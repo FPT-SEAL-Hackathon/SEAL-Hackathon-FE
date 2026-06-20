@@ -1,126 +1,112 @@
-import { useState } from 'react'
-import reactLogo from '../assets/image/react.svg'
-import viteLogo from '../assets/image/vite.svg'
-import heroImg from '../assets/image/hero.png'
-import './App.css'
+import { useState, useEffect } from "react";
+import { LanguageProvider } from "../store/languageStore";
+import { AuthProvider, useAuth } from "./store/authStore";
+import { LandingPage } from "./components/landing/LandingPage";
+import { AuthPages } from "./components/auth/AuthPages";
+import { Layout } from "../layout/Layout";
+import { MemberDashboard } from "./components/member/MemberDashboard";
+import { LeaderDashboard } from "./components/leader/LeaderDashboard";
+import { JudgeDashboard } from "./components/judge/JudgeDashboard";
+import { MentorDashboard } from "./components/mentor/MentorDashboard";
+import { AdminDashboard } from "./components/admin/AdminDashboard";
+import { ResearchDashboard } from "./components/research/ResearchDashboard";
+import { userTypeToRole } from "./services/authService";
+import { loadUser } from "./services/apiClient";
+import type { UserResponse } from "./services/authService";
 
-function App() {
-  const [count, setCount] = useState(0)
+const roleDefaultPages: Record<string, string> = {
+  member:   "dashboard",
+  leader:   "dashboard",
+  judge:    "rounds",
+  mentor:   "tracks",
+  admin:    "dashboard",
+  research: "variance",
+};
+
+type AppView = "landing" | "auth" | "app";
+
+function AppShell() {
+  const { user, role, setAuth, signOut } = useAuth();
+
+  // Restore session: if tokens + user exist in localStorage, go straight to app
+  const [view, setView] = useState<AppView>(() => {
+    const saved = loadUser<UserResponse>();
+    return saved ? "app" : "landing";
+  });
+
+  const [currentPage, setCurrentPage] = useState(() => {
+    const saved = loadUser<UserResponse>();
+    if (!saved) return "dashboard";
+    return roleDefaultPages[userTypeToRole(saved.userType)] ?? "dashboard";
+  });
+
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("seal-theme") === "dark");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+    localStorage.setItem("seal-theme", isDark ? "dark" : "light");
+  }, [isDark]);
+
+  const handleLoginSuccess = (roleOrUser: string) => {
+    // Demo path: roleOrUser is a plain role string (no real user object)
+    // Real API path: authService.login() already saved user; roleOrUser is derived role
+    const freshUser = loadUser<UserResponse>();
+    if (freshUser) setAuth(freshUser);
+
+    const resolvedRole = typeof roleOrUser === "string" ? roleOrUser : role ?? "member";
+    setCurrentPage(roleDefaultPages[resolvedRole] ?? "dashboard");
+    setView("app");
+  };
+
+  const handleRoleChange = async () => {
+    await signOut();
+    setCurrentPage("dashboard");
+    setView("landing");
+  };
+
+  const activeRole = role ?? (view === "app" ? "member" : null);
+
+  if (view === "landing") {
+    return <LandingPage onGoToAuth={() => setView("auth")} />;
+  }
+
+  if (view === "auth") {
+    return <AuthPages onLogin={handleLoginSuccess} />;
+  }
+
+  const renderDashboard = () => {
+    switch (activeRole) {
+      case "member":   return <MemberDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
+      case "leader":   return <LeaderDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
+      case "judge":    return <JudgeDashboard  currentPage={currentPage} onNavigate={setCurrentPage} />;
+      case "mentor":   return <MentorDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
+      case "admin":    return <AdminDashboard  currentPage={currentPage} onNavigate={setCurrentPage} />;
+      case "research": return <ResearchDashboard currentPage={currentPage} />;
+      default:         return <MemberDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
+    }
+  };
 
   return (
-    <>
-
-      <div>
-        <h1 className="bg-white text-green-500">Tailwindcss</h1>
-      </div>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+    <Layout
+      role={activeRole!}
+      currentPage={currentPage}
+      onNavigate={setCurrentPage}
+      onRoleChange={handleRoleChange}
+      isDark={isDark}
+      onToggleDark={() => setIsDark(v => !v)}
+      userName={user?.fullName ?? undefined}
+    >
+      {renderDashboard()}
+    </Layout>
+  );
 }
 
-export default App
+export default function App() {
+  return (
+    <LanguageProvider>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </LanguageProvider>
+  );
+}

@@ -1,0 +1,578 @@
+openapi: 3.0.0
+info:
+  title: SEAL Hackathon Management System API
+  description: Hệ thống quản lý cuộc thi SEAL Hackathon và thu thập dữ liệu nghiên cứu RBL.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Spring Boot Server
+
+tags:
+  - name: 1. Auth & Admin
+    description: Core System, Security, User Management
+  - name: 2. Events & Setup
+    description: Quản lý Cấu trúc Giải đấu (Event Master)
+  - name: 3. Teams & Submissions
+    description: Workflow Thí sinh (Team, Nộp bài)
+  - name: 4. Scoring Engine
+    description: Chấm điểm & Xếp hạng
+  - name: 5. Research & Extras
+    description: RBL Dashboard, Export CSV, Awards
+
+paths:
+  # ==========================================
+  # MODULE 1: AUTH & SECURITY
+  # ==========================================
+  /auth/register:
+    post:
+      tags: [1. Auth & Admin]
+      summary: Đăng ký tài khoản
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Đăng ký thành công, chờ duyệt
+
+  /auth/login:
+    post:
+      tags: [1. Auth & Admin]
+      summary: Đăng nhập (Sinh JWT)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Trả về Access Token và Refresh Token
+
+  /auth/refresh-token:
+    post:
+      tags: [1. Auth & Admin]
+      summary: Cấp lại token mới
+      responses:
+        '200':
+          description: Trả về Token mới
+
+  /users/me:
+    get:
+      tags: [1. Auth & Admin]
+      summary: Lấy profile người dùng hiện tại
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Trả về UserProfileResponse
+
+  /admin/users/{id}/approve:
+    put:
+      tags: [1. Auth & Admin]
+      summary: Duyệt tài khoản người dùng
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Duyệt thành công
+
+  /admin/users/guest-judge:
+    post:
+      tags: [1. Auth & Admin]
+      summary: Tạo tài khoản Guest Judge
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestJudgeRequest'
+      responses:
+        '201':
+          description: Tạo thành công
+
+  # ==========================================
+  # MODULE 2: EVENTS & SETUP
+  # ==========================================
+  /events:
+    get:
+      tags: [2. Events & Setup]
+      summary: Lấy danh sách sự kiện
+      responses:
+        '200':
+          description: Danh sách EventDTO
+    post:
+      tags: [2. Events & Setup]
+      summary: Tạo sự kiện mới
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRequest'
+      responses:
+        '201':
+          description: Tạo sự kiện thành công
+
+  /events/{id}:
+    put:
+      tags: [2. Events & Setup]
+      summary: Cập nhật sự kiện (Không được update nếu Ongoing)
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRequest'
+      responses:
+        '200':
+          description: Cập nhật thành công
+
+  /events/{id}/categories:
+    post:
+      tags: [2. Events & Setup]
+      summary: Thêm Hạng mục (Track) vào Sự kiện
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+      responses:
+        '201':
+          description: Thêm thành công
+
+  /events/{id}/rounds:
+    post:
+      tags: [2. Events & Setup]
+      summary: Thêm Vòng thi vào Sự kiện
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoundRequest'
+      responses:
+        '201':
+          description: Thêm vòng thi thành công
+
+  /criteria/templates:
+    get:
+      tags: [2. Events & Setup]
+      summary: Lấy danh sách Bộ tiêu chí mẫu
+      responses:
+        '200':
+          description: Trả về danh sách TemplateDTO
+    post:
+      tags: [2. Events & Setup]
+      summary: Tạo Bộ tiêu chí mẫu mới
+      security: [{bearerAuth: []}]
+      responses:
+        '201':
+          description: Tạo mẫu thành công
+
+  /events/{id}/criteria/import:
+    post:
+      tags: [2. Events & Setup]
+      summary: Kéo tiêu chí từ Template vào Sự kiện
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                templateIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Import thành công
+
+  /rounds/{id}/judges:
+    post:
+      tags: [2. Events & Setup]
+      summary: Phân công giám khảo vào Vòng
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                judgeIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Phân công thành công
+
+  # ==========================================
+  # MODULE 3: TEAMS & SUBMISSIONS
+  # ==========================================
+  /teams:
+    post:
+      tags: [3. Teams & Submissions]
+      summary: Tạo nhóm dự thi
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TeamCreateRequest'
+      responses:
+        '201':
+          description: Tạo nhóm thành công
+        '400':
+          description: Vượt MaxTeamSize hoặc đã có nhóm
+
+  /teams/{id}/join:
+    post:
+      tags: [3. Teams & Submissions]
+      summary: Xin vào nhóm
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Join thành công
+
+  /teams/my-team:
+    get:
+      tags: [3. Teams & Submissions]
+      summary: Xem thông tin nhóm của tôi
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Trả về thông tin nhóm
+
+  /submissions:
+    post:
+      tags: [3. Teams & Submissions]
+      summary: Nộp bài dự thi (Github/Slide)
+      description: Kiểm tra SubmissionDeadline. Bắn Exception nếu quá hạn. Gọi sp_UpsertSubmission.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmissionRequest'
+      responses:
+        '200':
+          description: Nộp bài thành công
+        '400':
+          description: Quá thời gian nộp bài
+
+  /admin/teams/{id}/disqualify:
+    post:
+      tags: [3. Teams & Submissions]
+      summary: Truất quyền thi đấu của đội
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: "Vi phạm quy chế sao chép code."
+      responses:
+        '200':
+          description: Truất quyền thành công
+
+  # ==========================================
+  # MODULE 4: SCORING ENGINE
+  # ==========================================
+  /judge/assignments:
+    get:
+      tags: [4. Scoring Engine]
+      summary: Giám khảo lấy danh sách bài cần chấm
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Trả về danh sách bài nộp được phân công
+
+  /scores:
+    post:
+      tags: [4. Scoring Engine]
+      summary: Giám khảo submit điểm
+      description: Validate ScoreValue <= MaxScore. Gọi sp_RecordScore.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoreRequest'
+      responses:
+        '201':
+          description: Lưu điểm thành công
+
+  /admin/events/{id}/compute-rankings:
+    post:
+      tags: [4. Scoring Engine]
+      summary: Kích hoạt tính điểm
+      description: Gọi sp_ComputeRoundRankings và sp_ComputeEventRankings.
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Tính toán hoàn tất
+
+  /public/leaderboard/{eventId}/{categoryId}:
+    get:
+      tags: [4. Scoring Engine]
+      summary: Lấy Bảng xếp hạng Public
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: categoryId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Trả về Leaderboard (dựa trên vw_RoundLeaderboard)
+
+  # ==========================================
+  # MODULE 5: RESEARCH & EXTRAS
+  # ==========================================
+  /rbl/variance-report:
+    get:
+      tags: [5. Research & Extras]
+      summary: Trả data vẽ biểu đồ lệch điểm
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Số liệu Mean, StdDev, Variance
+
+  /rbl/export/csv:
+    get:
+      tags: [5. Research & Extras]
+      summary: Tải file CSV ẩn danh
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: File CSV
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+
+  /awards:
+    post:
+      tags: [5. Research & Extras]
+      summary: Trao giải thưởng cho team
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AwardRequest'
+      responses:
+        '201':
+          description: Trao giải thành công
+
+  /notifications:
+    get:
+      tags: [5. Research & Extras]
+      summary: Lấy danh sách thông báo
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: Danh sách thông báo
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+        fullName:
+          type: string
+        studentCode:
+          type: string
+        university:
+          type: string
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+
+    GuestJudgeRequest:
+      type: object
+      properties:
+        email:
+          type: string
+        fullName:
+          type: string
+        company:
+          type: string
+
+    EventRequest:
+      type: object
+      properties:
+        eventName:
+          type: string
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        maxTeamSize:
+          type: integer
+        status:
+          type: string
+
+    CategoryRequest:
+      type: object
+      properties:
+        categoryName:
+          type: string
+        mentorId:
+          type: integer
+
+    RoundRequest:
+      type: object
+      properties:
+        roundName:
+          type: string
+        submissionDeadline:
+          type: string
+          format: date-time
+        promotionRule:
+          type: integer
+          description: "Top N đội được đi tiếp"
+
+    TeamCreateRequest:
+      type: object
+      properties:
+        teamName:
+          type: string
+        categoryId:
+          type: integer
+        memberIds:
+          type: array
+          items:
+            type: integer
+
+    SubmissionRequest:
+      type: object
+      properties:
+        teamId:
+          type: integer
+        roundId:
+          type: integer
+        githubUrl:
+          type: string
+        slideUrl:
+          type: string
+
+    ScoreRequest:
+      type: object
+      properties:
+        submissionId:
+          type: integer
+        criterionId:
+          type: integer
+        scoreValue:
+          type: number
+          format: float
+        comment:
+          type: string
+
+    AwardRequest:
+      type: object
+      properties:
+        teamId:
+          type: integer
+        eventId:
+          type: integer
+        awardTier:
+          type: string
+          example: "FIRST_PRIZE"
