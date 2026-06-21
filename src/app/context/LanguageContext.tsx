@@ -1,5 +1,5 @@
-import { createContext, useContext, useCallback, type ReactNode } from "react";
-import { en, type Language } from "../i18n/translations";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { Language, dictionaries } from "../i18n/translations";
 
 interface LanguageContextType {
   language: Language;
@@ -10,15 +10,19 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | null>(null);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const language: Language = "en";
+  const [language, setLanguageState] = useState<Language>(() => {
+    const stored = localStorage.getItem("seal-language");
+    return (stored === "en" || stored === "vi") ? stored : "vi";
+  });
 
-  const setLanguage = useCallback((_lang: Language) => {
-    localStorage.setItem("seal-language", "en");
+  const setLanguage = useCallback((lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem("seal-language", lang);
   }, []);
 
   const t = useCallback((key: string): string => {
-    return (en as Record<string, string>)[key] ?? key;
-  }, []);
+    return (dictionaries[language] as Record<string, string>)[key] ?? key;
+  }, [language]);
 
   return (
     <LanguageContext.Provider value={{ language, setLanguage, t }}>

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { ReactNode } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion } from "motion/react";
 

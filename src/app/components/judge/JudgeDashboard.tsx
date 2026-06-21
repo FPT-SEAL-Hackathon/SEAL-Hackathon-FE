@@ -157,11 +157,33 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
+  const displaySubmissions = apiSubmissions.length > 0
+    ? apiSubmissions.map(s => ({
+        id: s.submissionId,
+        team: s.teamId,
+        title: s.notes || `Submission ${s.submissionId.slice(0, 8)}`,
+        track: "—",
+        github: s.repositoryUrl ?? "",
+        demo: s.demoUrl ?? "",
+        status: s.submissionStatusName?.toLowerCase() === "scored" ? "completed" : "pending",
+        score: undefined,
+        round: s.roundId,
+      }))
+    : submissions;
+
   const renderSubmissions = () => (
     <>
-      <SectionHeader title="Submission Queue" subtitle={`${submissions.filter(s => s.status === "pending").length} submissions pending evaluation`} />
+      <SectionHeader
+        title="Submission Queue"
+        subtitle={`${displaySubmissions.filter((s: any) => s.status === "pending").length} submissions pending evaluation`}
+      />
+      {apiSubmissions.length === 0 && (
+        <div className="px-4 py-2 rounded-xl text-sm mb-3" style={{ background: `${COLORS.warning}10`, color: COLORS.warning, border: `1px solid ${COLORS.warning}30` }}>
+          Showing demo data — no assigned rounds loaded from API yet
+        </div>
+      )}
       <div className="space-y-3">
-        {submissions.map(sub => (
+        {displaySubmissions.map((sub: any) => (
           <Card key={sub.id} className="p-4">
             <div className="flex items-center gap-4">
               <div className="flex-1">
@@ -177,12 +199,16 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
                     {sub.score}/100
                   </span>
                 )}
-                <a href={`https://${sub.github}`} target="_blank" rel="noopener noreferrer">
-                  <Button variant="ghost" size="sm" icon={<Github size={13} />}>Code</Button>
-                </a>
-                <a href={`https://${sub.demo}`} target="_blank" rel="noopener noreferrer">
-                  <Button variant="ghost" size="sm" icon={<Globe size={13} />}>Demo</Button>
-                </a>
+                {sub.github && (
+                  <a href={sub.github.startsWith("http") ? sub.github : `https://${sub.github}`} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" icon={<Github size={13} />}>Code</Button>
+                  </a>
+                )}
+                {sub.demo && (
+                  <a href={sub.demo.startsWith("http") ? sub.demo : `https://${sub.demo}`} target="_blank" rel="noopener noreferrer">
+                    <Button variant="ghost" size="sm" icon={<Globe size={13} />}>Demo</Button>
+                  </a>
+                )}
                 {sub.status === "pending" && (
                   <Button variant="primary" size="sm" icon={<Star size={13} />} onClick={() => { setSelectedSubmission(sub); onNavigate("scoring"); }}>
                     Score

@@ -1,7 +1,5 @@
 import { api, clearTokens, getRefreshToken, saveUser, setTokens } from "./apiClient";
 
-const FPT_STUDENT_USER_TYPE_ID = "10000000-0000-0000-0000-000000000001";
-
 // ─── Types (aligned with backend spec) ──────────────────────────────────────
 export interface LoginRequest {
   email: string;
@@ -68,14 +66,7 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
 }
 
 export async function register(data: RegisterRequest): Promise<UserResponse> {
-  return api.post<UserResponse>(
-    "/auth/register",
-    {
-      ...data,
-      userTypeId: data.userTypeId ?? FPT_STUDENT_USER_TYPE_ID,
-    },
-    false,
-  );
+  return api.post<UserResponse>("/auth/register", data, false);
 }
 
 export async function logout(): Promise<void> {

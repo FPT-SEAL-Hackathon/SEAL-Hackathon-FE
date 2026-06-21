@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import {
   Eye, EyeOff, Mail, Lock, ArrowRight, X, CheckCircle, Loader,
   User, BookOpen, Building2, Phone, AlertCircle,
@@ -172,10 +172,10 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   const validate = (): boolean => {
     const e: Partial<typeof form> = {};
     if (!form.fullName.trim()) e.fullName = "Required";
-    if (!form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = "Invalid email format";
-    if (form.password.length < 8) e.password = "At least 8 characters";
-    if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords do not match";
-    if (!form.phone.match(/^\d{1,10}$/)) e.phone = "Invalid phone number (max 10 digits)";
+    if (!form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = "Invalid email";
+    if (form.password.length < 8) e.password = "Min 8 characters";
+    if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords don't match";
+    if (!form.phone.match(/^\d{1,10}$/)) e.phone = "Invalid phone (max 10 digits)";
     if (!form.studentCode.trim()) e.studentCode = "Required";
     if (!form.universityName.trim()) e.universityName = "Required";
     setErrors(e);
@@ -199,7 +199,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       setSuccess(true);
       setTimeout(onSwitchToLogin, 2500);
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.message : "Registration failed. Please try again later.");
+      setApiError(err instanceof ApiError ? err.message : "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -215,9 +215,9 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
         </motion.div>
         <div style={{ marginTop: 20, fontWeight: 700, fontSize: 20, color: "var(--text-primary)" }}>Registration successful!</div>
         <div style={{ marginTop: 8, fontSize: 14, color: "var(--text-secondary)" }}>
-          Your account is pending approval. You will be notified once it is approved.
+          Account pending approval. You will be notified once approved.
         </div>
-        <div style={{ marginTop: 6, fontSize: 13, color: "var(--text-muted)" }}>Redirecting to sign in...</div>
+        <div style={{ marginTop: 6, fontSize: 13, color: "var(--text-muted)" }}>Redirecting to login...</div>
       </motion.div>
     );
   }
@@ -228,25 +228,25 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       className="w-full rounded-3xl p-8"
       style={{ background: "var(--glass-bg)", backdropFilter: "blur(32px) saturate(180%)", WebkitBackdropFilter: "blur(32px) saturate(180%)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}>
       <div className="mb-6">
-        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>Create account</h1>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 5 }}>Register for SEAL Hackathon</p>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>Create Account</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 5 }}>Sign up to join SEAL Hackathon</p>
       </div>
 
       <div className="space-y-4">
         {apiError && <ErrorBanner message={apiError} />}
 
-        <GlassInput label="Full name" placeholder="Nguyễn Văn A" icon={<User size={15} />}
+        <GlassInput label="Full Name" placeholder="John Doe" icon={<User size={15} />}
           value={form.fullName} onChange={v => set("fullName", v)} error={errors.fullName} />
         <GlassInput label="Email" placeholder="you@fpt.edu.vn" icon={<Mail size={15} />}
           value={form.email} onChange={v => set("email", v)} error={errors.email} />
-        <GlassInput type={showPwd ? "text" : "password"} label="Password" placeholder="At least 8 characters"
+        <GlassInput type={showPwd ? "text" : "password"} label="Password" placeholder="Min 8 characters"
           icon={<Lock size={15} />} value={form.password} onChange={v => set("password", v)} error={errors.password}
           rightElement={<button type="button" onClick={() => setShowPwd(!showPwd)} style={{ color: "#c09060" }}>{showPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>} />
-        <GlassInput type="password" label="Confirm password" placeholder="Re-enter password"
+        <GlassInput type="password" label="Confirm Password" placeholder="Re-enter password"
           icon={<Lock size={15} />} value={form.confirmPassword} onChange={v => set("confirmPassword", v)} error={errors.confirmPassword} />
-        <GlassInput label="Phone number" placeholder="0912345678" icon={<Phone size={15} />}
+        <GlassInput label="Phone Number" placeholder="0912345678" icon={<Phone size={15} />}
           value={form.phone} onChange={v => set("phone", v)} error={errors.phone} />
-        <GlassInput label="Student code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
+        <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
           value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
         <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
           value={form.universityName} onChange={v => set("universityName", v)} error={errors.universityName} />
@@ -255,7 +255,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
           whileHover={{ scale: loading ? 1 : 1.02, y: loading ? 0 : -1 }} whileTap={{ scale: 0.97 }}
           className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-semibold"
           style={{ background: "linear-gradient(135deg, #F47920, #FF9040)", color: "white", fontSize: 14, boxShadow: "0 8px 24px rgba(244,121,32,0.4)", opacity: loading ? 0.7 : 1, cursor: loading ? "wait" : "pointer" }}>
-          {loading ? <><Loader size={15} className="animate-spin" /> Processing...</> : <>Create account <ArrowRight size={15} /></>}
+          {loading ? <><Loader size={15} className="animate-spin" /> Processing...</> : <>Create Account <ArrowRight size={15} /></>}
         </motion.button>
 
         <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)" }}>
@@ -286,7 +286,7 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
       const res = await login({ email, password });
       onLogin(userTypeToRole(res.user.userType));
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.message : "Sign in thất bại. Kiểm tra lại thông tin.");
+      setApiError(err instanceof ApiError ? err.message : "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -311,8 +311,8 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
         className="w-full rounded-3xl p-8"
         style={{ background: "var(--glass-bg)", backdropFilter: "blur(32px) saturate(180%)", WebkitBackdropFilter: "blur(32px) saturate(180%)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}>
         <div className="mb-7">
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>Welcome back</h1>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>Sign in vào tài khoản SEAL Hackathon</p>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>Welcome back 👋</h1>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>Sign in to your SEAL Hackathon account</p>
         </div>
 
         <div className="space-y-5" onKeyDown={handleKeyDown}>
@@ -336,7 +336,7 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px" style={{ background: "rgba(244,121,32,0.12)" }} />
-            <span style={{ fontSize: 12, color: "#a07850", letterSpacing: "0.02em" }}>or sign in with email</span>
+            <span style={{ fontSize: 12, color: "#a07850", letterSpacing: "0.02em" }}>or continue with email</span>
             <div className="flex-1 h-px" style={{ background: "rgba(244,121,32,0.12)" }} />
           </div>
 
@@ -348,23 +348,6 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
             icon={<Lock size={15} />} value={password} onChange={setPassword}
             rightElement={<button type="button" onClick={() => setShowPwd(!showPwd)} style={{ color: "#c09060" }}>{showPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>} />
 
-          {/* Demo quick access */}
-          <div>
-            <div style={{ fontSize: 10, color: "#a07850", marginBottom: 10, letterSpacing: "0.08em", fontWeight: 600 }}>
-              QUICK DEMO ACCESS
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {DEMO_ROLES.map(r => (
-                <motion.button key={r.role} onClick={() => onLogin(r.role)}
-                  whileHover={{ y: -2, scale: 1.02 }} whileTap={{ scale: 0.96 }}
-                  className="py-2 rounded-xl text-xs font-semibold transition-all"
-                  style={{ background: `${r.color}0f`, color: r.color, border: `1px solid ${r.color}28` }}>
-                  {r.label}
-                </motion.button>
-              ))}
-            </div>
-          </div>
-
           <motion.button onClick={handleLogin} disabled={loading}
             whileHover={{ scale: loading ? 1 : 1.02, y: loading ? 0 : -1 }} whileTap={{ scale: 0.97 }}
             className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-semibold"
@@ -373,7 +356,7 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
           </motion.button>
 
           <div style={{ textAlign: "center", fontSize: 13, color: "var(--text-muted)" }}>
-            Need an account?{" "}
+            Don't have an account?{" "}
             <button onClick={onSwitchToRegister} style={{ color: "#F47920", fontWeight: 600, cursor: "pointer", background: "none", border: "none" }}>
               Register
             </button>
@@ -390,7 +373,7 @@ function LoginPage({ onLogin, onSwitchToRegister }: { onLogin: (role: string) =>
     { label: "Active Teams", value: "127", icon: "🚀" },
     { label: "Submissions", value: "89",  icon: "📦" },
     { label: "Judges",      value: "24",  icon: "⭐" },
-    { label: "Prize Pool",  value: "5 tỷ",icon: "🏆" },
+    { label: "Prize Pool",  value: "5B",  icon: "🏆" },
   ];
 
   return (
@@ -423,7 +406,7 @@ function LoginPage({ onLogin, onSwitchToRegister }: { onLogin: (role: string) =>
             Platform
           </h2>
           <p style={{ color: "var(--text-secondary)", fontSize: 15, lineHeight: 1.7, maxWidth: 380 }}>
-            Manage teams, submit projects, evaluate work, and track rankings in one modern platform for FPT University.
+            Manage teams, submit projects, score entries, and track leaderboards — all in one modern platform built for FPT University.
           </p>
         </motion.div>
 
@@ -464,4 +447,3 @@ export function AuthPages({ onLogin }: { onLogin: (role: string) => void }) {
 
   return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} />;
 }
-

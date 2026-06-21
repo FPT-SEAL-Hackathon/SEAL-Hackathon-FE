@@ -1,124 +1,135 @@
-import { API_BASE_URL, api, getAccessToken } from "./apiClient";
-import type { LoginRequest, RegisterRequest, LoginResponse, UserResponse } from "./authService";
-import type { AwardResponse } from "./awardService";
-import type { CategoryResponse } from "./categoryService";
-import type { EventResponse } from "./eventService";
-import type { EventRankingDTO } from "./rankingService";
-import type { RoundResponse } from "./roundService";
-import type { SubmissionResponse } from "./submissionService";
-import type { TeamResponse } from "./teamService";
+const BASE_URL = "http://localhost:8080/api/v1";
 
-export type { LoginRequest, RegisterRequest };
+// ==================== REQUEST TYPES ====================
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  fullName: string;
+  studentCode: string;
+  university: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
 
 export interface GuestJudgeRequest {
   email: string;
   fullName: string;
-  company?: string;
+  company: string;
 }
 
 export interface EventRequest {
   eventName: string;
-  description?: string;
-  location?: string;
-  bannerImageUrl?: string;
-  eventStatusId: string;
-  registrationStart?: string;
-  registrationEnd?: string;
-  eventStartDate?: string;
-  eventEndDate?: string;
-  maxTeamSize?: number;
-  minTeamSize?: number;
+  startDate: string;
+  endDate: string;
+  maxTeamSize: number;
+  status: string;
 }
 
 export interface CategoryRequest {
   categoryName: string;
-  description?: string;
-  sortOrder?: number;
-  mentorId?: string;
+  mentorId: number;
 }
 
 export interface RoundRequest {
   roundName: string;
-  description?: string;
-  roundOrder?: number;
-  roundStatusId?: string;
-  submissionDeadline?: string;
-  judgingDeadline?: string;
-  startDate?: string;
-  endDate?: string;
-  advancementTopN?: number;
-  isCalibrationRound?: boolean;
+  submissionDeadline: string;
+  promotionRule: number;
 }
 
 export interface TeamCreateRequest {
-  eventId: string;
-  categoryId: string;
   teamName: string;
-  memberIds?: string[];
+  categoryId: number;
+  memberIds: number[];
 }
 
 export interface SubmissionRequest {
-  teamId: string;
-  roundId: string;
-  repositoryUrl?: string;
-  githubUrl?: string;
-  demoUrl?: string;
-  reportUrl?: string;
-  slideUrl?: string;
-  notes?: string;
+  teamId: number;
+  roundId: number;
+  githubUrl: string;
+  slideUrl: string;
 }
 
 export interface ScoreRequest {
-  submissionId: string;
-  roundCriterionId?: string;
-  criterionId?: string;
+  submissionId: number;
+  criterionId: number;
   scoreValue: number;
-  comment?: string;
-  isCalibration?: boolean;
+  comment: string;
 }
 
 export interface AwardRequest {
-  eventId: string;
-  categoryId?: string;
-  teamId: string;
-  awardTierId: string;
-  awardTitle: string;
-  description?: string;
-  prizeValue?: number;
-  prizeCurrency?: string;
+  teamId: number;
+  eventId: number;
+  awardTier: "FIRST_PRIZE" | "SECOND_PRIZE" | "THIRD_PRIZE" | "HONORABLE_MENTION";
 }
 
-export interface UserProfileResponse extends UserResponse {
-  role?: "MEMBER" | "LEADER" | "JUDGE" | "MENTOR" | "ADMIN" | "RESEARCH";
-  status?: string;
+// ==================== RESPONSE TYPES ====================
+
+export interface UserProfileResponse {
+  id: number;
+  email: string;
+  fullName: string;
+  role: "MEMBER" | "LEADER" | "JUDGE" | "MENTOR" | "ADMIN" | "RESEARCH";
+  studentCode?: string;
+  university?: string;
+  status: "PENDING" | "ACTIVE" | "SUSPENDED";
 }
 
-export type EventDTO = EventResponse;
-export type TeamDTO = TeamResponse;
-export type SubmissionDTO = SubmissionResponse;
+export interface EventDTO {
+  id: number;
+  eventName: string;
+  startDate: string;
+  endDate: string;
+  maxTeamSize: number;
+  status: "UPCOMING" | "ONGOING" | "COMPLETED";
+}
+
+export interface TeamDTO {
+  id: number;
+  teamName: string;
+  categoryId: number;
+  categoryName: string;
+  members: { id: number; fullName: string; email: string; role: string }[];
+  rank?: number;
+}
+
+export interface SubmissionDTO {
+  id: number;
+  teamId: number;
+  teamName: string;
+  roundId: number;
+  roundName: string;
+  githubUrl: string;
+  slideUrl: string;
+  submittedAt: string;
+  status: "SUBMITTED" | "SCORED" | "DISQUALIFIED";
+}
 
 export interface ScoreDTO {
-  submissionId: string;
-  criterionId: string;
-  criterionName?: string;
+  submissionId: number;
+  criterionId: number;
+  criterionName: string;
   scoreValue: number;
-  maxScore?: number;
-  comment?: string;
-  judgeId?: string;
-  judgeName?: string;
+  maxScore: number;
+  comment: string;
+  judgeId: number;
+  judgeName: string;
 }
 
 export interface LeaderboardEntry {
   rank: number;
-  teamId: string;
-  teamName?: string;
+  teamId: number;
+  teamName: string;
   totalScore: number;
-  roundScores?: Array<{ roundId: string; roundName: string; score: number }>;
-  status?: "FINALIST" | "QUALIFIED" | "ELIMINATED";
+  roundScores: { roundId: number; roundName: string; score: number }[];
+  status: "FINALIST" | "QUALIFIED" | "ELIMINATED";
 }
 
 export interface VarianceReport {
-  judgeId: string;
+  judgeId: number;
   judgeName: string;
   mean: number;
   stdDev: number;
@@ -129,150 +140,245 @@ export interface VarianceReport {
 }
 
 export interface NotificationDTO {
-  id: string;
-  notificationId?: string;
+  id: number;
   title: string;
-  message?: string;
-  body?: string;
-  type?: "INFO" | "WARNING" | "SUCCESS" | "ERROR";
+  message: string;
+  type: "INFO" | "WARNING" | "SUCCESS" | "ERROR";
   read: boolean;
   createdAt: string;
 }
 
-function unsupported<T>(feature: string): Promise<T> {
-  return Promise.reject(new Error(`${feature} is not available in the current backend API mapping.`));
+// ==================== HTTP CLIENT ====================
+
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = localStorage.getItem("seal-token");
+  const res = await fetch(`${BASE_URL}${url}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`API error ${res.status}: ${text}`);
+  }
+  const ct = res.headers.get("content-type") ?? "";
+  if (ct.includes("application/json")) return res.json() as Promise<T>;
+  return res.text() as unknown as Promise<T>;
 }
 
-function scoreToBackend(body: ScoreRequest) {
-  return {
-    submissionId: body.submissionId,
-    roundCriterionId: body.roundCriterionId ?? body.criterionId,
-    scoreValue: body.scoreValue,
-    comment: body.comment,
-    isCalibration: body.isCalibration,
-  };
-}
+// ==================== AUTH ====================
 
-// Compatibility facade for older imports. New code should prefer the focused services in this folder.
 export const authApi = {
   register: (body: RegisterRequest) =>
-    api.post<UserResponse>("/auth/register", body, false),
+    request<void>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
 
   login: (body: LoginRequest) =>
-    api.post<LoginResponse>("/auth/login", body, false),
+    request<{ accessToken: string; refreshToken: string }>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
 
   refreshToken: (refreshToken: string) =>
-    api.post<{ accessToken: string }>("/auth/refresh", { refreshToken }, false),
+    request<{ accessToken: string }>("/auth/refresh-token", { method: "POST", body: JSON.stringify({ refreshToken }) }),
 
   getMe: () =>
-    unsupported<UserProfileResponse>("GET /users/me"),
+    request<UserProfileResponse>("/users/me"),
 };
+
+// ==================== ADMIN ====================
 
 export const adminApi = {
-  approveUser: (_id: string) =>
-    unsupported<void>("User approval"),
+  approveUser: (id: number) =>
+    request<void>(`/admin/users/${id}/approve`, { method: "PUT" }),
 
-  createGuestJudge: (_body: GuestJudgeRequest) =>
-    unsupported<UserProfileResponse>("Guest judge creation"),
+  createGuestJudge: (body: GuestJudgeRequest) =>
+    request<UserProfileResponse>("/admin/users/guest-judge", { method: "POST", body: JSON.stringify(body) }),
 
-  computeRankings: (eventId: string) =>
-    api.post<EventRankingDTO[]>(`/api/v1/admin/events/${eventId}/compute-rankings`, {}),
+  computeRankings: (eventId: number) =>
+    request<void>(`/admin/events/${eventId}/compute-rankings`, { method: "POST" }),
 
-  disqualifyTeam: (teamId: string, reason: string) =>
-    api.post<void>(`/api/v1/admin/teams/${teamId}/disqualify`, { reason }),
+  disqualifyTeam: (teamId: number, reason: string) =>
+    request<void>(`/admin/teams/${teamId}/disqualify`, { method: "POST", body: JSON.stringify({ reason }) }),
 };
+
+// ==================== EVENTS ====================
 
 export const eventsApi = {
   list: () =>
-    api.get<EventDTO[]>("/api/v1/events"),
+    request<EventDTO[]>("/events"),
 
   create: (body: EventRequest) =>
-    api.post<EventDTO>("/api/v1/event", body),
+    request<EventDTO>("/events", { method: "POST", body: JSON.stringify(body) }),
 
-  update: (id: string, body: EventRequest) =>
-    api.put<EventDTO>(`/api/v1/event/${id}`, body),
+  update: (id: number, body: EventRequest) =>
+    request<EventDTO>(`/events/${id}`, { method: "PUT", body: JSON.stringify(body) }),
 
-  addCategory: (eventId: string, body: CategoryRequest) =>
-    api.post<CategoryResponse>(`/api/v1/categories/category/${eventId}`, body),
+  addCategory: (eventId: number, body: CategoryRequest) =>
+    request<void>(`/events/${eventId}/categories`, { method: "POST", body: JSON.stringify(body) }),
 
-  addRound: (categoryId: string, body: RoundRequest) =>
-    api.post<RoundResponse>(`/api/v1/round/${categoryId}`, body),
+  addRound: (eventId: number, body: RoundRequest) =>
+    request<void>(`/events/${eventId}/rounds`, { method: "POST", body: JSON.stringify(body) }),
 
-  importCriteria: (eventId: string, templateIds: string[]) =>
-    api.post<void>(`/api/v1/event/criteria/import/${eventId}`, { templateIds }),
+  importCriteria: (eventId: number, templateIds: number[]) =>
+    request<void>(`/events/${eventId}/criteria/import`, { method: "POST", body: JSON.stringify({ templateIds }) }),
 };
+
+// ==================== CRITERIA TEMPLATES ====================
 
 export const criteriaApi = {
   listTemplates: () =>
-    api.get("/api/v1/criteria/templates"),
+    request<{ id: number; name: string; criteria: { name: string; maxScore: number }[] }[]>("/criteria/templates"),
 
-  createTemplate: (_body: unknown) =>
-    unsupported<void>("Criteria template creation"),
+  createTemplate: (body: unknown) =>
+    request<void>("/criteria/templates", { method: "POST", body: JSON.stringify(body) }),
 };
+
+// ==================== ROUNDS ====================
 
 export const roundsApi = {
-  assignJudges: (roundId: string, judgeIds: string[]) =>
-    api.post<void>(`/api/v1/round/judges/${roundId}`, { userIds: judgeIds }),
+  assignJudges: (roundId: number, judgeIds: number[]) =>
+    request<void>(`/rounds/${roundId}/judges`, { method: "POST", body: JSON.stringify({ judgeIds }) }),
 };
+
+// ==================== TEAMS ====================
 
 export const teamsApi = {
   create: (body: TeamCreateRequest) =>
-    api.post<TeamDTO>("/api/v1/teams", body),
+    request<TeamDTO>("/teams", { method: "POST", body: JSON.stringify(body) }),
 
-  join: (teamId: string) =>
-    api.post<void>(`/api/v1/teams/${teamId}/join`, {}),
+  join: (teamId: number) =>
+    request<void>(`/teams/${teamId}/join`, { method: "POST" }),
 
   getMyTeam: () =>
-    unsupported<TeamDTO>("GET /teams/my-team"),
+    request<TeamDTO>("/teams/my-team"),
 };
+
+// ==================== SUBMISSIONS ====================
 
 export const submissionsApi = {
   submit: (body: SubmissionRequest) =>
-    api.post<SubmissionDTO>("/api/v1/submissions", {
-      teamId: body.teamId,
-      roundId: body.roundId,
-      repositoryUrl: body.repositoryUrl ?? body.githubUrl,
-      demoUrl: body.demoUrl,
-      reportUrl: body.reportUrl,
-      slideUrl: body.slideUrl,
-      notes: body.notes,
-    }),
+    request<SubmissionDTO>("/submissions", { method: "POST", body: JSON.stringify(body) }),
 };
+
+// ==================== SCORING ====================
 
 export const scoringApi = {
   getAssignments: () =>
-    unsupported<SubmissionDTO[]>("Judge assignment listing"),
+    request<SubmissionDTO[]>("/judge/assignments"),
 
   submitScore: (body: ScoreRequest) =>
-    api.post<ScoreDTO>("/api/v1/judging", [scoreToBackend(body)]),
+    request<ScoreDTO>("/scores", { method: "POST", body: JSON.stringify(body) }),
 
-  getLeaderboard: (eventId: string, categoryId: string) =>
-    api.get<LeaderboardEntry[]>(`/api/v1/public/leaderboard/${eventId}/${categoryId}`, false),
+  getLeaderboard: (eventId: number, categoryId: number) =>
+    request<LeaderboardEntry[]>(`/public/leaderboard/${eventId}/${categoryId}`),
 };
+
+// ==================== RESEARCH ====================
 
 export const researchApi = {
   getVarianceReport: () =>
-    unsupported<VarianceReport[]>("Variance report"),
+    request<VarianceReport[]>("/rbl/variance-report"),
 
-  exportCsv: () =>
-    unsupported<Blob>("Research CSV export"),
+  exportCsv: async () => {
+    const token = localStorage.getItem("seal-token");
+    const res = await fetch(`${BASE_URL}/rbl/export/csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+    return res.blob();
+  },
 };
+
+// ==================== AWARDS ====================
 
 export const awardsApi = {
   grant: (body: AwardRequest) =>
-    api.post<AwardResponse>("/api/v1/awards/grandAwardToATeam", body),
+    request<void>("/awards", { method: "POST", body: JSON.stringify(body) }),
 };
+
+// ==================== NOTIFICATIONS ====================
 
 export const notificationsApi = {
   list: () =>
-    api.get<NotificationDTO[]>("/api/v1/notifications/getMyNotifications"),
+    request<NotificationDTO[]>("/notifications"),
 };
 
-export const downloadWithAuth = async (path: string): Promise<Blob> => {
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) throw new Error(`Download failed (${res.status})`);
-  return res.blob();
+// ==================== MOCK DATA ====================
+
+export const mockUsers: UserProfileResponse[] = [
+  { id: 1, email: "admin@fpt.edu.vn", fullName: "Admin User", role: "ADMIN", status: "ACTIVE" },
+  { id: 2, email: "alex.j@fpt.edu.vn", fullName: "Alex Johnson", role: "MEMBER", studentCode: "FPT2021001", university: "FPT University", status: "ACTIVE" },
+  { id: 3, email: "ptlan@fpt.edu.vn", fullName: "Dr. Pham Thi Lan", role: "JUDGE", university: "FPT University", status: "ACTIVE" },
+  { id: 4, email: "nvminh@fpt.edu.vn", fullName: "Dr. Nguyen Van Minh", role: "MENTOR", university: "FPT University", status: "ACTIVE" },
+  { id: 5, email: "htthu@fpt.edu.vn", fullName: "Hoang Thi Thu", role: "MEMBER", studentCode: "FPT2023045", university: "FPT University", status: "PENDING" },
+  { id: 6, email: "tmduc@fpt.edu.vn", fullName: "Tran Minh Duc", role: "LEADER", studentCode: "FPT2022012", university: "FPT University", status: "ACTIVE" },
+  { id: 7, email: "research@fpt.edu.vn", fullName: "Research Team", role: "RESEARCH", university: "FPT University", status: "ACTIVE" },
+];
+
+export const mockEvents: EventDTO[] = [
+  { id: 1, eventName: "SEAL Fall 2025", startDate: "2025-10-01T00:00:00Z", endDate: "2025-12-01T00:00:00Z", maxTeamSize: 5, status: "ONGOING" },
+  { id: 2, eventName: "FPT Web3 Challenge", startDate: "2025-11-15T00:00:00Z", endDate: "2026-01-15T00:00:00Z", maxTeamSize: 4, status: "UPCOMING" },
+  { id: 3, eventName: "AI Agents Hackathon", startDate: "2026-01-01T00:00:00Z", endDate: "2026-02-28T00:00:00Z", maxTeamSize: 5, status: "UPCOMING" },
+  { id: 4, eventName: "SEAL Spring 2025", startDate: "2025-04-01T00:00:00Z", endDate: "2025-07-10T00:00:00Z", maxTeamSize: 5, status: "COMPLETED" },
+];
+
+export const mockLeaderboard: LeaderboardEntry[] = [
+  { rank: 1, teamId: 101, teamName: "AlphaCoders", totalScore: 92.1, roundScores: [{ roundId: 1, roundName: "Round 1", score: 88.5 }, { roundId: 2, roundName: "Round 2", score: 95.7 }], status: "FINALIST" },
+  { rank: 2, teamId: 102, teamName: "CodeCraft Pro", totalScore: 89.5, roundScores: [{ roundId: 1, roundName: "Round 1", score: 85.2 }, { roundId: 2, roundName: "Round 2", score: 93.8 }], status: "FINALIST" },
+  { rank: 3, teamId: 103, teamName: "ByteBuilders", totalScore: 87.8, roundScores: [{ roundId: 1, roundName: "Round 1", score: 90.1 }, { roundId: 2, roundName: "Round 2", score: 85.5 }], status: "FINALIST" },
+  { rank: 4, teamId: 104, teamName: "InnovateFPT", totalScore: 86.3, roundScores: [{ roundId: 1, roundName: "Round 1", score: 82.0 }, { roundId: 2, roundName: "Round 2", score: 90.6 }], status: "FINALIST" },
+  { rank: 5, teamId: 105, teamName: "TechStorm", totalScore: 84.9, roundScores: [{ roundId: 1, roundName: "Round 1", score: 84.9 }, { roundId: 2, roundName: "Round 2", score: 84.9 }], status: "FINALIST" },
+  { rank: 12, teamId: 112, teamName: "DevDynamo", totalScore: 79.3, roundScores: [{ roundId: 1, roundName: "Round 1", score: 76.8 }, { roundId: 2, roundName: "Round 2", score: 81.8 }], status: "QUALIFIED" },
+];
+
+export const mockVarianceReport: VarianceReport[] = [
+  { judgeId: 1, judgeName: "Dr. Pham Thi Lan", mean: 80.0, stdDev: 2.1, variance: 4.4, submissionsScored: 18, minScore: 77, maxScore: 83 },
+  { judgeId: 2, judgeName: "Prof. Nguyen Van A", mean: 78.5, stdDev: 4.3, variance: 18.5, submissionsScored: 17, minScore: 72, maxScore: 85 },
+  { judgeId: 3, judgeName: "Dr. Le Thi Bich", mean: 82.3, stdDev: 2.8, variance: 7.8, submissionsScored: 18, minScore: 78, maxScore: 88 },
+  { judgeId: 4, judgeName: "Assoc. Prof. Tran C", mean: 75.1, stdDev: 5.2, variance: 27.0, submissionsScored: 16, minScore: 68, maxScore: 82 },
+  { judgeId: 5, judgeName: "Dr. Hoang Van D", mean: 83.7, stdDev: 3.1, variance: 9.6, submissionsScored: 18, minScore: 79, maxScore: 89 },
+];
+
+export const mockNotifications: NotificationDTO[] = [
+  { id: 1, title: "Submission deadline in 2 days", message: "Your team DevDynamo must submit by Dec 1. Don't miss it!", type: "WARNING", read: false, createdAt: "2025-11-29T08:00:00Z" },
+  { id: 2, title: "Your team was approved!", message: "DevDynamo has been approved to compete in the AI Agents track.", type: "SUCCESS", read: false, createdAt: "2025-11-29T05:00:00Z" },
+  { id: 3, title: "Round 2 Finals now open", message: "Round 2 (Finals) is now accepting submissions for AI Agents.", type: "INFO", read: false, createdAt: "2025-11-28T09:00:00Z" },
+  { id: 4, title: "Score update: Round 1 results", message: "Your team scored 76.8/100 in Round 1. Check the leaderboard.", type: "INFO", read: true, createdAt: "2025-11-26T14:00:00Z" },
+];
+
+export const mockMyTeam: TeamDTO = {
+  id: 112,
+  teamName: "DevDynamo",
+  categoryId: 1,
+  categoryName: "AI Agents",
+  members: [
+    { id: 2, fullName: "Alex Johnson", email: "alex.j@fpt.edu.vn", role: "LEADER" },
+    { id: 8, fullName: "Maria Chen", email: "maria.c@fpt.edu.vn", role: "MEMBER" },
+    { id: 9, fullName: "James Park", email: "james.p@fpt.edu.vn", role: "MEMBER" },
+    { id: 10, fullName: "Sofia Rodriguez", email: "sofia.r@fpt.edu.vn", role: "MEMBER" },
+    { id: 11, fullName: "David Kim", email: "david.k@fpt.edu.vn", role: "MEMBER" },
+  ],
+  rank: 12,
 };
+
+export const mockSubmissions: SubmissionDTO[] = [
+  {
+    id: 1, teamId: 112, teamName: "DevDynamo", roundId: 1, roundName: "Round 1 — Qualifying",
+    githubUrl: "https://github.com/devdynamo/ai-task-manager",
+    slideUrl: "https://slides.devdynamo.ai/round1",
+    submittedAt: "2025-11-20T15:30:00Z", status: "SCORED",
+  },
+  {
+    id: 2, teamId: 112, teamName: "DevDynamo", roundId: 2, roundName: "Round 2 — Finals",
+    githubUrl: "https://github.com/devdynamo/ai-task-manager-v2",
+    slideUrl: "https://slides.devdynamo.ai/round2",
+    submittedAt: "2025-11-27T14:15:00Z", status: "SUBMITTED",
+  },
+];
+
+export const mockJudgeAssignments: SubmissionDTO[] = [
+  { id: 1, teamId: 101, teamName: "AlphaCoders", roundId: 2, roundName: "Round 2 — Finals", githubUrl: "github.com/alphacoders/ai-task", slideUrl: "slides.alphacoders.ai/r2", submittedAt: "2025-11-26T10:00:00Z", status: "SUBMITTED" },
+  { id: 2, teamId: 102, teamName: "CodeCraft Pro", roundId: 2, roundName: "Round 2 — Finals", githubUrl: "github.com/codecraft/sma", slideUrl: "slides.codecraft.io/r2", submittedAt: "2025-11-26T11:00:00Z", status: "SUBMITTED" },
+  { id: 3, teamId: 103, teamName: "ByteBuilders", roundId: 2, roundName: "Round 2 — Finals", githubUrl: "github.com/bytebuilders/ncr", slideUrl: "slides.bytebuilders.dev/r2", submittedAt: "2025-11-26T12:00:00Z", status: "SUBMITTED" },
+  { id: 4, teamId: 112, teamName: "DevDynamo", roundId: 2, roundName: "Round 2 — Finals", githubUrl: "github.com/devdynamo/ato", slideUrl: "slides.devdynamo.ai/r2", submittedAt: "2025-11-27T14:15:00Z", status: "SCORED" },
+];

@@ -1,4 +1,6 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useLanguage } from "../../../store/languageStore";
+import type { Language } from "../../i18n/translations";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
@@ -46,6 +48,7 @@ const roleMenus: Record<string, { icon: React.ElementType; label: string; key: s
   leader: [
     { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
     { icon: Users, label: "Team Management", key: "team" },
+    { icon: UserCheck, label: "Join Requests", key: "requests" },
     { icon: FolderOpen, label: "Submission Center", key: "submissions" },
     { icon: Trophy, label: "Rankings", key: "rankings" },
     { icon: Bell, label: "Notifications", key: "notifications" },
@@ -76,6 +79,7 @@ const roleMenus: Record<string, { icon: React.ElementType; label: string; key: s
     { icon: Trophy, label: "Rankings", key: "rankings" },
     { icon: BarChart2, label: "Reports", key: "reports" },
     { icon: Bell, label: "Notifications", key: "notifications" },
+    { icon: Award, label: "Awards", key: "awards" },
     { icon: Shield, label: "Audit Logs", key: "audit" },
     { icon: Wrench, label: "Settings", key: "settings" },
   ],
@@ -99,7 +103,7 @@ const roleProfileKey: Record<string, string | null> = {
 };
 
 const roleLabels: Record<string, string> = {
-  member: "Participant",
+  member: "Team Member",
   leader: "Team Leader",
   judge: "Judge",
   mentor: "Mentor",
@@ -128,11 +132,13 @@ interface LayoutProps {
 }
 
 export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson", isDark = false, onToggleDark }: LayoutProps) {
+  const { language, setLanguage } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [notifCount, setNotifCount] = useState(0);
+  const [notifCount, setNotifCount] = useState(3);
   const [appSettings, setAppSettings] = useState({
+    language: "vi",
     dateFormat: "DD/MM/YYYY",
     itemsPerPage: "10",
     emailNotif: true,
@@ -146,7 +152,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const menus = roleMenus[role] || [];
   const accentColor = roleColors[role] || COLORS.primary;
-  const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
+  const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2);
 
   useEffect(() => {
     const handleClickOutside = () => setNotifOpen(false);
@@ -303,20 +309,20 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               App Settings
             </span>
           </button>
-          {/* Log Out */}
+          {/* Back to Dev Hub */}
           <button
             onClick={onRoleChange}
             className="relative flex items-center rounded-xl transition-colors duration-150"
             style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
-            title={!sidebarOpen ? "Log Out" : undefined}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(229,62,46,0.06)")}
+            title={!sidebarOpen ? "← Dev Hub" : undefined}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(244,121,32,0.06)")}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
             <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
-              <LogOut size={17} style={{ color: "#e53e2e" }} />
+              <LogOut size={17} style={{ color: "#F47920" }} />
             </div>
-            <span style={{ marginLeft: 10, fontSize: 13.5, color: "#e53e2e", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
-              Log Out
+            <span style={{ marginLeft: 10, fontSize: 13.5, color: "#F47920", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
+              ← Dev Hub
             </span>
           </button>
         </div>
@@ -423,10 +429,24 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                     <div className="px-4 py-3.5" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>Notifications</span>
                     </div>
-                    <div className="px-4 py-6 text-center">
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>No notifications</div>
-                      <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Account, team, and event updates will appear here.</div>
-                    </div>
+                    {[
+                      { title: "Submission deadline in 2 days", time: "2h ago", color: "#F59E0B", icon: "⚠️" },
+                      { title: "Your team was approved!", time: "5h ago", color: "#009444", icon: "✅" },
+                      { title: "New round opened: Finals", time: "1d ago", color: "#F47920", icon: "🏆" },
+                    ].map((n, i) => (
+                      <motion.div
+                        key={i}
+                        whileHover={{ background: "rgba(244,121,32,0.04)" }}
+                        className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
+                        style={{ borderBottom: i < 2 ? "1px solid rgba(244,121,32,0.07)" : "none" }}
+                      >
+                        <span style={{ fontSize: 17 }}>{n.icon}</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
+                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
+                        </div>
+                      </motion.div>
+                    ))}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -540,7 +560,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                       </div>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Dark Mode</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{isDark ? "Dark interface is on" : "Light interface is on"}</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{isDark ? "Dark theme is active" : "Light theme is active"}</div>
                       </div>
                     </div>
                     <motion.button
@@ -565,6 +585,21 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                 <section>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Display</div>
                   <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Language</div>
+                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Interface language</div>
+                      </div>
+                      <select
+                        value={language}
+                        onChange={e => setLanguage(e.target.value as Language)}
+                        className="rounded-lg px-3 py-1.5 outline-none text-sm"
+                        style={{ background: "var(--surface-input)", border: "1px solid var(--glass-border-subtle)", color: "var(--text-primary)", fontSize: 13 }}
+                      >
+                        <option value="vi">Vietnamese</option>
+                        <option value="en">English</option>
+                      </select>
+                    </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Date Format</div>
@@ -698,4 +733,3 @@ function SettingsToggle({ label, desc, value, accent, onChange }: { label: strin
 }
 
 export { COLORS, roleLabels, roleColors };
-

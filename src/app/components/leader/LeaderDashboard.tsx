@@ -72,7 +72,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         if (page?.content?.length) {
           setNotifs(page.content.map((n: any) => ({
             id: n.notificationId, title: n.title, body: n.body,
-            type: "info", time: new Date(n.createdAt).toLocaleDateString("vi-VN"), read: n.read,
+            type: "info", time: new Date(n.createdAt).toLocaleDateString("en-US"), read: n.read,
           })));
         }
       }).catch(() => {});
@@ -599,6 +599,84 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
+  // ── Join Requests page ────────────────────────────────────────────────────
+  const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [handlingId, setHandlingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentPage !== "requests") return;
+    if (!teamId) return;
+    setRequestsLoading(true);
+    teamService.getPendingRequests(teamId)
+      .then(setPendingRequests)
+      .catch(() => {})
+      .finally(() => setRequestsLoading(false));
+  }, [currentPage, teamId]);
+
+  const handleRequest = async (requestId: string, action: "APPROVED" | "REJECTED") => {
+    setHandlingId(requestId);
+    try {
+      await teamService.handleJoinRequest(requestId, action);
+      setPendingRequests(prev => prev.filter(r => r.requestId !== requestId));
+    } catch { /* show error */ }
+    setHandlingId(null);
+  };
+
+  const renderRequests = () => (
+    <>
+      <SectionHeader title="Join Requests" subtitle="Pending requests to join your team" />
+      {requestsLoading && (
+        <div className="flex items-center justify-center py-12 gap-2" style={{ color: COLORS.textSecondary }}>
+          <Loader size={18} className="animate-spin" /> Loading...
+        </div>
+      )}
+      {!requestsLoading && pendingRequests.length === 0 && (
+        <Card className="p-8 text-center">
+          <CheckCircle size={36} className="mx-auto mb-3" style={{ color: COLORS.border }} />
+          <div style={{ fontSize: 15, color: COLORS.textSecondary }}>No pending join requests</div>
+          <div style={{ fontSize: 13, color: COLORS.textMuted, marginTop: 4 }}>
+            Candidates can request to join via the platform
+          </div>
+        </Card>
+      )}
+      <div className="space-y-3">
+        {pendingRequests.map(req => (
+          <Card key={req.requestId} className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+                  User ID: <span className="font-mono text-xs">{req.userId}</span>
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                  Requested: {new Date(req.requestedAt).toLocaleString("en-US")}
+                </div>
+                <div style={{ fontSize: 12, marginTop: 4 }}>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                    style={{ background: `${COLORS.warning}20`, color: COLORS.warning }}>
+                    {req.requestStatus}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" size="sm" icon={handlingId === req.requestId ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                  onClick={() => handleRequest(req.requestId, "APPROVED")}
+                  disabled={handlingId === req.requestId}>
+                  Approve
+                </Button>
+                <Button variant="danger" size="sm" icon={<Trash2 size={13} />}
+                  onClick={() => handleRequest(req.requestId, "REJECTED")}
+                  disabled={handlingId === req.requestId}>
+                  Reject
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </>
+  );
+
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return renderDashboard();
@@ -607,6 +685,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "rankings": return renderRankings();
       case "notifications": return renderNotifications();
       case "feedback": return renderFeedback();
+      case "requests": return renderRequests();
       case "settings": return renderSettings();
       case "profile": return renderProfile();
       default: return renderDashboard();

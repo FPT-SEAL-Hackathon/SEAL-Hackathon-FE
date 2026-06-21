@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Trophy, Medal, Star, Crown, Flame, Zap, Users, Calendar,
@@ -28,16 +28,16 @@ const COMPETITIONS = [
     id: 1,
     name: "SEAL Hackathon 2025 – AI Innovation",
     status: "ongoing",
-    phase: "Final Round",
+    phase: "Grand Final",
     startDate: "2025-11-01",
     endDate: "2025-12-15",
-    location: "FPT University, Hà Nội",
+    location: "FPT University, Hanoi",
     tracks: ["AI/ML", "Web3", "FinTech"],
     teams: 48,
-    prize: "500.000.000 VNĐ",
+    prize: "500,000,000 VND",
     color: "#F47920",
     gradient: "from-orange-500/20 to-amber-400/10",
-    description: "An annual hackathon for breakthrough technology solutions from FPT students.",
+    description: "The annual hackathon competition seeking breakthrough technology solutions from FPT students.",
   },
   {
     id: 2,
@@ -49,25 +49,25 @@ const COMPETITIONS = [
     location: "Online + FPT Campus",
     tracks: ["Data Science", "Computer Vision", "NLP"],
     teams: 0,
-    prize: "200.000.000 VNĐ",
+    prize: "200,000,000 VND",
     color: "#7C3AED",
     gradient: "from-violet-500/20 to-purple-400/10",
-    description: "A focused research sprint for applied data science and artificial intelligence.",
+    description: "An in-depth research sprint focused on data science and applied artificial intelligence.",
   },
   {
     id: 3,
     name: "SEAL Build Week – HealthTech",
     status: "upcoming",
-    phase: "Opening Soon",
+    phase: "Coming Soon",
     startDate: "2026-02-01",
     endDate: "2026-02-07",
-    location: "FPT University, TP.HCM",
+    location: "FPT University, Ho Chi Minh City",
     tracks: ["HealthTech", "IoT", "Mobile"],
     teams: 0,
-    prize: "150.000.000 VNĐ",
+    prize: "150,000,000 VND",
     color: "#0EA5E9",
     gradient: "from-sky-500/20 to-blue-400/10",
-    description: "A one-week build challenge for health technology with real social impact.",
+    description: "One week to build a health technology product with real social impact.",
   },
 ];
 
@@ -76,14 +76,14 @@ const COMPETITIONS = [
 const RANK_META = [
   { bg: "from-yellow-400/30 to-amber-300/20", border: "border-yellow-400/50", text: "text-yellow-600", label: "Champion" },
   { bg: "from-slate-300/30 to-gray-200/20",   border: "border-slate-400/50",  text: "text-slate-600",  label: "Runner-up" },
-  { bg: "from-orange-300/30 to-amber-200/20", border: "border-orange-400/50", text: "text-orange-600", label: "Third place" },
+  { bg: "from-orange-300/30 to-amber-200/20", border: "border-orange-400/50", text: "text-orange-600", label: "3rd Place" },
 ];
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "ongoing") return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-orange-500/15 text-orange-600 border border-orange-500/30">
       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-      Ongoing
+      Live
     </span>
   );
   return (
@@ -206,12 +206,12 @@ export function LandingPage({ onGoToAuth }: Props) {
           <div className="flex items-center gap-2">
             <button onClick={onGoToAuth}
               className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/40 transition-all">
-              Sign in
+              Sign In
             </button>
             <button onClick={onGoToAuth}
               className="px-4 py-2 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
               style={{ background: ORANGE_PRIMARY }}>
-              Register ngay
+              Register Now
             </button>
           </div>
         </div>
@@ -233,7 +233,7 @@ export function LandingPage({ onGoToAuth }: Props) {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass border border-orange-400/30 mb-8">
             <Flame size={14} style={{ color: "#F47920" }} />
             <span className="text-sm" style={{ color: "#F47920", fontWeight: 500 }}>
-              AI Innovation 2025 is now live
+              AI Innovation 2025 is live
             </span>
           </motion.div>
 
@@ -242,16 +242,15 @@ export function LandingPage({ onGoToAuth }: Props) {
             style={{ fontSize: "clamp(2.5rem, 6vw, 4.5rem)", fontWeight: 800, lineHeight: 1.1, letterSpacing: "-0.03em" }}>
             Where{" "}
             <span style={{ background: "linear-gradient(135deg, #F47920 0%, #FF8C2A 50%, #FFD0A0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-              Talent
+              Tech Talent
             </span>
-            <br />Technology Shines
+            <br />Shines
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
             className="text-muted-foreground max-w-2xl mx-auto mb-10"
             style={{ fontSize: "1.15rem", lineHeight: 1.7 }}>
-            FPT's flagship hackathon platform where students compete, innovate, and build
-            trang sử vinh quang trong Hall of Fame SEAL.
+            FPT's leading hackathon platform — where students compete, innovate, and write their names into the SEAL Hall of Fame.
           </motion.p>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.3 }}
@@ -265,7 +264,7 @@ export function LandingPage({ onGoToAuth }: Props) {
             <button onClick={() => document.getElementById("hall-of-fame")?.scrollIntoView({ behavior: "smooth" })}
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl glass border border-orange-400/25 text-foreground hover:bg-white/50 transition-all">
               <Trophy size={18} style={{ color: "#F47920" }} />
-              Xem Hall of Fame
+              View Hall of Fame
             </button>
           </motion.div>
 
@@ -273,10 +272,10 @@ export function LandingPage({ onGoToAuth }: Props) {
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.5 }}
             className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
             {[
-              { icon: Trophy, value: "12",    label: "Events hosted" },
-              { icon: Users,  value: "480+",  label: "Teams joined" },
-              { icon: Award,  value: "5 tỷ",  label: "Prize pool" },
-              { icon: Star,   value: "96",    label: "Outstanding projects" },
+              { icon: Trophy, value: "12",    label: "Events Hosted" },
+              { icon: Users,  value: "480+",  label: "Teams" },
+              { icon: Award,  value: "5B VND", label: "Total Prize" },
+              { icon: Star,   value: "96",    label: "Top Projects" },
             ].map((s, i) => (
               <div key={i} className="glass rounded-2xl p-4 text-center">
                 <s.icon size={20} className="mx-auto mb-1" style={{ color: "#F47920" }} />
@@ -288,7 +287,7 @@ export function LandingPage({ onGoToAuth }: Props) {
         </div>
       </section>
 
-      {/* ─── Competitions ──────────────────────────────────────────── */}
+      {/* ─── Competitions ──────────────────────────────────────── */}
       <section id="competitions" className="py-24 px-6">
         <div className="max-w-7xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
@@ -297,9 +296,9 @@ export function LandingPage({ onGoToAuth }: Props) {
               <Target size={14} style={{ color: "#F47920" }} />
               <span className="text-sm" style={{ color: "#F47920", fontWeight: 500 }}>Competitions</span>
             </div>
-            <h2 className="mb-3">Technology Arena</h2>
+            <h2 className="mb-3">Tech Arena</h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Những cuộc thi đang và sắp diễn ra — cơ hội để bạn chứng minh tài năng và bước vào Hall of Fame.
+              Ongoing and upcoming competitions — your opportunity to prove your talent and enter the Hall of Fame.
             </p>
           </motion.div>
 
@@ -328,7 +327,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                       </div>
                       <div className="shrink-0 text-right">
                         <div className="text-2xl" style={{ fontWeight: 800, color: c.color }}>{c.prize}</div>
-                        <div className="text-xs text-muted-foreground">Prize pool</div>
+                        <div className="text-xs text-muted-foreground">Total Prize</div>
                       </div>
                     </div>
 
@@ -337,9 +336,9 @@ export function LandingPage({ onGoToAuth }: Props) {
                         <div className="flex items-center gap-3">
                           <Calendar size={16} style={{ color: c.color }} />
                           <div>
-                            <div className="text-xs text-muted-foreground">Timeline</div>
+                            <div className="text-xs text-muted-foreground">Date</div>
                             <div className="text-sm font-medium">
-                              {new Date(c.startDate).toLocaleDateString("vi-VN")} – {new Date(c.endDate).toLocaleDateString("vi-VN")}
+                              {new Date(c.startDate).toLocaleDateString("en-US")} – {new Date(c.endDate).toLocaleDateString("en-US")}
                             </div>
                           </div>
                         </div>
@@ -354,7 +353,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                           <div className="flex items-center gap-3">
                             <Users size={16} style={{ color: c.color }} />
                             <div>
-                              <div className="text-xs text-muted-foreground">Active teams</div>
+                              <div className="text-xs text-muted-foreground">Competing Teams</div>
                               <div className="text-sm font-medium">{c.teams} teams</div>
                             </div>
                           </div>
@@ -381,7 +380,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                         <button onClick={onGoToAuth}
                           className="mt-6 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm transition-all hover:opacity-90"
                           style={{ background: c.color }}>
-                          {c.status === "ongoing" ? "View Details" : "Register to Join"}
+                          {c.status === "ongoing" ? "View Details" : "Register to Participate"}
                           <ArrowRight size={15} />
                         </button>
                       </div>
@@ -426,13 +425,13 @@ export function LandingPage({ onGoToAuth }: Props) {
               <span className="text-sm" style={{ color: "#D4A020", fontWeight: 500 }}>Hall of Fame</span>
             </div>
             <h2 className="mb-3">
-              Sảnh{" "}
+              Hall of{" "}
               <span style={{ background: "linear-gradient(135deg, #FFD700, #F47920, #FFD700)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-                Danh Vọng
+                Fame
               </span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              Những cái tên đã viết nên lịch sử SEAL — top 3 teams excellent nhất của từng cuộc thi.
+              The names that made SEAL history — the top 3 teams from each competition.
             </p>
           </motion.div>
 
@@ -448,7 +447,7 @@ export function LandingPage({ onGoToAuth }: Props) {
           {!hofLoading && hofGroups.length === 0 && (
             <div className="text-center py-16 text-muted-foreground">
               <Trophy size={40} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Chưa có dữ liệu Hall of Fame.</p>
+              <p className="text-sm">No Hall of Fame data available yet.</p>
             </div>
           )}
 
@@ -509,7 +508,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                                 <div className="font-medium text-xs leading-snug">{entry.awardTitle}</div>
                               </div>
                               <div className="p-3 rounded-xl bg-white/20 border border-white/30">
-                                <div className="text-xs text-muted-foreground mb-0.5">Team leader</div>
+                                <div className="text-xs text-muted-foreground mb-0.5">Team Leader</div>
                                 <div className="font-semibold text-sm">{entry.leaderName}</div>
                               </div>
                               <div className="text-xs text-muted-foreground px-1 pt-1">
@@ -538,10 +537,10 @@ export function LandingPage({ onGoToAuth }: Props) {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { icon: Trophy, value: "12",    label: "Competitions",    sub: "completed", color: "#F47920" },
-              { icon: Users,  value: "480+",  label: "Teams",     sub: "across FPT",   color: "#FF8C2A" },
-              { icon: Star,   value: "96",    label: "Projects",       sub: "excellent",       color: "#7C3AED" },
-              { icon: Award,  value: "5 tỷ",  label: "Prizes", sub: "awarded",  color: "#0EA5E9" },
+              { icon: Trophy, value: "12",     label: "Competitions",  sub: "completed",       color: "#F47920" },
+              { icon: Users,  value: "480+",   label: "Teams",         sub: "across FPT",      color: "#FF8C2A" },
+              { icon: Star,   value: "96",     label: "Projects",      sub: "top-ranked",      color: "#7C3AED" },
+              { icon: Award,  value: "5B VND", label: "Prize Money",   sub: "awarded",         color: "#0EA5E9" },
             ].map((s, i) => (
               <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
@@ -567,14 +566,14 @@ export function LandingPage({ onGoToAuth }: Props) {
           </div>
           <h2 className="mb-3">Ready to Make History?</h2>
           <p className="text-muted-foreground mb-8 max-w-lg mx-auto">
-            Sign in để xem thông tin cuộc thi của bạn, hoặc đăng ký để tham gia vào đấu trường công nghệ SEAL.
+            Sign in to view your competition details, or register to step into the SEAL Tech Arena.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button onClick={onGoToAuth}
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold transition-all hover:opacity-90 active:scale-95"
               style={{ background: ORANGE_WHITE, boxShadow: "0 8px 32px rgba(244,121,32,0.35)" }}>
               <Zap size={18} />
-              Sign In / Đăng Ký
+              Sign In / Register
             </button>
           </div>
         </motion.div>
@@ -591,10 +590,9 @@ export function LandingPage({ onGoToAuth }: Props) {
               SEAL Hackathon Platform
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 FPT University. Where technology talent shines.</p>
+          <p className="text-xs text-muted-foreground">© 2026 FPT University. Where tech talent shines.</p>
         </div>
       </footer>
     </div>
   );
 }
-

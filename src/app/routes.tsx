@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, Outlet, useParams, useNavigate, useLocation } from "react-router";
+import { useEffect } from "react";
 import { useAuth, AuthProvider } from "./context/AuthContext";
 import { AuthPages } from "./components/auth/AuthPages";
 import { Layout } from "./components/shared/Layout";
@@ -37,7 +38,7 @@ function RoleRedirect() {
 
 function MainLayout() {
   const { currentRole, logout, isDark, toggleDark } = useAuth();
-  const { page } = useParams();
+  const { role, page } = useParams();
   const navigate = useNavigate();
 
   const handlePageNavigate = (newPage: string) => {

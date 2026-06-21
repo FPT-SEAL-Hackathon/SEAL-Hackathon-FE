@@ -1,4 +1,4 @@
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 
 // ─── Token helpers ──────────────────────────────────────────────────────────
 export const TOKEN_KEY = "seal_access_token";
@@ -24,13 +24,7 @@ export function saveUser(user: object) {
 }
 export function loadUser<T>(): T | null {
   const raw = localStorage.getItem("seal_user");
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    clearTokens();
-    return null;
-  }
+  return raw ? (JSON.parse(raw) as T) : null;
 }
 
 // ─── API Error ──────────────────────────────────────────────────────────────

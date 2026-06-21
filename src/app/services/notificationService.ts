@@ -17,27 +17,92 @@ export interface NotificationPage {
   size: number;
 }
 
+interface BackendNotification {
+  id: string;
+  eventId?: string;
+  recipientUserId?: string;
+  title: string;
+  body: string;
+  sentAt: string;
+  sentByUserId?: string;
+  isRead: boolean;
+}
+
+interface BackendNotificationPage {
+  data: BackendNotification[];
+  totalElements: number;
+  totalPages: number;
+  currentPage: number;
+  statusCode: number;
+  message: string;
+}
+
+interface BackendEnvelope<T> {
+  data: T;
+  statusCode: number;
+  message: string;
+}
+
+function mapNotification(item: BackendNotification): NotificationItem {
+  return {
+    notificationId: item.id,
+    title: item.title,
+    body: item.body,
+    eventId: item.eventId,
+    read: item.isRead,
+    createdAt: item.sentAt,
+  };
+}
+
 export const notificationService = {
-  getMyNotifications: (page = 0, size = 20) =>
-    api.get<NotificationPage>(`/api/v1/notifications/getMyNotifications?page=${page}&size=${size}`),
+  getMyNotifications: async (page = 0, size = 20): Promise<NotificationPage> => {
+    const response = await api.get<BackendNotificationPage>(
+      `/api/v1/notifications/getMyNotifications?page=${page}&size=${size}`,
+    );
+    return {
+      content: (response.data ?? []).map(mapNotification),
+      totalElements: response.totalElements ?? 0,
+      totalPages: response.totalPages ?? 0,
+      number: response.currentPage ?? page,
+      size,
+    };
+  },
 
-  getUnreadCount: () =>
-    api.get<{ count: number }>("/api/v1/notifications/unread-count"),
+  getUnreadCount: async () => {
+    const response = await api.get<BackendEnvelope<number>>("/api/v1/notifications/unread-count");
+    return { count: response.data ?? 0 };
+  },
 
-  markAsRead: (notificationId: string) =>
-    api.patch<object>(`/api/v1/notifications/${notificationId}/read`),
+  markAsRead: async (notificationId: string) => {
+    const response = await api.patch<BackendEnvelope<BackendNotification>>(
+      `/api/v1/notifications/${notificationId}/read`,
+    );
+    return response.data ? mapNotification(response.data) : undefined;
+  },
 
-  markAllAsRead: () =>
-    api.patch<object>("/api/v1/notifications/read-all"),
+  markAllAsRead: async () => {
+    const response = await api.patch<BackendEnvelope<number>>("/api/v1/notifications/read-all");
+    return { count: response.data ?? 0 };
+  },
 
   delete: (notificationId: string) =>
     api.delete(`/api/v1/notifications/deleteNotification/${notificationId}`),
 
   // Admin send
-  sendToUser: (data: { recipientUserId: string; eventId?: string; title: string; body: string }) =>
-    api.post<object>("/api/v1/notifications/sendNotificationToUser", data),
-  broadcast: (data: { recipientUserIds: string[]; eventId?: string; title: string; body: string }) =>
-    api.post<object>("/api/v1/notifications/sendBroadcastNotification", data),
+  sendToUser: async (data: { recipientUserId: string; eventId?: string; title: string; body: string }) => {
+    const response = await api.post<BackendEnvelope<BackendNotification>>(
+      "/api/v1/notifications/sendNotificationToUser",
+      data,
+    );
+    return response.data ? mapNotification(response.data) : undefined;
+  },
+  broadcast: async (data: { recipientUserIds: string[]; eventId?: string; title: string; body: string }) => {
+    const response = await api.post<BackendEnvelope<BackendNotification[]>>(
+      "/api/v1/notifications/sendBroadcastNotification",
+      data,
+    );
+    return (response.data ?? []).map(mapNotification);
+  },
 
   // SSE stream — returns EventSource for real-time notifications
   createStream: (): EventSource | null => {

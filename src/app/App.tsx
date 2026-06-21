@@ -3,6 +3,7 @@ import { LanguageProvider } from "../store/languageStore";
 import { AuthProvider, useAuth } from "./store/authStore";
 import { LandingPage } from "./components/landing/LandingPage";
 import { AuthPages } from "./components/auth/AuthPages";
+import { DevHub } from "./components/dev/DevHub";
 import { Layout } from "../layout/Layout";
 import { MemberDashboard } from "./components/member/MemberDashboard";
 import { LeaderDashboard } from "./components/leader/LeaderDashboard";
@@ -10,36 +11,19 @@ import { JudgeDashboard } from "./components/judge/JudgeDashboard";
 import { MentorDashboard } from "./components/mentor/MentorDashboard";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { ResearchDashboard } from "./components/research/ResearchDashboard";
-import { userTypeToRole } from "./services/authService";
 import { loadUser } from "./services/apiClient";
 import type { UserResponse } from "./services/authService";
 
-const roleDefaultPages: Record<string, string> = {
-  member:   "dashboard",
-  leader:   "dashboard",
-  judge:    "rounds",
-  mentor:   "tracks",
-  admin:    "dashboard",
-  research: "variance",
-};
-
-type AppView = "landing" | "auth" | "app";
+type AppView = "landing" | "auth" | "devhub" | "page";
 
 function AppShell() {
-  const { user, role, setAuth, signOut } = useAuth();
+  const { setAuth, signOut } = useAuth();
 
-  // Restore session: if tokens + user exist in localStorage, go straight to app
-  const [view, setView] = useState<AppView>(() => {
-    const saved = loadUser<UserResponse>();
-    return saved ? "app" : "landing";
-  });
-
-  const [currentPage, setCurrentPage] = useState(() => {
-    const saved = loadUser<UserResponse>();
-    if (!saved) return "dashboard";
-    return roleDefaultPages[userTypeToRole(saved.userType)] ?? "dashboard";
-  });
-
+  const [view, setView] = useState<AppView>(() =>
+    loadUser<UserResponse>() ? "devhub" : "landing"
+  );
+  const [activeRole, setActiveRole] = useState("admin");
+  const [currentPage, setCurrentPage] = useState("dashboard");
   const [isDark, setIsDark] = useState(() => localStorage.getItem("seal-theme") === "dark");
 
   useEffect(() => {
@@ -47,24 +31,24 @@ function AppShell() {
     localStorage.setItem("seal-theme", isDark ? "dark" : "light");
   }, [isDark]);
 
-  const handleLoginSuccess = (roleOrUser: string) => {
-    // Demo path: roleOrUser is a plain role string (no real user object)
-    // Real API path: authService.login() already saved user; roleOrUser is derived role
+  const handleLoginSuccess = () => {
     const freshUser = loadUser<UserResponse>();
     if (freshUser) setAuth(freshUser);
-
-    const resolvedRole = typeof roleOrUser === "string" ? roleOrUser : role ?? "member";
-    setCurrentPage(roleDefaultPages[resolvedRole] ?? "dashboard");
-    setView("app");
+    setView("devhub");
   };
 
-  const handleRoleChange = async () => {
+  const handleNavigate = (role: string, page: string) => {
+    setActiveRole(role);
+    setCurrentPage(page);
+    setView("page");
+  };
+
+  const handleLogout = async () => {
     await signOut();
-    setCurrentPage("dashboard");
     setView("landing");
   };
 
-  const activeRole = role ?? (view === "app" ? "member" : null);
+  const handleBackToHub = () => setView("devhub");
 
   if (view === "landing") {
     return <LandingPage onGoToAuth={() => setView("auth")} />;
@@ -74,6 +58,11 @@ function AppShell() {
     return <AuthPages onLogin={handleLoginSuccess} />;
   }
 
+  if (view === "devhub") {
+    return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
+  }
+
+  // view === "page" — render the selected dashboard inside Layout
   const renderDashboard = () => {
     switch (activeRole) {
       case "member":   return <MemberDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
@@ -82,19 +71,18 @@ function AppShell() {
       case "mentor":   return <MentorDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
       case "admin":    return <AdminDashboard  currentPage={currentPage} onNavigate={setCurrentPage} />;
       case "research": return <ResearchDashboard currentPage={currentPage} />;
-      default:         return <MemberDashboard currentPage={currentPage} onNavigate={setCurrentPage} />;
+      default:         return <AdminDashboard  currentPage={currentPage} onNavigate={setCurrentPage} />;
     }
   };
 
   return (
     <Layout
-      role={activeRole!}
+      role={activeRole}
       currentPage={currentPage}
       onNavigate={setCurrentPage}
-      onRoleChange={handleRoleChange}
+      onRoleChange={handleBackToHub}
       isDark={isDark}
       onToggleDark={() => setIsDark(v => !v)}
-      userName={user?.fullName ?? undefined}
     >
       {renderDashboard()}
     </Layout>

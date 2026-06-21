@@ -1,21 +1,27 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "../../../store/languageStore";
-import { eventService } from "../../../app/services/eventService";
-import { categoryService } from "../../../app/services/categoryService";
+import { eventService, type EventResponse } from "../../../app/services/eventService";
+import { categoryService, type CategoryResponse } from "../../../app/services/categoryService";
+import { roundService, type CriterionTemplateResponse, type RoundResponse } from "../../../app/services/roundService";
 import { teamService, type TeamEligibilityReviewResponse } from "../../../app/services/teamService";
-import { rankingService } from "../../../app/services/rankingService";
-import { awardService } from "../../../app/services/awardService";
+import { rankingService, type EventRankingDTO } from "../../../app/services/rankingService";
+import { awardService, type AwardResponse } from "../../../app/services/awardService";
 import { notificationService } from "../../../app/services/notificationService";
+import { EventModal } from "./modals/EventModal";
+import { CategoryModal } from "./modals/CategoryModal";
+import { RoundModal } from "./modals/RoundModal";
+import { AssignJudgeModal } from "./modals/AssignJudgeModal";
+import { AwardModal } from "./modals/AwardModal";
 import {
-  Users, Upload, Shield, AlertTriangle,
-  Star, UserCheck, Trophy, Bell,
+  Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
+  GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
   Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
-  Download, Send, Search,
-  Eye, Zap, Award
+  TrendingUp, Clock, Activity, Download, Send, Search, Filter,
+  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
-  ProgressBar, Button
+  ProgressBar, Button, DataTable, TimelineItem
 } from "../shared/UIComponents";
 
 // ===== DATA =====
@@ -94,7 +100,19 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState(events);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
+  const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
   const [apiTeamEligibility, setApiTeamEligibility] = useState<TeamEligibilityReviewResponse[]>([]);
+  const [apiRankings, setApiRankings] = useState<EventRankingDTO[]>([]);
+  const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
+  const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
+
+  // ── Modal state ──────────────────────────────────────────────────────────
+  const [eventModal, setEventModal] = useState<{ open: boolean; edit?: EventResponse }>({ open: false });
+  const [categoryModal, setCategoryModal] = useState<{ open: boolean; edit?: CategoryResponse }>({ open: false });
+  const [roundModal, setRoundModal] = useState<{ open: boolean; edit?: RoundResponse; categoryId?: string }>({ open: false });
+  const [assignJudgeModal, setAssignJudgeModal] = useState<{ open: boolean; roundId?: string; roundName?: string }>({ open: false });
+  const [awardModal, setAwardModal] = useState(false);
 
   useEffect(() => {
     eventService.getAll()
@@ -112,10 +130,21 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   useEffect(() => {
     if (!selectedEventId) return;
-    categoryService.getByEvent(selectedEventId).catch(() => {});
+    categoryService.getByEvent(selectedEventId).then(data => {
+      setApiCategories(data);
+      // Load rounds for first category
+      if (data[0]) {
+        roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
+      }
+    }).catch(() => {});
     teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
-    awardService.getByEvent(selectedEventId).catch(() => {});
+    awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
   }, [selectedEventId]);
+
+  useEffect(() => {
+    if (currentPage !== "criteria") return;
+    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
+  }, [currentPage]);
 
   // Disqualify with real API
   const handleDisqualifyConfirm = async () => {
@@ -247,7 +276,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Recent Activity</div>
-            {auditLogs.slice(0, 4).map(log => (
+            {auditLogs.slice(0, 4).map((log, i) => (
               <div key={log.id} className="mb-3 last:mb-0">
                 <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{log.action}</div>
                 <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{log.actor} • {log.timestamp.split(" ")[0]}</div>
@@ -264,7 +293,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       <SectionHeader
         title="Event Management"
         subtitle="Create and manage hackathon events"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>New Event</Button>}
+        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setEventModal({ open: true })}>New Event</Button>}
       />
       <div className="space-y-3">
         {apiEvents.map((ev: any) => (
@@ -295,7 +324,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       <SectionHeader
         title="Category Management"
         subtitle="Manage competition categories and tracks"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>New Category</Button>}
+        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setCategoryModal({ open: true })}>New Category</Button>}
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {categories.map(cat => (
@@ -333,7 +362,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       <SectionHeader
         title="Round Management"
         subtitle="Configure and monitor competition rounds"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>New Round</Button>}
+        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setRoundModal({ open: true, categoryId: apiCategories[0]?.categoryId })}>New Round</Button>}
       />
       <div className="space-y-3">
         {rounds.map(r => (
@@ -369,7 +398,20 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>{t("common.newTemplate")}</Button>}
       />
       <div className="space-y-4">
-        {criteria.map(c => (
+        {(apiCriteriaTemplates.length > 0
+          ? apiCriteriaTemplates.map(template => ({
+            id: template.templateId,
+            name: template.criterionName,
+            fields: [
+              `Weight (${template.defaultWeight})`,
+              `Max Score (${template.maxScore})`,
+              template.description || "No description",
+            ],
+            events: 0,
+            status: template.isActive ? "active" : "draft",
+          }))
+          : criteria
+        ).map(c => (
           <Card key={c.id} className="p-5">
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -410,18 +452,15 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const handleComputeRankings = async () => {
     if (selectedEventId) {
       try {
-        await rankingService.computeEvent(selectedEventId);
+        const data = await rankingService.computeEvent(selectedEventId);
+        setApiRankings(data);
       } catch { /* ignore */ }
     }
     setRankingsComputed(true);
     setTimeout(() => setRankingsComputed(false), 3000);
   };
 
-  const handleGrantAward = () => {
-    setAwardSuccess(true);
-    setAwardForm({ teamId: "", eventId: "1", awardTier: "FIRST_PRIZE" });
-    setTimeout(() => setAwardSuccess(false), 2500);
-  };
+  const handleGrantAward = () => setAwardModal(true);
 
   const renderUsers = () => (
     <>
@@ -478,7 +517,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           <textarea
             value={disqualifyReason}
             onChange={e => setDisqualifyReason(e.target.value)}
-            placeholder="State reason for disqualification (e.g. Vi phạm quy chế sao chép code.)"
+            placeholder="State reason for disqualification (e.g. Violation of code plagiarism rules.)"
             rows={3}
             className="w-full px-3 py-2 rounded-xl outline-none resize-none mb-3"
             style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
@@ -618,7 +657,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               </tr>
             </thead>
             <tbody>
-              {rankings.map(row => (
+              {rankings.map((row, i) => (
                 <tr key={row.rank} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                   <td className="px-4 py-3">
                     <span style={{ fontSize: row.rank <= 3 ? 18 : 14, fontWeight: 700 }}>
@@ -1046,5 +1085,75 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
-  return <div className="p-6 space-y-6">{renderPage()}</div>;
+  return (
+    <div className="p-6 space-y-6">
+      {renderPage()}
+
+      {/* ── Modals ─────────────────────────────────────────────────── */}
+      {eventModal.open && (
+        <EventModal
+          event={eventModal.edit}
+          onClose={() => setEventModal({ open: false })}
+          onSaved={saved => {
+            setApiEvents(prev => eventModal.edit
+              ? prev.map((e: any) => e.id === saved.eventId ? { ...e, name: saved.eventName, category: saved.description ?? e.category } : e)
+              : [...prev, { id: saved.eventId, name: saved.eventName, category: saved.description ?? "—", status: "upcoming", teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
+            );
+            setEventModal({ open: false });
+          }}
+        />
+      )}
+
+      {categoryModal.open && selectedEventId && (
+        <CategoryModal
+          eventId={selectedEventId}
+          category={categoryModal.edit}
+          onClose={() => setCategoryModal({ open: false })}
+          onSaved={saved => {
+            setApiCategories(prev => categoryModal.edit
+              ? prev.map(c => c.categoryId === saved.categoryId ? saved : c)
+              : [...prev, saved]
+            );
+            setCategoryModal({ open: false });
+          }}
+        />
+      )}
+
+      {roundModal.open && roundModal.categoryId && (
+        <RoundModal
+          categoryId={roundModal.categoryId}
+          round={roundModal.edit}
+          onClose={() => setRoundModal({ open: false })}
+          onSaved={saved => {
+            setApiRounds(prev => roundModal.edit
+              ? prev.map(r => r.roundId === saved.roundId ? saved : r)
+              : [...prev, saved]
+            );
+            setRoundModal({ open: false });
+          }}
+        />
+      )}
+
+      {assignJudgeModal.open && assignJudgeModal.roundId && (
+        <AssignJudgeModal
+          roundId={assignJudgeModal.roundId}
+          roundName={assignJudgeModal.roundName ?? ""}
+          onClose={() => setAssignJudgeModal({ open: false })}
+          onSaved={() => setAssignJudgeModal({ open: false })}
+        />
+      )}
+
+      {awardModal && selectedEventId && (
+        <AwardModal
+          eventId={selectedEventId}
+          categoryId={apiCategories[0]?.categoryId}
+          onClose={() => setAwardModal(false)}
+          onSaved={() => {
+            setAwardModal(false);
+            if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+          }}
+        />
+      )}
+    </div>
+  );
 }

@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
-import { loadUser, getAccessToken } from "../services/apiClient";
+import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { loadUser, clearTokens, getAccessToken } from "../services/apiClient";
 import { logout as apiLogout, userTypeToRole, type UserResponse } from "../services/authService";
 
 interface AuthState {
