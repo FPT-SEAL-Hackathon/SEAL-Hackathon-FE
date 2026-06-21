@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLanguage } from "@/store/languageStore";
+import { useLanguage } from "@/app/store/languageStore";
 import {
   Activity, BarChart2, TrendingUp, Users, Download,
   FileText, PieChart, CheckCircle, AlertCircle

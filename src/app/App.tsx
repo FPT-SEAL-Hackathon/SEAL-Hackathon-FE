@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LanguageProvider } from "@/store/languageStore";
+import { LanguageProvider } from "@/app/store/languageStore";
 import { AuthProvider, useAuth } from "@/features/auth/store/authStore";
 import { LandingPage } from "@/pages/landing/LandingPage";
 import { AuthPages } from "@/features/auth/pages/AuthPages";

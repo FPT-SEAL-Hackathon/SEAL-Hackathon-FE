@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { useLanguage } from "@/store/languageStore";
-import type { Language } from "@/i18n/translations";
+import { useLanguage } from "@/app/store/languageStore";
+import type { Language } from "@/app/i18n/translations";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
