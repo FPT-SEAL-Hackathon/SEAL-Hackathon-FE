@@ -1,1 +1,1 @@
-export { Layout } from "../app/components/shared/Layout";
+export { Layout } from "@/components/layouts/Layout";
