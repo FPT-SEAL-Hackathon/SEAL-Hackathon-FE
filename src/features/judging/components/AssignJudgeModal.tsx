@@ -43,7 +43,7 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full rounded-2xl overflow-hidden"
-          style={{ maxWidth: 480, background: COLORS.surface, boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
+          style={{ maxWidth: 480, background: COLORS.bg, boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
           <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
             <div>
               <h3 style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>Assign Judges</h3>
