@@ -1,6 +1,4 @@
 import { useState, useRef, useEffect } from "react";
-import { useLanguage } from "@/app/store/languageStore";
-import type { Language } from "@/app/i18n/translations";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
@@ -132,13 +130,11 @@ interface LayoutProps {
 }
 
 export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson", isDark = false, onToggleDark }: LayoutProps) {
-  const { language, setLanguage } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [notifCount, setNotifCount] = useState(3);
   const [appSettings, setAppSettings] = useState({
-    language: "vi",
     dateFormat: "DD/MM/YYYY",
     itemsPerPage: "10",
     emailNotif: true,
@@ -585,21 +581,6 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                 <section>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Display</div>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Language</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Interface language</div>
-                      </div>
-                      <select
-                        value={language}
-                        onChange={e => setLanguage(e.target.value as Language)}
-                        className="rounded-lg px-3 py-1.5 outline-none text-sm"
-                        style={{ background: "var(--surface-input)", border: "1px solid var(--glass-border-subtle)", color: "var(--text-primary)", fontSize: 13 }}
-                      >
-                        <option value="vi">Vietnamese</option>
-                        <option value="en">English</option>
-                      </select>
-                    </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Date Format</div>
