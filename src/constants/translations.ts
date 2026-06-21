@@ -1,1 +1,1 @@
-export { en, vi, dictionaries, type Language } from "@/i18n/translations";
+export { en, dictionaries, type Language } from "@/i18n/translations";
