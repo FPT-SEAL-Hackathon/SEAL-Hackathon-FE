@@ -32,3 +32,4 @@ dist-ssr
 
 # TypeScript cache
 *.tsbuildinfo
+node_modules
