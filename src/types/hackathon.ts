@@ -17,4 +17,4 @@ export type {
   LeaderboardEntry,
   VarianceReport,
   NotificationDTO,
-} from "../app/services/hackathonApi";
+} from "@/lib/api/hackathonApi";
