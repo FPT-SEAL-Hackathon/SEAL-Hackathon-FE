@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from "@/features/auth/store/authStore";
 import { LandingPage } from "@/pages/landing/LandingPage";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
 import { DevHub } from "@/pages/dev/DevHub";
-import { Layout } from "@/components/layouts/Layout";
+import { Layout } from "@/layout/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
 import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";

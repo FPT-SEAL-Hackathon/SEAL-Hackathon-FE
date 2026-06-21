@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="dd710f91-bdb4-4a48-99df-85864b710358" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/App.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/DashboardRouter.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/admin/AdminDashboard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/admin/modals/AssignJudgeModal.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/admin/modals/AwardModal.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/admin/modals/CategoryModal.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/admin/modals/EventModal.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/admin/modals/RoundModal.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/auth/AuthPages.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/dev/DevHub.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/figma/ImageWithFallback.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/judge/JudgeDashboard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/landing/LandingPage.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/leader/LeaderDashboard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/member/MemberDashboard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/mentor/MentorDashboard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/research/ResearchDashboard.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/shared/Layout.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/shared/UIComponents.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/accordion.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/alert-dialog.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/alert.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/aspect-ratio.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/avatar.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/badge.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/breadcrumb.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/button.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/calendar.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/card.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/carousel.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/chart.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/checkbox.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/collapsible.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/command.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/context-menu.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/dialog.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/drawer.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/dropdown-menu.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/form.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/hover-card.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/input-otp.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/input.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/label.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/menubar.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/navigation-menu.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/pagination.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/popover.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/progress.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/radio-group.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/resizable.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/scroll-area.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/select.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/separator.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/sheet.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/sidebar.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/skeleton.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/slider.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/sonner.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/switch.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/table.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/tabs.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/textarea.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/toggle-group.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/toggle.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/tooltip.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/use-mobile.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/components/ui/utils.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/context/AuthContext.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/context/LanguageContext.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/hooks/useApiData.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/i18n/translations.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/routes.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/apiClient.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/authService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/awardService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/categoryService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/eventService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/hackathonApi.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/judgingService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/notificationService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/rankingService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/roundService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/submissionService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/services/teamService.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app/store/authStore.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/constants/translations.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/constants/translations.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/hooks/useAuth.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/hooks/useAuth.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/image-1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/image-2.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/image-3.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/image.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/pasted_text/hackathon-management-ui-design.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/pasted_text/hackathon-management-ui-ux.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/pasted_text/hackathon-management-ui.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/pasted_text/openapi-spec.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/imports/pasted_text/seal-hackathon-api.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/layout/Layout.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/layout/Layout.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/hackathonApi.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/store/authStore.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/store/languageStore.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/store/languageStore.tsx" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="CopilotPersistence">
+    <persistenceIdMap>
+      <entry key="_D:/1. FPT Document/Sem5/SWP391/FE/SEAL-Hackathon-FE" value="3FOnjXQvKnArbCtLx3I2WU11uou" />
+    </persistenceIdMap>
+  </component>
+  <component name="EmbeddingIndexingInfo">
+    <option name="cachedIndexableFilesCount" value="127" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="McpProjectServerCommands">
+    <commands />
+    <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.0504290119595419" />
+      <entry key="MS500" value="2.439913055696575" />
+      <entry key="S2" value="4.55576129326383" />
+      <entry key="S5" value="5.437051907403434" />
+      <entry key="S10" value="8.194626748702534" />
+      <entry key="S30" value="31.78625479417555" />
+      <entry key="S60" value="56.18546106885119" />
+      <entry key="M2" value="97.32891368652511" />
+      <entry key="M5" value="234.16568951820253" />
+      <entry key="M10" value="410.36059285703294" />
+      <entry key="M15" value="528.4475990412158" />
+      <entry key="M30" value="749.7906122654157" />
+      <entry key="H1" value="990.8920176527682" />
+      <entry key="H2" value="1207.447507914373" />
+      <entry key="H4" value="1361.8762126850222" />
+      <entry key="D1" value="1525.5385392086496" />
+      <entry key="W1" value="1557.5410509130695" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="0.1881647529356693" />
+      <entry key="MS500" value="2.0836450430837594" />
+      <entry key="S2" value="4.438376070080987" />
+      <entry key="S5" value="5.386216316895137" />
+      <entry key="S10" value="8.16605763293301" />
+      <entry key="S30" value="31.769968682242332" />
+      <entry key="S60" value="56.17435381296566" />
+      <entry key="M2" value="97.32155474456997" />
+      <entry key="M5" value="234.16087919431686" />
+      <entry key="M10" value="410.35704545975204" />
+      <entry key="M15" value="528.4447118501146" />
+      <entry key="M30" value="749.7886070822645" />
+      <entry key="H1" value="990.8906372365899" />
+      <entry key="H2" value="1207.4466256692804" />
+      <entry key="H4" value="1361.8756990072275" />
+      <entry key="D1" value="1525.538440343372" />
+      <entry key="W1" value="1557.5410364131046" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 6,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3FOnjXQvKnArbCtLx3I2WU11uou" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.MCP Project settings loaded": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "Stucture",
+    "ignore.virus.scanning.warn.message": "true",
+    "javascript.preferred.runtime.type.id": "node",
+    "last_opened_file_path": "D:/1. FPT Document/Sem5/SWP391/FE/SEAL-Hackathon-FE",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "ml.llm.AcpAgentsConfigurable",
+    "ts.external.directory.path": "C:\\Program Files\\JetBrains\\WebStorm 2025.2.6.1\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-WS-261.25134.101" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="dd710f91-bdb4-4a48-99df-85864b710358" name="Changes" comment="" />
+      <created>1781955120234</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1781955120234</updated>
+      <workItem from="1781955121845" duration="7970000" />
+      <workItem from="1781980420627" duration="118000" />
+      <workItem from="1782006049716" duration="2531000" />
+      <workItem from="1782008642620" duration="1764000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
