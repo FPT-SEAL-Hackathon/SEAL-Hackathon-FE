@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { en } from "@/constants/translations";
+import { en } from "@/constants/translation";
 
 interface LanguageState {
   t: (key: string) => string;
