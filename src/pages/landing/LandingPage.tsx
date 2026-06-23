@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Trophy, Medal, Star, Crown, Flame, Zap, Users, Calendar,
+  Trophy, Star, Crown, Flame, Zap, Users, Calendar,
   ArrowRight, Award, Target, Clock, MapPin, Shield, Hash, Loader
 } from "lucide-react";
 import { api } from "@/lib/api/apiClient";

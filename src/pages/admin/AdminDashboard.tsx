@@ -305,22 +305,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           return;
         }
 
-        const recipient = apiTeamEligibility
-          .flatMap(team => team.members)
-          .find(member => member.email.toLowerCase() === email);
-
-        if (!recipient) {
-          setNotificationError("No loaded event participant matches this email.");
-          return;
-        }
-
-        await notificationService.sendToUser({
-          recipientUserId: recipient.userId,
+        await notificationService.sendToEmail({
+          recipientEmail: email,
           eventId: selectedEventId ?? undefined,
           title: notificationTitle.trim(),
           body: notificationMessage.trim(),
         });
-        setNotificationStatus(`Notification sent to ${recipient.email}.`);
+        setNotificationStatus(`Notification sent to ${email}.`);
       }
 
       setNotificationTitle("");
@@ -1105,9 +1096,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                   className="w-full px-3 py-2 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 />
-                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
-                  Email is matched against loaded participants in the selected event.
-                </div>
               </div>
             )}
 
