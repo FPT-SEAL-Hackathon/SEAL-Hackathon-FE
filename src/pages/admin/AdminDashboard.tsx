@@ -112,7 +112,57 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [categoryModal, setCategoryModal] = useState<{ open: boolean; edit?: CategoryResponse }>({ open: false });
   const [roundModal, setRoundModal] = useState<{ open: boolean; edit?: RoundResponse; categoryId?: string }>({ open: false });
   const [assignJudgeModal, setAssignJudgeModal] = useState<{ open: boolean; roundId?: string; roundName?: string }>({ open: false });
+<<<<<<< Updated upstream
   const [awardModal, setAwardModal] = useState(false);
+=======
+
+  const [userSearch, setUserSearch] = useState("");
+  const [approvedUsers, setApprovedUsers] = useState<number[]>([]);
+  const [showGuestJudgeForm, setShowGuestJudgeForm] = useState(false);
+  const [guestJudgeForm, setGuestJudgeForm] = useState({ email: "", fullName: "", company: "" });
+  const [guestJudgeSuccess, setGuestJudgeSuccess] = useState(false);
+  const [rankingsComputed, setRankingsComputed] = useState(false);
+  const [disqualifiedTeams, setDisqualifiedTeams] = useState<number[]>([]);
+  const [disqualifyTarget, setDisqualifyTarget] = useState<{ id: number; name: string } | null>(null);
+  const [disqualifyReason, setDisqualifyReason] = useState("");
+  const [awardPatternCategoryId, setAwardPatternCategoryId] = useState("");
+  const [awardPatterns, setAwardPatterns] = useState([
+    createEmptyAwardPattern(1),
+    createEmptyAwardPattern(2),
+    createEmptyAwardPattern(3),
+  ]);
+  const [awardPatternLoading, setAwardPatternLoading] = useState(false);
+  const [awardPatternMessage, setAwardPatternMessage] = useState("");
+  const [awardPatternError, setAwardPatternError] = useState("");
+  const [autoGrantLimit, setAutoGrantLimit] = useState("3");
+  const [autoGrantLoading, setAutoGrantLoading] = useState(false);
+  const [autoGrantMessage, setAutoGrantMessage] = useState("");
+  const [autoGrantError, setAutoGrantError] = useState("");
+  const [autoGrantPreview, setAutoGrantPreview] = useState<Array<{ teamId: string; teamName: string; rankPosition: number; totalScore: number }>>([]);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
+  const [broadcastSent, setBroadcastSent] = useState(false);
+  const [notificationTargetMode, setNotificationTargetMode] = useState<"team" | "user">("team");
+  const [notificationTeamId, setNotificationTeamId] = useState("");
+  const [notificationEmail, setNotificationEmail] = useState("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationSending, setNotificationSending] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState("");
+  const [notificationError, setNotificationError] = useState("");
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [systemSettings, setSystemSettings] = useState({
+    platformName: "SEAL FPT Hackathon Platform",
+    maxTeamSize: "5",
+    minTeamSize: "2",
+    submissionGracePeriod: "30",
+    allowLateSubmissions: true,
+    enablePublicLeaderboard: true,
+    requireEmailVerification: true,
+    contactEmail: "seal@fpt.edu.vn",
+  });
+>>>>>>> Stashed changes
 
   useEffect(() => {
     eventService.getAll()
@@ -177,6 +227,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     } catch { setBroadcastSent(true); setTimeout(() => setBroadcastSent(false), 3000); }
   };
 
+<<<<<<< Updated upstream
   const [userSearch, setUserSearch] = useState("");
   const [approvedUsers, setApprovedUsers] = useState<number[]>([]);
   const [showGuestJudgeForm, setShowGuestJudgeForm] = useState(false);
@@ -203,6 +254,80 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     requireEmailVerification: true,
     contactEmail: "seal@fpt.edu.vn",
   });
+=======
+  const handleSendTargetedNotification = async () => {
+    if (!notificationTitle.trim() || !notificationMessage.trim()) {
+      setNotificationError("Title and message are required.");
+      return;
+    }
+
+    setNotificationSending(true);
+    setNotificationStatus("");
+    setNotificationError("");
+
+    try {
+      if (notificationTargetMode === "team") {
+        const team = apiTeamEligibility.find(item => item.teamId === notificationTeamId);
+        if (!team) {
+          setNotificationError("Select a team before sending.");
+          return;
+        }
+
+        const recipientIds = Array.from(new Set([
+          team.leaderUserId,
+          ...team.members.map(member => member.userId),
+        ].filter(Boolean)));
+
+        if (recipientIds.length === 0) {
+          setNotificationError("This team has no recipient user IDs.");
+          return;
+        }
+
+        const sent = await notificationService.broadcast({
+          recipientUserIds: recipientIds,
+          eventId: selectedEventId ?? undefined,
+          title: notificationTitle.trim(),
+          body: notificationMessage.trim(),
+        });
+        setNotificationStatus(`Sent to ${sent.length} team member(s).`);
+      } else {
+        const email = notificationEmail.trim().toLowerCase();
+        if (!email) {
+          setNotificationError("Recipient email is required.");
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          setNotificationError("Enter a valid recipient email.");
+          return;
+        }
+
+        const recipient = apiTeamEligibility
+          .flatMap(team => team.members)
+          .find(member => member.email.toLowerCase() === email);
+
+        if (!recipient) {
+          setNotificationError("No loaded event participant matches this email.");
+          return;
+        }
+
+        await notificationService.sendToUser({
+          recipientUserId: recipient.userId,
+          eventId: selectedEventId ?? undefined,
+          title: notificationTitle.trim(),
+          body: notificationMessage.trim(),
+        });
+        setNotificationStatus(`Notification sent to ${recipient.email}.`);
+      }
+
+      setNotificationTitle("");
+      setNotificationMessage("");
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : "Failed to send notification.");
+    } finally {
+      setNotificationSending(false);
+    }
+  };
+>>>>>>> Stashed changes
 
   const filteredUsers = users.filter(u =>
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -742,8 +867,16 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   const renderNotifications = () => (
     <>
-      <SectionHeader title={t("admin.notificationCenter")} subtitle={t("admin.notificationSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <SectionHeader
+        title={t("admin.notificationCenter")}
+        subtitle={t("admin.notificationSubtitle")}
+        action={
+          <Button variant="outline" size="sm" icon={<Send size={14} />} onClick={() => onNavigate("direct-notification")}>
+            Direct Notification
+          </Button>
+        }
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.broadcastSend")}</div>
           <div className="space-y-4">
@@ -759,8 +892,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                 <option>All Judges</option>
                 <option>All Mentors</option>
                 <option>All Participants</option>
-                <option>AI Agents Track Only</option>
-                <option>Web3 Track Only</option>
               </select>
             </div>
             <div>
@@ -798,6 +929,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
             </div>
           </div>
         </Card>
+
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.broadcastHistory")}</div>
           {broadcastHistory.map(b => (
@@ -805,7 +937,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{b.title}</div>
               <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{b.message}</div>
               <div className="flex items-center justify-between mt-2">
-                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} • {b.sent}</span>
+                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} - {b.sent}</span>
                 <StatusBadge status={b.status} />
               </div>
             </div>
@@ -815,6 +947,117 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
+  const renderDirectNotification = () => (
+    <>
+      <SectionHeader
+        title="Direct Notification"
+        subtitle="Send a targeted notification to one team or one user"
+        action={
+          <Button variant="outline" size="sm" icon={<Bell size={14} />} onClick={() => onNavigate("notifications")}>
+            Back to Broadcast
+          </Button>
+        }
+      />
+      <div className="max-w-3xl">
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Send Direct Notification</div>
+          <div className="space-y-4">
+            {notificationError && (
+              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+                {notificationError}
+              </div>
+            )}
+            {notificationStatus && (
+              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+                {notificationStatus}
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TARGET TYPE</label>
+              <select
+                value={notificationTargetMode}
+                onChange={e => setNotificationTargetMode(e.target.value as "team" | "user")}
+                className="w-full px-3 py-2 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="team">Team</option>
+                <option value="user">Individual User</option>
+              </select>
+            </div>
+
+            {notificationTargetMode === "team" ? (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM</label>
+                <select
+                  value={notificationTeamId}
+                  onChange={e => setNotificationTeamId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <option value="">Select team</option>
+                  {apiTeamEligibility.map(team => (
+                    <option key={team.teamId} value={team.teamId}>{team.teamName} ({team.activeMemberCount} members)</option>
+                  ))}
+                </select>
+                {apiTeamEligibility.length === 0 && (
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+                    No teams loaded for the selected event.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>RECIPIENT EMAIL</label>
+                <input
+                  type="email"
+                  value={notificationEmail}
+                  onChange={e => setNotificationEmail(e.target.value)}
+                  placeholder="student@fpt.edu.vn"
+                  className="w-full px-3 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+                  Email is matched against loaded participants in the selected event.
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TITLE</label>
+              <input
+                value={notificationTitle}
+                onChange={e => setNotificationTitle(e.target.value)}
+                placeholder="Notification title"
+                className="w-full px-3 py-2 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>MESSAGE</label>
+              <textarea
+                value={notificationMessage}
+                onChange={e => setNotificationMessage(e.target.value)}
+                rows={5}
+                placeholder="Write a message for this recipient"
+                className="w-full px-3 py-2 rounded-xl outline-none resize-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Send size={14} />}
+              onClick={handleSendTargetedNotification}
+              disabled={notificationSending || !notificationTitle || !notificationMessage || (notificationTargetMode === "team" ? !notificationTeamId : !notificationEmail)}
+            >
+              {notificationSending ? "Sending..." : "Send Notification"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
   const renderAudit = () => (
     <>
       <SectionHeader title={t("admin.auditLogs")} subtitle={t("admin.auditSubtitle")} action={<Button variant="outline" size="sm" icon={<Download size={14} />}>{t("common.exportLogs")}</Button>} />
@@ -1077,6 +1320,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "rankings": return renderRankings();
       case "reports": return renderReports();
       case "notifications": return renderNotifications();
+      case "direct-notification": return renderDirectNotification();
       case "audit": return renderAudit();
       case "awards": return renderAwards();
       case "settings": return renderSettings();

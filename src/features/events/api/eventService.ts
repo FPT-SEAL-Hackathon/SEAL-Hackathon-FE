@@ -41,8 +41,20 @@ export interface UpdateEventStatusRequest {
   eventStatusId: string;
 }
 
+interface BackendEnvelope<T> {
+  data?: T;
+  statusCode?: number;
+  message?: string;
+}
+
+function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response.data)) return response.data;
+  throw new Error(response.message ?? "Unexpected events response from server.");
+}
+
 export const eventService = {
-  getAll: () => api.get<EventResponse[]>("/api/v1/events"),
+  getAll: async () => unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events")),
   getById: (id: string) => api.get<EventResponse>(`/api/v1/event/${id}`),
   create: (data: CreateEventRequest) => api.post<EventResponse>("/api/v1/event", data),
   update: (id: string, data: UpdateEventRequest) => api.put<EventResponse>(`/api/v1/event/${id}`, data),
