@@ -96,6 +96,13 @@ export const notificationService = {
     );
     return response.data ? mapNotification(response.data) : undefined;
   },
+  sendToEmail: async (data: { recipientEmail: string; eventId?: string; title: string; body: string }) => {
+    const response = await api.post<BackendEnvelope<BackendNotification>>(
+      "/api/v1/notifications/sendNotificationToEmail",
+      data,
+    );
+    return response.data ? mapNotification(response.data) : undefined;
+  },
   broadcast: async (data: { recipientUserIds: string[]; eventId?: string; title: string; body: string }) => {
     const response = await api.post<BackendEnvelope<BackendNotification[]>>(
       "/api/v1/notifications/sendBroadcastNotification",
