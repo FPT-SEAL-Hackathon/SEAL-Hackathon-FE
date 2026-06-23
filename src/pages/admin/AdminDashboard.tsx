@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLanguage } from "@/store/languageStore";
+import { useLanguage } from "@/app/store/languageStore";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type CriterionTemplateResponse, type RoundResponse } from "@/features/judging/api/roundService";

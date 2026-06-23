@@ -32,5 +32,4 @@ dist-ssr
 
 # TypeScript cache
 *.tsbuildinfo
-node_modules
-.idea/workspace.xml
+
