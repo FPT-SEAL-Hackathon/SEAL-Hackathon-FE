@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useBlocker } from "react-router";
 import {
   Star, CheckCircle, Clock, ClipboardList, BarChart2,
   ChevronRight, ExternalLink, Github, Globe, FileText,
@@ -104,11 +105,25 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   const hasUnsavedChanges = currentPage === "scoring" && !scoreSaved && (totalScore > 0 || Object.values(comments).some(c => c.trim() !== ""));
 
-  const handleNavigate = (page: string) => {
-    if (hasUnsavedChanges && page !== "scoring") {
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
+  );
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
       const confirmLeave = window.confirm("The score data doesn't submit will be delete, Would you like to leave?");
-      if (!confirmLeave) return;
+      if (confirmLeave) {
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
     }
+  }, [blocker]);
+
+  const handleNavigate = (page: string) => {
+    // With Data Router, we don't need manual intercept here because useBlocker handles navigation away.
+    // However, if onNavigate just uses react-router navigate, useBlocker will intercept it anyway.
     onNavigate(page);
   };
 

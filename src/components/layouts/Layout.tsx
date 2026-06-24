@@ -8,6 +8,7 @@ import {
   UserCheck, FolderOpen, Activity,
   Target, TrendingUp, PieChart, MessageSquare, User, Wrench
 } from "lucide-react";
+import { notificationService } from "@/features/notifications/api/notificationService";
 
 
 const COLORS = {

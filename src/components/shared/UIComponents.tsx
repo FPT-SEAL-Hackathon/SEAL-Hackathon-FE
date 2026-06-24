@@ -14,6 +14,7 @@ const COLORS = {
   border: "var(--glass-border-subtle)",
   textPrimary: "var(--text-primary)",
   textSecondary: "var(--text-secondary)",
+  textMuted: "var(--text-muted)",
 };
 
 const glassSurface: React.CSSProperties = {

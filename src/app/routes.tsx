@@ -1,7 +1,10 @@
 import { createBrowserRouter, Navigate, Outlet, useParams, useNavigate, useLocation } from "react-router";
-import { useEffect } from "react";
-import { useAuth, AuthProvider } from "@/features/auth/context/AuthContext";
+import { useState, useEffect } from "react";
+import { useAuth, AuthProvider } from "@/features/auth/store/authStore";
+import { loadUser } from "@/lib/api/apiClient";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
+import { LandingPage } from "@/pages/landing/LandingPage";
+import { DevHub } from "@/pages/dev/DevHub";
 import { Layout } from "@/components/layouts/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
 import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
@@ -20,97 +23,116 @@ const roleDefaultPages: Record<string, string> = {
 };
 
 function RequireAuth() {
-  const { authenticated, currentRole } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
 
-  if (!authenticated || !currentRole) {
+  if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <Outlet />;
 }
 
-function RoleRedirect() {
-  const { currentRole } = useAuth();
-  if (!currentRole) return <Navigate to="/login" replace />;
-  return <Navigate to={`/${currentRole}/${roleDefaultPages[currentRole] ?? "dashboard"}`} replace />;
+function HubRoute() {
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+  
+  const handleNavigate = (role: string, page: string) => {
+    navigate(`/${role}/${page}`);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
 }
 
 function MainLayout() {
-  const { currentRole, logout, isDark, toggleDark } = useAuth();
+  const { user } = useAuth();
   const { role, page } = useParams();
   const navigate = useNavigate();
 
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("seal-theme") === "dark");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+    localStorage.setItem("seal-theme", isDark ? "dark" : "light");
+  }, [isDark]);
+
   const handlePageNavigate = (newPage: string) => {
-    navigate(`/${currentRole}/${newPage}`);
+    navigate(`/${role}/${newPage}`);
   };
 
   const handleRoleChange = () => {
-    logout();
-    navigate("/login");
+    navigate("/hub");
   };
 
-  if (!currentRole) return null;
+  if (!user || !role) return null;
 
   const renderDashboard = () => {
     const currentPage = page || "dashboard";
-    switch (currentRole) {
-      case "member":
-        return <MemberDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "leader":
-        return <LeaderDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "judge":
-        return <JudgeDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "mentor":
-        return <MentorDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "admin":
-        return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "research":
-        return <ResearchDashboard currentPage={currentPage} />;
-      default:
-        return <MemberDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+    switch (role) {
+      case "member":   return <MemberDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+      case "leader":   return <LeaderDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+      case "judge":    return <JudgeDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+      case "mentor":   return <MentorDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+      case "admin":    return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+      case "research": return <ResearchDashboard currentPage={currentPage} />;
+      default:         return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
     }
   };
 
   return (
     <Layout
-      role={currentRole}
+      role={role}
       currentPage={page || "dashboard"}
       onNavigate={handlePageNavigate}
       onRoleChange={handleRoleChange}
       isDark={isDark}
-      onToggleDark={toggleDark}
+      onToggleDark={() => setIsDark(v => !v)}
     >
       {renderDashboard()}
     </Layout>
   );
 }
 
+
+
 function AuthRoute() {
-  const { authenticated, login } = useAuth();
+  const { user, setAuth } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || "/";
+  const from = location.state?.from?.pathname || "/hub";
 
-  if (authenticated) {
+  if (user) {
     return <Navigate to={from} replace />;
   }
 
-  return <AuthPages onLogin={(role) => {
-    login(role);
-    navigate(`/${role}/${roleDefaultPages[role] ?? "dashboard"}`);
+  return <AuthPages onLogin={() => {
+    const freshUser = loadUser<any>();
+    if (freshUser) {
+      setAuth(freshUser);
+    }
+    navigate("/hub");
   }} />;
+}
+
+function LandingRoute() {
+  const navigate = useNavigate();
+  return <LandingPage onGoToAuth={() => navigate("/login")} />;
 }
 
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: (
-      <AuthProvider>
-        <Outlet />
-      </AuthProvider>
-    ),
+    element: <Outlet />,
     children: [
+      {
+        index: true,
+        element: <LandingRoute />,
+      },
       {
         path: "login",
         element: <AuthRoute />,
@@ -119,8 +141,8 @@ export const router = createBrowserRouter([
         path: "/",
         element: <RequireAuth />,
         children: [
-          { index: true, element: <RoleRedirect /> },
-          { path: ":role", element: <RoleRedirect /> },
+          { path: "hub", element: <HubRoute /> },
+          { path: ":role", element: <Navigate to="/hub" replace /> },
           { path: ":role/:page", element: <MainLayout /> },
         ],
       },
