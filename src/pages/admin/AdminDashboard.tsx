@@ -7,6 +7,8 @@ import { teamService, type TeamEligibilityReviewResponse } from "@/features/team
 import { rankingService, type EventRankingDTO } from "@/features/rankings/api/rankingService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { notificationService } from "@/features/notifications/api/notificationService";
+import { researchService } from "@/features/research/api/researchService";
+import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
 import { CategoryModal } from "@/features/categories/components/CategoryModal";
 import { RoundModal } from "@/features/judging/components/RoundModal";
@@ -16,7 +18,7 @@ import {
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
   Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
   TrendingUp, Clock, Activity, Download, Send, Search, Filter,
-  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader
+  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader, Database
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -126,6 +128,9 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
   const [eventLoadError, setEventLoadError] = useState("");
   const [categoryLoadError, setCategoryLoadError] = useState("");
+  const [dataExportLoading, setDataExportLoading] = useState(false);
+  const [dataExportDone, setDataExportDone] = useState(false);
+  const [dataExportError, setDataExportError] = useState("");
 
   // ── Modal state ──────────────────────────────────────────────────────────
   const [eventModal, setEventModal] = useState<{ open: boolean; edit?: EventResponse }>({ open: false });
@@ -287,6 +292,41 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       setNotificationError("Failed to send notification.");
     } finally {
       setNotificationSending(false);
+    }
+  };
+
+  const handleDataExport = async () => {
+    if (!selectedEventId) {
+      setDataExportError("Select or load an event before exporting data.");
+      return;
+    }
+
+    setDataExportLoading(true);
+    setDataExportError("");
+    setDataExportDone(false);
+    try {
+      const token = getAccessToken();
+      const response = await fetch(researchService.exportUrl(selectedEventId), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        const message = await response.text().catch(() => "");
+        throw new Error(message || `Export failed (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `seal-data-export-${selectedEventId}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setDataExportDone(true);
+      setTimeout(() => setDataExportDone(false), 3000);
+    } catch (error) {
+      setDataExportError(error instanceof Error ? error.message : "Failed to export data.");
+    } finally {
+      setDataExportLoading(false);
     }
   };
 
@@ -906,6 +946,98 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               <Button variant="ghost" size="sm" icon={<Download size={13} />}>{t("common.export")}</Button>
             </div>
           ))}
+        </Card>
+      </div>
+    </>
+  );
+
+  const renderDataExport = () => (
+    <>
+      <SectionHeader
+        title="Data Export"
+        subtitle="Export scoring data for the selected event"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={dataExportLoading ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
+            onClick={handleDataExport}
+            disabled={dataExportLoading || !selectedEventId}
+          >
+            {dataExportLoading ? "Exporting..." : "Download CSV"}
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_0.9fr] gap-6">
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Export Configuration</div>
+          {dataExportError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              {dataExportError}
+            </div>
+          )}
+          {dataExportDone && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+              Export file is ready.
+            </div>
+          )}
+          {eventLoadError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              Events could not be loaded from database: {eventLoadError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
+              <select
+                value={selectedEventId ?? ""}
+                onChange={e => setSelectedEventId(e.target.value || null)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {apiEvents.length === 0 && <option value="">No events found</option>}
+                {apiEvents.map((event: any) => (
+                  <option key={event.id} value={event.id}>{event.name}</option>
+                ))}
+              </select>
+            </div>
+            <Button
+              variant="primary"
+              size="lg"
+              icon={dataExportLoading ? <Loader size={15} className="animate-spin" /> : <Database size={15} />}
+              onClick={handleDataExport}
+              disabled={dataExportLoading || !selectedEventId}
+            >
+              {dataExportLoading ? "Exporting..." : "Export Data"}
+            </Button>
+          </div>
+
+          <div className="mt-5 p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 6 }}>BACKEND ENDPOINT USED</div>
+            <code style={{ fontSize: 12, color: COLORS.textSecondary, wordBreak: "break-all" }}>
+              GET /api/v1/research/events/{"{eventId}"}/export
+            </code>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Export Contents</div>
+          <div className="space-y-3">
+            {[
+              "Teams and submission identifiers",
+              "Judge identifiers and scoring metadata",
+              "Criterion-level score values",
+              "Round and event references",
+              "Exportable CSV format for admin analysis",
+            ].map(item => (
+              <div key={item} className="flex items-center gap-2">
+                <CheckCircle size={14} style={{ color: COLORS.success, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{item}</span>
+              </div>
+            ))}
+          </div>
         </Card>
       </div>
     </>
@@ -1591,6 +1723,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "assignments": return renderAssignments();
       case "rankings": return renderRankings();
       case "reports": return renderReports();
+      case "data-export": return renderDataExport();
       case "notifications": return renderNotifications();
       case "direct-notification": return renderDirectNotification();
       case "audit": return renderAudit();
