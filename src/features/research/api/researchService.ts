@@ -6,8 +6,6 @@ export interface ResearchQuery {
   bucketSize?: number;
 }
 
-export type ResearchExportType = "dashboard";
-
 function buildQuery(params: ResearchQuery & { type?: string } = {}) {
   const query = new URLSearchParams();
   if (params.roundId) query.set("roundId", params.roundId);
@@ -19,6 +17,6 @@ function buildQuery(params: ResearchQuery & { type?: string } = {}) {
 }
 
 export const researchService = {
-  exportUrl: (eventId: string, params?: ResearchQuery & { type?: ResearchExportType }) =>
+  exportUrl: (eventId: string, params?: ResearchQuery) =>
     `${API_BASE_URL}/api/v1/research/events/${eventId}/export${buildQuery(params)}`,
 };

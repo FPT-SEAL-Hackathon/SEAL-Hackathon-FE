@@ -306,10 +306,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setDataExportDone(false);
     try {
       const token = getAccessToken();
-      const response = await fetch(researchService.exportUrl(selectedEventId, { type: "dashboard" }), {
+      const response = await fetch(researchService.exportUrl(selectedEventId), {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
-      if (!response.ok) throw new Error(`Export failed (${response.status})`);
+      if (!response.ok) {
+        const message = await response.text().catch(() => "");
+        throw new Error(message || `Export failed (${response.status})`);
+      }
 
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
@@ -1014,7 +1017,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           <div className="mt-5 p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 6 }}>BACKEND ENDPOINT USED</div>
             <code style={{ fontSize: 12, color: COLORS.textSecondary, wordBreak: "break-all" }}>
-              GET /api/v1/research/events/{"{eventId}"}/export?type=dashboard
+              GET /api/v1/research/events/{"{eventId}"}/export
             </code>
           </div>
         </Card>
