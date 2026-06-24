@@ -2,9 +2,9 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, FileText,
-  Star, ClipboardList, BarChart2, Shield, Database, GitBranch,
-  Clock, Award, Zap, BookOpen, UserCheck, FolderOpen, Activity,
-  Target, TrendingUp, PieChart, MessageSquare, Wrench, LogOut,
+  Star, ClipboardList, BarChart2, Shield, GitBranch,
+  Clock, Award, Zap, BookOpen, UserCheck, FolderOpen,
+  Target, TrendingUp, MessageSquare, Wrench, LogOut,
   ChevronRight,
 } from "lucide-react";
 
@@ -99,26 +99,12 @@ const ALL_ROLES: {
       { key: "assignments",   label: "Assignments",      icon: UserCheck,       desc: "Assign judges/mentors" },
       { key: "rankings",      label: "Rankings",         icon: Trophy,          desc: "Compute and view rankings" },
       { key: "reports",       label: "Reports",          icon: BarChart2,       desc: "Analytics reports" },
+      { key: "data-export",   label: "Data Export",      icon: FileText,        desc: "Export scoring data" },
       { key: "notifications", label: "Notifications",    icon: Bell,            desc: "Send broadcast notifications" },
       { key: "awards",        label: "Awards",           icon: Award,           desc: "Grant awards, auto-grant" },
       { key: "audit",         label: "Audit Logs",       icon: Shield,          desc: "System audit logs" },
       { key: "settings",      label: "Settings",         icon: Wrench,          desc: "Platform configuration" },
       { key: "profile",       label: "Profile",          icon: UserCheck,       desc: "Admin information" },
-    ],
-  },
-  {
-    role: "research",
-    label: "Research",
-    color: "#7C3AED",
-    bg: "rgba(124,58,237,0.08)",
-    emoji: "🔬",
-    pages: [
-      { key: "variance",     label: "Variance Analytics",     icon: Activity,   desc: "Judge variance analysis" },
-      { key: "distribution", label: "Score Distribution",     icon: PieChart,   desc: "Score distribution" },
-      { key: "reliability",  label: "Inter-rater Reliability",icon: BarChart2,  desc: "ICC & Krippendorff reliability" },
-      { key: "export",       label: "Data Export",            icon: Database,   desc: "Export research CSV" },
-      { key: "comparison",   label: "Judge Comparison",       icon: TrendingUp, desc: "Judge comparison by criterion" },
-      { key: "stats",        label: "Research Stats",         icon: FileText,   desc: "Aggregated research stats" },
     ],
   },
 ];

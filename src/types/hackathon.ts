@@ -15,6 +15,5 @@ export type {
   SubmissionDTO,
   ScoreDTO,
   LeaderboardEntry,
-  VarianceReport,
   NotificationDTO,
 } from "@/lib/api/hackathonApi";

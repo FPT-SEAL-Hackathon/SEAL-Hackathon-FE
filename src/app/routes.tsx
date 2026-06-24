@@ -11,7 +11,6 @@ import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
-import { ResearchDashboard } from "@/pages/research/ResearchDashboard";
 
 const roleDefaultPages: Record<string, string> = {
   member:   "dashboard",
@@ -19,7 +18,6 @@ const roleDefaultPages: Record<string, string> = {
   judge:    "rounds",
   mentor:   "tracks",
   admin:    "dashboard",
-  research: "variance",
 };
 
 function RequireAuth() {
@@ -79,7 +77,6 @@ function MainLayout() {
       case "judge":    return <JudgeDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
       case "mentor":   return <MentorDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
       case "admin":    return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "research": return <ResearchDashboard currentPage={currentPage} />;
       default:         return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
     }
   };

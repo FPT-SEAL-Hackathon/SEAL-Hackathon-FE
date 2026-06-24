@@ -49,8 +49,8 @@ const USER_TYPE_MAP: Record<string, string> = {
   mentor:     "mentor",
   organizer:  "admin",
   admin:      "admin",
-  research:   "research",
-  researcher: "research",
+  research:   "admin",
+  researcher: "admin",
 };
 
 export function userTypeToRole(userType: string): string {

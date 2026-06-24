@@ -14,7 +14,6 @@ const DEMO_ROLES = [
   { role: "judge",    label: "Judge",    color: "#7C3AED" },
   { role: "mentor",   label: "Mentor",   color: "#0EA5E9" },
   { role: "admin",    label: "Admin",    color: "#c0392b" },
-  { role: "research", label: "Research", color: "#D4610A" },
 ];
 
 // ─── OAuth Modal ─────────────────────────────────────────────────────────────

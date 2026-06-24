@@ -5,8 +5,8 @@ import {
   FileText, Star, ClipboardList, BarChart2, Shield, Database,
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
-  UserCheck, FolderOpen, Activity,
-  Target, TrendingUp, PieChart, MessageSquare, User, Wrench
+  UserCheck, FolderOpen,
+  Target, TrendingUp, MessageSquare, User, Wrench
 } from "lucide-react";
 import { notificationService } from "@/features/notifications/api/notificationService";
 
@@ -77,18 +77,11 @@ const roleMenus: Record<string, { icon: React.ElementType; label: string; key: s
     { icon: UserCheck, label: "Assignments", key: "assignments" },
     { icon: Trophy, label: "Rankings", key: "rankings" },
     { icon: BarChart2, label: "Reports", key: "reports" },
+    { icon: Database, label: "Data Export", key: "data-export" },
     { icon: Bell, label: "Notifications", key: "notifications" },
     { icon: Award, label: "Awards", key: "awards" },
     { icon: Shield, label: "Audit Logs", key: "audit" },
     { icon: Wrench, label: "Settings", key: "settings" },
-  ],
-  research: [
-    { icon: Activity, label: "Variance Analytics", key: "variance" },
-    { icon: PieChart, label: "Score Distribution", key: "distribution" },
-    { icon: BarChart2, label: "Inter-rater Reliability", key: "reliability" },
-    { icon: Database, label: "Data Export", key: "export" },
-    { icon: Users, label: "Judge Comparison", key: "comparison" },
-    { icon: FileText, label: "Research Stats", key: "stats" },
   ],
 };
 
@@ -98,7 +91,6 @@ const roleProfileKey: Record<string, string | null> = {
   judge: "profile",
   mentor: "profile",
   admin: "profile",
-  research: null,
 };
 
 const roleLabels: Record<string, string> = {
@@ -107,7 +99,6 @@ const roleLabels: Record<string, string> = {
   judge: "Judge",
   mentor: "Mentor",
   admin: "Event Coordinator",
-  research: "RBL Researcher",
 };
 
 const roleColors: Record<string, string> = {
@@ -116,7 +107,6 @@ const roleColors: Record<string, string> = {
   judge: "#F59E0B",
   mentor: "#009444",
   admin: "#e53e2e",
-  research: "#F47920",
 };
 
 interface LayoutProps {
