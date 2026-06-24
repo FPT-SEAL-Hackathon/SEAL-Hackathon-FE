@@ -133,7 +133,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [notifCount, setNotifCount] = useState(3);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
   const [appSettings, setAppSettings] = useState({
     dateFormat: "DD/MM/YYYY",
     itemsPerPage: "10",
@@ -149,6 +149,37 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const menus = roleMenus[role] || [];
   const accentColor = roleColors[role] || COLORS.primary;
   const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2);
+  const notifCount = notifications.filter(notification => !notification.read).length;
+
+  useEffect(() => {
+    notificationService.getMyNotifications(0, 5)
+      .then(page => {
+        setNotifications((page.content ?? []).map(notification => ({
+          id: notification.notificationId,
+          title: notification.title,
+          body: notification.body,
+          time: new Date(notification.createdAt).toLocaleString(),
+          read: notification.read,
+        })));
+      })
+      .catch(() => {});
+  }, []);
+
+  const markNotificationRead = async (id: string) => {
+    setNotifications(prev => prev.map(notification => (
+      notification.id === id ? { ...notification, read: true } : notification
+    )));
+    try {
+      await notificationService.markAsRead(id);
+    } catch { /* keep local read state */ }
+  };
+
+  const markAllNotificationsRead = async () => {
+    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+    try {
+      await notificationService.markAllAsRead();
+    } catch { /* keep local read state */ }
+  };
 
   useEffect(() => {
     const handleClickOutside = () => setNotifOpen(false);
@@ -375,7 +406,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => { if (!notifOpen) setNotifCount(0); setNotifOpen(v => !v); }}
+                onClick={() => setNotifOpen(v => !v)}
                 className="relative flex items-center justify-center rounded-xl w-9 h-9 transition-colors"
                 style={{
                   background: "var(--surface-input)",
@@ -422,23 +453,41 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                       boxShadow: "0 24px 64px rgba(180,100,20,0.18), inset 0 1px 0 rgba(255,255,255,1)",
                     }}
                   >
-                    <div className="px-4 py-3.5" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
+                    <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>Notifications</span>
+                      {notifCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                          style={{ fontSize: 11, color: accentColor, fontWeight: 700 }}
+                        >
+                          Mark all read
+                        </button>
+                      )}
                     </div>
-                    {[
-                      { title: "Submission deadline in 2 days", time: "2h ago", color: "#F59E0B", icon: "⚠️" },
-                      { title: "Your team was approved!", time: "5h ago", color: "#009444", icon: "✅" },
-                      { title: "New round opened: Finals", time: "1d ago", color: "#F47920", icon: "🏆" },
-                    ].map((n, i) => (
+                    {notifications.length === 0 && (
+                      <div className="px-4 py-5" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                        No notifications yet.
+                      </div>
+                    )}
+                    {notifications.map((n, i) => (
                       <motion.div
-                        key={i}
+                        key={n.id}
                         whileHover={{ background: "rgba(244,121,32,0.04)" }}
                         className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
-                        style={{ borderBottom: i < 2 ? "1px solid rgba(244,121,32,0.07)" : "none" }}
+                        onClick={() => markNotificationRead(n.id)}
+                        style={{
+                          borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
+                          background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
+                        }}
                       >
-                        <span style={{ fontSize: 17 }}>{n.icon}</span>
-                        <div>
+                        <span
+                          className="rounded-full"
+                          style={{ width: 7, height: 7, marginTop: 6, flexShrink: 0, background: n.read ? "var(--text-muted)" : accentColor }}
+                        />
+                        <div className="min-w-0">
                           <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 }}>{n.body}</div>
                           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
                         </div>
                       </motion.div>

@@ -28,9 +28,21 @@ export interface CategoryMentorResponse {
   assignedAt: string;
 }
 
+interface BackendEnvelope<T> {
+  data?: T;
+  statusCode?: number;
+  message?: string;
+}
+
+function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
+  if (Array.isArray(response)) return response;
+  if (Array.isArray(response.data)) return response.data;
+  throw new Error(response.message ?? "Unexpected categories response from server.");
+}
+
 export const categoryService = {
-  getByEvent: (eventId: string) =>
-    api.get<CategoryResponse[]>(`/api/v1/categories/categories/${eventId}`),
+  getByEvent: async (eventId: string) =>
+    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`)),
   getById: (id: string) =>
     api.get<CategoryResponse>(`/api/v1/categories/category/${id}`),
   create: (eventId: string, data: CreateCategoryRequest) =>

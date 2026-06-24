@@ -885,8 +885,16 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   const renderNotifications = () => (
     <>
-      <SectionHeader title={t("admin.notificationCenter")} subtitle={t("admin.notificationSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <SectionHeader
+        title={t("admin.notificationCenter")}
+        subtitle={t("admin.notificationSubtitle")}
+        action={
+          <Button variant="outline" size="sm" icon={<Send size={14} />} onClick={() => onNavigate("direct-notification")}>
+            Direct Notification
+          </Button>
+        }
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.broadcastSend")}</div>
           <div className="space-y-4">
@@ -902,8 +910,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                 <option>All Judges</option>
                 <option>All Mentors</option>
                 <option>All Participants</option>
-                <option>AI Agents Track Only</option>
-                <option>Web3 Track Only</option>
               </select>
             </div>
             <div>
@@ -941,6 +947,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
             </div>
           </div>
         </Card>
+
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.broadcastHistory")}</div>
           {broadcastHistory.map(b => (
@@ -948,7 +955,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{b.title}</div>
               <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{b.message}</div>
               <div className="flex items-center justify-between mt-2">
-                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} • {b.sent}</span>
+                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} - {b.sent}</span>
                 <StatusBadge status={b.status} />
               </div>
             </div>
@@ -958,6 +965,114 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
+  const renderDirectNotification = () => (
+    <>
+      <SectionHeader
+        title="Direct Notification"
+        subtitle="Send a targeted notification to one team or one user"
+        action={
+          <Button variant="outline" size="sm" icon={<Bell size={14} />} onClick={() => onNavigate("notifications")}>
+            Back to Broadcast
+          </Button>
+        }
+      />
+      <div className="max-w-3xl">
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Send Direct Notification</div>
+          <div className="space-y-4">
+            {notificationError && (
+              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+                {notificationError}
+              </div>
+            )}
+            {notificationStatus && (
+              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+                {notificationStatus}
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TARGET TYPE</label>
+              <select
+                value={notificationTargetMode}
+                onChange={e => setNotificationTargetMode(e.target.value as "team" | "user")}
+                className="w-full px-3 py-2 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="team">Team</option>
+                <option value="user">Individual User</option>
+              </select>
+            </div>
+
+            {notificationTargetMode === "team" ? (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM</label>
+                <select
+                  value={notificationTeamId}
+                  onChange={e => setNotificationTeamId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <option value="">Select team</option>
+                  {apiTeamEligibility.map(team => (
+                    <option key={team.teamId} value={team.teamId}>{team.teamName} ({team.activeMemberCount} members)</option>
+                  ))}
+                </select>
+                {apiTeamEligibility.length === 0 && (
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+                    No teams loaded for the selected event.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>RECIPIENT EMAIL</label>
+                <input
+                  type="email"
+                  value={notificationEmail}
+                  onChange={e => setNotificationEmail(e.target.value)}
+                  placeholder="student@fpt.edu.vn"
+                  className="w-full px-3 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TITLE</label>
+              <input
+                value={notificationTitle}
+                onChange={e => setNotificationTitle(e.target.value)}
+                placeholder="Notification title"
+                className="w-full px-3 py-2 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>MESSAGE</label>
+              <textarea
+                value={notificationMessage}
+                onChange={e => setNotificationMessage(e.target.value)}
+                rows={5}
+                placeholder="Write a message for this recipient"
+                className="w-full px-3 py-2 rounded-xl outline-none resize-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Send size={14} />}
+              onClick={handleSendTargetedNotification}
+              disabled={notificationSending || !notificationTitle || !notificationMessage || (notificationTargetMode === "team" ? !notificationTeamId : !notificationEmail)}
+            >
+              {notificationSending ? "Sending..." : "Send Notification"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
   const renderAudit = () => (
     <>
       <SectionHeader title={t("admin.auditLogs")} subtitle={t("admin.auditSubtitle")} action={<Button variant="outline" size="sm" icon={<Download size={14} />}>{t("common.exportLogs")}</Button>} />
@@ -1436,6 +1551,108 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
+  const renderAwardPatterns = () => (
+    <>
+      <SectionHeader
+        title="Create Award Pattern"
+        subtitle="Configure award title, tier, description, and prize by rank for a category"
+        action={
+          <Button variant="outline" size="sm" icon={<Award size={14} />} onClick={() => onNavigate("awards")}>
+            Back to Awards
+          </Button>
+        }
+      />
+
+      <Card className="p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
+            <select
+              value={selectedEventId ?? ""}
+              onChange={e => setSelectedEventId(e.target.value || null)}
+              className="w-full px-3 py-2.5 rounded-xl outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              {apiEvents.map((event: any) => (
+                <option key={event.id} value={event.id}>{event.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
+            <select
+              value={awardPatternCategoryId}
+              onChange={e => setAwardPatternCategoryId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              <option value="">Select category</option>
+              {apiCategories.map(category => (
+                <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {awardPatternError && (
+          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+            {awardPatternError}
+          </div>
+        )}
+        {awardPatternMessage && (
+          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+            {awardPatternMessage}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {awardPatterns.map((pattern, index) => (
+            <div key={index} className="grid grid-cols-1 xl:grid-cols-[80px_1.2fr_1.4fr_1fr_120px_44px] gap-3 items-end p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANK</label>
+                <input type="number" min={1} max={10} value={pattern.rankPosition} onChange={e => updateAwardPattern(index, "rankPosition", Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TIER</label>
+                <select value={pattern.awardTierId} onChange={e => updateAwardPattern(index, "awardTierId", e.target.value)} className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                  {AWARD_TIER_OPTIONS.map(tier => <option key={tier.value} value={tier.value}>{tier.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TITLE</label>
+                <input value={pattern.awardTitle} onChange={e => updateAwardPattern(index, "awardTitle", e.target.value)} placeholder="Champion" className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>PRIZE</label>
+                <input type="number" value={pattern.prizeValue} onChange={e => updateAwardPattern(index, "prizeValue", e.target.value)} placeholder="10000000" className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CURRENCY</label>
+                <select value={pattern.prizeCurrency} onChange={e => updateAwardPattern(index, "prizeCurrency", e.target.value)} className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                  <option value="VND">VND</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <button type="button" onClick={() => removeAwardPattern(index)} className="h-11 rounded-xl flex items-center justify-center" style={{ border: `1px solid ${COLORS.border}`, color: COLORS.error, background: COLORS.bg }} aria-label="Remove award pattern">
+                <X size={16} />
+              </button>
+              <div className="xl:col-span-6">
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>DESCRIPTION</label>
+                <textarea value={pattern.description} onChange={e => updateAwardPattern(index, "description", e.target.value)} rows={2} className="w-full px-3 py-2.5 rounded-xl outline-none resize-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 mt-5">
+          <Button variant="outline" size="sm" icon={<PlusCircle size={14} />} onClick={addAwardPattern}>Add Rank</Button>
+          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={handleSaveAwardPatterns} disabled={awardPatternLoading || !awardPatternCategoryId}>
+            {awardPatternLoading ? "Saving..." : "Save Award Pattern"}
+          </Button>
+        </div>
+      </Card>
+    </>
+  );
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return renderDashboard();
@@ -1448,6 +1665,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "rankings": return renderRankings();
       case "reports": return renderReports();
       case "notifications": return renderNotifications();
+      case "direct-notification": return renderDirectNotification();
       case "audit": return renderAudit();
       case "awards": return renderAwards();
       case "award-patterns": return renderAwardPatterns();
