@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useBlocker } from "react-router";
 import {
   Star, CheckCircle, Clock, ClipboardList, BarChart2,
   ChevronRight, ExternalLink, Github, Globe, FileText,
@@ -58,26 +59,30 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
   const [apiCriteria, setApiCriteria] = useState<RoundCriterionResponse[]>([]);
   const [apiSubmissions, setApiSubmissions] = useState<SubmissionResponse[]>([]);
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
+
+  const loadRoundData = (roundId: string) => {
+    setSelectedRoundId(roundId);
+    Promise.all([
+      roundService.getCriteria(roundId).then(setApiCriteria),
+      submissionService.getByRound(roundId).then(setApiSubmissions),
+    ]).catch(() => {});
+  };
 
   useEffect(() => {
     if (!user?.id) return;
     roundService.getRoundsByJudge(user.id)
       .then(rounds => {
         setApiRounds(rounds);
-        // Load criteria and submissions for first active round
         const active = rounds.find(r => r.roundStatusId) ?? rounds[0];
-        if (!active) return;
-        return Promise.all([
-          roundService.getCriteria(active.roundId).then(setApiCriteria),
-          submissionService.getByRound(active.roundId).then(setApiSubmissions),
-        ]);
+        if (active) loadRoundData(active.roundId);
       })
       .catch(() => {});
   }, [user?.id]);
 
   const [selectedSubmission, setSelectedSubmission] = useState(submissions[0]);
-  const [scores, setScores] = useState<Record<string, number>>({ innovation: 0, technical: 0, impact: 0, presentation: 0 });
-  const [comment, setComment] = useState("");
+  const [scores, setScores] = useState<Record<string, number>>({});
+  const [comments, setComments] = useState<Record<string, string>>({});
   const [scoreSaved, setScoreSaved] = useState(false);
   const [scoreLoading, setScoreLoading] = useState(false);
   const [scoreError, setScoreError] = useState("");
@@ -88,20 +93,62 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
     institution: user?.universityName ?? "FPT University",
   });
 
+  // Reset scoring form when changing submissions
+  useEffect(() => {
+    setScores({});
+    setComments({});
+    setScoreSaved(false);
+    setScoreError("");
+  }, [selectedSubmission]);
+
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
+
+  const hasUnsavedChanges = currentPage === "scoring" && !scoreSaved && (totalScore > 0 || Object.values(comments).some(c => c.trim() !== ""));
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
+  );
+
+  useEffect(() => {
+    if (blocker.state === "blocked") {
+      const confirmLeave = window.confirm("The score data doesn't submit will be delete, Would you like to leave?");
+      if (confirmLeave) {
+        blocker.proceed();
+      } else {
+        blocker.reset();
+      }
+    }
+  }, [blocker]);
+
+  const handleNavigate = (page: string) => {
+    // With Data Router, we don't need manual intercept here because useBlocker handles navigation away.
+    // However, if onNavigate just uses react-router navigate, useBlocker will intercept it anyway.
+    onNavigate(page);
+  };
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "The score data doesn't submit will be delete, Would you like to leave?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const saveScore = async () => {
     setScoreLoading(true);
     setScoreError("");
     try {
-      // Use API criteria if available, otherwise fall back to mock scoringCriteria IDs
-      const criteriaToUse = apiCriteria.length > 0 ? apiCriteria : scoringCriteria.map(c => ({ roundCriterionId: c.id }));
-      const scorePayload: ScoreSubmissionDTO[] = criteriaToUse.map((c: any, i: number) => ({
-        submissionId: selectedSubmission.id?.toString() ?? "demo",
-        roundCriterionId: c.roundCriterionId ?? c.id,
-        scoreValue: Object.values(scores)[i] ?? 0,
-        comment,
-        isCalibration: false,
+      const isCalibrationRound = apiRounds.find(r => r.roundId === selectedRoundId)?.isCalibrationRound || false;
+      const scorePayload: ScoreSubmissionDTO[] = apiCriteria.map((c) => ({
+        submissionId: selectedSubmission.id?.toString() ?? "",
+        roundCriterionId: c.roundCriterionId,
+        scoreValue: scores[c.roundCriterionId] || 0,
+        comment: comments[c.roundCriterionId] || "",
+        isCalibration: isCalibrationRound,
       }));
       await judgingService.recordScores(scorePayload);
       setScoreSaved(true);
@@ -117,26 +164,28 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
     <>
       <SectionHeader title="Assigned Rounds" subtitle="SEAL Fall 2025 — Your evaluation assignments" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {assignedRounds.map(r => (
-          <Card key={r.id} className="p-5">
+        {apiRounds.length > 0 ? apiRounds.map(r => (
+          <Card key={r.roundId} className="p-5">
             <div className="flex items-start justify-between mb-3">
               <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{r.round}</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{r.event} • {r.track}</div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{r.roundName}</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{r.description || "Event Track"}</div>
               </div>
-              <StatusBadge status={r.status} />
+              <StatusBadge status="open" />
             </div>
             <div className="mb-4">
-              <ProgressBar value={r.scored} max={r.teams} color={r.status === "completed" ? COLORS.success : COLORS.primary} label={`Scored: ${r.scored}/${r.teams} teams`} />
+              <ProgressBar value={0} max={1} color={COLORS.primary} label={`Ready for scoring`} />
             </div>
             <div className="flex items-center justify-between">
-              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {r.deadline}</span>
-              <Button variant="outline" size="sm" icon={<ChevronRight size={13} />} onClick={() => onNavigate("submissions")}>
-                {r.status === "completed" ? "View History" : "Score Now"}
+              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {r.judgingDeadline ? new Date(r.judgingDeadline).toLocaleDateString() : "N/A"}</span>
+              <Button variant="outline" size="sm" icon={<ChevronRight size={13} />} onClick={() => { loadRoundData(r.roundId); handleNavigate("submissions"); }}>
+                Score Now
               </Button>
             </div>
           </Card>
-        ))}
+        )) : (
+          <div className="col-span-2 text-center py-8" style={{ color: COLORS.textSecondary }}>No rounds assigned yet.</div>
+        )}
       </div>
       <Card className="p-5">
         <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Your Statistics</div>
@@ -157,19 +206,17 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
-  const displaySubmissions = apiSubmissions.length > 0
-    ? apiSubmissions.map(s => ({
-        id: s.submissionId,
-        team: s.teamId,
-        title: s.notes || `Submission ${s.submissionId.slice(0, 8)}`,
-        track: "—",
-        github: s.repositoryUrl ?? "",
-        demo: s.demoUrl ?? "",
-        status: s.submissionStatusName?.toLowerCase() === "scored" ? "completed" : "pending",
-        score: undefined,
-        round: s.roundId,
-      }))
-    : submissions;
+  const displaySubmissions = apiSubmissions.map(s => ({
+    id: s.submissionId,
+    team: s.teamId,
+    title: s.notes || `Submission ${s.submissionId.slice(0, 8)}`,
+    track: "—",
+    github: s.repositoryUrl ?? "",
+    demo: s.demoUrl ?? "",
+    status: s.submissionStatusName?.toLowerCase() === "scored" ? "completed" : "pending",
+    score: undefined,
+    round: apiRounds.find(r => r.roundId === s.roundId)?.roundName || "Unknown Round",
+  }));
 
   const renderSubmissions = () => (
     <>
@@ -178,8 +225,8 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
         subtitle={`${displaySubmissions.filter((s: any) => s.status === "pending").length} submissions pending evaluation`}
       />
       {apiSubmissions.length === 0 && (
-        <div className="px-4 py-2 rounded-xl text-sm mb-3" style={{ background: `${COLORS.warning}10`, color: COLORS.warning, border: `1px solid ${COLORS.warning}30` }}>
-          Showing demo data — no assigned rounds loaded from API yet
+        <div className="px-4 py-2 rounded-xl text-sm mb-3" style={{ background: `${COLORS.bg}`, color: COLORS.textSecondary, border: `1px solid ${COLORS.border}` }}>
+          No submissions found for the selected round.
         </div>
       )}
       <div className="space-y-3">
@@ -210,12 +257,12 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
                   </a>
                 )}
                 {sub.status === "pending" && (
-                  <Button variant="primary" size="sm" icon={<Star size={13} />} onClick={() => { setSelectedSubmission(sub); onNavigate("scoring"); }}>
+                  <Button variant="primary" size="sm" icon={<Star size={13} />} onClick={() => { setSelectedSubmission(sub); handleNavigate("scoring"); }}>
                     Score
                   </Button>
                 )}
                 {sub.status === "completed" && (
-                  <Button variant="outline" size="sm" icon={<Eye size={13} />} onClick={() => { setSelectedSubmission(sub); onNavigate("scoring"); }}>
+                  <Button variant="outline" size="sm" icon={<Eye size={13} />} onClick={() => { setSelectedSubmission(sub); handleNavigate("scoring"); }}>
                     Review
                   </Button>
                 )}
@@ -254,57 +301,67 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Criteria Scoring */}
         <div className="col-span-2 space-y-4">
-          {scoringCriteria.map(c => (
-            <Card key={c.id} className="p-5">
+          {apiCriteria.map(c => (
+            <Card key={c.roundCriterionId} className="p-5">
               <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>{c.description}</div>
               <ScoreSlider
-                label={c.label}
-                value={scores[c.id] || 0}
-                max={c.max}
-                onChange={v => setScores(p => ({ ...p, [c.id]: v }))}
+                label={c.criterionName}
+                value={scores[c.roundCriterionId] || 0}
+                max={c.maxScore}
+                onChange={v => setScores(p => ({ ...p, [c.roundCriterionId]: v }))}
               />
+              <div className="mt-4">
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Comment for {c.criterionName}</label>
+                <textarea
+                  value={comments[c.roundCriterionId] || ""}
+                  onChange={e => setComments(p => ({ ...p, [c.roundCriterionId]: e.target.value }))}
+                  rows={2}
+                  placeholder="Provide feedback specifically for this criterion..."
+                  className="w-full px-3 py-2 rounded-xl outline-none resize-none"
+                  style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
             </Card>
           ))}
-          <Card className="p-5">
-            <label style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 8 }}>Overall Comments & Feedback</label>
-            <textarea
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              rows={4}
-              placeholder="Provide detailed feedback for the team..."
-              className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            />
-          </Card>
         </div>
 
         {/* Score Summary */}
         <div className="space-y-4">
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Score Summary</div>
-            {scoringCriteria.map(c => (
-              <div key={c.id} className="flex justify-between mb-3">
-                <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{c.label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>{scores[c.id] || 0}/{c.max}</span>
+            {apiCriteria.map(c => (
+              <div key={c.roundCriterionId} className="flex justify-between mb-3">
+                <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{c.criterionName}</span>
+                <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>{scores[c.roundCriterionId] || 0}/{c.maxScore}</span>
               </div>
             ))}
             <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 8, paddingTop: 12 }}>
-              <div className="flex justify-between items-center">
-                <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Total Score</span>
-                <span style={{ fontWeight: 700, fontSize: 24, color: totalScore >= 75 ? COLORS.success : totalScore >= 50 ? COLORS.warning : COLORS.error }}>
-                  {totalScore}/100
-                </span>
-              </div>
-              <ProgressBar value={totalScore} max={100} color={totalScore >= 75 ? COLORS.success : COLORS.warning} />
+              {(() => {
+                const maxTotal = apiCriteria.reduce((sum, c) => sum + c.maxScore, 0) || 100;
+                const scoreRatio = maxTotal > 0 ? totalScore / maxTotal : 0;
+                const scoreColor = scoreRatio >= 0.9 ? COLORS.success : scoreRatio >= 0.75 ? COLORS.primary : scoreRatio >= 0.5 ? COLORS.warning : COLORS.error;
+                return (
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Total Score</span>
+                      <span style={{ fontWeight: 700, fontSize: 24, color: scoreColor }}>
+                        {totalScore}/{maxTotal}
+                      </span>
+                    </div>
+                    <ProgressBar value={totalScore} max={maxTotal} color={scoreColor} />
+                  </>
+                );
+              })()}
             </div>
             <div className="mt-3 p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 4 }}>REQUEST PAYLOAD (POST /scores)</div>
               <pre style={{ fontSize: 11, color: COLORS.textSecondary, overflow: "auto", maxHeight: 100 }}>
-{JSON.stringify(scoringCriteria.map(c => ({
+{JSON.stringify(apiCriteria.map(c => ({
   submissionId: selectedSubmission.id,
-  criterionId: c.id === "innovation" ? 1 : c.id === "technical" ? 2 : c.id === "impact" ? 3 : 4,
-  scoreValue: scores[c.id] || 0,
-  comment,
+  roundCriterionId: c.roundCriterionId,
+  scoreValue: scores[c.roundCriterionId] || 0,
+  comment: comments[c.roundCriterionId] || "",
+  isCalibration: apiRounds.find(r => r.roundId === selectedRoundId)?.isCalibrationRound || false,
 })), null, 2)}
               </pre>
             </div>
@@ -330,17 +387,20 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 8 }}>Scoring Guidelines</div>
             <div className="space-y-2">
-              {[
-                { range: "90–100", label: "Exceptional", color: COLORS.success },
-                { range: "75–89", label: "Above Average", color: COLORS.primary },
-                { range: "60–74", label: "Average", color: COLORS.warning },
-                { range: "0–59", label: "Below Average", color: COLORS.error },
-              ].map(g => (
-                <div key={g.range} className="flex items-center justify-between">
-                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{g.range}</span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: g.color }}>{g.label}</span>
-                </div>
-              ))}
+              {(() => {
+                const maxTotal = apiCriteria.reduce((sum, c) => sum + c.maxScore, 0) || 100;
+                return [
+                  { range: `${Math.ceil(maxTotal * 0.9)}–${maxTotal}`, label: "Exceptional", color: COLORS.success },
+                  { range: `${Math.ceil(maxTotal * 0.75)}–${Math.max(0, Math.ceil(maxTotal * 0.9) - 1)}`, label: "Good", color: COLORS.primary },
+                  { range: `${Math.ceil(maxTotal * 0.5)}–${Math.max(0, Math.ceil(maxTotal * 0.75) - 1)}`, label: "Average", color: COLORS.warning },
+                  { range: `0–${Math.max(0, Math.ceil(maxTotal * 0.5) - 1)}`, label: "Needs Improvement", color: COLORS.error },
+                ].map(g => (
+                  <div key={g.range} className="flex items-center justify-between">
+                    <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{g.range} ({g.range.split('–')[0] && maxTotal ? Math.round(parseInt(g.range.split('–')[0])/maxTotal*100) : 0}%)</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: g.color }}>{g.label}</span>
+                  </div>
+                ));
+              })()}
             </div>
           </Card>
         </div>

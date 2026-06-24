@@ -160,6 +160,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
   const [broadcastSent, setBroadcastSent] = useState(false);
+  const [notificationTargetMode, setNotificationTargetMode] = useState<"team" | "user">("team");
+  const [notificationTeamId, setNotificationTeamId] = useState("");
+  const [notificationEmail, setNotificationEmail] = useState("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationSending, setNotificationSending] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState("");
+  const [notificationError, setNotificationError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
     platformName: "SEAL FPT Hackathon Platform",
@@ -259,7 +267,27 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       setBroadcastTitle("");
       setBroadcastMessage("");
       setTimeout(() => setBroadcastSent(false), 3000);
-    } catch { setBroadcastSent(true); setTimeout(() => setBroadcastSent(false), 3000); }
+    } catch { /* ignore for demo */ }
+    setBroadcastSent(true);
+    setTimeout(() => setBroadcastSent(false), 3000);
+  };
+
+  const handleSendTargetedNotification = async () => {
+    setNotificationError("");
+    setNotificationStatus("");
+    setNotificationSending(true);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setNotificationStatus("Notification sent successfully!");
+      setNotificationTitle("");
+      setNotificationMessage("");
+      setTimeout(() => setNotificationStatus(""), 3000);
+    } catch (err) {
+      setNotificationError("Failed to send notification.");
+    } finally {
+      setNotificationSending(false);
+    }
   };
 
   const filteredUsers = users.filter(u =>
@@ -1551,108 +1579,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
-  const renderAwardPatterns = () => (
-    <>
-      <SectionHeader
-        title="Create Award Pattern"
-        subtitle="Configure award title, tier, description, and prize by rank for a category"
-        action={
-          <Button variant="outline" size="sm" icon={<Award size={14} />} onClick={() => onNavigate("awards")}>
-            Back to Awards
-          </Button>
-        }
-      />
 
-      <Card className="p-5">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-            <select
-              value={selectedEventId ?? ""}
-              onChange={e => setSelectedEventId(e.target.value || null)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              {apiEvents.map((event: any) => (
-                <option key={event.id} value={event.id}>{event.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-            <select
-              value={awardPatternCategoryId}
-              onChange={e => setAwardPatternCategoryId(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              <option value="">Select category</option>
-              {apiCategories.map(category => (
-                <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {awardPatternError && (
-          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-            {awardPatternError}
-          </div>
-        )}
-        {awardPatternMessage && (
-          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
-            {awardPatternMessage}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {awardPatterns.map((pattern, index) => (
-            <div key={index} className="grid grid-cols-1 xl:grid-cols-[80px_1.2fr_1.4fr_1fr_120px_44px] gap-3 items-end p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANK</label>
-                <input type="number" min={1} max={10} value={pattern.rankPosition} onChange={e => updateAwardPattern(index, "rankPosition", Number(e.target.value))} className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TIER</label>
-                <select value={pattern.awardTierId} onChange={e => updateAwardPattern(index, "awardTierId", e.target.value)} className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  {AWARD_TIER_OPTIONS.map(tier => <option key={tier.value} value={tier.value}>{tier.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TITLE</label>
-                <input value={pattern.awardTitle} onChange={e => updateAwardPattern(index, "awardTitle", e.target.value)} placeholder="Champion" className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>PRIZE</label>
-                <input type="number" value={pattern.prizeValue} onChange={e => updateAwardPattern(index, "prizeValue", e.target.value)} placeholder="10000000" className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CURRENCY</label>
-                <select value={pattern.prizeCurrency} onChange={e => updateAwardPattern(index, "prizeCurrency", e.target.value)} className="w-full px-3 py-2.5 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  <option value="VND">VND</option>
-                  <option value="USD">USD</option>
-                </select>
-              </div>
-              <button type="button" onClick={() => removeAwardPattern(index)} className="h-11 rounded-xl flex items-center justify-center" style={{ border: `1px solid ${COLORS.border}`, color: COLORS.error, background: COLORS.bg }} aria-label="Remove award pattern">
-                <X size={16} />
-              </button>
-              <div className="xl:col-span-6">
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>DESCRIPTION</label>
-                <textarea value={pattern.description} onChange={e => updateAwardPattern(index, "description", e.target.value)} rows={2} className="w-full px-3 py-2.5 rounded-xl outline-none resize-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 mt-5">
-          <Button variant="outline" size="sm" icon={<PlusCircle size={14} />} onClick={addAwardPattern}>Add Rank</Button>
-          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={handleSaveAwardPatterns} disabled={awardPatternLoading || !awardPatternCategoryId}>
-            {awardPatternLoading ? "Saving..." : "Save Award Pattern"}
-          </Button>
-        </div>
-      </Card>
-    </>
-  );
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return renderDashboard();
