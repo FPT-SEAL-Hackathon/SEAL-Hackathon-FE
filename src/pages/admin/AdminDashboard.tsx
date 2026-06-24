@@ -116,7 +116,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const { t } = useLanguage();
 
   // ── API state ────────────────────────────────────────────────────────────
-  const [apiEvents, setApiEvents] = useState(events);
+  const [apiEvents, setApiEvents] = useState<typeof events>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
@@ -124,6 +124,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiRankings, setApiRankings] = useState<EventRankingDTO[]>([]);
   const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
+  const [eventLoadError, setEventLoadError] = useState("");
+  const [categoryLoadError, setCategoryLoadError] = useState("");
 
   // ── Modal state ──────────────────────────────────────────────────────────
   const [eventModal, setEventModal] = useState<{ open: boolean; edit?: EventResponse }>({ open: false });
@@ -158,14 +160,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
   const [broadcastSent, setBroadcastSent] = useState(false);
-  const [notificationTargetMode, setNotificationTargetMode] = useState<"team" | "user">("team");
-  const [notificationTeamId, setNotificationTeamId] = useState("");
-  const [notificationEmail, setNotificationEmail] = useState("");
-  const [notificationTitle, setNotificationTitle] = useState("");
-  const [notificationMessage, setNotificationMessage] = useState("");
-  const [notificationSending, setNotificationSending] = useState(false);
-  const [notificationStatus, setNotificationStatus] = useState("");
-  const [notificationError, setNotificationError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
     platformName: "SEAL FPT Hackathon Platform",
@@ -181,6 +175,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   useEffect(() => {
     eventService.getAll()
       .then(data => {
+        setEventLoadError("");
         const mapped = data.map(e => ({
           id: e.eventId, name: e.eventName,
           category: e.description ?? "—", status: "active",
@@ -189,19 +184,27 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         setApiEvents(mapped as any);
         if (data[0]) setSelectedEventId(data[0].eventId);
       })
-      .catch(() => {});
+      .catch(error => {
+        setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
+      });
   }, []);
 
   useEffect(() => {
     if (!selectedEventId) return;
+    setCategoryLoadError("");
+    setApiCategories([]);
+    setAwardPatternCategoryId("");
     categoryService.getByEvent(selectedEventId).then(data => {
+      setCategoryLoadError("");
       setApiCategories(data);
       // Load rounds for first category
       if (data[0]) {
         roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
         setAwardPatternCategoryId(data[0].categoryId);
       }
-    }).catch(() => {});
+    }).catch(error => {
+      setCategoryLoadError(error instanceof Error ? error.message : "Failed to load categories.");
+    });
     teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
     awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
   }, [selectedEventId]);
@@ -257,70 +260,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       setBroadcastMessage("");
       setTimeout(() => setBroadcastSent(false), 3000);
     } catch { setBroadcastSent(true); setTimeout(() => setBroadcastSent(false), 3000); }
-  };
-
-  const handleSendTargetedNotification = async () => {
-    if (!notificationTitle.trim() || !notificationMessage.trim()) {
-      setNotificationError("Title and message are required.");
-      return;
-    }
-
-    setNotificationSending(true);
-    setNotificationStatus("");
-    setNotificationError("");
-
-    try {
-      if (notificationTargetMode === "team") {
-        const team = apiTeamEligibility.find(item => item.teamId === notificationTeamId);
-        if (!team) {
-          setNotificationError("Select a team before sending.");
-          return;
-        }
-
-        const recipientIds = Array.from(new Set([
-          team.leaderUserId,
-          ...team.members.map(member => member.userId),
-        ].filter(Boolean)));
-
-        if (recipientIds.length === 0) {
-          setNotificationError("This team has no recipient user IDs.");
-          return;
-        }
-
-        const sent = await notificationService.broadcast({
-          recipientUserIds: recipientIds,
-          eventId: selectedEventId ?? undefined,
-          title: notificationTitle.trim(),
-          body: notificationMessage.trim(),
-        });
-        setNotificationStatus(`Sent to ${sent.length} team member(s).`);
-      } else {
-        const email = notificationEmail.trim().toLowerCase();
-        if (!email) {
-          setNotificationError("Recipient email is required.");
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          setNotificationError("Enter a valid recipient email.");
-          return;
-        }
-
-        await notificationService.sendToEmail({
-          recipientEmail: email,
-          eventId: selectedEventId ?? undefined,
-          title: notificationTitle.trim(),
-          body: notificationMessage.trim(),
-        });
-        setNotificationStatus(`Notification sent to ${email}.`);
-      }
-
-      setNotificationTitle("");
-      setNotificationMessage("");
-    } catch (error) {
-      setNotificationError(error instanceof Error ? error.message : "Failed to send notification.");
-    } finally {
-      setNotificationSending(false);
-    }
   };
 
   const filteredUsers = users.filter(u =>
@@ -1313,7 +1252,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       <SectionHeader
         title="Award Management"
         action={
-          <Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => onNavigate("award-patterns")}>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<PlusCircle size={14} />}
+            onClick={() => onNavigate("award-patterns")}
+          >
             Create Award Pattern
           </Button>
         }
@@ -1339,6 +1283,16 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           {autoGrantMessage && (
             <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
               {autoGrantMessage}
+            </div>
+          )}
+          {eventLoadError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              Events could not be loaded from database: {eventLoadError}
+            </div>
+          )}
+          {categoryLoadError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              Categories could not be loaded for this event: {categoryLoadError}
             </div>
           )}
 
@@ -1445,6 +1399,155 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           ))}
         </Card>
       </div>
+    </>
+  );
+  const renderAwardPatterns = () => (
+    <>
+      <SectionHeader
+        title="Create Award Pattern"
+        subtitle="Configure award title, tier, description, and prize by rank for a category"
+        action={
+          <Button variant="outline" size="sm" icon={<Award size={14} />} onClick={() => onNavigate("awards")}>
+            Back to Awards
+          </Button>
+        }
+      />
+
+      <Card className="p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
+            <select
+              value={selectedEventId ?? ""}
+              onChange={e => setSelectedEventId(e.target.value || null)}
+              className="w-full px-3 py-2.5 rounded-xl outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              {apiEvents.map((event: any) => (
+                <option key={event.id} value={event.id}>{event.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
+            <select
+              value={awardPatternCategoryId}
+              onChange={e => setAwardPatternCategoryId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              <option value="">Select category</option>
+              {apiCategories.map(category => (
+                <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {awardPatternError && (
+          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+            {awardPatternError}
+          </div>
+        )}
+        {awardPatternMessage && (
+          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+            {awardPatternMessage}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {awardPatterns.map((pattern, index) => (
+            <div key={index} className="grid grid-cols-1 xl:grid-cols-[80px_1.2fr_1.4fr_1fr_120px_44px] gap-3 items-end p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANK</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={pattern.rankPosition}
+                  onChange={e => updateAwardPattern(index, "rankPosition", Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TIER</label>
+                <select
+                  value={pattern.awardTierId}
+                  onChange={e => updateAwardPattern(index, "awardTierId", e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  {AWARD_TIER_OPTIONS.map(tier => (
+                    <option key={tier.value} value={tier.value}>{tier.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TITLE</label>
+                <input
+                  value={pattern.awardTitle}
+                  onChange={e => updateAwardPattern(index, "awardTitle", e.target.value)}
+                  placeholder="Champion"
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>PRIZE</label>
+                <input
+                  type="number"
+                  value={pattern.prizeValue}
+                  onChange={e => updateAwardPattern(index, "prizeValue", e.target.value)}
+                  placeholder="10000000"
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CURRENCY</label>
+                <select
+                  value={pattern.prizeCurrency}
+                  onChange={e => updateAwardPattern(index, "prizeCurrency", e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <option value="VND">VND</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAwardPattern(index)}
+                className="h-11 rounded-xl flex items-center justify-center"
+                style={{ border: `1px solid ${COLORS.border}`, color: COLORS.error, background: COLORS.bg }}
+                aria-label="Remove award pattern"
+              >
+                <X size={16} />
+              </button>
+              <div className="xl:col-span-6">
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>DESCRIPTION</label>
+                <textarea
+                  value={pattern.description}
+                  onChange={e => updateAwardPattern(index, "description", e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 mt-5">
+          <Button variant="outline" size="sm" icon={<PlusCircle size={14} />} onClick={addAwardPattern}>
+            Add Rank
+          </Button>
+          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={handleSaveAwardPatterns} disabled={awardPatternLoading || !awardPatternCategoryId}>
+            {awardPatternLoading ? "Saving..." : "Save Award Pattern"}
+          </Button>
+        </div>
+      </Card>
     </>
   );
 

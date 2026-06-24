@@ -66,6 +66,18 @@ export interface CriterionTemplateResponse {
   updatedAt: string;
 }
 
+export interface EventCriterionResponse {
+  eventCriterionId: string;
+  eventId: string;
+  templateId: string;
+  criterionName: string;
+  description: string;
+  weight: number;
+  maxScore: number;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 export const roundService = {
   getByCategory: (categoryId: string) =>
     api.get<RoundResponse[]>(`/api/v1/rounds/${categoryId}`),
@@ -99,4 +111,8 @@ export const roundService = {
   // Criterion templates
   getTemplates: () =>
     api.get<CriterionTemplateResponse[]>("/api/v1/criteria/templates"),
+  getTemplateById: (id: string) =>
+    api.get<CriterionTemplateResponse>(`/api/v1/criteria/templates/${id}`),
+  importCriteriaToEvent: (eventId: string, templateIds: string[]) =>
+    api.post<EventCriterionResponse[]>(`/api/v1/event/criteria/import/${eventId}`, { templateIds }),
 };
