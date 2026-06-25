@@ -1,10 +1,11 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
+import { normalizeRole, type Role } from "@/auth/rbac/roles";
 import { loadUser, clearTokens, getAccessToken } from "@/lib/api/apiClient";
-import { logout as apiLogout, userTypeToRole, type UserResponse } from "@/features/auth/api/authService";
+import { logout as apiLogout, type UserResponse } from "@/features/auth/api/authService";
 
 interface AuthState {
   user: UserResponse | null;
-  role: string | null;
+  role: Role | null;
   isAuthenticated: boolean;
   setAuth: (user: UserResponse) => void;
   signOut: () => Promise<void>;
@@ -16,7 +17,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserResponse | null>(() => {
     // Restore session from localStorage on app load
     if (!getAccessToken()) return null;
-    return loadUser<UserResponse>();
+    const storedUser = loadUser<UserResponse>();
+    if (storedUser && !normalizeRole(storedUser.userType)) {
+      clearTokens();
+      return null;
+    }
+    return storedUser;
   });
 
   const setAuth = useCallback((newUser: UserResponse) => {
@@ -28,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const role = user ? userTypeToRole(user.userType) : null;
+  const role = user ? normalizeRole(user.userType) : null;
 
   return (
     <AuthContext.Provider value={{ user, role, isAuthenticated: !!user, setAuth, signOut }}>
