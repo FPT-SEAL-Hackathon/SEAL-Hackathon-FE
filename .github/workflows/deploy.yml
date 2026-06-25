@@ -1,9 +1,0 @@
-name: deploy.yml
-on:
-  push:
-    branches:
-      - prod # Chỉ chạy tự động khi code vào nhánh prod
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches:
-      - prod
