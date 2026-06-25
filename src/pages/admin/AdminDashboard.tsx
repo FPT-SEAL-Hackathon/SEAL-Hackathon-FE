@@ -144,6 +144,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [guestJudgeForm, setGuestJudgeForm] = useState({ email: "", fullName: "", company: "" });
   const [guestJudgeSuccess, setGuestJudgeSuccess] = useState(false);
   const [rankingsComputed, setRankingsComputed] = useState(false);
+  const [rankingsPublished, setRankingsPublished] = useState(false);
   const [disqualifiedTeams, setDisqualifiedTeams] = useState<number[]>([]);
   const [disqualifyTarget, setDisqualifyTarget] = useState<{ id: number; name: string } | null>(null);
   const [disqualifyReason, setDisqualifyReason] = useState("");
@@ -634,6 +635,25 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setTimeout(() => setRankingsComputed(false), 3000);
   };
 
+  const handlePublishRankings = async () => {
+    if (selectedEventId && awardPatternCategoryId) {
+      try {
+        await rankingService.publishEvent(selectedEventId, awardPatternCategoryId);
+        const data = await rankingService.computeEvent(selectedEventId);
+        setApiRankings(data);
+      } catch { /* ignore */ }
+    }
+    setRankingsPublished(true);
+    setTimeout(() => {
+        setRankingsPublished(false);
+        if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
+            setBroadcastTitle("Leaderboard Published!");
+            setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
+            onNavigate("notifications");
+        }
+    }, 1500);
+  };
+
   const handleAutoGrantAwards = async () => {
     const limit = Number(autoGrantLimit);
     if (!awardPatternCategoryId) {
@@ -851,8 +871,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         action={
           <div className="flex items-center gap-2">
             {rankingsComputed && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Rankings computed!</span>}
-            <Button variant="primary" size="sm" icon={<Zap size={14} />} onClick={handleComputeRankings}>
-              Compute Rankings
+            {rankingsPublished && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Published!</span>}
+            <Button variant="secondary" size="sm" icon={<Zap size={14} />} onClick={handleComputeRankings}>
+              Re-Compute
+            </Button>
+            <Button variant="primary" size="sm" icon={<Award size={14} />} onClick={handlePublishRankings} style={{ background: COLORS.success }}>
+              Publish Leaderboard
             </Button>
           </div>
         }
@@ -868,25 +892,28 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               </tr>
             </thead>
             <tbody>
-              {rankings.map((row, i) => (
-                <tr key={row.rank} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+              {(apiRankings.length > 0 ? apiRankings : rankings).map((row: any, i: number) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                const isPublishedStatus = row.isPublished ? "PUBLISHED" : "DRAFT";
+                return (
+                <tr key={row.rank ?? i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                   <td className="px-4 py-3">
-                    <span style={{ fontSize: row.rank <= 3 ? 18 : 14, fontWeight: 700 }}>
-                      {row.rank <= 3 ? ["🥇", "🥈", "🥉"][row.rank - 1] : `#${row.rank}`}
+                    <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
+                      {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
                     </span>
                   </td>
-                  <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.team}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.track}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r1}</span></td>
+                  <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.teamId ?? row.team}</span></td>
+                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryId ?? row.track}</span></td>
+                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r1 ?? "—"}</span></td>
                   <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r2 ?? "—"}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.total}</span></td>
-                  <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                  <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.total}</span></td>
+                  <td className="px-4 py-3"><StatusBadge status={apiRankings.length > 0 ? isPublishedStatus : row.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" icon={<Eye size={13} />}>{t("common.view")}</Button>
-                      {!disqualifiedTeams.includes(row.rank) ? (
+                      {!disqualifiedTeams.includes(rankNum) ? (
                         <Button variant="danger" size="sm" icon={<AlertTriangle size={12} />}
-                          onClick={() => setDisqualifyTarget({ id: row.rank, name: row.team })}>
+                          onClick={() => setDisqualifyTarget({ id: rankNum, name: row.teamId ?? row.team })}>
                           DQ
                         </Button>
                       ) : (
@@ -895,7 +922,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
