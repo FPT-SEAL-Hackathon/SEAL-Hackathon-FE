@@ -305,7 +305,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               </tr>
             </thead>
             <tbody>
-              {(apiLeaderboard.length > 0 ? apiLeaderboard : leaderboard).map((row: any, i: number) => {
+              {apiLeaderboard.length > 0 ? apiLeaderboard.map((row: any, i: number) => {
                 const isMe = false;
                 return (
                   <tr
@@ -339,7 +339,18 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                     </td>
                   </tr>
                 );
-              })}
+              }) : (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center">
+                    <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
+                      Kết quả đang được Hội đồng Giám khảo tổng hợp và phê duyệt.
+                    </div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                      Vui lòng quay lại sau!
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
