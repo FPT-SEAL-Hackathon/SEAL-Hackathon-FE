@@ -3,7 +3,6 @@ import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
-import { ResearchDashboard } from "@/pages/research/ResearchDashboard";
 
 export function DashboardRouter({ role, currentPage, onNavigate }: { role: string; currentPage: string; onNavigate: (p: string) => void }) {
   switch (role) {
@@ -17,8 +16,6 @@ export function DashboardRouter({ role, currentPage, onNavigate }: { role: strin
       return <MentorDashboard currentPage={currentPage} onNavigate={onNavigate} />;
     case "admin":
       return <AdminDashboard currentPage={currentPage} onNavigate={onNavigate} />;
-    case "research":
-      return <ResearchDashboard currentPage={currentPage} />;
     default:
       return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }

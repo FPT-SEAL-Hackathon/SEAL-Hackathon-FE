@@ -55,6 +55,8 @@ export const submissionService = {
     api.post<SubmissionDisqualificationResponse>(`/api/v1/admin/submissions/${submissionId}/disqualify`, { reason }),
 
   // Student downloads
+  downloadProblem: (roundId: string, type: "csv" | "zip" = "csv") =>
+    `${API_BASE_URL}/api/v1/student-downloads/rounds/${roundId}/problem?type=${type}`,
   downloadProblemCsv: (roundId: string) =>
     `${API_BASE_URL}/api/v1/student-downloads/rounds/${roundId}/problem-csv`,
   downloadProblemZip: (roundId: string) =>

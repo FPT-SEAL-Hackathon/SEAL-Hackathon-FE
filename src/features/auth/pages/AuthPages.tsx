@@ -4,7 +4,7 @@ import {
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { login, register, userTypeToRole } from "@/features/auth/api/authService";
+import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService";
 import { ApiError } from "@/lib/api/apiClient";
 
 // ─── Demo roles (bypass API for dev/demo) ───────────────────────────────────
@@ -14,7 +14,6 @@ const DEMO_ROLES = [
   { role: "judge",    label: "Judge",    color: "#7C3AED" },
   { role: "mentor",   label: "Mentor",   color: "#0EA5E9" },
   { role: "admin",    label: "Admin",    color: "#c0392b" },
-  { role: "research", label: "Research", color: "#D4610A" },
 ];
 
 // ─── OAuth Modal ─────────────────────────────────────────────────────────────
@@ -153,9 +152,21 @@ function ErrorBanner({ message }: { message: string }) {
 
 // ─── Register Card ────────────────────────────────────────────────────────────
 export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
-  const [form, setForm] = useState({
+  type RegisterForm = {
+    fullName: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+    phone: string;
+    studentCode: string;
+    universityName: string;
+    userTypeId: string;
+  };
+
+  const [form, setForm] = useState<RegisterForm>({
     fullName: "", email: "", password: "", confirmPassword: "",
     phone: "", studentCode: "", universityName: "FPT University",
+    userTypeId: REGISTER_USER_TYPES[0].value,
   });
   const [showPwd, setShowPwd] = useState(false);
   const [errors, setErrors] = useState<Partial<typeof form>>({});
@@ -170,7 +181,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   };
 
   const validate = (): boolean => {
-    const e: Partial<typeof form> = {};
+    const e: Partial<RegisterForm> = {};
     if (!form.fullName.trim()) e.fullName = "Required";
     if (!form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = "Invalid email";
     if (form.password.length < 8) e.password = "Min 8 characters";
@@ -178,6 +189,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
     if (!form.phone.match(/^\d{1,10}$/)) e.phone = "Invalid phone (max 10 digits)";
     if (!form.studentCode.trim()) e.studentCode = "Required";
     if (!form.universityName.trim()) e.universityName = "Required";
+    if (!form.userTypeId.trim()) e.userTypeId = "Required";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -195,6 +207,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
         phone: form.phone,
         studentCode: form.studentCode,
         universityName: form.universityName,
+        userTypeId: form.userTypeId,
       });
       setSuccess(true);
       setTimeout(onSwitchToLogin, 2500);
@@ -246,6 +259,41 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
           icon={<Lock size={15} />} value={form.confirmPassword} onChange={v => set("confirmPassword", v)} error={errors.confirmPassword} />
         <GlassInput label="Phone Number" placeholder="0912345678" icon={<Phone size={15} />}
           value={form.phone} onChange={v => set("phone", v)} error={errors.phone} />
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: "#a07850", display: "block", marginBottom: 8, letterSpacing: "0.06em" }}>
+            USER TYPE
+          </label>
+          <div className="relative">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: errors.userTypeId ? "#e53e2e" : "#c09060" }}>
+              <User size={15} />
+            </div>
+            <select
+              value={form.userTypeId}
+              onChange={e => set("userTypeId", e.target.value)}
+              className="w-full py-3.5 rounded-2xl outline-none transition-all duration-200 appearance-none"
+              style={{
+                background: "var(--glass-bg)",
+                border: errors.userTypeId ? "1.5px solid rgba(229,62,46,0.5)" : "1.5px solid rgba(244,121,32,0.15)",
+                color: "var(--text-primary)",
+                fontSize: 14,
+                paddingLeft: 44,
+                paddingRight: 16,
+                boxShadow: "0 2px 4px rgba(180,100,20,0.04)",
+              }}
+            >
+              {REGISTER_USER_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {errors.userTypeId && (
+            <div className="flex items-center gap-1 mt-1" style={{ fontSize: 11, color: "#e53e2e" }}>
+              <AlertCircle size={11} /> {errors.userTypeId}
+            </div>
+          )}
+        </div>
         <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
           value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
         <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}

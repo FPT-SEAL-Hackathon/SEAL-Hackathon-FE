@@ -14,6 +14,7 @@ import { useAuth } from "@/features/auth/store/authStore";
 import { eventService } from "@/features/events/api/eventService";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { rankingService } from "@/features/rankings/api/rankingService";
+import { submissionService } from "@/features/submissions/api/submissionService";
 
 const teamMembers = [
   { id: 1, name: "Alex Johnson", role: "Team Leader", avatar: "AJ", skills: ["React", "TypeScript", "UI/UX"], tasks: 4, completed: 3, email: "alex.j@fpt.edu.vn" },
@@ -122,6 +123,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     bio: "Passionate full-stack developer with focus on AI/ML applications.", major: "Software Engineering",
   });
   const [profileSaved, setProfileSaved] = useState(false);
+  const [submissionForm, setSubmissionForm] = useState({
+    teamId: "",
+    roundId: "",
+    repositoryUrl: "",
+    demoUrl: "",
+    reportUrl: "",
+    slideUrl: "",
+    notes: "",
+  });
+  const [submissionStatus, setSubmissionStatus] = useState("");
+  const [submissionLoading, setSubmissionLoading] = useState(false);
 
   const unread = notifs.filter((n: any) => !n.read).length;
   const markRead = async (id: any) => {
@@ -131,6 +143,23 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const markAllRead = async () => {
     setNotifs(prev => prev.map((n: any) => ({ ...n, read: true })));
     try { await notificationService.markAllAsRead(); } catch { /* ignore */ }
+  };
+
+  const handleSubmitWork = async () => {
+    if (!submissionForm.teamId || !submissionForm.roundId) {
+      setSubmissionStatus("Team ID and Round ID are required by the backend submission API.");
+      return;
+    }
+    setSubmissionLoading(true);
+    setSubmissionStatus("");
+    try {
+      await submissionService.submit(submissionForm);
+      setSubmissionStatus("Submission saved.");
+    } catch (error) {
+      setSubmissionStatus(error instanceof Error ? error.message : "Submission failed.");
+    } finally {
+      setSubmissionLoading(false);
+    }
   };
 
   const renderDashboard = () => (
@@ -305,7 +334,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               </tr>
             </thead>
             <tbody>
-              {(apiLeaderboard.length > 0 ? apiLeaderboard : leaderboard).map((row: any, i: number) => {
+              {apiLeaderboard.length > 0 ? apiLeaderboard.map((row: any, i: number) => {
                 const isMe = false;
                 return (
                   <tr
@@ -339,7 +368,18 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                     </td>
                   </tr>
                 );
-              })}
+              }) : (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center">
+                    <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
+                      Kết quả đang được Hội đồng Giám khảo tổng hợp và phê duyệt.
+                    </div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                      Vui lòng quay lại sau!
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -380,6 +420,56 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           );
         })}
       </div>
+    </>
+  );
+
+  const renderSubmissions = () => (
+    <>
+      <SectionHeader title="Submission Center" subtitle="Submit or update your team's work for an assigned round" />
+      <Card className="p-5">
+        <div className="grid md:grid-cols-2 gap-4">
+          {[
+            { label: "Team ID", key: "teamId", icon: <Users size={14} /> },
+            { label: "Round ID", key: "roundId", icon: <Clock size={14} /> },
+            { label: "Repository URL", key: "repositoryUrl", icon: <Github size={14} /> },
+            { label: "Demo URL", key: "demoUrl", icon: <Globe size={14} /> },
+            { label: "Report URL", key: "reportUrl", icon: <FileText size={14} /> },
+            { label: "Slide URL", key: "slideUrl", icon: <FileText size={14} /> },
+          ].map(field => (
+            <label key={field.key} className="block">
+              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
+                {field.icon} {field.label}
+              </span>
+              <input
+                value={submissionForm[field.key as keyof typeof submissionForm]}
+                onChange={e => setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </label>
+          ))}
+        </div>
+        <label className="block mt-4">
+          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
+          <textarea
+            value={submissionForm.notes}
+            onChange={e => setSubmissionForm(prev => ({ ...prev, notes: e.target.value }))}
+            rows={3}
+            className="w-full px-3 py-2 rounded-lg outline-none resize-none mt-1"
+            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+          />
+        </label>
+        <div className="flex items-center gap-3 mt-4">
+          <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
+            {submissionLoading ? "Saving..." : "Submit Work"}
+          </Button>
+          {submissionStatus && (
+            <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
+              {submissionStatus}
+            </span>
+          )}
+        </div>
+      </Card>
     </>
   );
 
@@ -480,6 +570,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "team": return renderTeam();
       case "events": return renderEvents();
       case "leaderboard": return renderLeaderboard();
+      case "submissions": return renderSubmissions();
       case "notifications": return renderNotifications();
       case "profile": return renderProfile();
       default: return renderDashboard();

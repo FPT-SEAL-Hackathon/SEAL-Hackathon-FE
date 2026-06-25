@@ -1,14 +1,15 @@
 import { useState, useRef, useEffect } from "react";
-import { useLanguage } from "@/store/languageStore";
-import type { Language } from "@/i18n/translations";
+import { getMenuForRole } from "@/auth/permissions/navigation";
+import { ROLES, getRoleLabel, type Role } from "@/auth/rbac/roles";
+import { notificationService } from "@/features/notifications/api/notificationService";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
   FileText, Star, ClipboardList, BarChart2, Shield, Database,
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
-  UserCheck, FolderOpen, Activity,
-  Target, TrendingUp, PieChart, MessageSquare, User, Wrench
+  UserCheck, FolderOpen,
+  Target, TrendingUp, MessageSquare, User, Wrench
 } from "lucide-react";
 
 
@@ -37,91 +38,44 @@ const glassSurface: React.CSSProperties = {
   boxShadow: "var(--glass-shadow)",
 };
 
-const roleMenus: Record<string, { icon: React.ElementType; label: string; key: string }[]> = {
-  member: [
-    { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
-    { icon: Users, label: "My Team", key: "team" },
-    { icon: Calendar, label: "Events", key: "events" },
-    { icon: Trophy, label: "Leaderboard", key: "leaderboard" },
-    { icon: Bell, label: "Notifications", key: "notifications" },
-  ],
-  leader: [
-    { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
-    { icon: Users, label: "Team Management", key: "team" },
-    { icon: UserCheck, label: "Join Requests", key: "requests" },
-    { icon: FolderOpen, label: "Submission Center", key: "submissions" },
-    { icon: Trophy, label: "Rankings", key: "rankings" },
-    { icon: Bell, label: "Notifications", key: "notifications" },
-    { icon: MessageSquare, label: "Judge Feedback", key: "feedback" },
-    { icon: Wrench, label: "Settings", key: "settings" },
-  ],
-  judge: [
-    { icon: ClipboardList, label: "Assigned Rounds", key: "rounds" },
-    { icon: FileText, label: "Submissions", key: "submissions" },
-    { icon: Star, label: "Scoring", key: "scoring" },
-    { icon: BarChart2, label: "Calibration", key: "calibration" },
-    { icon: Clock, label: "History", key: "history" },
-  ],
-  mentor: [
-    { icon: Target, label: "Assigned Tracks", key: "tracks" },
-    { icon: Users, label: "Teams", key: "teams" },
-    { icon: TrendingUp, label: "Mentoring Progress", key: "progress" },
-    { icon: Calendar, label: "Schedule", key: "schedule" },
-  ],
-  admin: [
-    { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
-    { icon: Calendar, label: "Events", key: "events" },
-    { icon: BookOpen, label: "Categories", key: "categories" },
-    { icon: GitBranch, label: "Rounds", key: "rounds" },
-    { icon: Star, label: "Criteria", key: "criteria" },
-    { icon: Users, label: "Users", key: "users" },
-    { icon: UserCheck, label: "Assignments", key: "assignments" },
-    { icon: Trophy, label: "Rankings", key: "rankings" },
-    { icon: BarChart2, label: "Reports", key: "reports" },
-    { icon: Bell, label: "Notifications", key: "notifications" },
-    { icon: Award, label: "Awards", key: "awards" },
-    { icon: Shield, label: "Audit Logs", key: "audit" },
-    { icon: Wrench, label: "Settings", key: "settings" },
-  ],
-  research: [
-    { icon: Activity, label: "Variance Analytics", key: "variance" },
-    { icon: PieChart, label: "Score Distribution", key: "distribution" },
-    { icon: BarChart2, label: "Inter-rater Reliability", key: "reliability" },
-    { icon: Database, label: "Data Export", key: "export" },
-    { icon: Users, label: "Judge Comparison", key: "comparison" },
-    { icon: FileText, label: "Research Stats", key: "stats" },
-  ],
+const iconRegistry: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Trophy,
+  Bell,
+  FileText,
+  Star,
+  ClipboardList,
+  BarChart2,
+  Shield,
+  GitBranch,
+  Clock,
+  Award,
+  BookOpen,
+  UserCheck,
+  FolderOpen,
+  Wrench,
 };
 
-const roleProfileKey: Record<string, string | null> = {
-  member: "profile",
-  leader: "profile",
-  judge: "profile",
-  mentor: "profile",
-  admin: "profile",
-  research: null,
+const roleProfileKey: Record<Role, string> = {
+  [ROLES.FPT_STUDENT]: "profile",
+  [ROLES.EXTERNAL_STUDENT]: "profile",
+  [ROLES.INTERNAL_JUDGE]: "profile",
+  [ROLES.GUEST_JUDGE]: "profile",
+  [ROLES.ORGANIZER]: "profile",
 };
 
-const roleLabels: Record<string, string> = {
-  member: "Team Member",
-  leader: "Team Leader",
-  judge: "Judge",
-  mentor: "Mentor",
-  admin: "Event Coordinator",
-  research: "RBL Researcher",
-};
-
-const roleColors: Record<string, string> = {
-  member: "#F47920",
-  leader: "#009444",
-  judge: "#F59E0B",
-  mentor: "#009444",
-  admin: "#e53e2e",
-  research: "#F47920",
+const roleColors: Record<Role, string> = {
+  [ROLES.FPT_STUDENT]: "#F47920",
+  [ROLES.EXTERNAL_STUDENT]: "#009444",
+  [ROLES.INTERNAL_JUDGE]: "#F59E0B",
+  [ROLES.GUEST_JUDGE]: "#7C3AED",
+  [ROLES.ORGANIZER]: "#e53e2e",
 };
 
 interface LayoutProps {
-  role: string;
+  role: Role;
   currentPage: string;
   onNavigate: (page: string) => void;
   onRoleChange: () => void;
@@ -132,13 +86,11 @@ interface LayoutProps {
 }
 
 export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson", isDark = false, onToggleDark }: LayoutProps) {
-  const { language, setLanguage } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [notifCount, setNotifCount] = useState(3);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
   const [appSettings, setAppSettings] = useState({
-    language: "vi",
     dateFormat: "DD/MM/YYYY",
     itemsPerPage: "10",
     emailNotif: true,
@@ -150,9 +102,40 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     soundEnabled: false,
   });
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const menus = roleMenus[role] || [];
+  const menus = getMenuForRole(role);
   const accentColor = roleColors[role] || COLORS.primary;
   const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2);
+  const notifCount = notifications.filter(notification => !notification.read).length;
+
+  useEffect(() => {
+    notificationService.getMyNotifications(0, 5)
+      .then(page => {
+        setNotifications((page.content ?? []).map(notification => ({
+          id: notification.notificationId,
+          title: notification.title,
+          body: notification.body,
+          time: new Date(notification.createdAt).toLocaleString(),
+          read: notification.read,
+        })));
+      })
+      .catch(() => {});
+  }, []);
+
+  const markNotificationRead = async (id: string) => {
+    setNotifications(prev => prev.map(notification => (
+      notification.id === id ? { ...notification, read: true } : notification
+    )));
+    try {
+      await notificationService.markAsRead(id);
+    } catch { /* keep local read state */ }
+  };
+
+  const markAllNotificationsRead = async () => {
+    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+    try {
+      await notificationService.markAllAsRead();
+    } catch { /* keep local read state */ }
+  };
 
   useEffect(() => {
     const handleClickOutside = () => setNotifOpen(false);
@@ -243,7 +226,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto py-2 space-y-0.5" style={{ width: 260 }}>
           {menus.map((item) => {
-            const Icon = item.icon;
+            const Icon = iconRegistry[item.icon] ?? LayoutDashboard;
             const isActive = currentPage === item.key;
             return (
               <button
@@ -379,7 +362,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => { if (!notifOpen) setNotifCount(0); setNotifOpen(v => !v); }}
+                onClick={() => setNotifOpen(v => !v)}
                 className="relative flex items-center justify-center rounded-xl w-9 h-9 transition-colors"
                 style={{
                   background: "var(--surface-input)",
@@ -426,23 +409,41 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                       boxShadow: "0 24px 64px rgba(180,100,20,0.18), inset 0 1px 0 rgba(255,255,255,1)",
                     }}
                   >
-                    <div className="px-4 py-3.5" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
+                    <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>Notifications</span>
+                      {notifCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={markAllNotificationsRead}
+                          style={{ fontSize: 11, color: accentColor, fontWeight: 700 }}
+                        >
+                          Mark all read
+                        </button>
+                      )}
                     </div>
-                    {[
-                      { title: "Submission deadline in 2 days", time: "2h ago", color: "#F59E0B", icon: "⚠️" },
-                      { title: "Your team was approved!", time: "5h ago", color: "#009444", icon: "✅" },
-                      { title: "New round opened: Finals", time: "1d ago", color: "#F47920", icon: "🏆" },
-                    ].map((n, i) => (
+                    {notifications.length === 0 && (
+                      <div className="px-4 py-5" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                        No notifications yet.
+                      </div>
+                    )}
+                    {notifications.map((n, i) => (
                       <motion.div
-                        key={i}
+                        key={n.id}
                         whileHover={{ background: "rgba(244,121,32,0.04)" }}
                         className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
-                        style={{ borderBottom: i < 2 ? "1px solid rgba(244,121,32,0.07)" : "none" }}
+                        onClick={() => markNotificationRead(n.id)}
+                        style={{
+                          borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
+                          background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
+                        }}
                       >
-                        <span style={{ fontSize: 17 }}>{n.icon}</span>
-                        <div>
+                        <span
+                          className="rounded-full"
+                          style={{ width: 7, height: 7, marginTop: 6, flexShrink: 0, background: n.read ? "var(--text-muted)" : accentColor }}
+                        />
+                        <div className="min-w-0">
                           <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
+                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 }}>{n.body}</div>
                           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
                         </div>
                       </motion.div>
@@ -458,11 +459,11 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
             {/* User — click navigates directly to profile */}
             <motion.div
               whileHover={{ scale: 1.02 }}
-              onClick={() => { if (roleProfileKey[role]) onNavigate(roleProfileKey[role]!); }}
+              onClick={() => onNavigate(roleProfileKey[role])}
               className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-colors"
               style={{
                 background: "rgba(244,121,32,0.05)",
-                cursor: roleProfileKey[role] ? "pointer" : "default",
+                cursor: "pointer",
               }}
             >
               <div
@@ -481,7 +482,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               </div>
               <div className="hidden md:block">
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{userName}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.02em" }}>{roleLabels[role]}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.02em" }}>{getRoleLabel(role)}</div>
               </div>
             </motion.div>
           </div>
@@ -585,21 +586,6 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                 <section>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Display</div>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Language</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Interface language</div>
-                      </div>
-                      <select
-                        value={language}
-                        onChange={e => setLanguage(e.target.value as Language)}
-                        className="rounded-lg px-3 py-1.5 outline-none text-sm"
-                        style={{ background: "var(--surface-input)", border: "1px solid var(--glass-border-subtle)", color: "var(--text-primary)", fontSize: 13 }}
-                      >
-                        <option value="vi">Vietnamese</option>
-                        <option value="en">English</option>
-                      </select>
-                    </div>
                     <div className="flex items-center justify-between">
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>Date Format</div>
@@ -732,4 +718,4 @@ function SettingsToggle({ label, desc, value, accent, onChange }: { label: strin
   );
 }
 
-export { COLORS, roleLabels, roleColors };
+export { COLORS, roleColors };

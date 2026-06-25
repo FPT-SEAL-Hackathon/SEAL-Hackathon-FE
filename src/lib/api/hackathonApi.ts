@@ -1,4 +1,6 @@
-const BASE_URL = "http://localhost:8080/api/v1";
+const BASE_URL = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api/v1`
+  : "http://localhost:8080/api/v1";
 
 // ==================== REQUEST TYPES ====================
 
@@ -72,7 +74,7 @@ export interface UserProfileResponse {
   id: number;
   email: string;
   fullName: string;
-  role: "MEMBER" | "LEADER" | "JUDGE" | "MENTOR" | "ADMIN" | "RESEARCH";
+  role: "MEMBER" | "LEADER" | "JUDGE" | "MENTOR" | "ADMIN";
   studentCode?: string;
   university?: string;
   status: "PENDING" | "ACTIVE" | "SUSPENDED";
@@ -126,17 +128,6 @@ export interface LeaderboardEntry {
   totalScore: number;
   roundScores: { roundId: number; roundName: string; score: number }[];
   status: "FINALIST" | "QUALIFIED" | "ELIMINATED";
-}
-
-export interface VarianceReport {
-  judgeId: number;
-  judgeName: string;
-  mean: number;
-  stdDev: number;
-  variance: number;
-  submissionsScored: number;
-  minScore: number;
-  maxScore: number;
 }
 
 export interface NotificationDTO {
@@ -273,22 +264,6 @@ export const scoringApi = {
     request<LeaderboardEntry[]>(`/public/leaderboard/${eventId}/${categoryId}`),
 };
 
-// ==================== RESEARCH ====================
-
-export const researchApi = {
-  getVarianceReport: () =>
-    request<VarianceReport[]>("/rbl/variance-report"),
-
-  exportCsv: async () => {
-    const token = localStorage.getItem("seal-token");
-    const res = await fetch(`${BASE_URL}/rbl/export/csv`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) throw new Error(`Export failed: ${res.status}`);
-    return res.blob();
-  },
-};
-
 // ==================== AWARDS ====================
 
 export const awardsApi = {
@@ -312,7 +287,6 @@ export const mockUsers: UserProfileResponse[] = [
   { id: 4, email: "nvminh@fpt.edu.vn", fullName: "Dr. Nguyen Van Minh", role: "MENTOR", university: "FPT University", status: "ACTIVE" },
   { id: 5, email: "htthu@fpt.edu.vn", fullName: "Hoang Thi Thu", role: "MEMBER", studentCode: "FPT2023045", university: "FPT University", status: "PENDING" },
   { id: 6, email: "tmduc@fpt.edu.vn", fullName: "Tran Minh Duc", role: "LEADER", studentCode: "FPT2022012", university: "FPT University", status: "ACTIVE" },
-  { id: 7, email: "research@fpt.edu.vn", fullName: "Research Team", role: "RESEARCH", university: "FPT University", status: "ACTIVE" },
 ];
 
 export const mockEvents: EventDTO[] = [
@@ -329,14 +303,6 @@ export const mockLeaderboard: LeaderboardEntry[] = [
   { rank: 4, teamId: 104, teamName: "InnovateFPT", totalScore: 86.3, roundScores: [{ roundId: 1, roundName: "Round 1", score: 82.0 }, { roundId: 2, roundName: "Round 2", score: 90.6 }], status: "FINALIST" },
   { rank: 5, teamId: 105, teamName: "TechStorm", totalScore: 84.9, roundScores: [{ roundId: 1, roundName: "Round 1", score: 84.9 }, { roundId: 2, roundName: "Round 2", score: 84.9 }], status: "FINALIST" },
   { rank: 12, teamId: 112, teamName: "DevDynamo", totalScore: 79.3, roundScores: [{ roundId: 1, roundName: "Round 1", score: 76.8 }, { roundId: 2, roundName: "Round 2", score: 81.8 }], status: "QUALIFIED" },
-];
-
-export const mockVarianceReport: VarianceReport[] = [
-  { judgeId: 1, judgeName: "Dr. Pham Thi Lan", mean: 80.0, stdDev: 2.1, variance: 4.4, submissionsScored: 18, minScore: 77, maxScore: 83 },
-  { judgeId: 2, judgeName: "Prof. Nguyen Van A", mean: 78.5, stdDev: 4.3, variance: 18.5, submissionsScored: 17, minScore: 72, maxScore: 85 },
-  { judgeId: 3, judgeName: "Dr. Le Thi Bich", mean: 82.3, stdDev: 2.8, variance: 7.8, submissionsScored: 18, minScore: 78, maxScore: 88 },
-  { judgeId: 4, judgeName: "Assoc. Prof. Tran C", mean: 75.1, stdDev: 5.2, variance: 27.0, submissionsScored: 16, minScore: 68, maxScore: 82 },
-  { judgeId: 5, judgeName: "Dr. Hoang Van D", mean: 83.7, stdDev: 3.1, variance: 9.6, submissionsScored: 18, minScore: 79, maxScore: 89 },
 ];
 
 export const mockNotifications: NotificationDTO[] = [

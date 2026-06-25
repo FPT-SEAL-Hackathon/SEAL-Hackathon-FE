@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLanguage } from "@/store/languageStore";
+import { useLanguage } from "@/app/store/languageStore";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type CriterionTemplateResponse, type RoundResponse } from "@/features/judging/api/roundService";
@@ -7,17 +7,18 @@ import { teamService, type TeamEligibilityReviewResponse } from "@/features/team
 import { rankingService, type EventRankingDTO } from "@/features/rankings/api/rankingService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { notificationService } from "@/features/notifications/api/notificationService";
+import { researchService } from "@/features/research/api/researchService";
+import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
 import { CategoryModal } from "@/features/categories/components/CategoryModal";
 import { RoundModal } from "@/features/judging/components/RoundModal";
 import { AssignJudgeModal } from "@/features/judging/components/AssignJudgeModal";
-import { AwardModal } from "@/features/awards/components/AwardModal";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
   Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
   TrendingUp, Clock, Activity, Download, Send, Search, Filter,
-  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award
+  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader, Database
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -94,11 +95,30 @@ const roleColors: Record<string, string> = {
   admin: COLORS.error,
 };
 
+const AWARD_TIER_OPTIONS = [
+  { label: "First Place", value: "70000000-0000-0000-0000-000000000001" },
+  { label: "Second Place", value: "70000000-0000-0000-0000-000000000002" },
+  { label: "Third Place", value: "70000000-0000-0000-0000-000000000003" },
+  { label: "Honorable Mention", value: "70000000-0000-0000-0000-000000000004" },
+  { label: "Best Innovation", value: "70000000-0000-0000-0000-000000000005" },
+  { label: "Best Presentation", value: "70000000-0000-0000-0000-000000000006" },
+  { label: "Special Award", value: "70000000-0000-0000-0000-000000000007" },
+];
+
+const createEmptyAwardPattern = (rankPosition: number) => ({
+  rankPosition,
+  awardTierId: AWARD_TIER_OPTIONS[Math.min(rankPosition - 1, AWARD_TIER_OPTIONS.length - 1)].value,
+  awardTitle: `${rankPosition}${rankPosition === 1 ? "st" : rankPosition === 2 ? "nd" : rankPosition === 3 ? "rd" : "th"} Place`,
+  description: "",
+  prizeValue: "",
+  prizeCurrency: "VND",
+});
+
 export function AdminDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { t } = useLanguage();
 
   // ── API state ────────────────────────────────────────────────────────────
-  const [apiEvents, setApiEvents] = useState(events);
+  const [apiEvents, setApiEvents] = useState<typeof events>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
@@ -106,17 +126,70 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiRankings, setApiRankings] = useState<EventRankingDTO[]>([]);
   const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
+  const [eventLoadError, setEventLoadError] = useState("");
+  const [categoryLoadError, setCategoryLoadError] = useState("");
+  const [dataExportLoading, setDataExportLoading] = useState(false);
+  const [dataExportDone, setDataExportDone] = useState(false);
+  const [dataExportError, setDataExportError] = useState("");
 
   // ── Modal state ──────────────────────────────────────────────────────────
   const [eventModal, setEventModal] = useState<{ open: boolean; edit?: EventResponse }>({ open: false });
   const [categoryModal, setCategoryModal] = useState<{ open: boolean; edit?: CategoryResponse }>({ open: false });
   const [roundModal, setRoundModal] = useState<{ open: boolean; edit?: RoundResponse; categoryId?: string }>({ open: false });
   const [assignJudgeModal, setAssignJudgeModal] = useState<{ open: boolean; roundId?: string; roundName?: string }>({ open: false });
-  const [awardModal, setAwardModal] = useState(false);
+
+  const [userSearch, setUserSearch] = useState("");
+  const [approvedUsers, setApprovedUsers] = useState<number[]>([]);
+  const [showGuestJudgeForm, setShowGuestJudgeForm] = useState(false);
+  const [guestJudgeForm, setGuestJudgeForm] = useState({ email: "", fullName: "", company: "" });
+  const [guestJudgeSuccess, setGuestJudgeSuccess] = useState(false);
+  const [rankingsComputed, setRankingsComputed] = useState(false);
+  const [rankingsPublished, setRankingsPublished] = useState(false);
+  const [disqualifiedTeams, setDisqualifiedTeams] = useState<number[]>([]);
+  const [disqualifyTarget, setDisqualifyTarget] = useState<{ id: number; name: string } | null>(null);
+  const [disqualifyReason, setDisqualifyReason] = useState("");
+  const [awardPatternCategoryId, setAwardPatternCategoryId] = useState("");
+  const [awardPatterns, setAwardPatterns] = useState([
+    createEmptyAwardPattern(1),
+    createEmptyAwardPattern(2),
+    createEmptyAwardPattern(3),
+  ]);
+  const [awardPatternLoading, setAwardPatternLoading] = useState(false);
+  const [awardPatternMessage, setAwardPatternMessage] = useState("");
+  const [awardPatternError, setAwardPatternError] = useState("");
+  const [autoGrantLimit, setAutoGrantLimit] = useState("3");
+  const [autoGrantLoading, setAutoGrantLoading] = useState(false);
+  const [autoGrantMessage, setAutoGrantMessage] = useState("");
+  const [autoGrantError, setAutoGrantError] = useState("");
+  const [autoGrantPreview, setAutoGrantPreview] = useState<Array<{ teamId: string; teamName: string; rankPosition: number; totalScore: number }>>([]);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
+  const [broadcastSent, setBroadcastSent] = useState(false);
+  const [notificationTargetMode, setNotificationTargetMode] = useState<"team" | "user">("team");
+  const [notificationTeamId, setNotificationTeamId] = useState("");
+  const [notificationEmail, setNotificationEmail] = useState("");
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationSending, setNotificationSending] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState("");
+  const [notificationError, setNotificationError] = useState("");
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [systemSettings, setSystemSettings] = useState({
+    platformName: "SEAL FPT Hackathon Platform",
+    maxTeamSize: "5",
+    minTeamSize: "2",
+    submissionGracePeriod: "30",
+    allowLateSubmissions: true,
+    enablePublicLeaderboard: true,
+    requireEmailVerification: true,
+    contactEmail: "seal@fpt.edu.vn",
+  });
 
   useEffect(() => {
     eventService.getAll()
       .then(data => {
+        setEventLoadError("");
         const mapped = data.map(e => ({
           id: e.eventId, name: e.eventName,
           category: e.description ?? "—", status: "active",
@@ -125,21 +198,47 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         setApiEvents(mapped as any);
         if (data[0]) setSelectedEventId(data[0].eventId);
       })
-      .catch(() => {});
+      .catch(error => {
+        setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
+      });
   }, []);
 
   useEffect(() => {
     if (!selectedEventId) return;
+    setCategoryLoadError("");
+    setApiCategories([]);
+    setAwardPatternCategoryId("");
     categoryService.getByEvent(selectedEventId).then(data => {
+      setCategoryLoadError("");
       setApiCategories(data);
       // Load rounds for first category
       if (data[0]) {
         roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
+        setAwardPatternCategoryId(data[0].categoryId);
       }
-    }).catch(() => {});
+    }).catch(error => {
+      setCategoryLoadError(error instanceof Error ? error.message : "Failed to load categories.");
+    });
     teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
     awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
   }, [selectedEventId]);
+
+  useEffect(() => {
+    if (!awardPatternCategoryId) return;
+    awardService.getPatterns(awardPatternCategoryId)
+      .then(patterns => {
+        if (patterns.length === 0) return;
+        setAwardPatterns(patterns.map(pattern => ({
+          rankPosition: pattern.rankPosition,
+          awardTierId: pattern.awardTierId,
+          awardTitle: pattern.awardTitle,
+          description: pattern.description ?? "",
+          prizeValue: pattern.prizeValue !== undefined && pattern.prizeValue !== null ? String(pattern.prizeValue) : "",
+          prizeCurrency: pattern.prizeCurrency || "VND",
+        })));
+      })
+      .catch(() => {});
+  }, [awardPatternCategoryId]);
 
   useEffect(() => {
     if (currentPage !== "criteria") return;
@@ -174,41 +273,117 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       setBroadcastTitle("");
       setBroadcastMessage("");
       setTimeout(() => setBroadcastSent(false), 3000);
-    } catch { setBroadcastSent(true); setTimeout(() => setBroadcastSent(false), 3000); }
+    } catch { /* ignore for demo */ }
+    setBroadcastSent(true);
+    setTimeout(() => setBroadcastSent(false), 3000);
   };
 
-  const [userSearch, setUserSearch] = useState("");
-  const [approvedUsers, setApprovedUsers] = useState<number[]>([]);
-  const [showGuestJudgeForm, setShowGuestJudgeForm] = useState(false);
-  const [guestJudgeForm, setGuestJudgeForm] = useState({ email: "", fullName: "", company: "" });
-  const [guestJudgeSuccess, setGuestJudgeSuccess] = useState(false);
-  const [rankingsComputed, setRankingsComputed] = useState(false);
-  const [disqualifiedTeams, setDisqualifiedTeams] = useState<number[]>([]);
-  const [disqualifyTarget, setDisqualifyTarget] = useState<{ id: number; name: string } | null>(null);
-  const [disqualifyReason, setDisqualifyReason] = useState("");
-  const [awardForm, setAwardForm] = useState({ teamId: "", eventId: "1", awardTier: "FIRST_PRIZE" });
-  const [awardSuccess, setAwardSuccess] = useState(false);
-  const [broadcastTitle, setBroadcastTitle] = useState("");
-  const [broadcastMessage, setBroadcastMessage] = useState("");
-  const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
-  const [broadcastSent, setBroadcastSent] = useState(false);
-  const [settingsSaved, setSettingsSaved] = useState(false);
-  const [systemSettings, setSystemSettings] = useState({
-    platformName: "SEAL FPT Hackathon Platform",
-    maxTeamSize: "5",
-    minTeamSize: "2",
-    submissionGracePeriod: "30",
-    allowLateSubmissions: true,
-    enablePublicLeaderboard: true,
-    requireEmailVerification: true,
-    contactEmail: "seal@fpt.edu.vn",
-  });
+  const handleSendTargetedNotification = async () => {
+    setNotificationError("");
+    setNotificationStatus("");
+    setNotificationSending(true);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 800));
+      setNotificationStatus("Notification sent successfully!");
+      setNotificationTitle("");
+      setNotificationMessage("");
+      setTimeout(() => setNotificationStatus(""), 3000);
+    } catch (err) {
+      setNotificationError("Failed to send notification.");
+    } finally {
+      setNotificationSending(false);
+    }
+  };
+
+  const handleDataExport = async () => {
+    if (!selectedEventId) {
+      setDataExportError("Select or load an event before exporting data.");
+      return;
+    }
+
+    setDataExportLoading(true);
+    setDataExportError("");
+    setDataExportDone(false);
+    try {
+      const token = getAccessToken();
+      const response = await fetch(researchService.exportUrl(selectedEventId), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        const message = await response.text().catch(() => "");
+        throw new Error(message || `Export failed (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `seal-data-export-${selectedEventId}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setDataExportDone(true);
+      setTimeout(() => setDataExportDone(false), 3000);
+    } catch (error) {
+      setDataExportError(error instanceof Error ? error.message : "Failed to export data.");
+    } finally {
+      setDataExportLoading(false);
+    }
+  };
 
   const filteredUsers = users.filter(u =>
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.role.toLowerCase().includes(userSearch.toLowerCase())
   );
+
+  const updateAwardPattern = (index: number, key: keyof typeof awardPatterns[number], value: string | number) => {
+    setAwardPatterns(prev => prev.map((pattern, i) => (
+      i === index ? { ...pattern, [key]: value } : pattern
+    )));
+  };
+
+  const addAwardPattern = () => {
+    setAwardPatterns(prev => [...prev, createEmptyAwardPattern(prev.length + 1)]);
+  };
+
+  const removeAwardPattern = (index: number) => {
+    setAwardPatterns(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveAwardPatterns = async () => {
+    if (!awardPatternCategoryId) {
+      setAwardPatternError("Select a category before saving award patterns.");
+      return;
+    }
+    const validPatterns = awardPatterns
+      .map(pattern => ({
+        rankPosition: Number(pattern.rankPosition),
+        awardTierId: pattern.awardTierId,
+        awardTitle: pattern.awardTitle.trim(),
+        description: pattern.description.trim() || undefined,
+        prizeValue: pattern.prizeValue ? Number(pattern.prizeValue) : undefined,
+        prizeCurrency: pattern.prizeCurrency || undefined,
+      }))
+      .filter(pattern => pattern.rankPosition && pattern.awardTierId && pattern.awardTitle);
+
+    if (validPatterns.length === 0) {
+      setAwardPatternError("Add at least one rank with title and award tier.");
+      return;
+    }
+
+    setAwardPatternLoading(true);
+    setAwardPatternError("");
+    setAwardPatternMessage("");
+    try {
+      const saved = await awardService.savePatterns(awardPatternCategoryId, validPatterns);
+      setAwardPatternMessage(`Saved ${saved.length} award pattern(s).`);
+    } catch (error) {
+      setAwardPatternError(error instanceof Error ? error.message : "Failed to save award patterns.");
+    } finally {
+      setAwardPatternLoading(false);
+    }
+  };
 
   const renderDashboard = () => (
     <>
@@ -460,7 +635,63 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setTimeout(() => setRankingsComputed(false), 3000);
   };
 
-  const handleGrantAward = () => setAwardModal(true);
+  const handlePublishRankings = async () => {
+    if (selectedEventId && awardPatternCategoryId) {
+      try {
+        await rankingService.publishEvent(selectedEventId, awardPatternCategoryId);
+        const data = await rankingService.computeEvent(selectedEventId);
+        setApiRankings(data);
+      } catch { /* ignore */ }
+    }
+    setRankingsPublished(true);
+    setTimeout(() => {
+        setRankingsPublished(false);
+        if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
+            setBroadcastTitle("Leaderboard Published!");
+            setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
+            onNavigate("notifications");
+        }
+    }, 1500);
+  };
+
+  const handleAutoGrantAwards = async () => {
+    const limit = Number(autoGrantLimit);
+    if (!awardPatternCategoryId) {
+      setAutoGrantError("Select a category before granting awards.");
+      return;
+    }
+    if (!Number.isInteger(limit) || limit < 1) {
+      setAutoGrantError("Top N must be a positive whole number.");
+      return;
+    }
+
+    setAutoGrantLoading(true);
+    setAutoGrantError("");
+    setAutoGrantMessage("");
+    setAutoGrantPreview([]);
+
+    try {
+      const topCandidates = await awardService.getTopCandidates(awardPatternCategoryId, undefined, limit);
+      setAutoGrantPreview(topCandidates.map(candidate => ({
+        teamId: candidate.teamId,
+        teamName: candidate.teamName,
+        rankPosition: candidate.rankPosition,
+        totalScore: candidate.totalScore,
+      })));
+
+      const granted = await awardService.autoGrant(awardPatternCategoryId, undefined, limit);
+      setApiAwards(prev => {
+        const existingIds = new Set(prev.map(award => award.id));
+        return [...granted.filter(award => !existingIds.has(award.id)), ...prev];
+      });
+      setAutoGrantMessage(`Granted ${granted.length} award(s) for top ${limit} ranking team(s).`);
+      if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+    } catch (error) {
+      setAutoGrantError(error instanceof Error ? error.message : "Failed to grant awards for top ranking teams.");
+    } finally {
+      setAutoGrantLoading(false);
+    }
+  };
 
   const renderUsers = () => (
     <>
@@ -640,8 +871,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         action={
           <div className="flex items-center gap-2">
             {rankingsComputed && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Rankings computed!</span>}
-            <Button variant="primary" size="sm" icon={<Zap size={14} />} onClick={handleComputeRankings}>
-              Compute Rankings
+            {rankingsPublished && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Published!</span>}
+            <Button variant="secondary" size="sm" icon={<Zap size={14} />} onClick={handleComputeRankings}>
+              Re-Compute
+            </Button>
+            <Button variant="primary" size="sm" icon={<Award size={14} />} onClick={handlePublishRankings} style={{ background: COLORS.success }}>
+              Publish Leaderboard
             </Button>
           </div>
         }
@@ -657,25 +892,28 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               </tr>
             </thead>
             <tbody>
-              {rankings.map((row, i) => (
-                <tr key={row.rank} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+              {(apiRankings.length > 0 ? apiRankings : rankings).map((row: any, i: number) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                const isPublishedStatus = row.isPublished ? "PUBLISHED" : "DRAFT";
+                return (
+                <tr key={row.rank ?? i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                   <td className="px-4 py-3">
-                    <span style={{ fontSize: row.rank <= 3 ? 18 : 14, fontWeight: 700 }}>
-                      {row.rank <= 3 ? ["🥇", "🥈", "🥉"][row.rank - 1] : `#${row.rank}`}
+                    <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
+                      {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
                     </span>
                   </td>
-                  <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.team}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.track}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r1}</span></td>
+                  <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.teamId ?? row.team}</span></td>
+                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryId ?? row.track}</span></td>
+                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r1 ?? "—"}</span></td>
                   <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r2 ?? "—"}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.total}</span></td>
-                  <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                  <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.total}</span></td>
+                  <td className="px-4 py-3"><StatusBadge status={apiRankings.length > 0 ? isPublishedStatus : row.status} /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" icon={<Eye size={13} />}>{t("common.view")}</Button>
-                      {!disqualifiedTeams.includes(row.rank) ? (
+                      {!disqualifiedTeams.includes(rankNum) ? (
                         <Button variant="danger" size="sm" icon={<AlertTriangle size={12} />}
-                          onClick={() => setDisqualifyTarget({ id: row.rank, name: row.team })}>
+                          onClick={() => setDisqualifyTarget({ id: rankNum, name: row.teamId ?? row.team })}>
                           DQ
                         </Button>
                       ) : (
@@ -684,7 +922,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
@@ -740,10 +978,110 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
+  const renderDataExport = () => (
+    <>
+      <SectionHeader
+        title="Data Export"
+        subtitle="Export scoring data for the selected event"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={dataExportLoading ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
+            onClick={handleDataExport}
+            disabled={dataExportLoading || !selectedEventId}
+          >
+            {dataExportLoading ? "Exporting..." : "Download CSV"}
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_0.9fr] gap-6">
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Export Configuration</div>
+          {dataExportError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              {dataExportError}
+            </div>
+          )}
+          {dataExportDone && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+              Export file is ready.
+            </div>
+          )}
+          {eventLoadError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              Events could not be loaded from database: {eventLoadError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
+              <select
+                value={selectedEventId ?? ""}
+                onChange={e => setSelectedEventId(e.target.value || null)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {apiEvents.length === 0 && <option value="">No events found</option>}
+                {apiEvents.map((event: any) => (
+                  <option key={event.id} value={event.id}>{event.name}</option>
+                ))}
+              </select>
+            </div>
+            <Button
+              variant="primary"
+              size="lg"
+              icon={dataExportLoading ? <Loader size={15} className="animate-spin" /> : <Database size={15} />}
+              onClick={handleDataExport}
+              disabled={dataExportLoading || !selectedEventId}
+            >
+              {dataExportLoading ? "Exporting..." : "Export Data"}
+            </Button>
+          </div>
+
+          <div className="mt-5 p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 6 }}>BACKEND ENDPOINT USED</div>
+            <code style={{ fontSize: 12, color: COLORS.textSecondary, wordBreak: "break-all" }}>
+              GET /api/v1/research/events/{"{eventId}"}/export
+            </code>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Export Contents</div>
+          <div className="space-y-3">
+            {[
+              "Teams and submission identifiers",
+              "Judge identifiers and scoring metadata",
+              "Criterion-level score values",
+              "Round and event references",
+              "Exportable CSV format for admin analysis",
+            ].map(item => (
+              <div key={item} className="flex items-center gap-2">
+                <CheckCircle size={14} style={{ color: COLORS.success, flexShrink: 0 }} />
+                <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{item}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+
   const renderNotifications = () => (
     <>
-      <SectionHeader title={t("admin.notificationCenter")} subtitle={t("admin.notificationSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <SectionHeader
+        title={t("admin.notificationCenter")}
+        subtitle={t("admin.notificationSubtitle")}
+        action={
+          <Button variant="outline" size="sm" icon={<Send size={14} />} onClick={() => onNavigate("direct-notification")}>
+            Direct Notification
+          </Button>
+        }
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.broadcastSend")}</div>
           <div className="space-y-4">
@@ -759,8 +1097,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                 <option>All Judges</option>
                 <option>All Mentors</option>
                 <option>All Participants</option>
-                <option>AI Agents Track Only</option>
-                <option>Web3 Track Only</option>
               </select>
             </div>
             <div>
@@ -798,6 +1134,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
             </div>
           </div>
         </Card>
+
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.broadcastHistory")}</div>
           {broadcastHistory.map(b => (
@@ -805,7 +1142,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{b.title}</div>
               <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{b.message}</div>
               <div className="flex items-center justify-between mt-2">
-                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} • {b.sent}</span>
+                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} - {b.sent}</span>
                 <StatusBadge status={b.status} />
               </div>
             </div>
@@ -815,6 +1152,114 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     </>
   );
 
+  const renderDirectNotification = () => (
+    <>
+      <SectionHeader
+        title="Direct Notification"
+        subtitle="Send a targeted notification to one team or one user"
+        action={
+          <Button variant="outline" size="sm" icon={<Bell size={14} />} onClick={() => onNavigate("notifications")}>
+            Back to Broadcast
+          </Button>
+        }
+      />
+      <div className="max-w-3xl">
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Send Direct Notification</div>
+          <div className="space-y-4">
+            {notificationError && (
+              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+                {notificationError}
+              </div>
+            )}
+            {notificationStatus && (
+              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+                {notificationStatus}
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TARGET TYPE</label>
+              <select
+                value={notificationTargetMode}
+                onChange={e => setNotificationTargetMode(e.target.value as "team" | "user")}
+                className="w-full px-3 py-2 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="team">Team</option>
+                <option value="user">Individual User</option>
+              </select>
+            </div>
+
+            {notificationTargetMode === "team" ? (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM</label>
+                <select
+                  value={notificationTeamId}
+                  onChange={e => setNotificationTeamId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <option value="">Select team</option>
+                  {apiTeamEligibility.map(team => (
+                    <option key={team.teamId} value={team.teamId}>{team.teamName} ({team.activeMemberCount} members)</option>
+                  ))}
+                </select>
+                {apiTeamEligibility.length === 0 && (
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+                    No teams loaded for the selected event.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>RECIPIENT EMAIL</label>
+                <input
+                  type="email"
+                  value={notificationEmail}
+                  onChange={e => setNotificationEmail(e.target.value)}
+                  placeholder="student@fpt.edu.vn"
+                  className="w-full px-3 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+            )}
+
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TITLE</label>
+              <input
+                value={notificationTitle}
+                onChange={e => setNotificationTitle(e.target.value)}
+                placeholder="Notification title"
+                className="w-full px-3 py-2 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>MESSAGE</label>
+              <textarea
+                value={notificationMessage}
+                onChange={e => setNotificationMessage(e.target.value)}
+                rows={5}
+                placeholder="Write a message for this recipient"
+                className="w-full px-3 py-2 rounded-xl outline-none resize-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Send size={14} />}
+              onClick={handleSendTargetedNotification}
+              disabled={notificationSending || !notificationTitle || !notificationMessage || (notificationTargetMode === "team" ? !notificationTeamId : !notificationEmail)}
+            >
+              {notificationSending ? "Sending..." : "Send Notification"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
   const renderAudit = () => (
     <>
       <SectionHeader title={t("admin.auditLogs")} subtitle={t("admin.auditSubtitle")} action={<Button variant="outline" size="sm" icon={<Download size={14} />}>{t("common.exportLogs")}</Button>} />
@@ -993,77 +1438,306 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     <>
       <SectionHeader
         title="Award Management"
-        subtitle="Grant prizes to winning teams — POST /awards"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<PlusCircle size={14} />}
+            onClick={() => onNavigate("award-patterns")}
+          >
+            Create Award Pattern
+          </Button>
+        }
+        subtitle="Auto-grant awards from category rankings"
       />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
         <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Grant Award</div>
-          <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-4">
+            <Zap size={17} style={{ color: COLORS.primary }} />
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>EVENT</label>
+              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Grant for Top Ranking of Category</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                Select a category, enter Top N, then grant awards using the backend award patterns.
+              </div>
+            </div>
+          </div>
+
+          {autoGrantError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              {autoGrantError}
+            </div>
+          )}
+          {autoGrantMessage && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+              {autoGrantMessage}
+            </div>
+          )}
+          {eventLoadError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              Events could not be loaded from database: {eventLoadError}
+            </div>
+          )}
+          {categoryLoadError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              Categories could not be loaded for this event: {categoryLoadError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_140px] gap-4">
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
               <select
-                value={awardForm.eventId}
-                onChange={e => setAwardForm(p => ({ ...p, eventId: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl outline-none"
+                value={selectedEventId ?? ""}
+                onChange={e => setSelectedEventId(e.target.value || null)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
                 style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
               >
-                <option value="1">SEAL Fall 2025</option>
-                <option value="2">FPT Web3 Challenge</option>
+                {apiEvents.length === 0 && <option value="">No events found</option>}
+                {apiEvents.map((event: any) => (
+                  <option key={event.id} value={event.id}>{event.name}</option>
+                ))}
               </select>
             </div>
             <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM ID</label>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
+              <select
+                value={awardPatternCategoryId}
+                onChange={e => setAwardPatternCategoryId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="">Select category</option>
+                {apiCategories.length === 0 && selectedEventId && <option value="" disabled>No categories found</option>}
+                {apiCategories.map(category => (
+                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TOP N</label>
               <input
-                value={awardForm.teamId}
-                onChange={e => setAwardForm(p => ({ ...p, teamId: e.target.value }))}
-                placeholder="e.g. 101 (AlphaCoders)"
-                className="w-full px-3 py-2 rounded-xl outline-none"
+                type="number"
+                min={1}
+                max={50}
+                value={autoGrantLimit}
+                onChange={e => setAutoGrantLimit(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
                 style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
               />
             </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>AWARD TIER</label>
-              <select
-                value={awardForm.awardTier}
-                onChange={e => setAwardForm(p => ({ ...p, awardTier: e.target.value }))}
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="FIRST_PRIZE">🥇 First Prize</option>
-                <option value="SECOND_PRIZE">🥈 Second Prize</option>
-                <option value="THIRD_PRIZE">🥉 Third Prize</option>
-                <option value="HONORABLE_MENTION">🏅 Honorable Mention</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button variant="primary" size="md" icon={<Award size={14} />} onClick={handleGrantAward} disabled={!awardForm.teamId}>
-                Grant Award
-              </Button>
-              {awardSuccess && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Award granted successfully!</span>}
-            </div>
           </div>
-        </Card>
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Recent Awards</div>
-          {[
-            { team: "AlphaCoders", event: "SEAL Fall 2025", tier: "FIRST_PRIZE", emoji: "🥇", date: "Dec 5, 2025" },
-            { team: "CodeCraft Pro", event: "SEAL Fall 2025", tier: "SECOND_PRIZE", emoji: "🥈", date: "Dec 5, 2025" },
-            { team: "ByteBuilders", event: "SEAL Fall 2025", tier: "THIRD_PRIZE", emoji: "🥉", date: "Dec 5, 2025" },
-            { team: "InnovateFPT", event: "SEAL Fall 2025", tier: "HONORABLE_MENTION", emoji: "🏅", date: "Dec 5, 2025" },
-          ].map(a => (
-            <div key={a.team} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
-              <span style={{ fontSize: 22 }}>{a.emoji}</span>
-              <div className="flex-1">
-                <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary }}>{a.team}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{a.event} • {a.date}</div>
+
+          <div className="flex flex-wrap items-center gap-3 mt-5">
+            <Button
+              variant="primary"
+              size="lg"
+              icon={autoGrantLoading ? <Loader size={15} className="animate-spin" /> : <Trophy size={15} />}
+              onClick={handleAutoGrantAwards}
+              disabled={autoGrantLoading || !awardPatternCategoryId}
+            >
+              {autoGrantLoading ? "Granting..." : "Grant for Top Ranking of Category"}
+            </Button>
+          </div>
+
+          {autoGrantPreview.length > 0 && (
+            <div className="mt-6">
+              <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 10 }}>Top Ranking Used</div>
+              <div className="space-y-2">
+                {autoGrantPreview.map(candidate => (
+                  <div key={candidate.teamId} className="flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center justify-center rounded-lg" style={{ width: 30, height: 30, background: `${COLORS.primary}12`, color: COLORS.primary, fontWeight: 700, fontSize: 12 }}>
+                        #{candidate.rankPosition}
+                      </span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary }}>{candidate.teamName}</div>
+                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{candidate.teamId}</div>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 12, color: COLORS.textSecondary, fontWeight: 600 }}>{candidate.totalScore.toFixed(1)} pts</span>
+                  </div>
+                ))}
               </div>
-              <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{a.tier.replace("_", " ")}</span>
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Granted Awards</div>
+          {apiAwards.length === 0 && (
+            <div className="p-4 rounded-xl" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+              No awards have been granted for this event yet.
+            </div>
+          )}
+          {apiAwards.map(award => (
+            <div key={award.id} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
+              <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: `${COLORS.primary}12`, color: COLORS.primary }}>
+                <Award size={18} />
+              </span>
+              <div className="flex-1">
+                <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary }}>{award.teamName}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{award.eventName} - {award.categoryName}</div>
+              </div>
+              <div className="text-right">
+                <div style={{ fontSize: 11, color: COLORS.textPrimary, fontWeight: 700 }}>{award.awardTierName}</div>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{award.awardTitle}</div>
+              </div>
             </div>
           ))}
         </Card>
       </div>
     </>
   );
+  const renderAwardPatterns = () => (
+    <>
+      <SectionHeader
+        title="Create Award Pattern"
+        subtitle="Configure award title, tier, description, and prize by rank for a category"
+        action={
+          <Button variant="outline" size="sm" icon={<Award size={14} />} onClick={() => onNavigate("awards")}>
+            Back to Awards
+          </Button>
+        }
+      />
+
+      <Card className="p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
+            <select
+              value={selectedEventId ?? ""}
+              onChange={e => setSelectedEventId(e.target.value || null)}
+              className="w-full px-3 py-2.5 rounded-xl outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              {apiEvents.map((event: any) => (
+                <option key={event.id} value={event.id}>{event.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
+            <select
+              value={awardPatternCategoryId}
+              onChange={e => setAwardPatternCategoryId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              <option value="">Select category</option>
+              {apiCategories.map(category => (
+                <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {awardPatternError && (
+          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+            {awardPatternError}
+          </div>
+        )}
+        {awardPatternMessage && (
+          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+            {awardPatternMessage}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {awardPatterns.map((pattern, index) => (
+            <div key={index} className="grid grid-cols-1 xl:grid-cols-[80px_1.2fr_1.4fr_1fr_120px_44px] gap-3 items-end p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANK</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={pattern.rankPosition}
+                  onChange={e => updateAwardPattern(index, "rankPosition", Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TIER</label>
+                <select
+                  value={pattern.awardTierId}
+                  onChange={e => updateAwardPattern(index, "awardTierId", e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  {AWARD_TIER_OPTIONS.map(tier => (
+                    <option key={tier.value} value={tier.value}>{tier.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TITLE</label>
+                <input
+                  value={pattern.awardTitle}
+                  onChange={e => updateAwardPattern(index, "awardTitle", e.target.value)}
+                  placeholder="Champion"
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>PRIZE</label>
+                <input
+                  type="number"
+                  value={pattern.prizeValue}
+                  onChange={e => updateAwardPattern(index, "prizeValue", e.target.value)}
+                  placeholder="10000000"
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CURRENCY</label>
+                <select
+                  value={pattern.prizeCurrency}
+                  onChange={e => updateAwardPattern(index, "prizeCurrency", e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <option value="VND">VND</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => removeAwardPattern(index)}
+                className="h-11 rounded-xl flex items-center justify-center"
+                style={{ border: `1px solid ${COLORS.border}`, color: COLORS.error, background: COLORS.bg }}
+                aria-label="Remove award pattern"
+              >
+                <X size={16} />
+              </button>
+              <div className="xl:col-span-6">
+                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>DESCRIPTION</label>
+                <textarea
+                  value={pattern.description}
+                  onChange={e => updateAwardPattern(index, "description", e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 mt-5">
+          <Button variant="outline" size="sm" icon={<PlusCircle size={14} />} onClick={addAwardPattern}>
+            Add Rank
+          </Button>
+          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={handleSaveAwardPatterns} disabled={awardPatternLoading || !awardPatternCategoryId}>
+            {awardPatternLoading ? "Saving..." : "Save Award Pattern"}
+          </Button>
+        </div>
+      </Card>
+    </>
+  );
+
 
   const renderPage = () => {
     switch (currentPage) {
@@ -1076,9 +1750,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "assignments": return renderAssignments();
       case "rankings": return renderRankings();
       case "reports": return renderReports();
+      case "data-export": return renderDataExport();
       case "notifications": return renderNotifications();
+      case "direct-notification": return renderDirectNotification();
       case "audit": return renderAudit();
       case "awards": return renderAwards();
+      case "award-patterns": return renderAwardPatterns();
       case "settings": return renderSettings();
       case "profile": return renderProfile();
       default: return renderDashboard();
@@ -1143,17 +1820,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         />
       )}
 
-      {awardModal && selectedEventId && (
-        <AwardModal
-          eventId={selectedEventId}
-          categoryId={apiCategories[0]?.categoryId}
-          onClose={() => setAwardModal(false)}
-          onSaved={() => {
-            setAwardModal(false);
-            if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
-          }}
-        />
-      )}
     </div>
   );
 }
