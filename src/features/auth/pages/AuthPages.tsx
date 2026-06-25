@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Eye, EyeOff, Mail, Lock, ArrowRight, X, CheckCircle, Loader,
+  Eye, EyeOff, Mail, Lock, ArrowLeft, ArrowRight, X, CheckCircle, Loader,
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -318,7 +318,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
 }
 
 // ─── Login Card ───────────────────────────────────────────────────────────────
-export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: string) => void; onSwitchToRegister: () => void }) {
+export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -356,8 +356,18 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
 
       <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ delay: 0.15, duration: 0.4 }}
-        className="w-full rounded-3xl p-8"
+        className="relative w-full rounded-3xl p-8"
         style={{ background: "var(--glass-bg)", backdropFilter: "blur(32px) saturate(180%)", WebkitBackdropFilter: "blur(32px) saturate(180%)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}>
+        <button
+          type="button"
+          onClick={onBackToLanding}
+          className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-2xl transition-all hover:-translate-y-0.5"
+          style={{ background: "rgba(244,121,32,0.08)", border: "1px solid rgba(244,121,32,0.16)", color: "#F47920" }}
+          aria-label="Back to landing page"
+          title="Back to landing page"
+        >
+          <ArrowLeft size={17} />
+        </button>
         <div className="mb-7">
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>Welcome back 👋</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>Sign in to your SEAL Hackathon account</p>
@@ -416,7 +426,7 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
 }
 
 // ─── Full-page Login (with left panel) ───────────────────────────────────────
-function LoginPage({ onLogin, onSwitchToRegister }: { onLogin: (role: string) => void; onSwitchToRegister: () => void }) {
+function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const stats = [
     { label: "Active Teams", value: "127", icon: "🚀" },
     { label: "Submissions", value: "89",  icon: "📦" },
@@ -473,14 +483,14 @@ function LoginPage({ onLogin, onSwitchToRegister }: { onLogin: (role: string) =>
 
       {/* Right panel */}
       <div className="flex flex-col justify-center items-center p-8 flex-1" style={{ maxWidth: 520 }}>
-        <LoginCard onLogin={onLogin} onSwitchToRegister={onSwitchToRegister} />
+        <LoginCard onLogin={onLogin} onSwitchToRegister={onSwitchToRegister} onBackToLanding={onBackToLanding} />
       </div>
     </div>
   );
 }
 
 // ─── AuthPages (entry point) ─────────────────────────────────────────────────
-export function AuthPages({ onLogin }: { onLogin: (role: string) => void }) {
+export function AuthPages({ onLogin, onBackToLanding }: { onLogin: (role: string) => void; onBackToLanding: () => void }) {
   const [page, setPage] = useState<"login" | "register">("login");
 
   if (page === "register") {
@@ -493,5 +503,5 @@ export function AuthPages({ onLogin }: { onLogin: (role: string) => void }) {
     );
   }
 
-  return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} />;
+  return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} onBackToLanding={onBackToLanding} />;
 }
