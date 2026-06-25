@@ -12,6 +12,7 @@ import {
 import { useAuth } from "@/features/auth/store/authStore";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { teamService, type JoinTeamRequestResponse } from "@/features/teams/api/teamService";
+import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 
@@ -238,6 +239,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           </Card>
         ))}
       </div>
+      <TeamApiPanel initialTeamId={teamId ?? ""} />
     </>
   );
 
