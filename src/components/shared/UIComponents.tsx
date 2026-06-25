@@ -139,8 +139,9 @@ interface ButtonProps {
   className?: string;
   icon?: ReactNode;
   fullWidth?: boolean;
+  style?: React.CSSProperties;
 }
-export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth }: ButtonProps) {
+export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style }: ButtonProps) {
   const sizes = {
     sm: { padding: "6px 12px", fontSize: 12 },
     md: { padding: "8px 16px", fontSize: 13 },
@@ -183,7 +184,7 @@ export function Button({ children, variant = "primary", size = "md", onClick, di
       whileHover={disabled ? {} : { scale: 1.02, y: -1 }}
       whileTap={disabled ? {} : { scale: 0.97 }}
       className={`inline-flex items-center gap-2 rounded-xl font-medium transition-all duration-150 cursor-pointer ${fullWidth ? "w-full justify-center" : ""} ${className}`}
-      style={{ ...variants[variant], ...sizes[size], opacity: disabled ? 0.4 : 1, letterSpacing: "0.01em" }}
+      style={{ ...variants[variant], ...sizes[size], opacity: disabled ? 0.4 : 1, letterSpacing: "0.01em", ...style }}
     >
       {icon && icon}
       {children}
