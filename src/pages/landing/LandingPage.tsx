@@ -5,6 +5,7 @@ import {
   ArrowRight, Award, Target, Clock, MapPin, Shield, Hash, Loader
 } from "lucide-react";
 import { api } from "@/lib/api/apiClient";
+import { eventService, type EventResponse } from "@/features/events/api/eventService";
 
 interface Props {
   onGoToLogin: () => void;
@@ -24,55 +25,35 @@ interface HallOfFameResponse {
 const ORANGE_WHITE = "linear-gradient(135deg, #F47920 0%, #FF9040 55%, #FFE8D4 100%)";
 const ORANGE_PRIMARY = "linear-gradient(135deg, #F47920, #FF9040)";
 
-const COMPETITIONS = [
-  {
-    id: 1,
-    name: "SEAL Hackathon 2025 – AI Innovation",
-    status: "ongoing",
-    phase: "Grand Final",
-    startDate: "2025-11-01",
-    endDate: "2025-12-15",
-    location: "FPT University, Hanoi",
-    tracks: ["AI/ML", "Web3", "FinTech"],
-    teams: 48,
-    prize: "500,000,000 VND",
-    color: "#F47920",
-    gradient: "from-orange-500/20 to-amber-400/10",
-    description: "The annual hackathon competition seeking breakthrough technology solutions from FPT students.",
-  },
-  {
-    id: 2,
-    name: "SEAL Research Sprint – Data Science",
-    status: "upcoming",
-    phase: "Registration Open",
-    startDate: "2026-01-10",
-    endDate: "2026-03-20",
-    location: "Online + FPT Campus",
-    tracks: ["Data Science", "Computer Vision", "NLP"],
-    teams: 0,
-    prize: "200,000,000 VND",
-    color: "#7C3AED",
-    gradient: "from-violet-500/20 to-purple-400/10",
-    description: "An in-depth research sprint focused on data science and applied artificial intelligence.",
-  },
-  {
-    id: 3,
-    name: "SEAL Build Week – HealthTech",
-    status: "upcoming",
-    phase: "Coming Soon",
-    startDate: "2026-02-01",
-    endDate: "2026-02-07",
-    location: "FPT University, Ho Chi Minh City",
-    tracks: ["HealthTech", "IoT", "Mobile"],
-    teams: 0,
-    prize: "150,000,000 VND",
-    color: "#0EA5E9",
-    gradient: "from-sky-500/20 to-blue-400/10",
-    description: "One week to build a health technology product with real social impact.",
-  },
+// Hall of Fame data is fetched from API — no static mock
+
+interface LandingCompetition {
+  id: string;
+  name: string;
+  status: "ongoing" | "upcoming" | "completed";
+  phase: string;
+  startDate: string;
+  endDate: string;
+  registrationEnd?: string;
+  location: string;
+  minTeamSize?: number;
+  maxTeamSize?: number;
+  color: string;
+  gradient: string;
+  description: string;
+}
+
+const EVENT_COLORS = [
+  { color: "#F47920", gradient: "from-orange-500/20 to-amber-400/10" },
+  { color: "#7C3AED", gradient: "from-violet-500/20 to-purple-400/10" },
+  { color: "#0EA5E9", gradient: "from-sky-500/20 to-blue-400/10" },
 ];
 
-// Hall of Fame data is fetched from API — no static mock
+const EVENT_STATUS = {
+  UPCOMING: "30000000-0000-0000-0000-000000000002",
+  ONGOING: "30000000-0000-0000-0000-000000000003",
+  COMPLETED: "30000000-0000-0000-0000-000000000004",
+};
 
 const RANK_META = [
   { bg: "from-yellow-400/30 to-amber-300/20", border: "border-yellow-400/50", text: "text-yellow-600", label: "Champion" },
@@ -85,6 +66,12 @@ function StatusBadge({ status }: { status: string }) {
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-orange-500/15 text-orange-600 border border-orange-500/30">
       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
       Live
+    </span>
+  );
+  if (status === "completed") return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
+      <Trophy size={10} />
+      Completed
     </span>
   );
   return (
@@ -162,20 +149,137 @@ function groupHallOfFame(data: HallOfFameResponse[]): HofGroup[] {
       entryKey: `${g.groupKey}-entry-${stableKey(`${p.awardTierName}|${p.awardTitle}|${p.leaderName}|${i}`)}`,
     }));
   }
-  return groups;
+  return groups.slice(0, 3);
+}
+
+function toCompetition(event: EventResponse, index: number): LandingCompetition {
+  const dates = getEventDates(event);
+  const palette = EVENT_COLORS[index % EVENT_COLORS.length];
+  return {
+    id: event.eventId,
+    name: event.eventName,
+    status: getCompetitionStatus(event, dates.startDate, dates.endDate),
+    phase: getCompetitionPhase(event, dates.startDate, dates.endDate),
+    startDate: dates.startDate,
+    endDate: dates.endDate,
+    registrationEnd: event.registrationEnd,
+    location: event.location || "Location TBA",
+    minTeamSize: event.minTeamSize,
+    maxTeamSize: event.maxTeamSize,
+    color: palette.color,
+    gradient: palette.gradient,
+    description: event.description || "Hackathon event details will be announced soon.",
+  };
+}
+
+function getEventDates(event: EventResponse) {
+  return {
+    startDate: event.eventStartDate || event.registrationStart || event.createdAt,
+    endDate: event.eventEndDate || event.registrationEnd || event.eventStartDate || event.createdAt,
+  };
+}
+
+function pickLandingCompetitions(events: EventResponse[]): EventResponse[] {
+  const byCreatedDesc = (a: EventResponse, b: EventResponse) => parseDateTime(b.createdAt) - parseDateTime(a.createdAt);
+  const byStartAsc = (a: EventResponse, b: EventResponse) => parseDateTime(getEventDates(a).startDate) - parseDateTime(getEventDates(b).startDate);
+
+  const ongoing = events
+    .filter(event => getCompetitionStatus(event, getEventDates(event).startDate, getEventDates(event).endDate) === "ongoing")
+    .sort(byCreatedDesc)
+    .slice(0, 2);
+
+  const upcoming = events
+    .filter(event => {
+      const dates = getEventDates(event);
+      return getCompetitionStatus(event, dates.startDate, dates.endDate) === "upcoming" && !hasEnded(dates.endDate);
+    })
+    .sort(byStartAsc)
+    .slice(0, 1);
+
+  return [...ongoing, ...upcoming];
+}
+
+function hasEnded(endDate: string): boolean {
+  const end = parseDateTime(endDate);
+  return Number.isFinite(end) && end > 0 && end < Date.now();
+}
+
+function getCompetitionStatus(event: EventResponse, startDate: string, endDate: string): LandingCompetition["status"] {
+  if (event.eventStatusId === EVENT_STATUS.ONGOING) return "ongoing";
+  if (event.eventStatusId === EVENT_STATUS.UPCOMING) return "upcoming";
+  if (event.eventStatusId === EVENT_STATUS.COMPLETED) return "completed";
+
+  const now = Date.now();
+  const start = parseDateTime(startDate);
+  const end = parseDateTime(endDate);
+  if (Number.isFinite(end) && now > end) return "completed";
+  if (Number.isFinite(start) && now < start) return "upcoming";
+  return "ongoing";
+}
+
+function getCompetitionPhase(event: EventResponse, startDate: string, endDate: string): string {
+  if (event.eventStatusId === EVENT_STATUS.COMPLETED) return "Completed";
+  if (event.eventStatusId === EVENT_STATUS.ONGOING) return "In Progress";
+  if (event.eventStatusId === EVENT_STATUS.UPCOMING) return "Registration Open";
+
+  const now = Date.now();
+  const regEnd = event.registrationEnd ? parseDateTime(event.registrationEnd) : NaN;
+  const start = parseDateTime(startDate);
+  const end = parseDateTime(endDate);
+  if (Number.isFinite(end) && now > end) return "Completed";
+  if (Number.isFinite(regEnd) && now <= regEnd) return "Registration Open";
+  if (Number.isFinite(start) && now < start) return "Coming Soon";
+  return "In Progress";
+}
+
+function formatDate(date: string): string {
+  if (!date) return "TBA";
+  const parsed = new Date(normalizeDateTime(date));
+  if (Number.isNaN(parsed.getTime())) return "TBA";
+  return parsed.toLocaleDateString("en-US");
+}
+
+function parseDateTime(date: string): number {
+  if (!date) return 0;
+  const timestamp = new Date(normalizeDateTime(date)).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function normalizeDateTime(date: string): string {
+  return date.includes(" ") ? date.replace(" ", "T") : date;
 }
 
 export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   const [activeCompetition, setActiveCompetition] = useState(0);
+  const [competitions, setCompetitions] = useState<LandingCompetition[]>([]);
+  const [competitionsLoading, setCompetitionsLoading] = useState(true);
+  const [competitionsError, setCompetitionsError] = useState("");
   const [activeHof, setActiveHof] = useState(0);
   const [hofGroups, setHofGroups] = useState<HofGroup[]>([]);
   const [hofLoading, setHofLoading] = useState(true);
 
   useEffect(() => {
+    if (competitions.length <= 1) return;
     const timer = setInterval(() => {
-      setActiveCompetition(v => (v + 1) % COMPETITIONS.length);
+      setActiveCompetition(v => (v + 1) % competitions.length);
     }, 5000);
     return () => clearInterval(timer);
+  }, [competitions.length]);
+
+  useEffect(() => {
+    eventService.getPublic()
+      .then(data => {
+        const mapped = pickLandingCompetitions(data).map(toCompetition);
+        setCompetitions(mapped);
+        setCompetitionsError("");
+        setActiveCompetition(0);
+      })
+      .catch((error) => {
+        console.error("Failed to load landing events", error);
+        setCompetitionsError(error instanceof Error ? error.message : "Failed to load events.");
+        setCompetitions([]);
+      })
+      .finally(() => setCompetitionsLoading(false));
   }, []);
 
   // Fetch Hall of Fame from real API
@@ -316,32 +420,43 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
             </p>
           </motion.div>
 
-          <div className="flex flex-wrap justify-center gap-2 mb-8">
-            {COMPETITIONS.map((c, i) => (
+          {competitionsLoading && (
+            <div className="flex items-center justify-center py-20 gap-3 text-muted-foreground">
+              <Loader size={20} className="animate-spin" style={{ color: "#F47920" }} />
+              <span className="text-sm">Loading events...</span>
+            </div>
+          )}
+
+          {!competitionsLoading && competitions.length === 0 && (
+            <div className="text-center py-16 text-muted-foreground">
+              <Calendar size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">{competitionsError || "No events available yet."}</p>
+            </div>
+          )}
+
+          {!competitionsLoading && competitions.length > 0 && <div className="flex flex-wrap justify-center gap-2 mb-8">
+            {competitions.map((c, i) => (
               <button key={c.id} onClick={() => setActiveCompetition(i)}
                 className={`px-4 py-2 rounded-xl text-sm transition-all ${activeCompetition === i ? "text-white shadow-md" : "glass text-muted-foreground hover:text-foreground"}`}
                 style={activeCompetition === i ? { background: c.color } : {}}>
                 {c.name.split("–")[0].trim()}
               </button>
             ))}
-          </div>
+          </div>}
 
           <AnimatePresence mode="wait">
             <motion.div key={activeCompetition} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -16 }} transition={{ duration: 0.35 }}>
               {(() => {
-                const c = COMPETITIONS[activeCompetition];
+                const c = competitions[activeCompetition];
+                if (!c) return null;
                 return (
                   <div className="glass rounded-3xl overflow-hidden border border-white/30 max-w-4xl mx-auto">
-                    <div className={`bg-gradient-to-r ${c.gradient} border-b border-white/20 px-8 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4`}>
+                    <div className={`bg-gradient-to-r ${c.gradient} border-b border-white/20 px-8 py-6`}>
                       <div>
                         <StatusBadge status={c.status} />
                         <h3 className="mt-2 mb-1">{c.name}</h3>
                         <p className="text-muted-foreground text-sm">{c.description}</p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-2xl" style={{ fontWeight: 800, color: c.color }}>{c.prize}</div>
-                        <div className="text-xs text-muted-foreground">Total Prize</div>
                       </div>
                     </div>
 
@@ -352,7 +467,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                           <div>
                             <div className="text-xs text-muted-foreground">Date</div>
                             <div className="text-sm font-medium">
-                              {new Date(c.startDate).toLocaleDateString("en-US")} – {new Date(c.endDate).toLocaleDateString("en-US")}
+                              {formatDate(c.startDate)} - {formatDate(c.endDate)}
                             </div>
                           </div>
                         </div>
@@ -363,12 +478,14 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                             <div className="text-sm font-medium">{c.location}</div>
                           </div>
                         </div>
-                        {c.status === "ongoing" && (
+                        {c.maxTeamSize && (
                           <div className="flex items-center gap-3">
                             <Users size={16} style={{ color: c.color }} />
                             <div>
-                              <div className="text-xs text-muted-foreground">Competing Teams</div>
-                              <div className="text-sm font-medium">{c.teams} teams</div>
+                              <div className="text-xs text-muted-foreground">Team Size</div>
+                              <div className="text-sm font-medium">
+                                {c.minTeamSize ? `${c.minTeamSize} - ` : "Up to "}{c.maxTeamSize} members
+                              </div>
                             </div>
                           </div>
                         )}
@@ -382,19 +499,15 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                       </div>
 
                       <div>
-                        <div className="text-xs text-muted-foreground mb-2">Tracks</div>
-                        <div className="flex flex-wrap gap-2">
-                          {c.tracks.map((t, trackIndex) => (
-                            <span key={`${c.id}-track-${trackIndex}`} className="px-3 py-1 rounded-full text-sm border"
-                              style={{ borderColor: c.color + "40", color: c.color, background: c.color + "12" }}>
-                              {t}
-                            </span>
-                          ))}
+                        <div className="text-xs text-muted-foreground mb-2">Registration Deadline</div>
+                        <div className="rounded-xl border px-4 py-3 text-sm font-medium"
+                          style={{ borderColor: c.color + "40", color: c.color, background: c.color + "12" }}>
+                          {c.registrationEnd ? formatDate(c.registrationEnd) : "TBA"}
                         </div>
                         <button onClick={onGoToRegister}
                           className="mt-6 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm transition-all hover:opacity-90"
                           style={{ background: c.color }}>
-                          {c.status === "ongoing" ? "View Details" : "Register to Participate"}
+                          {c.status === "completed" ? "View Results" : c.status === "ongoing" ? "View Details" : "Register to Participate"}
                           <ArrowRight size={15} />
                         </button>
                       </div>
@@ -406,14 +519,14 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
           </AnimatePresence>
 
           <div className="mt-8 grid sm:grid-cols-3 gap-4 max-w-4xl mx-auto">
-            {COMPETITIONS.map((c, i) => (
+            {competitions.map((c, i) => (
               <motion.button key={c.id} onClick={() => setActiveCompetition(i)}
                 initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
                 className={`p-4 rounded-2xl glass border text-left transition-all hover:scale-[1.02] ${activeCompetition === i ? "border-orange-400/40" : "border-white/20"}`}>
                 <StatusBadge status={c.status} />
                 <div className="mt-2 text-sm font-medium line-clamp-2">{c.name}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{c.prize}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{formatDate(c.startDate)} - {formatDate(c.endDate)}</div>
               </motion.button>
             ))}
           </div>
@@ -445,7 +558,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
               </span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto">
-              The names that made SEAL history — the top 3 teams from each competition.
+              The names that made SEAL history - highlights from the 3 latest competitions.
             </p>
           </motion.div>
 
@@ -520,10 +633,6 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                               <div className="p-3 rounded-xl bg-white/30 border border-white/40">
                                 <div className="text-xs text-muted-foreground mb-0.5">Award</div>
                                 <div className="font-medium text-xs leading-snug">{entry.awardTitle}</div>
-                              </div>
-                              <div className="p-3 rounded-xl bg-white/20 border border-white/30">
-                                <div className="text-xs text-muted-foreground mb-0.5">Team Leader</div>
-                                <div className="font-semibold text-sm">{entry.leaderName}</div>
                               </div>
                               <div className="text-xs text-muted-foreground px-1 pt-1">
                                 {entry.categoryName}

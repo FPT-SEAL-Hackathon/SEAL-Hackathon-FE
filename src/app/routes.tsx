@@ -54,6 +54,7 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
   return (
     <AuthPages
       mode={mode}
+      onBackToLanding={() => navigate("/", { replace: true })}
       onLogin={() => {
         const raw = localStorage.getItem("seal_user");
         if (!raw) return;
