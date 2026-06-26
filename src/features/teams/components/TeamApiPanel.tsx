@@ -415,6 +415,7 @@ export function TeamApiPanel({
 
   const removeMember = (userId = form.memberUserId.trim()) => {
     if (!form.teamId.trim() || !userId) return;
+    const removingCurrentUser = userId === user?.id;
     run(
       "remove",
       async () => {
@@ -422,9 +423,22 @@ export function TeamApiPanel({
         return true;
       },
       () => {
+        if (removingCurrentUser) {
+          try {
+            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+          } catch {
+            // Ignore storage failures.
+          }
+          setSelectedTeam(null);
+          setTeamDiscoveryDone(true);
+          setTeams([]);
+          setMemberDetails({});
+          setField("teamId", "");
+          return;
+        }
         setSelectedTeam(prev => prev ? { ...prev, members: prev.members.filter(member => member.userId !== userId) } : prev);
       },
-      isLeader ? "Member removed." : "You left the team.",
+      removingCurrentUser ? "You left the team." : "Member removed.",
     );
   };
 
@@ -699,7 +713,20 @@ export function TeamApiPanel({
                 {selectedTeam.teamName} - {selectedTeam.members.length} member(s)
               </div>
             </div>
-            {message && <InlineMessage tone={message.tone} message={message.text} />}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              {message && <InlineMessage tone={message.tone} message={message.text} />}
+              {!isLeader && user?.id && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  disabled={loading.remove}
+                  onClick={() => removeMember(user.id)}
+                >
+                  {loading.remove ? "Leaving..." : "Leave Team"}
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-5">
@@ -733,15 +760,6 @@ export function TeamApiPanel({
               { key: "email", label: "Email" },
               { key: "active", label: "Status" },
               { key: "joinedAt", label: "Joined" },
-              {
-                key: "action",
-                label: "Action",
-                render: (_value, row) => isLeader && row.userId !== user?.id ? (
-                  <Button variant="danger" size="sm" icon={<Trash2 size={13} />} onClick={() => removeMember(row.userId)}>
-                    Remove
-                  </Button>
-                ) : null,
-              },
             ]}
             data={memberTableRows}
           />

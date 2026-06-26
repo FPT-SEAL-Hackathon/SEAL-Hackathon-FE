@@ -186,6 +186,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   };
 
   const handleSubmitWork = async () => {
+    if (activeTeamContext?.leaderUserId !== user?.id) {
+      setSubmissionStatus("Only the team leader can submit or update team work.");
+      return;
+    }
     if (!submissionForm.teamId || !submissionForm.roundId) {
       setSubmissionStatus("Team ID and Round ID are required by the backend submission API.");
       return;
@@ -502,6 +506,36 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   Browse Events
                 </Button>
               </div>
+            </div>
+          </Card>
+        </>
+      );
+    }
+
+    const isSubmissionLeader = activeTeamContext.leaderUserId === user?.id;
+    if (!isSubmissionLeader) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Only team leaders can submit or update team work" />
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.warning}14`, color: COLORS.warning }}
+                >
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Leader-only submission</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    You are a member of {activeTeamContext.teamName ?? "this team"}. The backend submission API is available to the team leader only.
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" size="md" icon={<Users size={14} />} onClick={() => onNavigate("team")}>
+                Back to My Team
+              </Button>
             </div>
           </Card>
         </>
