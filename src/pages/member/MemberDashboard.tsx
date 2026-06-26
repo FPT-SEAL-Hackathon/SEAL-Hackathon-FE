@@ -15,12 +15,40 @@ import { eventService } from "@/features/events/api/eventService";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
+import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 
 
 
 
 
 const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
+const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
+
+type ActiveTeamContext = {
+  teamId: string;
+  eventId?: string;
+  categoryId?: string;
+  teamName?: string;
+  leaderUserId?: string;
+  userId?: string;
+  memberUserIds?: string[];
+};
+
+function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
+    if (!raw) return null;
+    const team = JSON.parse(raw) as ActiveTeamContext;
+    if (!team?.teamId) return null;
+    const belongsToStoredTeam = !userId
+      || team.userId === userId
+      || team.leaderUserId === userId
+      || team.memberUserIds?.includes(userId);
+    return belongsToStoredTeam ? team : null;
+  } catch {
+    return null;
+  }
+}
 
 type MemberEvent = {
   id: string;
@@ -121,8 +149,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     bio: "", major: "",
   });
   const [profileSaved, setProfileSaved] = useState(false);
+  const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.id));
   const [submissionForm, setSubmissionForm] = useState({
-    teamId: "",
+    teamId: activeTeamContext?.teamId ?? "",
     roundId: "",
     repositoryUrl: "",
     demoUrl: "",
@@ -132,6 +161,19 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   });
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
+  const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
+
+  useEffect(() => {
+    if (currentPage !== "submissions") return;
+    const storedTeam = getStoredActiveTeam(user?.id);
+    setActiveTeamContext(storedTeam);
+    if (storedTeam?.teamId) {
+      setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
+    } else {
+      setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+    }
+  }, [currentPage, user?.id]);
 
   const unread = notifs.filter(n => !n.read).length;
   const markRead = async (id: string) => {
@@ -144,6 +186,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   };
 
   const handleSubmitWork = async () => {
+    if (activeTeamContext?.leaderUserId !== user?.id) {
+      setSubmissionStatus("Only the team leader can submit or update team work.");
+      return;
+    }
     if (!submissionForm.teamId || !submissionForm.roundId) {
       setSubmissionStatus("Team ID and Round ID are required by the backend submission API.");
       return;
@@ -157,6 +203,54 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus(error instanceof Error ? error.message : "Submission failed.");
     } finally {
       setSubmissionLoading(false);
+    }
+  };
+
+  const handleLoadSubmission = async () => {
+    if (!submissionForm.teamId || !submissionForm.roundId) {
+      setSubmissionStatus("Enter Team ID and Round ID before loading the current submission.");
+      return;
+    }
+    setSubmissionLookupLoading(true);
+    setSubmissionStatus("");
+    try {
+      const submission = await submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId);
+      setSubmissionForm(prev => ({
+        ...prev,
+        repositoryUrl: submission.repositoryUrl ?? "",
+        demoUrl: submission.demoUrl ?? "",
+        reportUrl: submission.reportUrl ?? "",
+        slideUrl: submission.slideUrl ?? "",
+        notes: submission.notes ?? "",
+      }));
+      setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
+    } catch (error) {
+      setSubmissionStatus(error instanceof Error ? error.message : "Could not load current submission.");
+    } finally {
+      setSubmissionLookupLoading(false);
+    }
+  };
+
+  const handleDownloadProblem = async (type: "csv" | "zip") => {
+    if (!submissionForm.roundId) {
+      setSubmissionStatus("Enter Round ID before downloading the round problem.");
+      return;
+    }
+    setProblemDownloadLoading(type);
+    setSubmissionStatus("");
+    try {
+      const blob = await submissionService.downloadProblem(submissionForm.roundId, type);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `round-${submissionForm.roundId}-problem.${type}`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setSubmissionStatus(`Problem ${type.toUpperCase()} downloaded.`);
+    } catch (error) {
+      setSubmissionStatus(error instanceof Error ? error.message : "Problem download failed.");
+    } finally {
+      setProblemDownloadLoading(null);
     }
   };
 
@@ -220,41 +314,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const renderTeam = () => (
     <>
-      <SectionHeader title="My Team" subtitle="Team information linked to your account" />
-      {teamMembers.length === 0 && (
-        <Card className="p-5">
-          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No team members are available for your account yet.</div>
-        </Card>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {teamMembers.map((m, i) => (
-          <Card key={m.id} className="p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <div
-                className="flex items-center justify-center rounded-full text-white"
-                style={{ width: 44, height: 44, background: avatarColors[i % avatarColors.length], fontSize: 15, fontWeight: 700 }}
-              >
-                {m.avatar}
-              </div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{m.name}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.role}</div>
-              </div>
-              {i === 0 && <span className="ml-auto px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: `${COLORS.accent}20`, color: COLORS.accent }}>Leader</span>}
-            </div>
-            <div className="flex flex-wrap gap-1 mb-4">
-              {m.skills.map(s => (
-                <span key={s} className="px-2 py-0.5 rounded-full text-xs" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>{s}</span>
-              ))}
-            </div>
-            <ProgressBar value={m.completed} max={m.tasks} color={COLORS.success} label={`Tasks: ${m.completed}/${m.tasks}`} />
-            <div className="flex items-center gap-2 mt-3">
-              <Mail size={13} style={{ color: COLORS.textSecondary }} />
-              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.email}</span>
-            </div>
-          </Card>
-        ))}
-      </div>
+      <SectionHeader title="My Team" subtitle="Team membership and join requests from backend data" />
+      <TeamApiPanel />
     </>
   );
 
@@ -416,9 +477,74 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
-  const renderSubmissions = () => (
-    <>
-      <SectionHeader title="Submission Center" subtitle="Submit or update your team's work for an assigned round" />
+  const renderSubmissions = () => {
+    if (!activeTeamContext?.teamId) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Create or join a team before submitting work" />
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.warning}14`, color: COLORS.warning }}
+                >
+                  <Users size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>No team yet</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    Submissions belong to a team and a round. Create a team or join an existing team first.
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="primary" size="md" icon={<PlusCircle size={14} />} onClick={() => onNavigate("team")}>
+                  Create or Join Team
+                </Button>
+                <Button variant="outline" size="md" icon={<Calendar size={14} />} onClick={() => onNavigate("events")}>
+                  Browse Events
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      );
+    }
+
+    const isSubmissionLeader = activeTeamContext.leaderUserId === user?.id;
+    if (!isSubmissionLeader) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Only team leaders can submit or update team work" />
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.warning}14`, color: COLORS.warning }}
+                >
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Leader-only submission</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    You are a member of {activeTeamContext.teamName ?? "this team"}. The backend submission API is available to the team leader only.
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" size="md" icon={<Users size={14} />} onClick={() => onNavigate("team")}>
+                Back to My Team
+              </Button>
+            </div>
+          </Card>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
       <Card className="p-5">
         <div className="grid md:grid-cols-2 gap-4">
           {[
@@ -452,9 +578,18 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
           />
         </label>
-        <div className="flex items-center gap-3 mt-4">
+        <div className="flex flex-wrap items-center gap-3 mt-4">
           <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
             {submissionLoading ? "Saving..." : "Submit Work"}
+          </Button>
+          <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading}>
+            {submissionLookupLoading ? "Loading..." : "Load Current"}
+          </Button>
+          <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null}>
+            {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
+          </Button>
+          <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null}>
+            {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
           </Button>
           {submissionStatus && (
             <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
@@ -463,8 +598,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           )}
         </div>
       </Card>
-    </>
-  );
+      </>
+    );
+  };
 
   const renderProfile = () => (
     <>

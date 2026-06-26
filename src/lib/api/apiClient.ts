@@ -120,6 +120,59 @@ export async function request<T>(
   return res.json() as Promise<T>;
 }
 
+export async function requestBlob(
+  path: string,
+  options: RequestInit = {},
+  authenticated = true,
+): Promise<Blob> {
+  const headers: Record<string, string> = {
+    Accept: "*/*",
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (authenticated) {
+    const token = getAccessToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  const doFetch = (token?: string) =>
+    fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: token ? { ...headers, Authorization: `Bearer ${token}` } : headers,
+    });
+
+  let res = await doFetch();
+
+  if (res.status === 401 && authenticated) {
+    if (!isRefreshing) {
+      isRefreshing = true;
+      const newToken = await attemptRefresh();
+      isRefreshing = false;
+      refreshQueue.forEach(cb => newToken && cb(newToken));
+      refreshQueue = [];
+
+      if (!newToken) throw new ApiError(401, "Session expired. Please log in again.");
+      res = await doFetch(newToken);
+    } else {
+      const newToken = await new Promise<string>((resolve) => {
+        refreshQueue.push(resolve);
+      });
+      res = await doFetch(newToken);
+    }
+  }
+
+  if (!res.ok) {
+    let message = `Request failed (${res.status})`;
+    try {
+      const err = await res.json();
+      message = err.message ?? err.error ?? message;
+    } catch { /* ignore */ }
+    throw new ApiError(res.status, message);
+  }
+
+  return res.blob();
+}
+
 // ─── Convenience wrappers ────────────────────────────────────────────────────
 export const api = {
   get: <T>(path: string, auth = true) => request<T>(path, { method: "GET" }, auth),
@@ -130,4 +183,5 @@ export const api = {
   patch: <T>(path: string, body?: unknown, auth = true) =>
     request<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }, auth),
   delete: <T>(path: string, auth = true) => request<T>(path, { method: "DELETE" }, auth),
+  blob: (path: string, auth = true) => requestBlob(path, { method: "GET" }, auth),
 };
