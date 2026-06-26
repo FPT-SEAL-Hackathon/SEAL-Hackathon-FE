@@ -1,52 +1,39 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
-  Upload, Trophy, Users, CheckCircle, Star, PlusCircle,
-  Trash2, Edit, ExternalLink, Github, Globe, FileText,
-  AlertCircle, ChevronRight, Mail, Save, Info, Award,
-  TrendingUp, TrendingDown, Minus, Bell, Settings, Zap, MessageSquare, Loader
+  CheckCircle,
+  Eye,
+  FileText,
+  Github,
+  Globe,
+  Loader,
+  Mail,
+  MessageSquare,
+  Minus,
+  Save,
+  Search,
+  Trash2,
+  Trophy,
+  TrendingDown,
+  TrendingUp,
+  Upload,
+  Users,
 } from "lucide-react";
 import {
-  StatCard, Card, SectionHeader, COLORS, StatusBadge,
-  ProgressBar, Button, AvatarGroup, TimelineItem
+  StatCard,
+  Card,
+  SectionHeader,
+  COLORS,
+  StatusBadge,
+  Button,
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
-import { teamService, type JoinTeamRequestResponse } from "@/features/teams/api/teamService";
+import { teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 
-const teamMembers = [
-  { id: 1, name: "Alex Johnson", role: "Team Leader", avatar: "AJ", email: "alex.j@fpt.edu.vn", joinDate: "Nov 15, 2025", status: "active" },
-  { id: 2, name: "Maria Chen", role: "Backend Developer", avatar: "MC", email: "maria.c@fpt.edu.vn", joinDate: "Nov 16, 2025", status: "active" },
-  { id: 3, name: "James Park", role: "ML Engineer", avatar: "JP", email: "james.p@fpt.edu.vn", joinDate: "Nov 16, 2025", status: "active" },
-  { id: 4, name: "Sofia Rodriguez", role: "DevOps Engineer", avatar: "SR", email: "sofia.r@fpt.edu.vn", joinDate: "Nov 17, 2025", status: "active" },
-  { id: 5, name: "David Kim", role: "Frontend Developer", avatar: "DK", email: "david.k@fpt.edu.vn", joinDate: "Nov 17, 2025", status: "active" },
-];
-
-const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
-
-const submissions = [
-  {
-    id: 1, round: "Round 1 — Qualifying", submittedAt: "Nov 20, 2025 at 3:30 PM",
-    githubUrl: "https://github.com/devdynamo/ai-task-manager",
-    slideUrl: "https://slides.devdynamo.ai/round1",
-    score: 76.8, status: "completed",
-    feedback: [
-      { criterion: "Innovation & Creativity", score: 19, max: 25, comment: "Good concept but needs more originality in approach." },
-      { criterion: "Technical Complexity", score: 20, max: 25, comment: "Solid implementation with clean code architecture." },
-      { criterion: "Business Impact", score: 18, max: 25, comment: "Clear use case but market analysis could be stronger." },
-      { criterion: "Presentation", score: 20, max: 25, comment: "Excellent demo video and documentation." },
-    ]
-  },
-  {
-    id: 2, round: "Round 2 — Finals", submittedAt: "Nov 27, 2025 at 2:15 PM",
-    githubUrl: "https://github.com/devdynamo/ai-task-manager-v2",
-    slideUrl: "https://slides.devdynamo.ai/round2",
-    score: null, status: "submitted",
-    feedback: []
-  },
-];
+const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
 
 const rankings = [
   { rank: 1, team: "AlphaCoders", score: 92.1, change: 0, r1: 88.5, r2: 95.7 },
@@ -56,322 +43,304 @@ const rankings = [
   { rank: 12, team: "DevDynamo", score: 79.3, change: 3, r1: 76.8, r2: 81.8 },
 ];
 
-const initialNotifs = [
-  { id: 1, title: "Finals round submission window open", body: "Round 2 submissions are now being accepted until Dec 1, 2025.", type: "info", time: "1d ago", read: false },
-  { id: 2, title: "Score update: Round 1 results", body: "Your team scored 76.8/100. Check feedback from judges.", type: "info", time: "3d ago", read: false },
-  { id: 3, title: "Mentor session reminder", body: "Meeting with Dr. Nguyen tomorrow at 10:00 AM.", type: "warning", time: "4d ago", read: true },
-];
+type StoredTeam = {
+  teamId?: string;
+  eventId?: string;
+  categoryId?: string;
+  teamName?: string;
+  leaderUserId?: string;
+};
+
+function getStoredTeam(): StoredTeam | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
+    return raw ? JSON.parse(raw) as StoredTeam : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatDate(value?: string) {
+  return value ? new Date(value).toLocaleString() : "-";
+}
+
+function display(value?: string | number | null) {
+  return value === undefined || value === null || value === "" ? "-" : value;
+}
 
 export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { user } = useAuth();
+  const [activeTeam, setActiveTeam] = useState<TeamResponse | null>(null);
+  const [teamId, setTeamId] = useState("");
+  const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [handlingId, setHandlingId] = useState<string | null>(null);
 
-  // ── Notifications ─────────────────────────────────────────────────────────
-  const [notifs, setNotifs] = useState(initialNotifs);
+  const [submissionForm, setSubmissionForm] = useState({
+    teamId: "",
+    roundId: "",
+    repositoryUrl: "",
+    demoUrl: "",
+    reportUrl: "",
+    slideUrl: "",
+    notes: "",
+  });
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
+  const [activeSubmission, setActiveSubmission] = useState<SubmissionResponse | null>(null);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
+  const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
+
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = getStoredTeam();
+    if (!stored?.teamId) return;
+    setTeamId(stored.teamId);
+    setSubmissionForm(prev => ({ ...prev, teamId: stored.teamId ?? "" }));
+    teamService.getById(stored.teamId)
+      .then(team => {
+        setActiveTeam(team);
+        setSubmissionForm(prev => ({ ...prev, teamId: team.teamId }));
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     notificationService.getMyNotifications()
       .then(page => {
-        if (page?.content?.length) {
-          setNotifs(page.content.map((n: any) => ({
-            id: n.notificationId, title: n.title, body: n.body,
-            type: "info", time: new Date(n.createdAt).toLocaleDateString("en-US"), read: n.read,
-          })));
-        }
-      }).catch(() => {});
+        setNotifications((page?.content ?? []).map((notification: any) => ({
+          id: notification.notificationId,
+          title: notification.title,
+          body: notification.body,
+          time: formatDate(notification.createdAt),
+          read: notification.read,
+        })));
+      })
+      .catch(() => {});
   }, []);
 
-  // ── Join requests ─────────────────────────────────────────────────────────
-  const [joinRequests, setJoinRequests] = useState<JoinTeamRequestResponse[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
+  useEffect(() => {
+    if (currentPage !== "requests" || !teamId) return;
+    loadRequests(teamId);
+  }, [currentPage, teamId]);
 
-  // ── API submission form ───────────────────────────────────────────────────
-  const [submissionForm, setSubmissionForm] = useState({ teamId: "", roundId: "", githubUrl: "", slideUrl: "", demoUrl: "", reportUrl: "", notes: "" });
-  const [submitLoading, setSubmitLoading] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  const unread = notifications.filter(notification => !notification.read).length;
 
-  // ── Judge feedback (judging scores) ──────────────────────────────────────
-  const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
-
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteSent, setInviteSent] = useState(false);
-  const [activeSub, setActiveSub] = useState<number | null>(null);
-
-  const unread = notifs.filter((n: any) => !n.read).length;
-  const markRead = async (id: any) => {
-    setNotifs(prev => prev.map((n: any) => n.id === id ? { ...n, read: true } : n));
-    try { await notificationService.markAsRead(String(id)); } catch { /* ignore */ }
+  const loadRequests = async (id = teamId) => {
+    if (!id) return;
+    setRequestsLoading(true);
+    try {
+      setPendingRequests(await teamService.getPendingRequests(id));
+    } finally {
+      setRequestsLoading(false);
+    }
   };
-  const markAllRead = async () => {
-    setNotifs(prev => prev.map((n: any) => ({ ...n, read: true })));
-    try { await notificationService.markAllAsRead(); } catch { /* ignore */ }
+
+  const handleRequest = async (requestId: string, action: "APPROVED" | "REJECTED") => {
+    setHandlingId(requestId);
+    try {
+      await teamService.handleJoinRequest(requestId, action);
+      setPendingRequests(prev => prev.filter(request => request.requestId !== requestId));
+    } finally {
+      setHandlingId(null);
+    }
   };
 
   const handleSubmit = async () => {
-    if (!submissionForm.githubUrl) return;
+    if (!submissionForm.teamId || !submissionForm.roundId) {
+      setSubmitError("Team ID and Round ID are required.");
+      return;
+    }
+
     setSubmitLoading(true);
     setSubmitError("");
+    setSubmitMessage("");
     try {
-      await submissionService.submit({
-        teamId: submissionForm.teamId || "demo-team",
-        roundId: submissionForm.roundId || "demo-round",
-        repositoryUrl: submissionForm.githubUrl,
-        slideUrl: submissionForm.slideUrl,
+      const saved = await submissionService.submit({
+        teamId: submissionForm.teamId,
+        roundId: submissionForm.roundId,
+        repositoryUrl: submissionForm.repositoryUrl,
         demoUrl: submissionForm.demoUrl,
         reportUrl: submissionForm.reportUrl,
+        slideUrl: submissionForm.slideUrl,
         notes: submissionForm.notes,
       });
-      setSubmitSuccess(true);
-      setSubmissionForm(p => ({ ...p, githubUrl: "", slideUrl: "", demoUrl: "", reportUrl: "", notes: "" }));
-      setTimeout(() => setSubmitSuccess(false), 3000);
-    } catch (err: any) {
-      setSubmitError(err?.message ?? "Submission failed");
+      setActiveSubmission(saved);
+      setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
+      setSubmitMessage("Submission saved.");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Submission failed.");
     } finally {
       setSubmitLoading(false);
     }
   };
 
+  const loadSubmission = async () => {
+    if (!submissionForm.teamId || !submissionForm.roundId) {
+      setSubmitError("Team ID and Round ID are required.");
+      return;
+    }
+
+    setSubmissionLoading(true);
+    setSubmitError("");
+    setSubmitMessage("");
+    try {
+      const submission = await submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId);
+      setActiveSubmission(submission);
+      setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
+      setSubmitMessage("Submission loaded.");
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "Could not load submission.");
+    } finally {
+      setSubmissionLoading(false);
+    }
+  };
+
+  const loadFeedback = async (submissionId?: string) => {
+    const targetSubmissionId = submissionId || activeSubmission?.submissionId;
+    if (!targetSubmissionId) {
+      setFeedbackError("Load a submission first.");
+      return;
+    }
+
+    setFeedbackLoading(true);
+    setFeedbackError("");
+    try {
+      setJudgingScores(await judgingService.getBySubmission(targetSubmissionId));
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "Could not load feedback.");
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
+
+  const markRead = async (id: string) => {
+    setNotifications(prev => prev.map(notification => notification.id === id ? { ...notification, read: true } : notification));
+    try {
+      await notificationService.markAsRead(id);
+    } catch {
+      // Keep local read state.
+    }
+  };
+
+  const markAllRead = async () => {
+    setNotifications(prev => prev.map(notification => ({ ...notification, read: true })));
+    try {
+      await notificationService.markAllAsRead();
+    } catch {
+      // Keep local read state.
+    }
+  };
+
   const renderDashboard = () => (
     <>
-      <SectionHeader title="Team Leader Dashboard" subtitle="DevDynamo • AI Agents Track • SEAL Fall 2025" />
+      <SectionHeader
+        title="Team Leader Dashboard"
+        subtitle={activeTeam ? activeTeam.teamName : "Load your team from the Team page"}
+      />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Team Members" value={5} icon={<Users size={20} />} color={COLORS.primary} />
-        <StatCard title="Current Rank" value="#12" trend={3} icon={<Trophy size={20} />} color={COLORS.warning} />
-        <StatCard title="Avg Score" value="79.3" trend={5} icon={<Star size={20} />} color={COLORS.success} />
-        <StatCard title="Submissions" value="2/2" icon={<Upload size={20} />} color={COLORS.secondary} />
+        <StatCard title="Team Members" value={activeTeam?.members.length ?? "-"} icon={<Users size={20} />} color={COLORS.primary} />
+        <StatCard title="Pending Requests" value={pendingRequests.length} icon={<MessageSquare size={20} />} color={COLORS.warning} />
+        <StatCard title="Loaded Submissions" value={submissionHistory.length} icon={<Upload size={20} />} color={COLORS.secondary} />
+        <StatCard title="Feedback Items" value={judgingScores.length} icon={<Trophy size={20} />} color={COLORS.success} />
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Score Breakdown</div>
-          {[
-            { label: "Innovation & Creativity", value: 78, max: 100, color: COLORS.accent },
-            { label: "Technical Complexity", value: 82, max: 100, color: COLORS.primary },
-            { label: "Business Impact", value: 75, max: 100, color: COLORS.secondary },
-            { label: "Presentation Quality", value: 84, max: 100, color: COLORS.success },
-          ].map(c => (
-            <div key={c.label} className="mb-3">
-              <ProgressBar value={c.value} max={c.max} color={c.color} label={c.label} />
-            </div>
-          ))}
-        </Card>
-
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Submission Checklist</div>
-          {submissions.map(sub => (
-            <div key={sub.id} className="mb-4 last:mb-0">
-              <div className="flex items-center justify-between mb-2">
-                <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{sub.round}</span>
-                <StatusBadge status={sub.status} />
-              </div>
-              {[
-                { label: "GitHub Repo", value: sub.githubUrl, icon: <Github size={13} /> },
-                { label: "Slide URL", value: sub.slideUrl, icon: <FileText size={13} /> },
-              ].map(item => (
-                <div key={item.label} className="flex items-center gap-2 mb-1">
-                  <CheckCircle size={13} style={{ color: item.value ? COLORS.success : COLORS.border }} />
-                  <span style={{ color: item.value ? COLORS.textSecondary : COLORS.error, fontSize: 13 }}>{item.label}</span>
-                </div>
-              ))}
-              {sub.score !== null && (
-                <div className="mt-2 px-3 py-1 rounded-lg inline-flex items-center gap-1" style={{ background: `${COLORS.success}10` }}>
-                  <Star size={12} style={{ color: COLORS.success }} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.success }}>Score: {sub.score}/100</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </Card>
-      </div>
+      <Card className="p-5">
+        <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 10 }}>Active Team</div>
+        {activeTeam ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <InfoPill label="Team" value={activeTeam.teamName} />
+            <InfoPill label="Team ID" value={activeTeam.teamId} />
+            <InfoPill label="Members" value={activeTeam.members.length} />
+          </div>
+        ) : (
+          <EmptyLine text="No active team is loaded yet. Open Team Management and load or create a team." />
+        )}
+      </Card>
     </>
   );
 
   const renderTeam = () => (
     <>
-      <SectionHeader
-        title="Team Management"
-        subtitle="DevDynamo • 5 members"
-        action={
-          <div className="flex gap-2">
-            <input
-              placeholder="Invite by email..."
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              className="px-3 py-2 rounded-xl text-sm outline-none"
-              style={{ border: `1px solid ${COLORS.border}`, width: 200, fontSize: 14 }}
-            />
-            <Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => { if (inviteEmail) { setInviteSent(true); setInviteEmail(""); setTimeout(() => setInviteSent(false), 2500); } }}>
-              Invite
-            </Button>
-          </div>
-        }
-      />
-      {inviteSent && (
-        <div className="flex items-center gap-2 px-4 py-3 rounded-xl" style={{ background: `${COLORS.success}10`, border: `1px solid ${COLORS.success}30` }}>
-          <CheckCircle size={16} style={{ color: COLORS.success }} />
-          <span style={{ fontSize: 14, color: COLORS.success }}>Invitation sent successfully!</span>
-        </div>
-      )}
-      <div className="space-y-3">
-        {teamMembers.map((m, i) => (
-          <Card key={m.id} className="p-4">
-            <div className="flex items-center gap-4">
-              <div
-                className="flex items-center justify-center rounded-full text-white flex-shrink-0"
-                style={{ width: 44, height: 44, background: avatarColors[i % avatarColors.length], fontSize: 15, fontWeight: 700 }}
-              >
-                {m.avatar}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{m.name}</span>
-                  {i === 0 && <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: `${COLORS.accent}20`, color: COLORS.accent }}>You</span>}
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.role} • Joined {m.joinDate}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.email}</span>
-                <StatusBadge status={m.status} />
-                {i !== 0 && (
-                  <Button variant="ghost" size="sm" icon={<Trash2 size={13} />} onClick={() => {}}>Remove</Button>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-      <TeamApiPanel initialTeamId={teamId ?? ""} mode="leader" />
+      <SectionHeader title="Team Management" subtitle="Team data and member actions from backend API" />
+      <TeamApiPanel initialTeamId={teamId} mode="leader" />
     </>
   );
 
   const renderSubmissions = () => (
     <>
-      <SectionHeader title="Submission Center" subtitle="Manage your team's submissions for SEAL Fall 2025" />
-
-      {/* New Submission Form — POST /submissions */}
+      <SectionHeader title="Submission Center" subtitle="Submit and load your team's work from backend API" />
       <Card className="p-5">
-        <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 4 }}>Submit to Round</div>
-        <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
-          POST /submissions — Round 2 Finals • Deadline: Dec 1, 2025 at 11:59 PM
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <TextField label="Team ID" value={submissionForm.teamId} onChange={value => setSubmissionForm(prev => ({ ...prev, teamId: value }))} />
+          <TextField label="Round ID" value={submissionForm.roundId} onChange={value => setSubmissionForm(prev => ({ ...prev, roundId: value }))} />
+          <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }))} icon={<Github size={14} />} />
+          <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, demoUrl: value }))} icon={<Globe size={14} />} />
+          <TextField label="Report URL" value={submissionForm.reportUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, reportUrl: value }))} icon={<FileText size={14} />} />
+          <TextField label="Slide URL" value={submissionForm.slideUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, slideUrl: value }))} icon={<FileText size={14} />} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>ROUND</label>
-            <select
-              value={submissionForm.roundId}
-              onChange={e => setSubmissionForm(p => ({ ...p, roundId: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              <option value="1">Round 1 — Qualifying</option>
-              <option value="2">Round 2 — Finals</option>
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM ID</label>
-            <input
-              value={submissionForm.teamId}
-              readOnly
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: `${COLORS.bg}88`, color: COLORS.textSecondary }}
-            />
-          </div>
-        </div>
-        <div className="space-y-4">
-          {[
-            { label: "GitHub Repository URL", key: "githubUrl", placeholder: "https://github.com/your-team/project", icon: <Github size={14} /> },
-            { label: "Slide / Presentation URL (slideUrl)", key: "slideUrl", placeholder: "https://slides.google.com/...", icon: <FileText size={14} /> },
-          ].map(field => (
-            <div key={field.key}>
-              <label className="flex items-center gap-2 mb-2" style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary }}>
-                {field.icon} {field.label}
-              </label>
-              <input
-                value={submissionForm[field.key as keyof typeof submissionForm]}
-                onChange={e => setSubmissionForm(p => ({ ...p, [field.key]: e.target.value }))}
-                placeholder={field.placeholder}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 mt-5">
+        <label className="block mt-4">
+          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
+          <textarea
+            value={submissionForm.notes}
+            onChange={event => setSubmissionForm(prev => ({ ...prev, notes: event.target.value }))}
+            rows={3}
+            className="w-full px-3 py-2 rounded-xl outline-none resize-none mt-1"
+            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-3 mt-5">
           <Button
             variant="primary"
             size="md"
             icon={submitLoading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
             onClick={handleSubmit}
-            disabled={!submissionForm.githubUrl || submitLoading}
+            disabled={submitLoading}
           >
-            {submitLoading ? "Submitting..." : "Submit Now"}
+            {submitLoading ? "Submitting..." : "Submit Work"}
           </Button>
-          {submitSuccess && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Submission uploaded successfully!</span>}
+          <Button
+            variant="outline"
+            size="md"
+            icon={submissionLoading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
+            onClick={loadSubmission}
+            disabled={submissionLoading}
+          >
+            {submissionLoading ? "Loading..." : "Load Submission"}
+          </Button>
+          {submitMessage && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>{submitMessage}</span>}
           {submitError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{submitError}</span>}
         </div>
       </Card>
 
-      {/* Submission History */}
-      <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginTop: 8 }}>Submission History</div>
-      {submissions.map(sub => (
-        <Card key={sub.id} className="p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{sub.round}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Submitted {sub.submittedAt}</div>
-            </div>
-            <div className="flex items-center gap-3">
-              {sub.score !== null && (
-                <span className="px-3 py-1 rounded-xl font-bold" style={{ background: `${COLORS.success}15`, color: COLORS.success, fontSize: 14 }}>
-                  {sub.score}/100
-                </span>
-              )}
-              <StatusBadge status={sub.status} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            {[
-              { label: "GitHub Repo", value: sub.githubUrl, icon: <Github size={13} /> },
-              { label: "Slide URL", value: sub.slideUrl, icon: <FileText size={13} /> },
-            ].map(item => (
-              <div key={item.label} className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                <span style={{ color: item.value ? COLORS.primary : COLORS.border }}>{item.icon}</span>
-                <span style={{ fontSize: 12, color: item.value ? COLORS.primary : COLORS.textSecondary }}>
-                  {item.value ? item.label : `${item.label} — Missing`}
-                </span>
-              </div>
+      <Card className="p-5">
+        <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Submission History</div>
+        {submissionHistory.length === 0 ? (
+          <EmptyLine text="No submissions loaded yet." />
+        ) : (
+          <div className="space-y-3">
+            {submissionHistory.map(submission => (
+              <SubmissionCard
+                key={submission.submissionId}
+                submission={submission}
+                onLoadFeedback={() => loadFeedback(submission.submissionId)}
+              />
             ))}
           </div>
-          {sub.feedback.length > 0 && (
-            <button
-              onClick={() => setActiveSub(activeSub === sub.id ? null : sub.id)}
-              className="flex items-center gap-2 text-sm font-medium"
-              style={{ color: COLORS.primary }}
-            >
-              <Star size={14} /> {activeSub === sub.id ? "Hide" : "View"} Judge Feedback
-            </button>
-          )}
-          {activeSub === sub.id && (
-            <div className="mt-4 space-y-3">
-              {sub.feedback.map(f => (
-                <div key={f.criterion} className="p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{f.criterion}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary }}>{f.score}/{f.max}</span>
-                  </div>
-                  <ProgressBar value={f.score} max={f.max} color={COLORS.primary} />
-                  <p style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>{f.comment}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      ))}
+        )}
+      </Card>
     </>
   );
 
   const renderRankings = () => (
     <>
-      <SectionHeader title="Team Rankings" subtitle="AI Agents Track — SEAL Fall 2025" />
+      <SectionHeader title="Team Rankings" subtitle="AI Agents Track - SEAL Fall 2025" />
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
@@ -383,13 +352,13 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
               </tr>
             </thead>
             <tbody>
-              {[...rankings].map((row, i) => {
+              {[...rankings].map(row => {
                 const isMe = row.team === "DevDynamo";
                 return (
                   <tr key={row.rank} style={{ borderBottom: `1px solid ${COLORS.border}`, background: isMe ? `${COLORS.primary}08` : undefined }}>
                     <td className="px-4 py-3">
                       <span style={{ fontSize: row.rank <= 3 ? 18 : 14, fontWeight: 700, color: COLORS.textPrimary }}>
-                        {row.rank <= 3 ? ["🥇", "🥈", "🥉"][row.rank - 1] : `#${row.rank}`}
+                        {row.rank <= 3 ? ["1st", "2nd", "3rd"][row.rank - 1] : `#${row.rank}`}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -403,7 +372,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1" style={{ color: row.change > 0 ? COLORS.success : row.change < 0 ? COLORS.error : COLORS.textSecondary }}>
                         {row.change > 0 ? <TrendingUp size={13} /> : row.change < 0 ? <TrendingDown size={13} /> : <Minus size={13} />}
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>{row.change !== 0 ? Math.abs(row.change) : "—"}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{row.change !== 0 ? Math.abs(row.change) : "-"}</span>
                       </div>
                     </td>
                   </tr>
@@ -424,210 +393,117 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         action={unread > 0 ? <Button variant="ghost" size="sm" onClick={markAllRead}>Mark all read</Button> : undefined}
       />
       <div className="space-y-3">
-        {notifs.map(n => {
-          const iconColor = n.type === "warning" ? COLORS.warning : n.type === "success" ? COLORS.success : COLORS.primary;
-          const Icon = n.type === "warning" ? AlertCircle : n.type === "success" ? CheckCircle : Info;
-          return (
-            <Card key={n.id} className="p-4" style={{ borderLeft: !n.read ? `3px solid ${iconColor}` : undefined, opacity: n.read ? 0.75 : 1 }}>
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: `${iconColor}15` }}>
-                  <Icon size={15} style={{ color: iconColor }} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span style={{ fontSize: 14, fontWeight: n.read ? 500 : 700, color: COLORS.textPrimary }}>{n.title}</span>
-                    {!n.read && <span className="w-2 h-2 rounded-full" style={{ background: COLORS.primary }} />}
-                  </div>
-                  <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{n.body}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{n.time}</span>
-                    {!n.read && <Button variant="ghost" size="sm" onClick={() => markRead(n.id)}>Mark as read</Button>}
-                  </div>
-                </div>
+        {notifications.length === 0 ? (
+          <EmptyLine text="No notifications loaded." />
+        ) : notifications.map(notification => (
+          <Card key={notification.id} className="p-4" style={{ opacity: notification.read ? 0.75 : 1 }}>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div style={{ fontSize: 14, fontWeight: notification.read ? 500 : 700, color: COLORS.textPrimary }}>{notification.title}</div>
+                <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{notification.body}</p>
+                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{notification.time}</span>
               </div>
-            </Card>
-          );
-        })}
+              {!notification.read && <Button variant="ghost" size="sm" onClick={() => markRead(notification.id)}>Mark as read</Button>}
+            </div>
+          </Card>
+        ))}
       </div>
     </>
   );
 
   const renderFeedback = () => (
     <>
-      <SectionHeader title="Judge Feedback" subtitle="Detailed scoring and comments from judges for each round" />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Round 1 — Judge Feedback</div>
-          {submissions[0].feedback.map(f => (
-            <div key={f.criterion} className="mb-4">
-              <div className="flex justify-between mb-1">
-                <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{f.criterion}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.primary }}>{f.score}/{f.max}</span>
-              </div>
-              <ProgressBar value={f.score} max={f.max} color={COLORS.primary} />
-              <p style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4, fontStyle: "italic" }}>"{f.comment}"</p>
-            </div>
+      <SectionHeader
+        title="Judge Feedback"
+        subtitle="Load a submission in Submission Center, then view its judging scores"
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            icon={feedbackLoading ? <Loader size={14} className="animate-spin" /> : <Eye size={14} />}
+            onClick={() => loadFeedback()}
+            disabled={feedbackLoading}
+          >
+            Load Feedback
+          </Button>
+        }
+      />
+      {feedbackError && <Card className="p-4" style={{ color: COLORS.error }}>{feedbackError}</Card>}
+      {judgingScores.length === 0 ? (
+        <Card className="p-8 text-center">
+          <MessageSquare size={34} className="mx-auto mb-3" style={{ color: COLORS.border }} />
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No feedback loaded yet.</div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {judgingScores.map(score => (
+            <Card key={score.id} className="p-5">
+              <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{score.criterionName}</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>Judge: {score.judgeName}</div>
+              <div className="mt-3" style={{ fontSize: 22, fontWeight: 800, color: COLORS.primary }}>{score.scoreValue}</div>
+              {score.comment && <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 8 }}>{score.comment}</p>}
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 8 }}>{formatDate(score.scoredAt)}</div>
+            </Card>
           ))}
-        </Card>
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Overall Summary</div>
-          <div className="space-y-3">
-            {[
-              { label: "Total Score", value: `${submissions[0].feedback.reduce((s, f) => s + f.score, 0)} / ${submissions[0].feedback.reduce((s, f) => s + f.max, 0)}`, color: COLORS.primary },
-              { label: "Highest Criterion", value: [...submissions[0].feedback].sort((a,b) => b.score/b.max - a.score/a.max)[0]?.criterion ?? "—", color: COLORS.success },
-              { label: "Round Status", value: "Completed", color: COLORS.success },
-            ].map(item => (
-              <div key={item.label} className="flex justify-between items-center py-2" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{item.label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: item.color }}>{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+        </div>
+      )}
     </>
   );
 
   const renderProfile = () => (
     <>
-      <SectionHeader title="My Profile" subtitle="Manage your personal information and account details" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6 flex flex-col items-center text-center gap-4">
-          <div style={{
-            width: 80, height: 80, borderRadius: "50%",
-            background: "linear-gradient(135deg, #F47920, #FF9040)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 28, fontWeight: 700, color: "#fff",
-            boxShadow: "0 4px 16px rgba(244,121,32,0.35)"
-          }}>AJ</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>Alex Johnson</div>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>Team Leader · DevDynamo</div>
-            <StatusBadge status="active" />
-          </div>
-          <div className="w-full space-y-2 text-left mt-2">
-            {[
-              { icon: <Mail size={14} />, value: "alex.j@fpt.edu.vn" },
-              { icon: <Github size={14} />, value: "github.com/alexj" },
-              { icon: <Globe size={14} />, value: "alexjohnson.dev" },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-2" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                <span style={{ color: COLORS.primary }}>{item.icon}</span>
-                {item.value}
-              </div>
-            ))}
-          </div>
-        </Card>
-        <div className="lg:col-span-2 space-y-5">
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Personal Information</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[
-                { label: "Full Name", value: "Alex Johnson" },
-                { label: "Student ID", value: "FPT2021001" },
-                { label: "Email", value: "alex.j@fpt.edu.vn" },
-                { label: "Phone", value: "+84 909 123 456" },
-                { label: "GitHub", value: "github.com/alexj" },
-                { label: "Portfolio", value: "alexjohnson.dev" },
-              ].map(field => (
-                <div key={field.label}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
-                  <input
-                    defaultValue={field.value}
-                    className="w-full px-3 py-2 rounded-xl outline-none"
-                    style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  />
-                </div>
-              ))}
-              <div className="sm:col-span-2">
-                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Bio</label>
-                <textarea
-                  rows={3}
-                  defaultValue="Full-stack developer passionate about AI and building impactful products."
-                  className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Button variant="primary" size="md" icon={<Save size={14} />}>Save Changes</Button>
-            </div>
-          </Card>
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Team & Hackathon Info</div>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { label: "Team", value: "DevDynamo", color: COLORS.primary },
-                { label: "Track", value: "AI Agents", color: COLORS.secondary },
-                { label: "Current Rank", value: "#12", color: COLORS.warning },
-              ].map(stat => (
-                <div key={stat.label} className="text-center p-3 rounded-xl" style={{ background: COLORS.bg }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: stat.color }}>{stat.value}</div>
-                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </Card>
+      <SectionHeader title="My Profile" subtitle="Account information from current session" />
+      <Card className="p-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <InfoPill label="Full Name" value={user?.fullName} />
+          <InfoPill label="Email" value={user?.email} />
+          <InfoPill label="Phone" value={user?.phone} />
+          <InfoPill label="Student Code" value={user?.studentCode} />
         </div>
-      </div>
+        <div className="mt-4">
+          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000); }}>
+            Save Changes
+          </Button>
+          {profileSaved && <span className="ml-3" style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Profile saved locally.</span>}
+        </div>
+      </Card>
     </>
   );
 
   const renderSettings = () => (
     <>
-      <SectionHeader title="Team Settings" subtitle="Configure your team information and contact details" />
-      <div className="max-w-lg">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Team Information</div>
-          <div className="space-y-4">
-            {[
-              { label: "Team Name", value: "DevDynamo" },
-              { label: "Track", value: "AI Agents" },
-              { label: "Contact Email", value: "team@devdynamo.ai" },
-            ].map(field => (
-              <div key={field.label}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
-                <input
-                  defaultValue={field.value}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            ))}
-            <Button variant="primary" size="md" icon={<Save size={14} />}>Save Settings</Button>
+      <SectionHeader title="Team Settings" subtitle="Use Team Management to update team membership through backend APIs" />
+      <Card className="p-5">
+        {activeTeam ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <InfoPill label="Team" value={activeTeam.teamName} />
+            <InfoPill label="Event ID" value={activeTeam.eventId} />
+            <InfoPill label="Category ID" value={activeTeam.categoryId} />
           </div>
-        </Card>
-      </div>
+        ) : (
+          <EmptyLine text="No active team loaded." />
+        )}
+      </Card>
     </>
   );
 
-  // ── Join Requests page ────────────────────────────────────────────────────
-  const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
-  const [handlingId, setHandlingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (currentPage !== "requests") return;
-    if (!teamId) return;
-    setRequestsLoading(true);
-    teamService.getPendingRequests(teamId)
-      .then(setPendingRequests)
-      .catch(() => {})
-      .finally(() => setRequestsLoading(false));
-  }, [currentPage, teamId]);
-
-  const handleRequest = async (requestId: string, action: "APPROVED" | "REJECTED") => {
-    setHandlingId(requestId);
-    try {
-      await teamService.handleJoinRequest(requestId, action);
-      setPendingRequests(prev => prev.filter(r => r.requestId !== requestId));
-    } catch { /* show error */ }
-    setHandlingId(null);
-  };
-
   const renderRequests = () => (
     <>
-      <SectionHeader title="Join Requests" subtitle="Pending requests to join your team" />
+      <SectionHeader
+        title="Join Requests"
+        subtitle="Pending requests to join your team"
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            icon={requestsLoading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
+            onClick={() => loadRequests()}
+            disabled={!teamId || requestsLoading}
+          >
+            Load Requests
+          </Button>
+        }
+      />
       {requestsLoading && (
         <div className="flex items-center justify-center py-12 gap-2" style={{ color: COLORS.textSecondary }}>
           <Loader size={18} className="animate-spin" /> Loading...
@@ -637,38 +513,34 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         <Card className="p-8 text-center">
           <CheckCircle size={36} className="mx-auto mb-3" style={{ color: COLORS.border }} />
           <div style={{ fontSize: 15, color: COLORS.textSecondary }}>No pending join requests</div>
-          <div style={{ fontSize: 13, color: COLORS.textMuted, marginTop: 4 }}>
-            Candidates can request to join via the platform
-          </div>
         </Card>
       )}
       <div className="space-y-3">
-        {pendingRequests.map(req => (
-          <Card key={req.requestId} className="p-5">
-            <div className="flex items-center justify-between">
+        {pendingRequests.map(request => (
+          <Card key={request.requestId} className="p-5">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-                  User ID: <span className="font-mono text-xs">{req.userId}</span>
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
-                  Requested: {new Date(req.requestedAt).toLocaleString("en-US")}
-                </div>
-                <div style={{ fontSize: 12, marginTop: 4 }}>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                    style={{ background: `${COLORS.warning}20`, color: COLORS.warning }}>
-                    {req.requestStatus}
-                  </span>
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>User ID: {request.userId}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Requested: {formatDate(request.requestedAt)}</div>
+                <div className="mt-2"><StatusBadge status={request.requestStatus.toLowerCase()} /></div>
               </div>
               <div className="flex items-center gap-2">
-                <Button variant="primary" size="sm" icon={handlingId === req.requestId ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                  onClick={() => handleRequest(req.requestId, "APPROVED")}
-                  disabled={handlingId === req.requestId}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  icon={handlingId === request.requestId ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                  onClick={() => handleRequest(request.requestId, "APPROVED")}
+                  disabled={handlingId === request.requestId}
+                >
                   Approve
                 </Button>
-                <Button variant="danger" size="sm" icon={<Trash2 size={13} />}
-                  onClick={() => handleRequest(req.requestId, "REJECTED")}
-                  disabled={handlingId === req.requestId}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  icon={<Trash2 size={13} />}
+                  onClick={() => handleRequest(request.requestId, "REJECTED")}
+                  disabled={handlingId === request.requestId}
+                >
                   Reject
                 </Button>
               </div>
@@ -695,4 +567,67 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   };
 
   return <div className="p-6 space-y-6">{renderPage()}</div>;
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
+        {icon} {label}
+      </span>
+      <input
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="w-full px-3 py-2 rounded-xl outline-none"
+        style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+      />
+    </label>
+  );
+}
+
+function InfoPill({ label, value }: { label: string; value?: string | number | null }) {
+  return (
+    <div className="rounded-xl p-3" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: 14, color: COLORS.textPrimary, marginTop: 4, wordBreak: "break-word" }}>{display(value)}</div>
+    </div>
+  );
+}
+
+function EmptyLine({ text }: { text: string }) {
+  return <div style={{ fontSize: 14, color: COLORS.textSecondary }}>{text}</div>;
+}
+
+function SubmissionCard({ submission, onLoadFeedback }: { submission: SubmissionResponse; onLoadFeedback: () => void }) {
+  return (
+    <div className="p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>Round ID: {submission.roundId}</div>
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Submitted: {formatDate(submission.submittedAt)}</div>
+          <div className="mt-2"><StatusBadge status={(submission.submissionStatusName || "submitted").toLowerCase()} /></div>
+        </div>
+        <Button variant="ghost" size="sm" icon={<Eye size={13} />} onClick={onLoadFeedback}>
+          Load Feedback
+        </Button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
+        <InfoPill label="Repository" value={submission.repositoryUrl} />
+        <InfoPill label="Demo" value={submission.demoUrl} />
+        <InfoPill label="Report" value={submission.reportUrl} />
+        <InfoPill label="Slide" value={submission.slideUrl} />
+      </div>
+      {submission.notes && <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>{submission.notes}</p>}
+    </div>
+  );
 }
