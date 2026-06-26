@@ -1,8 +1,29 @@
 import axios from "axios";
 import { REFRESH_KEY, TOKEN_KEY } from "@/lib/api/apiClient";
 
+function normalizeApiBaseUrl(value) {
+  const raw = (value || "http://localhost:8080").trim().replace(/\/+$/, "");
+  return raw.replace(/\/api\/v1$/i, "").replace(/\/api$/i, "");
+}
+
+const API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL
+);
+
+const PUBLIC_OR_AUTH_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/refresh",
+  "/auth/verify-email",
+  "/api/v1/public/",
+];
+
+function isPublicOrAuthRequest(url = "") {
+  return PUBLIC_OR_AUTH_PATHS.some((path) => url.startsWith(path));
+}
+
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -11,7 +32,8 @@ const axiosClient = axios.create({
 axiosClient.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem(TOKEN_KEY);
-    if (token) {
+    const requestUrl = config.url || "";
+    if (token && !isPublicOrAuthRequest(requestUrl)) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -23,7 +45,13 @@ axiosClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    const requestUrl = originalRequest?.url || "";
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !isPublicOrAuthRequest(requestUrl)
+    ) {
       originalRequest._retry = true;
       try {
         const refreshToken = localStorage.getItem(REFRESH_KEY);
@@ -31,8 +59,7 @@ axiosClient.interceptors.response.use(
           throw new Error("No refresh token available");
         }
         
-        // Assuming refresh endpoint is /auth/refresh
-        const { data } = await axios.post(`${import.meta.env.VITE_API_URL}/auth/refresh`, {
+        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
           refreshToken,
         });
 
