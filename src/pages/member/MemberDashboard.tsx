@@ -16,63 +16,61 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
 
-const teamMembers = [
-  { id: 1, name: "Alex Johnson", role: "Team Leader", avatar: "AJ", skills: ["React", "TypeScript", "UI/UX"], tasks: 4, completed: 3, email: "alex.j@fpt.edu.vn" },
-  { id: 2, name: "Maria Chen", role: "Backend Developer", avatar: "MC", skills: ["Python", "FastAPI", "ML"], tasks: 5, completed: 4, email: "maria.c@fpt.edu.vn" },
-  { id: 3, name: "James Park", role: "ML Engineer", avatar: "JP", skills: ["TensorFlow", "PyTorch", "Data"], tasks: 3, completed: 2, email: "james.p@fpt.edu.vn" },
-  { id: 4, name: "Sofia Rodriguez", role: "DevOps Engineer", avatar: "SR", skills: ["Docker", "AWS", "CI/CD"], tasks: 3, completed: 3, email: "sofia.r@fpt.edu.vn" },
-  { id: 5, name: "David Kim", role: "Frontend Developer", avatar: "DK", skills: ["Vue.js", "GraphQL", "CSS"], tasks: 4, completed: 2, email: "david.k@fpt.edu.vn" },
-];
 
-const events = [
-  { id: 1, name: "SEAL Fall 2025", category: "AI/ML", deadline: "Dec 1, 2025", status: "active", participants: 127, tracks: 5, registered: true, prizePool: "$10,000" },
-  { id: 2, name: "FPT Web3 Challenge", category: "Web3/Blockchain", deadline: "Jan 15, 2026", status: "open", participants: 89, tracks: 3, registered: false, prizePool: "$5,000" },
-  { id: 3, name: "AI Agents Hackathon", category: "Artificial Intelligence", deadline: "Feb 28, 2026", status: "upcoming", participants: 0, tracks: 4, registered: false, prizePool: "$8,000" },
-  { id: 4, name: "SEAL Spring 2025", category: "Open Innovation", deadline: "Jul 10, 2025", status: "completed", participants: 203, tracks: 6, registered: true, prizePool: "$12,000" },
-];
 
-const leaderboard = [
-  { rank: 1, team: "AlphaCoders", score: 92.1, change: 0, track: "AI Agents", members: 5 },
-  { rank: 2, team: "CodeCraft Pro", score: 89.5, change: 2, track: "AI Agents", members: 4 },
-  { rank: 3, team: "ByteBuilders", score: 87.8, change: -1, track: "AI Agents", members: 5 },
-  { rank: 4, team: "InnovateFPT", score: 86.3, change: 3, track: "AI Agents", members: 3 },
-  { rank: 5, team: "TechStorm", score: 84.9, change: -2, track: "AI Agents", members: 4 },
-  { rank: 6, team: "FutureForge", score: 83.7, change: 1, track: "AI Agents", members: 5 },
-  { rank: 7, team: "NeuralNinjas", score: 82.9, change: -1, track: "AI Agents", members: 4 },
-  { rank: 8, team: "CloudChasers", score: 82.3, change: 4, track: "AI Agents", members: 5 },
-  { rank: 9, team: "DataDynamos", score: 81.5, change: -3, track: "AI Agents", members: 4 },
-  { rank: 10, team: "PixelPioneers", score: 80.9, change: 0, track: "AI Agents", members: 3 },
-  { rank: 11, team: "SynthMinds", score: 80.1, change: 2, track: "AI Agents", members: 5 },
-  { rank: 12, team: "DevDynamo", score: 79.3, change: 3, track: "AI Agents", members: 5 },
-  { rank: 13, team: "QuantumLeap", score: 78.8, change: -1, track: "AI Agents", members: 4 },
-  { rank: 14, team: "StackSurge", score: 77.4, change: -2, track: "AI Agents", members: 3 },
-  { rank: 15, team: "OmegaCode", score: 76.9, change: 1, track: "AI Agents", members: 4 },
-];
 
-const activityTimeline = [
-  { date: "Nov 29, 2025 • 10:23 AM", title: "Score update received", description: "Round 2 evaluation completed — 79.3/100", status: "completed", color: COLORS.success },
-  { date: "Nov 27, 2025 • 2:15 PM", title: "Submission uploaded", description: "DevDynamo submitted prototype for Round 2 evaluation", status: "submitted", color: COLORS.primary },
-  { date: "Nov 25, 2025 • 9:00 AM", title: "Round 2 opened", description: "AI Agents Track — Finals round is now accepting submissions", status: "active", color: COLORS.secondary },
-  { date: "Nov 20, 2025 • 3:30 PM", title: "Team approved", description: "Your team DevDynamo has been approved to compete", status: "approved", color: COLORS.success },
-  { date: "Nov 15, 2025 • 11:00 AM", title: "Event registration", description: "Successfully registered for SEAL Fall 2025", status: "completed", color: COLORS.accent },
-];
-
-const initialNotifs = [
-  { id: 1, title: "Submission deadline in 2 days", body: "Your team DevDynamo must submit by Dec 1. Don't miss it!", type: "warning", time: "2h ago", read: false },
-  { id: 2, title: "Your team was approved!", body: "DevDynamo has been approved to compete in the AI Agents track.", type: "success", time: "5h ago", read: false },
-  { id: 3, title: "New round opened: Finals", body: "Round 2 (Finals) is now accepting submissions for AI Agents.", type: "info", time: "1d ago", read: false },
-  { id: 4, title: "Score update: Round 1 results", body: "Your team scored 76.8/100 in Round 1. Check the leaderboard.", type: "info", time: "3d ago", read: true },
-  { id: 5, title: "Mentor session scheduled", body: "Meeting with Dr. Nguyen on Dec 2 at 10:00 AM.", type: "info", time: "4d ago", read: true },
-];
 
 const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
 
+type MemberEvent = {
+  id: string;
+  name: string;
+  category: string;
+  deadline: string;
+  status: string;
+  participants: string;
+  tracks: string;
+  registered?: boolean;
+  prizePool: string;
+};
+
+type MemberNotification = {
+  id: string;
+  title: string;
+  body: string;
+  type: "info" | "success" | "warning";
+  time: string;
+  read: boolean;
+};
+
+type MemberTeamMember = {
+  id: string;
+  name: string;
+  role: string;
+  avatar: string;
+  skills: string[];
+  tasks: number;
+  completed: number;
+  email: string;
+};
+
+const getInitials = (name?: string) =>
+  (name ?? "")
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join("") || "U";
+
 export function MemberDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { user } = useAuth();
+  const displayName = user?.fullName || user?.email || "Member";
+  const userInitials = getInitials(displayName);
 
   // ── Events ──────────────────────────────────────────────────────────────────
-  const [apiEvents, setApiEvents] = useState(events);
+  const [apiEvents, setApiEvents] = useState<MemberEvent[]>([]);
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
+  const [teamMembers] = useState<MemberTeamMember[]>([]);
   // Load leaderboard when on that page — needs eventId + categoryId from user's team
   useEffect(() => {
     if (currentPage !== "leaderboard") return;
@@ -94,13 +92,13 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       .then(data => setApiEvents(data.map(e => ({
         id: e.eventId, name: e.eventName,
         category: e.description ?? "", deadline: e.registrationEnd ?? e.eventEndDate ?? "",
-        status: "active", participants: 0, tracks: 0, registered: false, prizePool: "",
+        status: e.eventStatusId || "unknown", participants: "N/A", tracks: "N/A", prizePool: "N/A",
       }))))
-      .catch(() => {}); // silent fallback to mock
+      .catch(() => {});
   }, []);
 
   // ── Notifications ────────────────────────────────────────────────────────────
-  const [notifs, setNotifs] = useState(initialNotifs);
+  const [notifs, setNotifs] = useState<MemberNotification[]>([]);
   useEffect(() => {
     notificationService.getMyNotifications()
       .then(page => {
@@ -115,12 +113,12 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   }, []);
 
   const [profileForm, setProfileForm] = useState({
-    fullName: user?.fullName ?? "Alex Johnson",
-    studentId: user?.studentCode ?? "FPT2021001",
-    email: user?.email ?? "alex.j@fpt.edu.vn",
-    phone: user?.phone ?? "+84 912 345 678",
-    github: "github.com/alexj", portfolio: "alexjohnson.dev",
-    bio: "Passionate full-stack developer with focus on AI/ML applications.", major: "Software Engineering",
+    fullName: user?.fullName ?? "",
+    studentId: user?.studentCode ?? "",
+    email: user?.email ?? "",
+    phone: user?.phone ?? "",
+    github: "", portfolio: "",
+    bio: "", major: "",
   });
   const [profileSaved, setProfileSaved] = useState(false);
   const [submissionForm, setSubmissionForm] = useState({
@@ -135,13 +133,13 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionLoading, setSubmissionLoading] = useState(false);
 
-  const unread = notifs.filter((n: any) => !n.read).length;
-  const markRead = async (id: any) => {
-    setNotifs(prev => prev.map((n: any) => n.id === id ? { ...n, read: true } : n));
+  const unread = notifs.filter(n => !n.read).length;
+  const markRead = async (id: string) => {
+    setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     try { await notificationService.markAsRead(String(id)); } catch { /* ignore */ }
   };
   const markAllRead = async () => {
-    setNotifs(prev => prev.map((n: any) => ({ ...n, read: true })));
+    setNotifs(prev => prev.map(n => ({ ...n, read: true })));
     try { await notificationService.markAllAsRead(); } catch { /* ignore */ }
   };
 
@@ -166,74 +164,54 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     <>
       <SectionHeader
         title="Team Member Dashboard"
-        subtitle="Welcome back, Alex! SEAL Fall 2025 deadline is in 2 days."
+        subtitle={`Welcome back, ${displayName}.`}
       />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="My Events" value={2} trend={0} icon={<Calendar size={22} />} color={COLORS.primary} />
-        <StatCard title="Team Rank" value="#12" trend={3} icon={<Trophy size={22} />} color={COLORS.warning} />
-        <StatCard title="Team Score" value="79.3" trend={5} icon={<Star size={22} />} color={COLORS.accent} />
-        <StatCard title="Days to Deadline" value={2} icon={<Clock size={22} />} color={COLORS.error} />
+        <StatCard title="Events" value={apiEvents.length} trend={0} icon={<Calendar size={22} />} color={COLORS.primary} />
+        <StatCard title="Team Rank" value="N/A" icon={<Trophy size={22} />} color={COLORS.warning} />
+        <StatCard title="Team Score" value="N/A" icon={<Star size={22} />} color={COLORS.accent} />
+        <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Team Status */}
         <Card className="p-5 col-span-1">
           <div className="flex items-center justify-between mb-4">
             <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Team Status</span>
-            <StatusBadge status="active" />
+            <StatusBadge status={teamMembers.length > 0 ? "active" : "pending"} />
           </div>
-          <div className="mb-3">
-            <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>DevDynamo</div>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary }}>AI Agents Track • 5 members</div>
-          </div>
-          <ProgressBar value={79.3} max={100} color={COLORS.accent} label="Overall Score" />
-          <div className="mt-4 space-y-2">
-            {[
-              { label: "Innovation", value: 82 },
-              { label: "Technical", value: 78 },
-              { label: "Business Impact", value: 75 },
-            ].map(c => (
-              <ProgressBar key={c.label} value={c.value} max={100} color={COLORS.primary} label={c.label} />
-            ))}
-          </div>
-          <AvatarGroup names={teamMembers.map(m => m.name)} max={5} />
+          {teamMembers.length > 0 ? (
+            <>
+              <div className="mb-3">
+                <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>My Team</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{teamMembers.length} members</div>
+              </div>
+              <AvatarGroup names={teamMembers.map(m => m.name)} max={5} />
+            </>
+          ) : (
+            <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+              No team data is available for your account yet.
+            </div>
+          )}
         </Card>
 
-        {/* Upcoming Deadline */}
         <Card className="p-5 col-span-1">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle size={18} style={{ color: COLORS.error }} />
             <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Upcoming Deadline</span>
           </div>
           <div className="rounded-xl p-4 mb-4" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30` }}>
-            <div style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>SEAL Fall 2025 — Finals</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary, margin: "8px 0" }}>2 Days Left</div>
-            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: December 1, 2025 at 11:59 PM</div>
-          </div>
-          <div className="space-y-2">
-            {[
-              { label: "GitHub Repo URL", done: true },
-              { label: "Demo Video Link", done: true },
-              { label: "Project Report PDF", done: false },
-            ].map(item => (
-              <div key={item.label} className="flex items-center gap-2">
-                <CheckCircle size={15} style={{ color: item.done ? COLORS.success : COLORS.border }} />
-                <span style={{ fontSize: 13, color: item.done ? COLORS.textPrimary : COLORS.textSecondary, textDecoration: item.done ? "none" : "none" }}>{item.label}</span>
-                {!item.done && <span style={{ fontSize: 11, color: COLORS.error, fontWeight: 600 }}>Required</span>}
-              </div>
-            ))}
+            <div style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{apiEvents[0]?.name ?? "No active event"}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary, margin: "8px 0" }}>{apiEvents[0]?.deadline ? "Deadline available" : "N/A"}</div>
+            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {apiEvents[0]?.deadline || "No deadline data"}</div>
           </div>
           <Button variant="primary" size="sm" className="mt-4 w-full" icon={<ExternalLink size={14} />} onClick={() => onNavigate("submissions")}>
-            Complete Submission
+            Open Submission
           </Button>
         </Card>
 
-        {/* Activity Timeline */}
         <Card className="p-5 col-span-1">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Recent Activity</div>
-          <div className="space-y-0">
-            {activityTimeline.slice(0, 4).map((item, i) => (
-              <TimelineItem key={i} date={item.date} title={item.title} description={item.description} color={item.color} />
-            ))}
+          <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+            No recent activity is available.
           </div>
         </Card>
       </div>
@@ -242,7 +220,12 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const renderTeam = () => (
     <>
-      <SectionHeader title="My Team — DevDynamo" subtitle="AI Agents Track • SEAL Fall 2025" />
+      <SectionHeader title="My Team" subtitle="Team information linked to your account" />
+      {teamMembers.length === 0 && (
+        <Card className="p-5">
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No team members are available for your account yet.</div>
+        </Card>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {teamMembers.map((m, i) => (
           <Card key={m.id} className="p-5">
@@ -278,6 +261,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderEvents = () => (
     <>
       <SectionHeader title="Browse Events" subtitle="Discover and register for hackathon events" />
+      {apiEvents.length === 0 && (
+        <Card className="p-5">
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No events are available.</div>
+        </Card>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {apiEvents.map(ev => (
           <Card key={ev.id} className="p-5">
@@ -305,12 +293,12 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               ))}
             </div>
             <div className="flex gap-2">
-              {ev.registered ? (
+              {ev.registered === true ? (
                 <Button variant="outline" size="sm" icon={<CheckCircle size={13} />}>Registered</Button>
-              ) : ev.status !== "completed" ? (
+              ) : ev.registered === false && ev.status !== "completed" ? (
                 <Button variant="primary" size="sm" icon={<PlusCircle size={13} />}>Register</Button>
               ) : (
-                <Button variant="ghost" size="sm">View Results</Button>
+                <Button variant="ghost" size="sm">View Event</Button>
               )}
               <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />}>Details</Button>
             </div>
@@ -372,10 +360,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center">
                     <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                      Kết quả đang được Hội đồng Giám khảo tổng hợp và phê duyệt.
+                      The results are currently being compiled and approved by the Judging Panel.
                     </div>
                     <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                      Vui lòng quay lại sau!
+                      Please come back later!
                     </div>
                   </td>
                 </tr>
@@ -394,6 +382,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         subtitle={`${unread} unread notification${unread !== 1 ? "s" : ""}`}
         action={unread > 0 ? <Button variant="ghost" size="sm" onClick={markAllRead}>Mark all read</Button> : undefined}
       />
+      {notifs.length === 0 && (
+        <Card className="p-5">
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No notifications are available.</div>
+        </Card>
+      )}
       <div className="space-y-3">
         {notifs.map(n => {
           const iconColor = n.type === "warning" ? COLORS.warning : n.type === "success" ? COLORS.success : COLORS.primary;
@@ -482,17 +475,16 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             className="flex items-center justify-center rounded-full text-white mb-4"
             style={{ width: 80, height: 80, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, fontSize: 24, fontWeight: 700 }}
           >
-            AJ
+            {userInitials}
           </div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: COLORS.textPrimary }}>Alex Johnson</div>
-          <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>Team Member • DevDynamo</div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: COLORS.textPrimary }}>{displayName}</div>
+          <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>Team Member</div>
           <StatusBadge status="active" />
           <div className="mt-4 w-full space-y-2 text-left">
             {[
-              { icon: <Mail size={14} />, label: "alex.j@fpt.edu.vn" },
-              { icon: <Github size={14} />, label: "github.com/alexj" },
-              { icon: <Globe size={14} />, label: "alexjohnson.dev" },
-              { icon: <MapPin size={14} />, label: "FPT University, HCM" },
+              { icon: <Mail size={14} />, label: user?.email || "No email" },
+              { icon: <Phone size={14} />, label: user?.phone || "No phone" },
+              { icon: <User size={14} />, label: user?.studentCode || "No student code" },
             ].map((info, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span style={{ color: COLORS.textSecondary }}>{info.icon}</span>
@@ -547,9 +539,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Hackathon Stats</div>
             <div className="grid grid-cols-3 gap-4">
               {[
-                { label: "Events Joined", value: "2", icon: <Calendar size={18} />, color: COLORS.primary },
-                { label: "Best Rank", value: "#8", icon: <Trophy size={18} />, color: COLORS.warning },
-                { label: "Total Score", value: "79.3", icon: <Star size={18} />, color: COLORS.accent },
+                { label: "Events", value: String(apiEvents.length), icon: <Calendar size={18} />, color: COLORS.primary },
+                { label: "Best Rank", value: "N/A", icon: <Trophy size={18} />, color: COLORS.warning },
+                { label: "Total Score", value: "N/A", icon: <Star size={18} />, color: COLORS.accent },
               ].map(stat => (
                 <div key={stat.label} className="rounded-xl p-4 text-center" style={{ background: `${stat.color}10` }}>
                   <span style={{ color: stat.color }}>{stat.icon}</span>
