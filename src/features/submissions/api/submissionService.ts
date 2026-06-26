@@ -71,6 +71,12 @@ export const submissionService = {
   getSubmissionsByRound: (roundId: string) =>
     api.get<SubmissionResponse[]>(`/api/v1/admin/rounds/${enc(roundId)}/submissions`),
 
+  getUnreviewByRound: (roundId: string) =>
+    api.get<SubmissionResponse[]>(`/api/v1/admin/rounds/${enc(roundId)}/unreview-submissions`),
+
+  getUnreviewSubmissionsByRound: (roundId: string) =>
+    api.get<SubmissionResponse[]>(`/api/v1/admin/rounds/${enc(roundId)}/unreview-submissions`),
+
   getByEvent: (eventId: string) =>
     api.get<SubmissionResponse[]>(`/api/v1/admin/events/${enc(eventId)}/submissions`),
 

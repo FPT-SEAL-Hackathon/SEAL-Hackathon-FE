@@ -39,7 +39,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   leaderboard: [...STUDENT_ROLES],
   notifications: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
   profile: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
-  submissions: [...STUDENT_ROLES, ...JUDGE_ROLES],
+  submissions: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
   rounds: [...JUDGE_ROLES, ...ORGANIZER_ROLES],
   scoring: [...JUDGE_ROLES],
   calibration: [...JUDGE_ROLES],

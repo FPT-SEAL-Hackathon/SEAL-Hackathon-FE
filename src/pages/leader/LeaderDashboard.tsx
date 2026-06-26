@@ -239,7 +239,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           </Card>
         ))}
       </div>
-      <TeamApiPanel initialTeamId={teamId ?? ""} />
+      <TeamApiPanel initialTeamId={teamId ?? ""} mode="leader" />
     </>
   );
 

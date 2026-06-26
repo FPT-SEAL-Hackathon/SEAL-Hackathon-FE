@@ -46,6 +46,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "Users", label: "Users", key: "users" },
     { icon: "UserCheck", label: "Assignments", key: "assignments" },
+    { icon: "FileText", label: "Submissions", key: "submissions" },
     { icon: "Trophy", label: "Rankings", key: "rankings" },
     { icon: "BarChart2", label: "Research & Analytics", key: "reports" },
     { icon: "Award", label: "Awards", key: "awards" },
