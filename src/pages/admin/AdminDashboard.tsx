@@ -198,9 +198,16 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       .then(data => {
         setEventLoadError("");
         const mapped = data.map(e => ({
-          id: e.eventId, name: e.eventName,
-          category: e.description ?? "—", status: "active",
-          teams: 0, rounds: 0, deadline: e.eventEndDate ?? "—", prize: "—",
+          ...e,
+          //Field to display on UI
+          id: e.eventId, 
+          name: e.eventName,
+          description: e.description ?? "—", 
+          status: e.eventStatus?.eventStatusName,
+          teams: 0,
+          rounds: 0, 
+          deadline: e.eventEndDate ?? "—", 
+          prize: "—",
         }));
         setApiEvents(mapped as any);
         if (data[0]) setSelectedEventId(data[0].eventId);
@@ -641,8 +648,9 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           onClose={() => setEventModal({ open: false })}
           onSaved={saved => {
             setApiEvents(prev => eventModal.edit
-              ? prev.map((e: any) => e.id === saved.eventId ? { ...e, name: saved.eventName, category: saved.description ?? e.category } : e)
-              : [...prev, { id: saved.eventId, name: saved.eventName, category: saved.description ?? "—", status: "upcoming", teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
+              ? prev.map((e: any) => e.eventId === saved.eventId ? { ...e, ...saved,
+                 name: saved.eventName, description: saved.description ?? "-", status: saved.eventStatus?.eventStatusName ?? "Unknow", deadline: saved.eventEndDate } : e)
+              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: saved.eventStatus?.eventStatusName, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
             );
             setEventModal({ open: false });
           }}

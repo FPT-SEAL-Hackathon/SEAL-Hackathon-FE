@@ -164,12 +164,13 @@ export function AdminEventsView({ context }: AdminViewProps) {
                   <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{ev.name}</span>
                   <StatusBadge status={ev.status} />
                 </div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.category} • {ev.teams ?? 0} teams • {ev.rounds ?? 0} rounds • Deadline: {ev.deadline}</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {ev.teams ?? 0} teams • {ev.rounds ?? 0} rounds • Deadline: {ev.deadline}</div>
               </div>
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>
                 <Button variant="ghost" size="sm" icon={<Eye size={13} />}>View</Button>
-                <Button variant="ghost" size="sm" icon={<Edit size={13} />}>Edit</Button>
+                <Button variant="ghost" size="sm" icon={<Edit size={13}/>} 
+                    onClick={() => setEventModal({open: true, edit: ev})}>Edit</Button>
                 {ev.status === "upcoming" && <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Delete</Button>}
               </div>
             </div>
