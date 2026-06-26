@@ -117,6 +117,25 @@ function userBelongsToTeam(team: TeamResponse, currentUserId?: string) {
   return team.leaderUserId === currentUserId || team.members.some(member => member.userId === currentUserId);
 }
 
+function displayValue(value?: string | null) {
+  return value && value.trim() ? value : "-";
+}
+
+function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
+  return [
+    { label: "Full Name", value: displayValue(detail.fullName) },
+    { label: "Email", value: displayValue(detail.email) },
+    { label: "Phone", value: displayValue(detail.phone) },
+    { label: "FPT Student Code", value: displayValue(detail.fptStudentCode) },
+    { label: "External Student Code", value: detail.externalStudentCode?.trim() ? detail.externalStudentCode : "None" },
+    { label: "University", value: displayValue(detail.universityName) },
+    { label: "User Type", value: displayValue(detail.userTypeName) },
+    { label: "Account Status", value: displayValue(detail.accountStatusName) },
+    { label: "Joined At", value: detail.joinedAt ? new Date(detail.joinedAt).toLocaleString() : "-" },
+    { label: "Active", value: detail.active ? "Yes" : "No" },
+  ];
+}
+
 function getStoredActiveTeam(currentUserId?: string): { teamId: string } | null {
   try {
     const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
@@ -166,7 +185,6 @@ export function TeamApiPanel({
   const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>({});
   const [loading, setLoading] = useState<Partial<Record<ActionKey, boolean>>>({});
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
-  const [memberDetail, setMemberDetail] = useState<unknown>(null);
   const [leaderActionPanel, setLeaderActionPanel] = useState<LeaderActionPanel>(null);
   const [removeMemberName, setRemoveMemberName] = useState("");
   const [joinRequestsLoaded, setJoinRequestsLoaded] = useState(false);
@@ -414,7 +432,7 @@ export function TeamApiPanel({
     run(
       "memberDetail",
       () => teamService.getMemberDetail(form.teamId.trim(), form.memberUserId.trim()),
-      setMemberDetail,
+      detail => setMemberDetails(prev => ({ ...prev, [detail.userId]: detail })),
       "Member detail loaded.",
     );
   };
@@ -771,23 +789,8 @@ export function TeamApiPanel({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {selectedTeam.members.map(member => {
                 const detail = memberDetails[member.userId];
-                const detailRows = detail ? [
-                  { label: "Team Member ID", value: detail.teamMemberId },
-                  { label: "Team ID", value: detail.teamId },
-                  { label: "User ID", value: detail.userId },
-                  { label: "Full Name", value: detail.fullName },
-                  { label: "Email", value: detail.email },
-                  { label: "Phone", value: detail.phone },
-                  { label: "FPT Student Code", value: detail.fptStudentCode },
-                  { label: "External Student Code", value: detail.externalStudentCode },
-                  { label: "University", value: detail.universityName },
-                  { label: "User Type", value: detail.userTypeName },
-                  { label: "Account Status", value: detail.accountStatusName },
-                  { label: "Joined At", value: detail.joinedAt ? new Date(detail.joinedAt).toLocaleString() : "" },
-                  { label: "Active", value: detail.active ? "Yes" : "No" },
-                ] : [
-                  { label: "User ID", value: member.userId },
-                  { label: "Joined At", value: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "" },
+                const detailRows = detail ? visibleMemberDetailRows(detail) : [
+                  { label: "Joined At", value: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-" },
                   { label: "Active", value: member.active ? "Yes" : "No" },
                 ];
                 return (
@@ -800,7 +803,7 @@ export function TeamApiPanel({
                         <div key={row.label} className="rounded-lg px-3 py-2" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}>
                           <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>{row.label.toUpperCase()}</div>
                           <div style={{ fontSize: 12, color: COLORS.textPrimary, marginTop: 3, wordBreak: "break-word" }}>
-                            {row.value || "-"}
+                            {row.value}
                           </div>
                         </div>
                       ))}
@@ -1161,14 +1164,6 @@ export function TeamApiPanel({
         </Card>
       )}
 
-      {memberDetail ? (
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Member Detail</div>
-          <pre style={{ fontSize: 12, color: COLORS.textSecondary, whiteSpace: "pre-wrap", margin: 0 }}>
-            {JSON.stringify(memberDetail, null, 2)}
-          </pre>
-        </Card>
-      ) : null}
     </div>
   );
 }
