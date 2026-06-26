@@ -5,6 +5,7 @@ import { loadUser } from "@/lib/api/apiClient";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
 import { LandingPage } from "@/pages/landing/LandingPage";
 import { DevHub } from "@/pages/dev/DevHub";
+import { Team } from "@/pages/dev/Team";
 import { Layout } from "@/components/layouts/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
 import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
@@ -98,6 +99,33 @@ function MainLayout() {
   );
 }
 
+function TeamRoute() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [isDark, setIsDark] = useState(() => localStorage.getItem("seal-theme") === "dark");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
+    localStorage.setItem("seal-theme", isDark ? "dark" : "light");
+  }, [isDark]);
+
+  if (!user) return null;
+
+  return (
+    <Layout
+      role="leader"
+      currentPage="team"
+      onNavigate={page => navigate(`/leader/${page}`)}
+      onRoleChange={() => navigate("/hub")}
+      userName={user.fullName}
+      isDark={isDark}
+      onToggleDark={() => setIsDark(v => !v)}
+    >
+      <Team />
+    </Layout>
+  );
+}
+
 
 
 function AuthRoute() {
@@ -142,6 +170,7 @@ export const router = createBrowserRouter([
         element: <RequireAuth />,
         children: [
           { path: "hub", element: <HubRoute /> },
+          { path: "team", element: <TeamRoute /> },
           { path: ":role", element: <Navigate to="/hub" replace /> },
           { path: ":role/:page", element: <MainLayout /> },
         ],
