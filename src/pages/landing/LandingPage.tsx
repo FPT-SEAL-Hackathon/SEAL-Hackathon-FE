@@ -25,7 +25,7 @@ interface HallOfFameResponse {
 const ORANGE_WHITE = "linear-gradient(135deg, #F47920 0%, #FF9040 55%, #FFE8D4 100%)";
 const ORANGE_PRIMARY = "linear-gradient(135deg, #F47920, #FF9040)";
 
-// Hall of Fame data is fetched from API — no static mock
+// Hall of Fame data is fetched from API.
 
 interface LandingCompetition {
   id: string;
@@ -41,6 +41,13 @@ interface LandingCompetition {
   color: string;
   gradient: string;
   description: string;
+}
+
+interface LandingStats {
+  events: string;
+  teams: string;
+  prizeMoney: string;
+  topProjects: string;
 }
 
 const EVENT_COLORS = [
@@ -163,12 +170,12 @@ function toCompetition(event: EventResponse, index: number): LandingCompetition 
     startDate: dates.startDate,
     endDate: dates.endDate,
     registrationEnd: event.registrationEnd,
-    location: event.location || "Location TBA",
+    location: event.location || "N/A",
     minTeamSize: event.minTeamSize,
     maxTeamSize: event.maxTeamSize,
     color: palette.color,
     gradient: palette.gradient,
-    description: event.description || "Hackathon event details will be announced soon.",
+    description: event.description || "N/A",
   };
 }
 
@@ -233,9 +240,9 @@ function getCompetitionPhase(event: EventResponse, startDate: string, endDate: s
 }
 
 function formatDate(date: string): string {
-  if (!date) return "TBA";
+  if (!date) return "N/A";
   const parsed = new Date(normalizeDateTime(date));
-  if (Number.isNaN(parsed.getTime())) return "TBA";
+  if (Number.isNaN(parsed.getTime())) return "N/A";
   return parsed.toLocaleDateString("en-US");
 }
 
@@ -252,6 +259,12 @@ function normalizeDateTime(date: string): string {
 export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   const [activeCompetition, setActiveCompetition] = useState(0);
   const [competitions, setCompetitions] = useState<LandingCompetition[]>([]);
+  const [stats, setStats] = useState<LandingStats>({
+    events: "N/A",
+    teams: "N/A",
+    prizeMoney: "N/A",
+    topProjects: "N/A",
+  });
   const [competitionsLoading, setCompetitionsLoading] = useState(true);
   const [competitionsError, setCompetitionsError] = useState("");
   const [activeHof, setActiveHof] = useState(0);
@@ -271,6 +284,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
       .then(data => {
         const mapped = pickLandingCompetitions(data).map(toCompetition);
         setCompetitions(mapped);
+        setStats(prev => ({ ...prev, events: String(data.length) }));
         setCompetitionsError("");
         setActiveCompetition(0);
       })
@@ -278,6 +292,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         console.error("Failed to load landing events", error);
         setCompetitionsError(error instanceof Error ? error.message : "Failed to load events.");
         setCompetitions([]);
+        setStats(prev => ({ ...prev, events: "N/A" }));
       })
       .finally(() => setCompetitionsLoading(false));
   }, []);
@@ -285,10 +300,18 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   // Fetch Hall of Fame from real API
   useEffect(() => {
     api.get<HallOfFameResponse[]>("/api/v1/public/hall-of-fame", false)
-      .then(data => setHofGroups(groupHallOfFame(data)))
+      .then(data => {
+        setHofGroups(groupHallOfFame(data));
+        setStats(prev => ({ ...prev, topProjects: String(data.length) }));
+      })
       .catch(() => { /* keep empty, show fallback */ })
       .finally(() => setHofLoading(false));
   }, []);
+
+  const currentCompetition = competitions[activeCompetition];
+  const heroBadgeText = currentCompetition
+    ? `${currentCompetition.name} is ${currentCompetition.status}`
+    : "N/A";
 
   return (
     <div className="min-h-screen" style={{ background: "var(--gradient-bg)", backgroundAttachment: "fixed" }}>
@@ -351,7 +374,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass border border-orange-400/30 mb-8">
             <Flame size={14} style={{ color: "#F47920" }} />
             <span className="text-sm" style={{ color: "#F47920", fontWeight: 500 }}>
-              AI Innovation 2025 is live
+              {heroBadgeText}
             </span>
           </motion.div>
 
@@ -390,10 +413,10 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.5 }}
             className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
             {[
-              { id: "hero-events", icon: Trophy, value: "12",    label: "Events Hosted" },
-              { id: "hero-teams", icon: Users,  value: "480+",  label: "Teams" },
-              { id: "hero-prize", icon: Award,  value: "5B VND", label: "Total Prize" },
-              { id: "hero-projects", icon: Star,   value: "96",    label: "Top Projects" },
+              { id: "hero-events", icon: Trophy, value: stats.events, label: "Events Hosted" },
+              { id: "hero-teams", icon: Users, value: stats.teams, label: "Teams" },
+              { id: "hero-prize", icon: Award, value: stats.prizeMoney, label: "Total Prize" },
+              { id: "hero-projects", icon: Star, value: stats.topProjects, label: "Top Projects" },
             ].map((s, i) => (
               <div key={s.id} className="glass rounded-2xl p-4 text-center">
                 <s.icon size={20} className="mx-auto mb-1" style={{ color: "#F47920" }} />
@@ -478,17 +501,15 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                             <div className="text-sm font-medium">{c.location}</div>
                           </div>
                         </div>
-                        {c.maxTeamSize && (
-                          <div className="flex items-center gap-3">
-                            <Users size={16} style={{ color: c.color }} />
-                            <div>
-                              <div className="text-xs text-muted-foreground">Team Size</div>
-                              <div className="text-sm font-medium">
-                                {c.minTeamSize ? `${c.minTeamSize} - ` : "Up to "}{c.maxTeamSize} members
-                              </div>
+                        <div className="flex items-center gap-3">
+                          <Users size={16} style={{ color: c.color }} />
+                          <div>
+                            <div className="text-xs text-muted-foreground">Team Size</div>
+                            <div className="text-sm font-medium">
+                              {c.maxTeamSize ? `${c.minTeamSize ? `${c.minTeamSize} - ` : "Up to "}${c.maxTeamSize} members` : "N/A"}
                             </div>
                           </div>
-                        )}
+                        </div>
                         <div className="flex items-center gap-3">
                           <Hash size={16} style={{ color: c.color }} />
                           <div>
@@ -502,7 +523,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                         <div className="text-xs text-muted-foreground mb-2">Registration Deadline</div>
                         <div className="rounded-xl border px-4 py-3 text-sm font-medium"
                           style={{ borderColor: c.color + "40", color: c.color, background: c.color + "12" }}>
-                          {c.registrationEnd ? formatDate(c.registrationEnd) : "TBA"}
+                          {c.registrationEnd ? formatDate(c.registrationEnd) : "N/A"}
                         </div>
                         <button onClick={onGoToRegister}
                           className="mt-6 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm transition-all hover:opacity-90"
@@ -660,10 +681,10 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { id: "stats-competitions", icon: Trophy, value: "12",     label: "Competitions",  sub: "completed",       color: "#F47920" },
-              { id: "stats-teams", icon: Users,  value: "480+",   label: "Teams",         sub: "across FPT",      color: "#FF8C2A" },
-              { id: "stats-projects", icon: Star,   value: "96",     label: "Projects",      sub: "top-ranked",      color: "#7C3AED" },
-              { id: "stats-prize", icon: Award,  value: "5B VND", label: "Prize Money",   sub: "awarded",         color: "#0EA5E9" },
+              { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
+              { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", sub: "N/A", color: "#FF8C2A" },
+              { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
+              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", sub: "N/A", color: "#0EA5E9" },
             ].map((s, i) => (
               <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
