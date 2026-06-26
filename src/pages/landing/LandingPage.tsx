@@ -48,14 +48,8 @@ interface LandingStats {
   topProjects: string;
 }
 
-interface TeamListResponse {
-  teamId: string;
-}
-
-interface BackendEnvelope<T> {
-  data?: T;
-  content?: T;
-  message?: string;
+interface TeamCountResponse {
+  totalTeams: number;
 }
 
 const EVENT_COLORS = [
@@ -251,29 +245,9 @@ function normalizeDateTime(date: string): string {
   return date.includes(" ") ? date.replace(" ", "T") : date;
 }
 
-function unwrapTeams(response: TeamListResponse[] | BackendEnvelope<TeamListResponse[]>): TeamListResponse[] {
-  if (Array.isArray(response)) return response;
-  if (Array.isArray(response.data)) return response.data;
-  if (Array.isArray(response.content)) return response.content;
-  return [];
-}
-
-async function getTeamCountByEvents(events: EventResponse[]) {
-  const teamLists = await Promise.all(
-    events.map(event =>
-      api.get<TeamListResponse[] | BackendEnvelope<TeamListResponse[]>>(`/api/v1/events/${event.eventId}/teams`, false)
-        .then(unwrapTeams)
-        .catch(() => []),
-    ),
-  );
-
-  const uniqueTeamIds = new Set<string>();
-  for (const teams of teamLists) {
-    for (const team of teams) {
-      if (team.teamId) uniqueTeamIds.add(team.teamId);
-    }
-  }
-  return uniqueTeamIds.size;
+async function getPublicTeamCount() {
+  const response = await api.get<TeamCountResponse>("/api/v1/public/teams/count", false);
+  return response.totalTeams;
 }
 
 export function LandingPage({ onGoToAuth }: Props) {
@@ -305,9 +279,6 @@ export function LandingPage({ onGoToAuth }: Props) {
         const mapped = pickLandingCompetitions(data).map(toCompetition);
         setCompetitions(mapped);
         setStats(prev => ({ ...prev, events: String(data.length) }));
-        getTeamCountByEvents(data)
-          .then(teamCount => setStats(prev => ({ ...prev, teams: String(teamCount) })))
-          .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
         setCompetitionsError("");
         setActiveCompetition(0);
       })
@@ -318,6 +289,12 @@ export function LandingPage({ onGoToAuth }: Props) {
         setStats(prev => ({ ...prev, events: "N/A" }));
       })
       .finally(() => setCompetitionsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    getPublicTeamCount()
+      .then(teamCount => setStats(prev => ({ ...prev, teams: String(teamCount) })))
+      .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
   }, []);
 
   // Fetch Hall of Fame from real API
@@ -705,7 +682,7 @@ export function LandingPage({ onGoToAuth }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
-              { icon: Users,  value: stats.teams, label: "Teams", sub: "from API", color: "#FF8C2A" },
+              { icon: Users,  value: stats.teams, label: "Teams", sub: "", color: "#FF8C2A" },
               { icon: Star,   value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
               { icon: Award,  value: stats.prizeMoney, label: "Prize Money", sub: "N/A", color: "#0EA5E9" },
             ].map((s, i) => (
@@ -715,7 +692,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                 <s.icon size={28} className="mx-auto mb-3" style={{ color: s.color }} />
                 <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
                 <div style={{ fontWeight: 600, fontSize: "0.9rem" }} className="mt-0.5">{s.label}</div>
-                <div className="text-xs text-muted-foreground">{s.sub}</div>
+                {s.sub && <div className="text-xs text-muted-foreground">{s.sub}</div>}
               </motion.div>
             ))}
           </div>
