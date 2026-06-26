@@ -48,6 +48,10 @@ interface LandingStats {
   topProjects: string;
 }
 
+interface TeamCountResponse {
+  totalTeams: number;
+}
+
 const EVENT_COLORS = [
   { color: "#F47920", gradient: "from-orange-500/20 to-amber-400/10" },
   { color: "#7C3AED", gradient: "from-violet-500/20 to-purple-400/10" },
@@ -241,6 +245,11 @@ function normalizeDateTime(date: string): string {
   return date.includes(" ") ? date.replace(" ", "T") : date;
 }
 
+async function getPublicTeamCount() {
+  const response = await api.get<TeamCountResponse>("/api/v1/public/teams/count", false);
+  return response.totalTeams;
+}
+
 export function LandingPage({ onGoToAuth }: Props) {
   const [activeCompetition, setActiveCompetition] = useState(0);
   const [competitions, setCompetitions] = useState<LandingCompetition[]>([]);
@@ -280,6 +289,12 @@ export function LandingPage({ onGoToAuth }: Props) {
         setStats(prev => ({ ...prev, events: "N/A" }));
       })
       .finally(() => setCompetitionsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    getPublicTeamCount()
+      .then(teamCount => setStats(prev => ({ ...prev, teams: String(teamCount) })))
+      .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
   }, []);
 
   // Fetch Hall of Fame from real API
@@ -667,7 +682,7 @@ export function LandingPage({ onGoToAuth }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
               { icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
-              { icon: Users,  value: stats.teams, label: "Teams", sub: "N/A", color: "#FF8C2A" },
+              { icon: Users,  value: stats.teams, label: "Teams", sub: "", color: "#FF8C2A" },
               { icon: Star,   value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
               { icon: Award,  value: stats.prizeMoney, label: "Prize Money", sub: "N/A", color: "#0EA5E9" },
             ].map((s, i) => (
@@ -677,7 +692,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                 <s.icon size={28} className="mx-auto mb-3" style={{ color: s.color }} />
                 <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
                 <div style={{ fontWeight: 600, fontSize: "0.9rem" }} className="mt-0.5">{s.label}</div>
-                <div className="text-xs text-muted-foreground">{s.sub}</div>
+                {s.sub && <div className="text-xs text-muted-foreground">{s.sub}</div>}
               </motion.div>
             ))}
           </div>
