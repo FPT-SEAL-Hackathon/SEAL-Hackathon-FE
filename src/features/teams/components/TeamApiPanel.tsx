@@ -203,9 +203,33 @@ export function TeamApiPanel({
     if (!user?.id || selectedTeam || teamDiscoveryDone) return;
     const storedTeam = getStoredActiveTeam(user.id);
     if (storedTeam?.teamId) {
-      loadTeam(storedTeam.teamId);
-      setTeamDiscoveryDone(true);
-      return;
+      let cancelled = false;
+      setLoading(prev => ({ ...prev, discover: true }));
+      teamService.getById(storedTeam.teamId)
+        .then(team => {
+          if (cancelled) return;
+          setSelectedTeam(team);
+          saveActiveTeam(team, user.id);
+          setField("teamId", team.teamId);
+          setField("eventId", team.eventId);
+          setField("categoryId", team.categoryId);
+        })
+        .catch(() => {
+          try {
+            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+          } catch {
+            // Ignore storage failures.
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setTeamDiscoveryDone(true);
+            setLoading(prev => ({ ...prev, discover: false }));
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }
     if (events.length === 0) return;
 
@@ -422,7 +446,7 @@ export function TeamApiPanel({
     setRemoveMemberName("");
   };
 
-  if (!selectedTeam && mode !== "leader" && loading.discover) {
+  if (!selectedTeam && mode !== "leader" && (!teamDiscoveryDone || loading.discover || loading.events)) {
     return (
       <Card className="p-8">
         <div className="flex items-center gap-3" style={{ color: COLORS.textSecondary }}>
