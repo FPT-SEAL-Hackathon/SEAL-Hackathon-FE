@@ -44,14 +44,19 @@ function AuthRoute() {
     return <Navigate to={from || getDefaultPath(role)} replace />;
   }
 
-  return <AuthPages onLogin={() => {
-    const raw = localStorage.getItem("seal_user");
-    if (!raw) return;
-    const user = JSON.parse(raw);
-    setAuth(user);
-    const nextRole = roleFromUserType(user.userType);
-    navigate(from || getDefaultPath(nextRole), { replace: true });
-  }} />;
+  return (
+    <AuthPages
+      onBackToLanding={() => navigate("/", { replace: true })}
+      onLogin={() => {
+        const raw = localStorage.getItem("seal_user");
+        if (!raw) return;
+        const user = JSON.parse(raw);
+        setAuth(user);
+        const nextRole = roleFromUserType(user.userType);
+        navigate(from || getDefaultPath(nextRole), { replace: true });
+      }}
+    />
+  );
 }
 
 function MainLayout() {
