@@ -67,6 +67,33 @@ const initialNotifs = [
 ];
 
 const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
+const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
+
+type ActiveTeamContext = {
+  teamId: string;
+  eventId?: string;
+  categoryId?: string;
+  teamName?: string;
+  leaderUserId?: string;
+  userId?: string;
+  memberUserIds?: string[];
+};
+
+function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
+    if (!raw) return null;
+    const team = JSON.parse(raw) as ActiveTeamContext;
+    if (!team?.teamId) return null;
+    const belongsToStoredTeam = !userId
+      || team.userId === userId
+      || team.leaderUserId === userId
+      || team.memberUserIds?.includes(userId);
+    return belongsToStoredTeam ? team : null;
+  } catch {
+    return null;
+  }
+}
 
 export function MemberDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { user } = useAuth();
@@ -124,8 +151,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     bio: "Passionate full-stack developer with focus on AI/ML applications.", major: "Software Engineering",
   });
   const [profileSaved, setProfileSaved] = useState(false);
+  const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.id));
   const [submissionForm, setSubmissionForm] = useState({
-    teamId: "",
+    teamId: activeTeamContext?.teamId ?? "",
     roundId: "",
     repositoryUrl: "",
     demoUrl: "",
@@ -137,6 +165,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
+
+  useEffect(() => {
+    if (currentPage !== "submissions") return;
+    const storedTeam = getStoredActiveTeam(user?.id);
+    setActiveTeamContext(storedTeam);
+    if (storedTeam?.teamId) {
+      setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
+    } else {
+      setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+    }
+  }, [currentPage, user?.id]);
 
   const unread = notifs.filter((n: any) => !n.read).length;
   const markRead = async (id: any) => {
@@ -446,9 +485,44 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
-  const renderSubmissions = () => (
-    <>
-      <SectionHeader title="Submission Center" subtitle="Submit or update your team's work for an assigned round" />
+  const renderSubmissions = () => {
+    if (!activeTeamContext?.teamId) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Create or join a team before submitting work" />
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.warning}14`, color: COLORS.warning }}
+                >
+                  <Users size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>No team yet</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    Submissions belong to a team and a round. Create a team or join an existing team first.
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="primary" size="md" icon={<PlusCircle size={14} />} onClick={() => onNavigate("team")}>
+                  Create or Join Team
+                </Button>
+                <Button variant="outline" size="md" icon={<Calendar size={14} />} onClick={() => onNavigate("events")}>
+                  Browse Events
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
       <Card className="p-5">
         <div className="grid md:grid-cols-2 gap-4">
           {[
@@ -502,8 +576,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           )}
         </div>
       </Card>
-    </>
-  );
+      </>
+    );
+  };
 
   const renderProfile = () => (
     <>
