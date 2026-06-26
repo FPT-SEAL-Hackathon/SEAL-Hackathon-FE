@@ -1,10 +1,10 @@
 import { useState } from "react";
 import {
-  Eye, EyeOff, Mail, Lock, ArrowRight, X, CheckCircle, Loader,
+  Eye, EyeOff, Mail, Lock, ArrowLeft, ArrowRight, X, CheckCircle, Loader,
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { login, register, userTypeToRole } from "@/features/auth/api/authService";
+import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService";
 import { ApiError } from "@/lib/api/apiClient";
 
 // ─── Demo roles (bypass API for dev/demo) ───────────────────────────────────
@@ -14,7 +14,6 @@ const DEMO_ROLES = [
   { role: "judge",    label: "Judge",    color: "#7C3AED" },
   { role: "mentor",   label: "Mentor",   color: "#0EA5E9" },
   { role: "admin",    label: "Admin",    color: "#c0392b" },
-  { role: "research", label: "Research", color: "#D4610A" },
 ];
 
 // ─── OAuth Modal ─────────────────────────────────────────────────────────────
@@ -153,9 +152,21 @@ function ErrorBanner({ message }: { message: string }) {
 
 // ─── Register Card ────────────────────────────────────────────────────────────
 export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void }) {
-  const [form, setForm] = useState({
+  type RegisterForm = {
+    fullName: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+    phone: string;
+    studentCode: string;
+    universityName: string;
+    userTypeId: string;
+  };
+
+  const [form, setForm] = useState<RegisterForm>({
     fullName: "", email: "", password: "", confirmPassword: "",
     phone: "", studentCode: "", universityName: "FPT University",
+    userTypeId: REGISTER_USER_TYPES[0].value,
   });
   const [showPwd, setShowPwd] = useState(false);
   const [errors, setErrors] = useState<Partial<typeof form>>({});
@@ -170,7 +181,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   };
 
   const validate = (): boolean => {
-    const e: Partial<typeof form> = {};
+    const e: Partial<RegisterForm> = {};
     if (!form.fullName.trim()) e.fullName = "Required";
     if (!form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = "Invalid email";
     if (form.password.length < 8) e.password = "Min 8 characters";
@@ -178,6 +189,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
     if (!form.phone.match(/^\d{1,10}$/)) e.phone = "Invalid phone (max 10 digits)";
     if (!form.studentCode.trim()) e.studentCode = "Required";
     if (!form.universityName.trim()) e.universityName = "Required";
+    if (!form.userTypeId.trim()) e.userTypeId = "Required";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -195,6 +207,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
         phone: form.phone,
         studentCode: form.studentCode,
         universityName: form.universityName,
+        userTypeId: form.userTypeId,
       });
       setSuccess(true);
       setTimeout(onSwitchToLogin, 2500);
@@ -246,6 +259,41 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
           icon={<Lock size={15} />} value={form.confirmPassword} onChange={v => set("confirmPassword", v)} error={errors.confirmPassword} />
         <GlassInput label="Phone Number" placeholder="0912345678" icon={<Phone size={15} />}
           value={form.phone} onChange={v => set("phone", v)} error={errors.phone} />
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: "#a07850", display: "block", marginBottom: 8, letterSpacing: "0.06em" }}>
+            USER TYPE
+          </label>
+          <div className="relative">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: errors.userTypeId ? "#e53e2e" : "#c09060" }}>
+              <User size={15} />
+            </div>
+            <select
+              value={form.userTypeId}
+              onChange={e => set("userTypeId", e.target.value)}
+              className="w-full py-3.5 rounded-2xl outline-none transition-all duration-200 appearance-none"
+              style={{
+                background: "var(--glass-bg)",
+                border: errors.userTypeId ? "1.5px solid rgba(229,62,46,0.5)" : "1.5px solid rgba(244,121,32,0.15)",
+                color: "var(--text-primary)",
+                fontSize: 14,
+                paddingLeft: 44,
+                paddingRight: 16,
+                boxShadow: "0 2px 4px rgba(180,100,20,0.04)",
+              }}
+            >
+              {REGISTER_USER_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {errors.userTypeId && (
+            <div className="flex items-center gap-1 mt-1" style={{ fontSize: 11, color: "#e53e2e" }}>
+              <AlertCircle size={11} /> {errors.userTypeId}
+            </div>
+          )}
+        </div>
         <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
           value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
         <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
@@ -270,7 +318,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
 }
 
 // ─── Login Card ───────────────────────────────────────────────────────────────
-export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: string) => void; onSwitchToRegister: () => void }) {
+export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -308,8 +356,18 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
 
       <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ delay: 0.15, duration: 0.4 }}
-        className="w-full rounded-3xl p-8"
+        className="relative w-full rounded-3xl p-8"
         style={{ background: "var(--glass-bg)", backdropFilter: "blur(32px) saturate(180%)", WebkitBackdropFilter: "blur(32px) saturate(180%)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}>
+        <button
+          type="button"
+          onClick={onBackToLanding}
+          className="absolute right-5 top-5 flex h-10 w-10 items-center justify-center rounded-2xl transition-all hover:-translate-y-0.5"
+          style={{ background: "rgba(244,121,32,0.08)", border: "1px solid rgba(244,121,32,0.16)", color: "#F47920" }}
+          aria-label="Back to landing page"
+          title="Back to landing page"
+        >
+          <ArrowLeft size={17} />
+        </button>
         <div className="mb-7">
           <h1 style={{ fontSize: 26, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>Welcome back 👋</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 6 }}>Sign in to your SEAL Hackathon account</p>
@@ -368,7 +426,7 @@ export function LoginCard({ onLogin, onSwitchToRegister }: { onLogin: (role: str
 }
 
 // ─── Full-page Login (with left panel) ───────────────────────────────────────
-function LoginPage({ onLogin, onSwitchToRegister }: { onLogin: (role: string) => void; onSwitchToRegister: () => void }) {
+function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const stats = [
     { label: "Active Teams", value: "127", icon: "🚀" },
     { label: "Submissions", value: "89",  icon: "📦" },
@@ -425,14 +483,14 @@ function LoginPage({ onLogin, onSwitchToRegister }: { onLogin: (role: string) =>
 
       {/* Right panel */}
       <div className="flex flex-col justify-center items-center p-8 flex-1" style={{ maxWidth: 520 }}>
-        <LoginCard onLogin={onLogin} onSwitchToRegister={onSwitchToRegister} />
+        <LoginCard onLogin={onLogin} onSwitchToRegister={onSwitchToRegister} onBackToLanding={onBackToLanding} />
       </div>
     </div>
   );
 }
 
 // ─── AuthPages (entry point) ─────────────────────────────────────────────────
-export function AuthPages({ onLogin }: { onLogin: (role: string) => void }) {
+export function AuthPages({ onLogin, onBackToLanding }: { onLogin: (role: string) => void; onBackToLanding: () => void }) {
   const [page, setPage] = useState<"login" | "register">("login");
 
   if (page === "register") {
@@ -445,5 +503,5 @@ export function AuthPages({ onLogin }: { onLogin: (role: string) => void }) {
     );
   }
 
-  return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} />;
+  return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} onBackToLanding={onBackToLanding} />;
 }

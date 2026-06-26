@@ -47,14 +47,21 @@ interface BackendEnvelope<T> {
   message?: string;
 }
 
-function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
+interface PageEnvelope<T> {
+  content?: T[];
+}
+
+function unwrapList<T>(response: T[] | BackendEnvelope<T[] | PageEnvelope<T>> | PageEnvelope<T>): T[] {
   if (Array.isArray(response)) return response;
+  if (Array.isArray(response.content)) return response.content;
   if (Array.isArray(response.data)) return response.data;
+  if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.content)) return response.data.content;
   throw new Error(response.message ?? "Unexpected events response from server.");
 }
 
 export const eventService = {
-  getAll: async () => unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events")),
+  getAll: async (auth = true) => unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events", auth)),
+  getPublic: async () => unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[] | PageEnvelope<EventResponse>> | PageEnvelope<EventResponse>>("/api/v1/public/events", false)),
   getById: (id: string) => api.get<EventResponse>(`/api/v1/event/${id}`),
   create: (data: CreateEventRequest) => api.post<EventResponse>("/api/v1/event", data),
   update: (id: string, data: UpdateEventRequest) => api.put<EventResponse>(`/api/v1/event/${id}`, data),

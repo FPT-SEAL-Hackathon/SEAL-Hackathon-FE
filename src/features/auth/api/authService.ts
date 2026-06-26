@@ -1,6 +1,6 @@
+import { normalizeRole, type Role } from "@/auth/rbac/roles";
 import { api, clearTokens, getRefreshToken, saveUser, setTokens } from "@/lib/api/apiClient";
 
-// ─── Types (aligned with backend spec) ──────────────────────────────────────
 export interface LoginRequest {
   email: string;
   password: string;
@@ -14,15 +14,26 @@ export interface RegisterRequest {
   phone: string;
   studentCode: string;
   universityName: string;
-  userTypeId?: string; // optional UUID — defaults to student on backend
+  userTypeId: string;
 }
+
+export const REGISTER_USER_TYPES = [
+  {
+    label: "FPT Student",
+    value: "10000000-0000-0000-0000-000000000001",
+  },
+  {
+    label: "External Student",
+    value: "10000000-0000-0000-0000-000000000002",
+  },
+] as const;
 
 export interface UserResponse {
   id: string;
   email: string;
   fullName: string;
   phone: string;
-  userType: string;       // e.g. "STUDENT", "JUDGE", "MENTOR", "ORGANIZER"
+  userType: string;
   accountStatus: string;
   studentCode: string;
   universityName: string;
@@ -39,25 +50,14 @@ export interface TokenResponse {
   accessToken: string;
 }
 
-// ─── Map backend userType string → frontend role key ────────────────────────
-const USER_TYPE_MAP: Record<string, string> = {
-  student:    "member",
-  member:     "member",
-  leader:     "leader",
-  team_leader:"leader",
-  judge:      "judge",
-  mentor:     "mentor",
-  organizer:  "admin",
-  admin:      "admin",
-  research:   "research",
-  researcher: "research",
-};
-
-export function userTypeToRole(userType: string): string {
-  return USER_TYPE_MAP[userType.toLowerCase()] ?? "member";
+export function userTypeToRole(userType: string): Role {
+  const role = normalizeRole(userType);
+  if (!role) {
+    throw new Error(`Unsupported user type: ${userType}`);
+  }
+  return role;
 }
 
-// ─── Auth API calls ──────────────────────────────────────────────────────────
 export async function login(data: LoginRequest): Promise<LoginResponse> {
   const res = await api.post<LoginResponse>("/auth/login", data, false);
   setTokens(res.accessToken, res.refreshToken);
@@ -74,7 +74,9 @@ export async function logout(): Promise<void> {
   if (refreshToken) {
     try {
       await api.post<string>("/auth/logout", { refreshToken });
-    } catch { /* ignore — clear tokens regardless */ }
+    } catch {
+      // Clear local session even if the backend logout call fails.
+    }
   }
   clearTokens();
 }
