@@ -699,6 +699,120 @@ export function TeamApiPanel({
         joinedAt: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-",
       };
     });
+    const renderLeaderActionPanel = () => {
+      if (leaderActionPanel === "memberDetail") {
+        return (
+          <div className="mt-5 rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 12 }}>Member Details</div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {selectedTeam.members.map(member => {
+                const detail = memberDetails[member.userId];
+                const detailRows = detail ? visibleMemberDetailRows(detail) : [
+                  { label: "Joined At", value: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-" },
+                  { label: "Active", value: member.active ? "Yes" : "No" },
+                ];
+                return (
+                  <div key={member.userId} className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: COLORS.textPrimary }}>
+                      {detail?.fullName || detail?.email || "Member"}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
+                      {detailRows.map(row => (
+                        <div key={row.label} className="rounded-lg px-3 py-2" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>{row.label.toUpperCase()}</div>
+                          <div style={{ fontSize: 12, color: COLORS.textPrimary, marginTop: 3, wordBreak: "break-word" }}>
+                            {row.value}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-3"><StatusBadge status={member.active ? "active" : "pending"} /></div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+
+      if (leaderActionPanel === "removeMember") {
+        return (
+          <div className="mt-5 rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 8 }}>Remove Member</div>
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
+              Enter the exact member name or email to remove them from this team.
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
+              <Field label="MEMBER NAME OR EMAIL" value={removeMemberName} onChange={setRemoveMemberName} placeholder="Enter member name or email" />
+              <Button
+                variant="danger"
+                size="md"
+                icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                disabled={!removeMemberName.trim() || loading.remove}
+                onClick={() => removeMemberByName(selectedTeam)}
+              >
+                {loading.remove ? "Removing..." : "Remove Member"}
+              </Button>
+            </div>
+          </div>
+        );
+      }
+
+      if (leaderActionPanel === "joinRequests") {
+        return (
+          <div className="mt-5 rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 12 }}>Join Requests</div>
+            {joinRequestsLoaded && requests.length === 0 && (
+              <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
+                There are no join requests waiting for review.
+              </div>
+            )}
+            {requests.length > 0 && <div className="space-y-3">
+              {requests.map(request => (
+                <div
+                  key={request.requestId}
+                  className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-xl"
+                  style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Applicant</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                      {request.requestStatus} - {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : "-"}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      icon={loading.approve ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                      disabled={loading.approve || loading.reject}
+                      onClick={() => decideRequest(request.requestId, "APPROVED")}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={loading.reject ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      disabled={loading.approve || loading.reject}
+                      onClick={() => decideRequest(request.requestId, "REJECTED")}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>}
+            <div className="mt-4">
+              <Field label="RESPONSE NOTE" value={form.responseNote} onChange={value => setField("responseNote", value)} placeholder="Optional note for join request" />
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    };
+
     return (
       <div className="space-y-5">
         <Card className="p-5">
@@ -773,7 +887,7 @@ export function TeamApiPanel({
                 variant="outline"
                 size="sm"
                 icon={<Eye size={14} />}
-                onClick={() => setLeaderActionPanel(leaderActionPanel === "memberDetail" ? null : "memberDetail")}
+                onClick={() => setLeaderActionPanel(current => current === "memberDetail" ? null : "memberDetail")}
               >
                 Member Detail
               </Button>
@@ -781,7 +895,7 @@ export function TeamApiPanel({
                 variant="danger"
                 size="sm"
                 icon={<Trash2 size={14} />}
-                onClick={() => setLeaderActionPanel(leaderActionPanel === "removeMember" ? null : "removeMember")}
+                onClick={() => setLeaderActionPanel(current => current === "removeMember" ? null : "removeMember")}
               >
                 Remove Member
               </Button>
@@ -798,110 +912,7 @@ export function TeamApiPanel({
                 {loading.requests ? "Loading..." : "Load Join Requests"}
               </Button>
             </div>
-          </Card>
-        )}
-
-        {isLeader && leaderActionPanel === "memberDetail" ? (
-          <Card className="p-5">
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 12 }}>Member Details</div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {selectedTeam.members.map(member => {
-                const detail = memberDetails[member.userId];
-                const detailRows = detail ? visibleMemberDetailRows(detail) : [
-                  { label: "Joined At", value: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-" },
-                  { label: "Active", value: member.active ? "Yes" : "No" },
-                ];
-                return (
-                  <div key={member.userId} className="rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: COLORS.textPrimary }}>
-                      {detail?.fullName || detail?.email || "Member"}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
-                      {detailRows.map(row => (
-                        <div key={row.label} className="rounded-lg px-3 py-2" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>{row.label.toUpperCase()}</div>
-                          <div style={{ fontSize: 12, color: COLORS.textPrimary, marginTop: 3, wordBreak: "break-word" }}>
-                            {row.value}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-3"><StatusBadge status={member.active ? "active" : "pending"} /></div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        ) : null}
-
-        {isLeader && leaderActionPanel === "removeMember" ? (
-          <Card className="p-5">
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 8 }}>Remove Member</div>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
-              Enter the exact member name or email to remove them from this team.
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
-              <Field label="MEMBER NAME OR EMAIL" value={removeMemberName} onChange={setRemoveMemberName} placeholder="Enter member name or email" />
-              <Button
-                variant="danger"
-                size="md"
-                icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                disabled={!removeMemberName.trim() || loading.remove}
-                onClick={() => removeMemberByName(selectedTeam)}
-              >
-                {loading.remove ? "Removing..." : "Remove Member"}
-              </Button>
-            </div>
-          </Card>
-        ) : null}
-
-        {isLeader && leaderActionPanel === "joinRequests" && (
-          <Card className="p-5">
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 12 }}>Join Requests</div>
-            {joinRequestsLoaded && requests.length === 0 && (
-              <div className="rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
-                There are no join requests waiting for review.
-              </div>
-            )}
-            {requests.length > 0 && <div className="space-y-3">
-              {requests.map(request => (
-                <div
-                  key={request.requestId}
-                  className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-xl"
-                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
-                >
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Applicant</div>
-                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-                      {request.requestStatus} - {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : "-"}
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={loading.approve ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                      disabled={loading.approve || loading.reject}
-                      onClick={() => decideRequest(request.requestId, "APPROVED")}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      icon={loading.reject ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                      disabled={loading.approve || loading.reject}
-                      onClick={() => decideRequest(request.requestId, "REJECTED")}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>}
-            <div className="mt-4">
-              <Field label="RESPONSE NOTE" value={form.responseNote} onChange={value => setField("responseNote", value)} placeholder="Optional note for join request" />
-            </div>
+            {renderLeaderActionPanel()}
           </Card>
         )}
       </div>
