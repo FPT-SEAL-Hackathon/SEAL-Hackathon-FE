@@ -14,17 +14,25 @@ import { EventModal } from "@/features/events/components/EventModal";
 import { CategoryModal } from "@/features/categories/components/CategoryModal";
 import { RoundModal } from "@/features/judging/components/RoundModal";
 import { AssignJudgeModal } from "@/features/judging/components/AssignJudgeModal";
-import {
-  Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
-  GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
-  Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
-  TrendingUp, Clock, Activity, Download, Send, Search, Filter,
-  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader, Database
-} from "lucide-react";
-import {
-  StatCard, Card, SectionHeader, COLORS, StatusBadge,
-  ProgressBar, Button, DataTable, TimelineItem
-} from "@/components/shared/UIComponents";
+import { AdminDashboardView } from "./components/AdminDashboardView";
+import { AdminEventsView } from "./components/AdminEventsView";
+import { AdminCategoriesView } from "./components/AdminCategoriesView";
+import { AdminRoundsView } from "./components/AdminRoundsView";
+import { AdminCriteriaView } from "./components/AdminCriteriaView";
+import { AdminUsersView } from "./components/AdminUsersView";
+import { AdminAssignmentsView } from "./components/AdminAssignmentsView";
+import { AdminSubmissionsView } from "./components/AdminSubmissionsView";
+import { AdminRankingsView } from "./components/AdminRankingsView";
+import { AdminReportsView } from "./components/AdminReportsView";
+import { AdminDataExportView } from "./components/AdminDataExportView";
+import { AdminNotificationsView } from "./components/AdminNotificationsView";
+import { AdminDirectNotificationView } from "./components/AdminDirectNotificationView";
+import { AdminAuditView } from "./components/AdminAuditView";
+import { AdminProfileView } from "./components/AdminProfileView";
+import { AdminSettingsView } from "./components/AdminSettingsView";
+import { AdminAwardsView } from "./components/AdminAwardsView";
+import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
+import { COLORS } from "@/components/shared/UIComponents";
 
 // ===== DATA =====
 
@@ -470,460 +478,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
-  const renderDashboard = () => (
-    <>
-      <SectionHeader title="Admin Dashboard" subtitle="SEAL Hackathon Platform — System Overview" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Teams" value={127} trend={12} icon={<Users size={20} />} color={COLORS.primary} />
-        <StatCard title="Submissions" value={89} trend={8} icon={<Upload size={20} />} color={COLORS.success} />
-        <StatCard title="Active Judges" value={24} icon={<Shield size={20} />} color={COLORS.warning} />
-        <StatCard title="Pending Approvals" value={8} icon={<AlertTriangle size={20} />} color={COLORS.error} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-4">
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Active Events Overview</div>
-            {apiEvents.filter((e: any) => e.status === "active" || e.status === "scoring" || e.status !== "completed").map((ev: any) => (
-              <div key={ev.id} className="mb-4 last:mb-0">
-                <div className="flex items-center justify-between mb-2">
-                  <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{ev.name}</span>
-                  <StatusBadge status={ev.status} />
-                </div>
-                <ProgressBar value={ev.teams} max={150} color={COLORS.primary} label={`${ev.teams} teams registered`} />
-              </div>
-            ))}
-          </Card>
-
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Scoring Progress — SEAL Fall 2025</div>
-            {rounds.filter(r => r.event === "SEAL Fall 2025").map(r => (
-              <div key={r.id} className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</span>
-                  <StatusBadge status={r.status} />
-                </div>
-                <ProgressBar value={r.scored} max={r.teams} color={r.status === "completed" ? COLORS.success : COLORS.warning} label={`Scored: ${r.scored}/${r.teams}`} />
-              </div>
-            ))}
-          </Card>
-        </div>
-
-        <div className="space-y-4">
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Quick Actions</div>
-            <div className="space-y-2">
-              {[
-                { label: "Create New Event", icon: <PlusCircle size={14} />, page: "events" },
-                { label: "Manage Users", icon: <Users size={14} />, page: "users" },
-                { label: "View Rankings", icon: <Trophy size={14} />, page: "rankings" },
-                { label: "Send Broadcast", icon: <Bell size={14} />, page: "notifications" },
-                { label: "View Audit Logs", icon: <Shield size={14} />, page: "audit" },
-                { label: "System Settings", icon: <Settings size={14} />, page: "settings" },
-              ].map(action => (
-                <button
-                  key={action.label}
-                  onClick={() => onNavigate(action.page)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left"
-                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
-                >
-                  <span style={{ color: COLORS.primary }}>{action.icon}</span>
-                  <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{action.label}</span>
-                </button>
-              ))}
-            </div>
-          </Card>
-
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Recent Activity</div>
-            {auditLogs.slice(0, 4).map((log, i) => (
-              <div key={log.id} className="mb-3 last:mb-0">
-                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{log.action}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{log.actor} • {log.timestamp.split(" ")[0]}</div>
-              </div>
-            ))}
-          </Card>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderEvents = () => (
-    <>
-      <SectionHeader
-        title="Event Management"
-        subtitle="Create and manage hackathon events"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setEventModal({ open: true })}>New Event</Button>}
-      />
-      <div className="space-y-3">
-        {apiEvents.map((ev: any) => (
-          <Card key={ev.id} className="p-5">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{ev.name}</span>
-                  <StatusBadge status={ev.status} />
-                </div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.category} • {ev.teams ?? 0} teams • {ev.rounds ?? 0} rounds • Deadline: {ev.deadline}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>
-                <Button variant="ghost" size="sm" icon={<Eye size={13} />}>View</Button>
-                <Button variant="ghost" size="sm" icon={<Edit size={13} />}>Edit</Button>
-                {ev.status === "upcoming" && <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Delete</Button>}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const renderCategories = () => (
-    <>
-      <SectionHeader
-        title="Category Management"
-        subtitle="Manage competition categories and tracks"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setCategoryModal({ open: true })}>New Category</Button>}
-      />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {categories.map(cat => (
-          <Card key={cat.id} className="p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{cat.name}</div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" icon={<Edit size={13} />}>Edit</Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3 mt-3">
-              <div className="text-center p-2 rounded-xl" style={{ background: `${cat.color}10` }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: cat.color }}>{cat.tracks}</div>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{t("event.tracks")}</div>
-              </div>
-              <div className="text-center p-2 rounded-xl" style={{ background: `${cat.color}10` }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: cat.color }}>{cat.teams}</div>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{t("event.teams")}</div>
-              </div>
-              <div className="text-center p-2 rounded-xl" style={{ background: `${cat.color}10` }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: cat.color }}>{cat.criteria}</div>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{t("nav.criteria")}</div>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const renderRounds = () => (
-    <>
-      <SectionHeader
-        title="Round Management"
-        subtitle="Configure and monitor competition rounds"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setRoundModal({ open: true, categoryId: apiCategories[0]?.categoryId })}>New Round</Button>}
-      />
-      <div className="space-y-3">
-        {rounds.map(r => (
-          <Card key={r.id} className="p-5">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{r.name}</span>
-                  <StatusBadge status={r.status} />
-                </div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{r.event} • Deadline: {r.deadline}</div>
-                <div className="mt-2">
-                  <ProgressBar value={r.scored} max={r.teams} color={r.status === "completed" ? COLORS.success : COLORS.primary} label={`Scored: ${r.scored}/${r.teams}`} />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" icon={<Edit size={13} />}>{t("common.edit")}</Button>
-                {r.status === "open" && <Button variant="secondary" size="sm">{t("common.closeRound")}</Button>}
-                {r.status === "upcoming" && <Button variant="primary" size="sm">{t("common.openRound")}</Button>}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
-  const renderSubmissions = () => {
-    const submitted = adminSubmissions.filter(submission =>
-      (submission.submissionStatusName ?? "").toLowerCase().includes("submitted")
-    ).length;
-    const disqualified = adminSubmissions.filter(submission =>
-      (submission.submissionStatusName ?? "").toLowerCase().includes("disqualified")
-    ).length;
-    const scored = adminSubmissions.filter(submission =>
-      (submission.submissionStatusName ?? "").toLowerCase().includes("scored")
-    ).length;
-    const selectedRound = apiRounds.find(round => round.roundId === selectedSubmissionRoundId);
-
-    return (
-      <>
-        <SectionHeader
-          title="Submission Management"
-          subtitle="Review team submissions by event or round, and disqualify invalid work"
-        />
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Loaded Submissions" value={adminSubmissions.length} icon={<Upload size={20} />} color={COLORS.primary} />
-          <StatCard title="Submitted" value={submitted} icon={<CheckCircle size={20} />} color={COLORS.success} />
-          <StatCard title="Scored" value={scored} icon={<Star size={20} />} color={COLORS.warning} />
-          <StatCard title="Disqualified" value={disqualified} icon={<Shield size={20} />} color={COLORS.error} />
-        </div>
-
-        <Card className="p-5">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end">
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-              <select
-                value={selectedEventId ?? ""}
-                onChange={e => setSelectedEventId(e.target.value || null)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {apiEvents.length === 0 && <option value="">No events found</option>}
-                {apiEvents.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-              <select
-                value={selectedSubmissionCategoryId}
-                onChange={e => setSelectedSubmissionCategoryId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                disabled={submissionScope === "event"}
-              >
-                {apiCategories.length === 0 && <option value="">No categories found</option>}
-                {apiCategories.map(category => (
-                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
-              <select
-                value={selectedSubmissionRoundId}
-                onChange={e => setSelectedSubmissionRoundId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                disabled={submissionScope === "event"}
-              >
-                {apiRounds.length === 0 && <option value="">No rounds loaded</option>}
-                {apiRounds.map(round => (
-                  <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>VIEW</label>
-              <select
-                value={submissionScope}
-                onChange={e => setSubmissionScope(e.target.value as "event" | "round" | "unreview")}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="event">All submissions in event</option>
-                <option value="round">All submissions in round</option>
-                <option value="unreview">Unreviewed submissions in round</option>
-              </select>
-            </div>
-            <Button
-              variant="outline"
-              size="md"
-              icon={submissionsLoading ? <Loader size={14} className="animate-spin" /> : <Filter size={14} />}
-              onClick={() => setSubmissionReloadKey(key => key + 1)}
-              disabled={submissionsLoading}
-            >
-              {submissionsLoading ? "Loading..." : "Refresh"}
-            </Button>
-          </div>
-          {selectedRound && submissionScope !== "event" && (
-            <div className="mt-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-              Deadline: {selectedRound.submissionDeadline ? new Date(selectedRound.submissionDeadline).toLocaleString("en-US") : "Not set"}
-            </div>
-          )}
-        </Card>
-
-        {submissionsError && (
-          <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-            {submissionsError}
-          </div>
-        )}
-        {submissionActionMessage && (
-          <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
-            {submissionActionMessage}
-          </div>
-        )}
-
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: COLORS.bg }}>
-                  {["Team", "Round", "Status", "Submitted", "Artifacts", "Repo Stats", "Action"].map(header => (
-                    <th key={header} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>
-                      {header.toUpperCase()}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {adminSubmissions.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center" style={{ color: COLORS.textSecondary, fontSize: 13 }}>
-                      {submissionsLoading ? "Loading submissions..." : "No submissions found for the selected scope."}
-                    </td>
-                  </tr>
-                )}
-                {adminSubmissions.map(submission => {
-                  const status = (submission.submissionStatusName || "draft").toLowerCase().replace(/\s+/g, "_");
-                  return (
-                    <tr key={submission.submissionId} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td className="px-4 py-3">
-                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{submission.teamId}</div>
-                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>By {submission.submittedByUserId ?? "unknown"}</div>
-                      </td>
-                      <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>{submission.roundId}</td>
-                      <td className="px-4 py-3"><StatusBadge status={status} /></td>
-                      <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                        {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString("en-US") : "Not submitted"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          {[
-                            { label: "Repo", url: submission.repositoryUrl, icon: <Github size={12} /> },
-                            { label: "Demo", url: submission.demoUrl, icon: <Eye size={12} /> },
-                            { label: "Report", url: submission.reportUrl, icon: <BookOpen size={12} /> },
-                            { label: "Slides", url: submission.slideUrl, icon: <FileText size={12} /> },
-                          ].map(item => item.url ? (
-                            <a
-                              key={item.label}
-                              href={item.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg"
-                              style={{ background: `${COLORS.primary}10`, color: COLORS.primary, fontSize: 11, fontWeight: 600 }}
-                            >
-                              {item.icon}{item.label}
-                            </a>
-                          ) : null)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                        {submission.repoStarCount ?? 0} stars / {submission.repoForkCount ?? 0} forks
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          icon={<AlertTriangle size={13} />}
-                          onClick={() => setSubmissionDisqualifyTarget(submission)}
-                          disabled={status === "disqualified"}
-                        >
-                          Disqualify
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        {submissionDisqualifyTarget && (
-          <Card className="p-5" style={{ border: `1px solid ${COLORS.error}55` }}>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Disqualify submission</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
-                  {submissionDisqualifyTarget.submissionId}
-                </div>
-              </div>
-              <Button variant="ghost" size="sm" icon={<X size={13} />} onClick={() => setSubmissionDisqualifyTarget(null)}>
-                Cancel
-              </Button>
-            </div>
-            <textarea
-              value={submissionDisqualifyReason}
-              onChange={e => setSubmissionDisqualifyReason(e.target.value)}
-              rows={3}
-              placeholder="Reason required by backend"
-              className="w-full px-3 py-2.5 rounded-xl outline-none resize-none mt-4"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            />
-            <div className="mt-4">
-              <Button
-                variant="danger"
-                size="md"
-                icon={submissionDisqualifying ? <Loader size={14} className="animate-spin" /> : <Shield size={14} />}
-                onClick={handleSubmissionDisqualifyConfirm}
-                disabled={submissionDisqualifying || !submissionDisqualifyReason.trim()}
-              >
-                {submissionDisqualifying ? "Disqualifying..." : "Confirm Disqualification"}
-              </Button>
-            </div>
-          </Card>
-        )}
-      </>
-    );
-  };
-
-  const renderCriteria = () => (
-    <>
-      <SectionHeader
-        title={t("admin.criteriaTemplates")}
-        subtitle={t("admin.criteriaTemplatesSubtitle")}
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>{t("common.newTemplate")}</Button>}
-      />
-      <div className="space-y-4">
-        {(apiCriteriaTemplates.length > 0
-          ? apiCriteriaTemplates.map(template => ({
-            id: template.templateId,
-            name: template.criterionName,
-            fields: [
-              `Weight (${template.defaultWeight})`,
-              `Max Score (${template.maxScore})`,
-              template.description || "No description",
-            ],
-            events: 0,
-            status: template.isActive ? "active" : "draft",
-          }))
-          : criteria
-        ).map(c => (
-          <Card key={c.id} className="p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{c.name}</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Used in {c.events} event{c.events !== 1 ? "s" : ""}</div>
-              </div>
-              <div className="flex items-center gap-2">
-                <StatusBadge status={c.status} />
-                <Button variant="ghost" size="sm" icon={<Edit size={13} />}>{t("common.edit")}</Button>
-                <Button variant="ghost" size="sm" icon={<Trash2 size={13} />}>{t("common.delete")}</Button>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {c.fields.map(f => (
-                <span key={f} className="px-2 py-1 rounded-xl text-xs font-medium" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
-                  {f}
-                </span>
-              ))}
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
-
   const handleApproveUser = (id: number) => {
     setApprovedUsers(prev => [...prev, id]);
   };
@@ -1005,1073 +559,185 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
-  const renderUsers = () => (
-    <>
-      <SectionHeader
-        title={t("admin.userManagement")}
-        subtitle={`${users.length} users registered`}
-        action={
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" icon={<UserCheck size={14} />} onClick={() => setShowGuestJudgeForm(v => !v)}>
-              Guest Judge
-            </Button>
-            <Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>{t("common.addUser")}</Button>
-          </div>
-        }
-      />
-      {showGuestJudgeForm && (
-        <Card className="p-5 mb-4">
-          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary, marginBottom: 12 }}>
-            Create Guest Judge Account <span style={{ fontSize: 12, color: COLORS.textSecondary }}>— POST /admin/users/guest-judge</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-            {[
-              { label: "Full Name", key: "fullName", placeholder: "Dr. Nguyen Van A" },
-              { label: "Email", key: "email", placeholder: "judge@company.com" },
-              { label: "Company / Institution", key: "company", placeholder: "Google, FPT Corp, ..." },
-            ].map(field => (
-              <div key={field.key}>
-                <label style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label.toUpperCase()}</label>
-                <input
-                  value={guestJudgeForm[field.key as keyof typeof guestJudgeForm]}
-                  onChange={e => setGuestJudgeForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                  placeholder={field.placeholder}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="primary" size="sm" icon={<CheckCircle size={13} />} onClick={handleGuestJudgeSubmit}
-              disabled={!guestJudgeForm.fullName || !guestJudgeForm.email || !guestJudgeForm.company}>
-              Create Guest Judge
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowGuestJudgeForm(false)}>Cancel</Button>
-            {guestJudgeSuccess && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Guest judge created!</span>}
-          </div>
-        </Card>
-      )}
-      {disqualifyTarget && (
-        <Card className="p-5 mb-4" style={{ border: `1.5px solid ${COLORS.error}30` }}>
-          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.error, marginBottom: 12 }}>
-            Disqualify Team: {disqualifyTarget.name} <span style={{ fontSize: 12, color: COLORS.textSecondary }}>— POST /admin/teams/{"{id}"}/disqualify</span>
-          </div>
-          <textarea
-            value={disqualifyReason}
-            onChange={e => setDisqualifyReason(e.target.value)}
-            placeholder="State reason for disqualification (e.g. Violation of code plagiarism rules.)"
-            rows={3}
-            className="w-full px-3 py-2 rounded-xl outline-none resize-none mb-3"
-            style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-          />
-          <div className="flex gap-2">
-            <Button variant="danger" size="sm" icon={<AlertTriangle size={13} />} onClick={handleDisqualify} disabled={!disqualifyReason}>
-              Confirm Disqualify
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setDisqualifyTarget(null)}>Cancel</Button>
-          </div>
-        </Card>
-      )}
-      <Card className="p-4 mb-4">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: COLORS.textSecondary }} />
-          <input
-            value={userSearch}
-            onChange={e => setUserSearch(e.target.value)}
-            placeholder={t("users.searchPlaceholder")}
-            className="w-full pl-9 pr-4 py-2 rounded-xl outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-          />
-        </div>
-      </Card>
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: COLORS.bg }}>
-                {[t("users.user"), t("users.role"), t("users.team"), t("users.status"), t("users.joined"), t("users.actions")].map(h => (
-                  <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>{h.toUpperCase()}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((user, i) => (
-                <tr key={user.id} style={{ borderBottom: i < filteredUsers.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-                  <td className="px-4 py-3">
-                    <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary }}>{user.name}</div>
-                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{user.email}</div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold" style={{ background: `${roleColors[user.role] || COLORS.primary}15`, color: roleColors[user.role] || COLORS.primary }}>
-                      {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{user.team}</span></td>
-                  <td className="px-4 py-3"><StatusBadge status={user.status} /></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 12, color: COLORS.textSecondary }}>{user.joined}</span></td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1 flex-wrap">
-                      <Button variant="ghost" size="sm" icon={<Edit size={12} />}>{t("common.edit")}</Button>
-                      {user.status === "pending" && !approvedUsers.includes(user.id) && (
-                        <Button variant="primary" size="sm" icon={<CheckCircle size={12} />} onClick={() => handleApproveUser(user.id)}>
-                          {t("common.approve")}
-                        </Button>
-                      )}
-                      {approvedUsers.includes(user.id) && (
-                        <span style={{ fontSize: 12, color: COLORS.success, fontWeight: 600 }}>Approved</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </>
-  );
 
-  const renderAssignments = () => (
-    <>
-      <SectionHeader title={t("admin.judgeAssignments")} subtitle={t("admin.judgeAssignmentsSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.judgeAssignmentsLabel")}</div>
-          {[
-            { judge: "Dr. Pham Thi Lan", track: "AI Agents", teams: 10, completed: 7 },
-            { judge: "Prof. Le Thi Bich", track: "AI Agents", teams: 10, completed: 8 },
-            { judge: "Dr. Nguyen Huu Phuoc", track: "Web3", teams: 8, completed: 8 },
-            { judge: "Assoc. Prof. Tran Van C", track: "AI Agents", teams: 10, completed: 5 },
-          ].map(j => (
-            <div key={j.judge} className="mb-4">
-              <div className="flex items-center justify-between mb-1">
-                <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{j.judge}</span>
-                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{j.track}</span>
-              </div>
-              <ProgressBar value={j.completed} max={j.teams} color={COLORS.warning} label={`${j.completed}/${j.teams} scored`} />
-            </div>
-          ))}
-          <Button variant="outline" size="sm" icon={<PlusCircle size={13} />} className="mt-2">{t("common.assignJudge")}</Button>
-        </Card>
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.mentorAssignments")}</div>
-          {[
-            { mentor: "Dr. Nguyen Van Minh", track: "AI Agents", teams: 3 },
-            { mentor: "Dr. Hoang Thi Huong", track: "AI Agents", teams: 2 },
-            { mentor: "Prof. Bui Van Nam", track: "Web3", teams: 3 },
-          ].map(m => (
-            <div key={m.mentor} className="mb-3 flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{m.mentor}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.track} • {m.teams} teams</div>
-              </div>
-              <Button variant="ghost" size="sm" icon={<Edit size={13} />}>{t("common.edit")}</Button>
-            </div>
-          ))}
-          <Button variant="outline" size="sm" icon={<PlusCircle size={13} />} className="mt-2">{t("common.assignMentor")}</Button>
-        </Card>
-      </div>
-    </>
-  );
-
-  const renderRankings = () => (
-    <>
-      <SectionHeader
-        title={t("admin.rankingsManagement")}
-        subtitle={t("admin.rankingsManagementSubtitle")}
-        action={
-          <div className="flex items-center gap-2">
-            {rankingsComputed && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Rankings computed!</span>}
-            {rankingsPublished && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Published!</span>}
-            <Button variant="secondary" size="sm" icon={<Zap size={14} />} onClick={handleComputeRankings}>
-              Re-Compute
-            </Button>
-            <Button variant="primary" size="sm" icon={<Award size={14} />} onClick={handlePublishRankings} style={{ background: COLORS.success }}>
-              Publish Leaderboard
-            </Button>
-          </div>
-        }
-      />
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: COLORS.bg }}>
-                {[t("adminRankings.rank"), t("adminRankings.team"), t("adminRankings.track"), t("adminRankings.round1"), t("adminRankings.round2"), t("adminRankings.total"), t("adminRankings.status"), t("adminRankings.actions")].map(h => (
-                  <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>{h.toUpperCase()}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(apiRankings.length > 0 ? apiRankings : rankings).map((row: any, i: number) => {
-                const rankNum = row.rankPosition ?? row.rank;
-                const isPublishedStatus = row.isPublished ? "PUBLISHED" : "DRAFT";
-                return (
-                <tr key={row.rank ?? i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                  <td className="px-4 py-3">
-                    <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
-                      {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.teamId ?? row.team}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryId ?? row.track}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r1 ?? "—"}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.r2 ?? "—"}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.total}</span></td>
-                  <td className="px-4 py-3"><StatusBadge status={apiRankings.length > 0 ? isPublishedStatus : row.status} /></td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" icon={<Eye size={13} />}>{t("common.view")}</Button>
-                      {!disqualifiedTeams.includes(rankNum) ? (
-                        <Button variant="danger" size="sm" icon={<AlertTriangle size={12} />}
-                          onClick={() => setDisqualifyTarget({ id: rankNum, name: row.teamId ?? row.team })}>
-                          DQ
-                        </Button>
-                      ) : (
-                        <span style={{ fontSize: 11, color: COLORS.error, fontWeight: 600 }}>DQ'd</span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              )})}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </>
-  );
-
-  const renderReports = () => (
-    <>
-      <SectionHeader
-        title={t("admin.reportsAnalytics")}
-        subtitle={t("admin.reportsSubtitle")}
-        action={<Button variant="outline" size="sm" icon={<Download size={14} />}>{t("common.exportAll")}</Button>}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title={t("reports.totalParticipants")} value={486} trend={15} icon={<Users size={20} />} color={COLORS.primary} />
-        <StatCard title={t("reports.totalSubmissions")} value={203} trend={8} icon={<Upload size={20} />} color={COLORS.success} />
-        <StatCard title={t("reports.avgScore")} value="81.2" trend={2} icon={<Star size={20} />} color={COLORS.warning} />
-        <StatCard title={t("reports.completionRate")} value="94%" trend={3} icon={<CheckCircle size={20} />} color={COLORS.accent} />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.trackDistribution")}</div>
-          {[
-            { track: "AI Agents", teams: 54, color: COLORS.primary },
-            { track: "Web3 & Blockchain", teams: 38, color: COLORS.secondary },
-            { track: "Healthcare Tech", teams: 23, color: COLORS.success },
-            { track: "Open Innovation", teams: 12, color: COLORS.accent },
-          ].map(tr => (
-            <div key={tr.track} className="mb-3">
-              <ProgressBar value={tr.teams} max={60} color={tr.color} label={`${tr.track} — ${tr.teams} teams`} />
-            </div>
-          ))}
-        </Card>
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.availableReports")}</div>
-          {[
-            { title: "Participant Summary", desc: "All registered users and teams" },
-            { title: "Score Analytics", desc: "Detailed scoring breakdown by round" },
-            { title: "Judge Performance", desc: "Calibration and consistency metrics" },
-            { title: "Event Timeline", desc: "Complete event activity log" },
-          ].map(r => (
-            <div key={r.title} className="flex items-center justify-between mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.title}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{r.desc}</div>
-              </div>
-              <Button variant="ghost" size="sm" icon={<Download size={13} />}>{t("common.export")}</Button>
-            </div>
-          ))}
-        </Card>
-      </div>
-    </>
-  );
-
-  const renderDataExport = () => (
-    <>
-      <SectionHeader
-        title="Data Export"
-        subtitle="Export scoring data for the selected event"
-        action={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={dataExportLoading ? <Loader size={14} className="animate-spin" /> : <Download size={14} />}
-            onClick={handleDataExport}
-            disabled={dataExportLoading || !selectedEventId}
-          >
-            {dataExportLoading ? "Exporting..." : "Download CSV"}
-          </Button>
-        }
-      />
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_0.9fr] gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Export Configuration</div>
-          {dataExportError && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-              {dataExportError}
-            </div>
-          )}
-          {dataExportDone && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
-              Export file is ready.
-            </div>
-          )}
-          {eventLoadError && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-              Events could not be loaded from database: {eventLoadError}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-              <select
-                value={selectedEventId ?? ""}
-                onChange={e => setSelectedEventId(e.target.value || null)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {apiEvents.length === 0 && <option value="">No events found</option>}
-                {apiEvents.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
-                ))}
-              </select>
-            </div>
-            <Button
-              variant="primary"
-              size="lg"
-              icon={dataExportLoading ? <Loader size={15} className="animate-spin" /> : <Database size={15} />}
-              onClick={handleDataExport}
-              disabled={dataExportLoading || !selectedEventId}
-            >
-              {dataExportLoading ? "Exporting..." : "Export Data"}
-            </Button>
-          </div>
-
-          <div className="mt-5 p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 6 }}>BACKEND ENDPOINT USED</div>
-            <code style={{ fontSize: 12, color: COLORS.textSecondary, wordBreak: "break-all" }}>
-              GET /api/v1/research/events/{"{eventId}"}/export
-            </code>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Export Contents</div>
-          <div className="space-y-3">
-            {[
-              "Teams and submission identifiers",
-              "Judge identifiers and scoring metadata",
-              "Criterion-level score values",
-              "Round and event references",
-              "Exportable CSV format for admin analysis",
-            ].map(item => (
-              <div key={item} className="flex items-center gap-2">
-                <CheckCircle size={14} style={{ color: COLORS.success, flexShrink: 0 }} />
-                <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{item}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-    </>
-  );
-
-  const renderNotifications = () => (
-    <>
-      <SectionHeader
-        title={t("admin.notificationCenter")}
-        subtitle={t("admin.notificationSubtitle")}
-        action={
-          <Button variant="outline" size="sm" icon={<Send size={14} />} onClick={() => onNavigate("direct-notification")}>
-            Direct Notification
-          </Button>
-        }
-      />
-      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.broadcastSend")}</div>
-          <div className="space-y-4">
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{t("broadcast.audience")}</label>
-              <select
-                value={broadcastAudience}
-                onChange={e => setBroadcastAudience(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option>All Teams</option>
-                <option>All Judges</option>
-                <option>All Mentors</option>
-                <option>All Participants</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{t("broadcast.titleLabel")}</label>
-              <input
-                value={broadcastTitle}
-                onChange={e => setBroadcastTitle(e.target.value)}
-                placeholder={t("broadcast.titlePlaceholder")}
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{t("broadcast.message")}</label>
-              <textarea
-                value={broadcastMessage}
-                onChange={e => setBroadcastMessage(e.target.value)}
-                rows={5}
-                placeholder={t("broadcast.messagePlaceholder")}
-                className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="primary"
-                size="md"
-                icon={<Send size={14} />}
-                onClick={handleBroadcast}
-                disabled={!broadcastTitle || !broadcastMessage}
-              >
-                {t("common.sendBroadcast")}
-              </Button>
-              {broadcastSent && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>{t("common.broadcastSent")}</span>}
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.broadcastHistory")}</div>
-          {broadcastHistory.map(b => (
-            <div key={b.id} className="mb-4 p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{b.title}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{b.message}</div>
-              <div className="flex items-center justify-between mt-2">
-                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} - {b.sent}</span>
-                <StatusBadge status={b.status} />
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
-    </>
-  );
-
-  const renderDirectNotification = () => (
-    <>
-      <SectionHeader
-        title="Direct Notification"
-        subtitle="Send a targeted notification to one team or one user"
-        action={
-          <Button variant="outline" size="sm" icon={<Bell size={14} />} onClick={() => onNavigate("notifications")}>
-            Back to Broadcast
-          </Button>
-        }
-      />
-      <div className="max-w-3xl">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Send Direct Notification</div>
-          <div className="space-y-4">
-            {notificationError && (
-              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-                {notificationError}
-              </div>
-            )}
-            {notificationStatus && (
-              <div className="px-4 py-3 rounded-xl" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
-                {notificationStatus}
-              </div>
-            )}
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TARGET TYPE</label>
-              <select
-                value={notificationTargetMode}
-                onChange={e => setNotificationTargetMode(e.target.value as "team" | "user")}
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="team">Team</option>
-                <option value="user">Individual User</option>
-              </select>
-            </div>
-
-            {notificationTargetMode === "team" ? (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM</label>
-                <select
-                  value={notificationTeamId}
-                  onChange={e => setNotificationTeamId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  <option value="">Select team</option>
-                  {apiTeamEligibility.map(team => (
-                    <option key={team.teamId} value={team.teamId}>{team.teamName} ({team.activeMemberCount} members)</option>
-                  ))}
-                </select>
-                {apiTeamEligibility.length === 0 && (
-                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
-                    No teams loaded for the selected event.
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>RECIPIENT EMAIL</label>
-                <input
-                  type="email"
-                  value={notificationEmail}
-                  onChange={e => setNotificationEmail(e.target.value)}
-                  placeholder="student@fpt.edu.vn"
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            )}
-
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TITLE</label>
-              <input
-                value={notificationTitle}
-                onChange={e => setNotificationTitle(e.target.value)}
-                placeholder="Notification title"
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>MESSAGE</label>
-              <textarea
-                value={notificationMessage}
-                onChange={e => setNotificationMessage(e.target.value)}
-                rows={5}
-                placeholder="Write a message for this recipient"
-                className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </div>
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Send size={14} />}
-              onClick={handleSendTargetedNotification}
-              disabled={notificationSending || !notificationTitle || !notificationMessage || (notificationTargetMode === "team" ? !notificationTeamId : !notificationEmail)}
-            >
-              {notificationSending ? "Sending..." : "Send Notification"}
-            </Button>
-          </div>
-        </Card>
-      </div>
-    </>
-  );
-  const renderAudit = () => (
-    <>
-      <SectionHeader title={t("admin.auditLogs")} subtitle={t("admin.auditSubtitle")} action={<Button variant="outline" size="sm" icon={<Download size={14} />}>{t("common.exportLogs")}</Button>} />
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: COLORS.bg }}>
-                {[t("audit.action"), t("audit.actor"), t("audit.target"), t("audit.timestamp"), t("audit.ipAddress")].map(h => (
-                  <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>{h.toUpperCase()}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {auditLogs.map((log, i) => (
-                <tr key={log.id} style={{ borderBottom: i < auditLogs.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{log.action}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{log.actor}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{log.target}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 12, color: COLORS.textSecondary }}>{log.timestamp}</span></td>
-                  <td className="px-4 py-3"><span style={{ fontSize: 12, color: COLORS.textSecondary, fontFamily: "monospace" }}>{log.ip}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </>
-  );
-
-  const renderProfile = () => (
-    <>
-      <SectionHeader title={t("admin.myProfile")} subtitle={t("admin.myProfileSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-6 flex flex-col items-center text-center gap-4">
-          <div style={{
-            width: 80, height: 80, borderRadius: "50%",
-            background: "linear-gradient(135deg, #F47920, #009444)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 28, fontWeight: 700, color: "#fff",
-            boxShadow: "0 4px 16px rgba(244,121,32,0.35)"
-          }}>AD</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>Admin User</div>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>Platform Administrator</div>
-            <StatusBadge status="active" />
-          </div>
-          <div className="w-full space-y-2 text-left mt-2">
-            {[
-              { label: "admin@fpt.edu.vn" },
-              { label: "FPT University, HCM" },
-              { label: "SEAL Platform — Full Access" },
-            ].map((item, i) => (
-              <div key={i} style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                {item.label}
-              </div>
-            ))}
-          </div>
-        </Card>
-        <div className="lg:col-span-2 space-y-5">
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.personalInfo")}</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {[
-                { label: t("common.fullName"), value: "Admin User" },
-                { label: t("adminForm.staffId"), value: "FPT-ADMIN-001" },
-                { label: t("common.email"), value: "admin@fpt.edu.vn" },
-                { label: t("common.phone"), value: "+84 900 000 001" },
-                { label: t("adminForm.department"), value: "IT & Innovation" },
-                { label: t("common.institution"), value: "FPT University" },
-              ].map(field => (
-                <div key={field.label}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
-                  <input
-                    defaultValue={field.value}
-                    className="w-full px-3 py-2 rounded-xl outline-none"
-                    style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  />
-                </div>
-              ))}
-              <div className="sm:col-span-2">
-                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{t("common.bio")}</label>
-                <textarea
-                  rows={3}
-                  defaultValue="Platform administrator responsible for managing SEAL hackathon events and participants at FPT University."
-                  className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            </div>
-            <div className="mt-4">
-              <Button variant="primary" size="md" icon={<Save size={14} />}>{t("common.saveChanges")}</Button>
-            </div>
-          </Card>
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.adminPermissions")}</div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                t("admin.perm.eventManagement"),
-                t("admin.perm.userManagement"),
-                t("admin.perm.scoreOverride"),
-                t("admin.perm.systemSettings"),
-                t("admin.perm.auditLogAccess"),
-                t("admin.perm.broadcastMessages"),
-              ].map(perm => (
-                <div key={perm} className="flex items-center gap-2 p-3 rounded-xl" style={{ background: COLORS.bg }}>
-                  <CheckCircle size={14} style={{ color: COLORS.success, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{perm}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
-      </div>
-    </>
-  );
-
-  const renderSettings = () => (
-    <>
-      <SectionHeader title={t("admin.systemSettings")} subtitle={t("admin.systemSettingsSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.generalSettings")}</div>
-          <div className="space-y-4">
-            {[
-              { label: t("adminForm.platformName"), key: "platformName" },
-              { label: t("adminForm.maxTeamSize"), key: "maxTeamSize" },
-              { label: t("adminForm.minTeamSize"), key: "minTeamSize" },
-              { label: t("adminForm.submissionGracePeriod"), key: "submissionGracePeriod" },
-              { label: t("adminForm.contactEmail"), key: "contactEmail" },
-            ].map(field => (
-              <div key={field.key}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
-                <input
-                  value={systemSettings[field.key as keyof typeof systemSettings] as string}
-                  onChange={e => setSystemSettings(p => ({ ...p, [field.key]: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            ))}
-          </div>
-        </Card>
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.featureToggles")}</div>
-          <div className="space-y-3">
-            {[
-              { labelKey: "admin.allowLateSubmissions", key: "allowLateSubmissions" },
-              { labelKey: "admin.enablePublicLeaderboard", key: "enablePublicLeaderboard" },
-              { labelKey: "admin.requireEmailVerification", key: "requireEmailVerification" },
-            ].map(toggle => (
-              <div key={toggle.key} className="flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg }}>
-                <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{t(toggle.labelKey)}</span>
-                <div
-                  className="rounded-full flex items-center cursor-pointer transition-all"
-                  style={{ width: 40, height: 22, background: systemSettings[toggle.key as keyof typeof systemSettings] ? COLORS.primary : COLORS.border, padding: "2px" }}
-                  onClick={() => setSystemSettings(p => ({ ...p, [toggle.key]: !p[toggle.key as keyof typeof systemSettings] }))}
-                >
-                  <div className="rounded-full bg-white" style={{ width: 18, height: 18, transform: systemSettings[toggle.key as keyof typeof systemSettings] ? "translateX(18px)" : "translateX(0)", transition: "transform 0.2s" }} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-3 mt-6">
-            <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setSettingsSaved(true); setTimeout(() => setSettingsSaved(false), 2000); }}>
-              {t("common.saveSettings")}
-            </Button>
-            {settingsSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>{t("common.settingsSaved")}</span>}
-          </div>
-        </Card>
-      </div>
-    </>
-  );
-
-  const renderAwards = () => (
-    <>
-      <SectionHeader
-        title="Award Management"
-        action={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<PlusCircle size={14} />}
-            onClick={() => onNavigate("award-patterns")}
-          >
-            Create Award Pattern
-          </Button>
-        }
-        subtitle="Auto-grant awards from category rankings"
-      />
-      <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
-        <Card className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap size={17} style={{ color: COLORS.primary }} />
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Grant for Top Ranking of Category</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
-                Select a category, enter Top N, then grant awards using the backend award patterns.
-              </div>
-            </div>
-          </div>
-
-          {autoGrantError && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-              {autoGrantError}
-            </div>
-          )}
-          {autoGrantMessage && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
-              {autoGrantMessage}
-            </div>
-          )}
-          {eventLoadError && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-              Events could not be loaded from database: {eventLoadError}
-            </div>
-          )}
-          {categoryLoadError && (
-            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-              Categories could not be loaded for this event: {categoryLoadError}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_140px] gap-4">
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-              <select
-                value={selectedEventId ?? ""}
-                onChange={e => setSelectedEventId(e.target.value || null)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {apiEvents.length === 0 && <option value="">No events found</option>}
-                {apiEvents.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-              <select
-                value={awardPatternCategoryId}
-                onChange={e => setAwardPatternCategoryId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="">Select category</option>
-                {apiCategories.length === 0 && selectedEventId && <option value="" disabled>No categories found</option>}
-                {apiCategories.map(category => (
-                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TOP N</label>
-              <input
-                type="number"
-                min={1}
-                max={50}
-                value={autoGrantLimit}
-                onChange={e => setAutoGrantLimit(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 mt-5">
-            <Button
-              variant="primary"
-              size="lg"
-              icon={autoGrantLoading ? <Loader size={15} className="animate-spin" /> : <Trophy size={15} />}
-              onClick={handleAutoGrantAwards}
-              disabled={autoGrantLoading || !awardPatternCategoryId}
-            >
-              {autoGrantLoading ? "Granting..." : "Grant for Top Ranking of Category"}
-            </Button>
-          </div>
-
-          {autoGrantPreview.length > 0 && (
-            <div className="mt-6">
-              <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 10 }}>Top Ranking Used</div>
-              <div className="space-y-2">
-                {autoGrantPreview.map(candidate => (
-                  <div key={candidate.teamId} className="flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center justify-center rounded-lg" style={{ width: 30, height: 30, background: `${COLORS.primary}12`, color: COLORS.primary, fontWeight: 700, fontSize: 12 }}>
-                        #{candidate.rankPosition}
-                      </span>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary }}>{candidate.teamName}</div>
-                        <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{candidate.teamId}</div>
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 12, color: COLORS.textSecondary, fontWeight: 600 }}>{candidate.totalScore.toFixed(1)} pts</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </Card>
-
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Granted Awards</div>
-          {apiAwards.length === 0 && (
-            <div className="p-4 rounded-xl" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
-              No awards have been granted for this event yet.
-            </div>
-          )}
-          {apiAwards.map(award => (
-            <div key={award.id} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
-              <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: `${COLORS.primary}12`, color: COLORS.primary }}>
-                <Award size={18} />
-              </span>
-              <div className="flex-1">
-                <div style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary }}>{award.teamName}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{award.eventName} - {award.categoryName}</div>
-              </div>
-              <div className="text-right">
-                <div style={{ fontSize: 11, color: COLORS.textPrimary, fontWeight: 700 }}>{award.awardTierName}</div>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{award.awardTitle}</div>
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
-    </>
-  );
-  const renderAwardPatterns = () => (
-    <>
-      <SectionHeader
-        title="Create Award Pattern"
-        subtitle="Configure award title, tier, description, and prize by rank for a category"
-        action={
-          <Button variant="outline" size="sm" icon={<Award size={14} />} onClick={() => onNavigate("awards")}>
-            Back to Awards
-          </Button>
-        }
-      />
-
-      <Card className="p-5">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-            <select
-              value={selectedEventId ?? ""}
-              onChange={e => setSelectedEventId(e.target.value || null)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              {apiEvents.map((event: any) => (
-                <option key={event.id} value={event.id}>{event.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-            <select
-              value={awardPatternCategoryId}
-              onChange={e => setAwardPatternCategoryId(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              <option value="">Select category</option>
-              {apiCategories.map(category => (
-                <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {awardPatternError && (
-          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
-            {awardPatternError}
-          </div>
-        )}
-        {awardPatternMessage && (
-          <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
-            {awardPatternMessage}
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {awardPatterns.map((pattern, index) => (
-            <div key={index} className="grid grid-cols-1 xl:grid-cols-[80px_1.2fr_1.4fr_1fr_120px_44px] gap-3 items-end p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANK</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={pattern.rankPosition}
-                  onChange={e => updateAwardPattern(index, "rankPosition", Number(e.target.value))}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TIER</label>
-                <select
-                  value={pattern.awardTierId}
-                  onChange={e => updateAwardPattern(index, "awardTierId", e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  {AWARD_TIER_OPTIONS.map(tier => (
-                    <option key={tier.value} value={tier.value}>{tier.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TITLE</label>
-                <input
-                  value={pattern.awardTitle}
-                  onChange={e => updateAwardPattern(index, "awardTitle", e.target.value)}
-                  placeholder="Champion"
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>PRIZE</label>
-                <input
-                  type="number"
-                  value={pattern.prizeValue}
-                  onChange={e => updateAwardPattern(index, "prizeValue", e.target.value)}
-                  placeholder="10000000"
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CURRENCY</label>
-                <select
-                  value={pattern.prizeCurrency}
-                  onChange={e => updateAwardPattern(index, "prizeCurrency", e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  <option value="VND">VND</option>
-                  <option value="USD">USD</option>
-                </select>
-              </div>
-              <button
-                type="button"
-                onClick={() => removeAwardPattern(index)}
-                className="h-11 rounded-xl flex items-center justify-center"
-                style={{ border: `1px solid ${COLORS.border}`, color: COLORS.error, background: COLORS.bg }}
-                aria-label="Remove award pattern"
-              >
-                <X size={16} />
-              </button>
-              <div className="xl:col-span-6">
-                <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>DESCRIPTION</label>
-                <textarea
-                  value={pattern.description}
-                  onChange={e => updateAwardPattern(index, "description", e.target.value)}
-                  rows={2}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between gap-3 mt-5">
-          <Button variant="outline" size="sm" icon={<PlusCircle size={14} />} onClick={addAwardPattern}>
-            Add Rank
-          </Button>
-          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={handleSaveAwardPatterns} disabled={awardPatternLoading || !awardPatternCategoryId}>
-            {awardPatternLoading ? "Saving..." : "Save Award Pattern"}
-          </Button>
-        </div>
-      </Card>
-    </>
-  );
-
+  const viewContext = {
+    t,
+    onNavigate,
+    events,
+    categories,
+    rounds,
+    criteria,
+    users,
+    rankings,
+    auditLogs,
+    broadcastHistory,
+    roleColors,
+    AWARD_TIER_OPTIONS,
+    apiEvents,
+    setApiEvents,
+    selectedEventId,
+    setSelectedEventId,
+    apiCategories,
+    setApiCategories,
+    apiRounds,
+    setApiRounds,
+    apiTeamEligibility,
+    setApiTeamEligibility,
+    apiRankings,
+    setApiRankings,
+    apiAwards,
+    setApiAwards,
+    apiCriteriaTemplates,
+    setApiCriteriaTemplates,
+    eventLoadError,
+    setEventLoadError,
+    categoryLoadError,
+    setCategoryLoadError,
+    selectedSubmissionCategoryId,
+    setSelectedSubmissionCategoryId,
+    selectedSubmissionRoundId,
+    setSelectedSubmissionRoundId,
+    adminSubmissions,
+    setAdminSubmissions,
+    submissionScope,
+    setSubmissionScope,
+    submissionsLoading,
+    setSubmissionsLoading,
+    submissionsError,
+    setSubmissionsError,
+    submissionReloadKey,
+    setSubmissionReloadKey,
+    submissionActionMessage,
+    setSubmissionActionMessage,
+    submissionDisqualifyTarget,
+    setSubmissionDisqualifyTarget,
+    submissionDisqualifyReason,
+    setSubmissionDisqualifyReason,
+    submissionDisqualifying,
+    setSubmissionDisqualifying,
+    dataExportLoading,
+    setDataExportLoading,
+    dataExportDone,
+    setDataExportDone,
+    dataExportError,
+    setDataExportError,
+    eventModal,
+    setEventModal,
+    categoryModal,
+    setCategoryModal,
+    roundModal,
+    setRoundModal,
+    assignJudgeModal,
+    setAssignJudgeModal,
+    userSearch,
+    setUserSearch,
+    approvedUsers,
+    setApprovedUsers,
+    showGuestJudgeForm,
+    setShowGuestJudgeForm,
+    guestJudgeForm,
+    setGuestJudgeForm,
+    guestJudgeSuccess,
+    setGuestJudgeSuccess,
+    rankingsComputed,
+    setRankingsComputed,
+    rankingsPublished,
+    setRankingsPublished,
+    disqualifiedTeams,
+    setDisqualifiedTeams,
+    disqualifyTarget,
+    setDisqualifyTarget,
+    disqualifyReason,
+    setDisqualifyReason,
+    awardPatternCategoryId,
+    setAwardPatternCategoryId,
+    awardPatterns,
+    setAwardPatterns,
+    awardPatternLoading,
+    setAwardPatternLoading,
+    awardPatternMessage,
+    setAwardPatternMessage,
+    awardPatternError,
+    setAwardPatternError,
+    autoGrantLimit,
+    setAutoGrantLimit,
+    autoGrantLoading,
+    setAutoGrantLoading,
+    autoGrantMessage,
+    setAutoGrantMessage,
+    autoGrantError,
+    setAutoGrantError,
+    autoGrantPreview,
+    setAutoGrantPreview,
+    broadcastTitle,
+    setBroadcastTitle,
+    broadcastMessage,
+    setBroadcastMessage,
+    broadcastAudience,
+    setBroadcastAudience,
+    broadcastSent,
+    setBroadcastSent,
+    notificationTargetMode,
+    setNotificationTargetMode,
+    notificationTeamId,
+    setNotificationTeamId,
+    notificationEmail,
+    setNotificationEmail,
+    notificationTitle,
+    setNotificationTitle,
+    notificationMessage,
+    setNotificationMessage,
+    notificationSending,
+    setNotificationSending,
+    notificationStatus,
+    setNotificationStatus,
+    notificationError,
+    setNotificationError,
+    settingsSaved,
+    setSettingsSaved,
+    systemSettings,
+    setSystemSettings,
+    filteredUsers,
+    updateAwardPattern,
+    addAwardPattern,
+    removeAwardPattern,
+    handleSaveAwardPatterns,
+    handleApproveUser,
+    handleGuestJudgeSubmit,
+    handleDisqualify,
+    handleDisqualifyConfirm,
+    handleSubmissionDisqualifyConfirm,
+    handleComputeRankings,
+    handlePublishRankings,
+    handleAutoGrantAwards,
+    handleBroadcast,
+    handleSendTargetedNotification,
+    handleDataExport,
+    createEmptyAwardPattern
+  };
 
   const renderPage = () => {
     switch (currentPage) {
-      case "dashboard": return renderDashboard();
-      case "events": return renderEvents();
-      case "categories": return renderCategories();
-      case "rounds": return renderRounds();
-      case "criteria": return renderCriteria();
-      case "users": return renderUsers();
-      case "assignments": return renderAssignments();
-      case "submissions": return renderSubmissions();
-      case "rankings": return renderRankings();
-      case "reports": return renderReports();
-      case "data-export": return renderDataExport();
-      case "notifications": return renderNotifications();
-      case "direct-notification": return renderDirectNotification();
-      case "audit": return renderAudit();
-      case "awards": return renderAwards();
-      case "award-patterns": return renderAwardPatterns();
-      case "settings": return renderSettings();
-      case "profile": return renderProfile();
-      default: return renderDashboard();
+      case "dashboard": return <AdminDashboardView context={viewContext} />;
+      case "events": return <AdminEventsView context={viewContext} />;
+      case "categories": return <AdminCategoriesView context={viewContext} />;
+      case "rounds": return <AdminRoundsView context={viewContext} />;
+      case "criteria": return <AdminCriteriaView context={viewContext} />;
+      case "users": return <AdminUsersView context={viewContext} />;
+      case "assignments": return <AdminAssignmentsView context={viewContext} />;
+      case "submissions": return <AdminSubmissionsView context={viewContext} />;
+      case "rankings": return <AdminRankingsView context={viewContext} />;
+      case "reports": return <AdminReportsView context={viewContext} />;
+      case "data-export": return <AdminDataExportView context={viewContext} />;
+      case "notifications": return <AdminNotificationsView context={viewContext} />;
+      case "direct-notification": return <AdminDirectNotificationView context={viewContext} />;
+      case "audit": return <AdminAuditView context={viewContext} />;
+      case "awards": return <AdminAwardsView context={viewContext} />;
+      case "award-patterns": return <AdminAwardPatternsView context={viewContext} />;
+      case "settings": return <AdminSettingsView context={viewContext} />;
+      case "profile": return <AdminProfileView context={viewContext} />;
+      default: return <AdminDashboardView context={viewContext} />;
+
     }
   };
 

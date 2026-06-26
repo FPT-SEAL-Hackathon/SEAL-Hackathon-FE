@@ -14,10 +14,11 @@ interface Props {
 // Event status IDs — these need to match your backend seed data UUIDs
 // Using placeholder values; replace with real UUIDs from your DB
 const STATUS_OPTIONS = [
-  { label: "Draft / Upcoming", value: "00000000-0000-0000-0000-000000000001" },
-  { label: "Open (Registration)", value: "00000000-0000-0000-0000-000000000002" },
-  { label: "Active / In Progress", value: "00000000-0000-0000-0000-000000000003" },
-  { label: "Completed", value: "00000000-0000-0000-0000-000000000004" },
+  { label: "Draft", value: "30000000-0000-0000-0000-000000000001" },
+  { label: "Registration Open", value: "30000000-0000-0000-0000-000000000002" },
+  { label: "Ongoing", value: "30000000-0000-0000-0000-000000000003" },
+  { label: "Completed", value: "30000000-0000-0000-0000-000000000004" },
+  { label: "Cancelled", value: "30000000-0000-0000-0000-000000000005" },
 ];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
