@@ -24,7 +24,14 @@ function RequireAuth() {
 function HomeRoute() {
   const { isAuthenticated, role } = useAuth();
   const navigate = useNavigate();
-  if (!isAuthenticated || !role) return <LandingPage onGoToAuth={() => navigate("/login")} />;
+  if (!isAuthenticated || !role) {
+    return (
+      <LandingPage
+        onGoToLogin={() => navigate("/login")}
+        onGoToRegister={() => navigate("/register")}
+      />
+    );
+  }
   return <Navigate to={getDefaultPath(role)} replace />;
 }
 
@@ -34,7 +41,7 @@ function RoleRedirect() {
   return <Navigate to={getDefaultPath(role)} replace />;
 }
 
-function AuthRoute() {
+function AuthRoute({ mode }: { mode: "login" | "register" }) {
   const { isAuthenticated, role, setAuth } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,14 +51,21 @@ function AuthRoute() {
     return <Navigate to={from || getDefaultPath(role)} replace />;
   }
 
-  return <AuthPages onLogin={() => {
-    const raw = localStorage.getItem("seal_user");
-    if (!raw) return;
-    const user = JSON.parse(raw);
-    setAuth(user);
-    const nextRole = roleFromUserType(user.userType);
-    navigate(from || getDefaultPath(nextRole), { replace: true });
-  }} />;
+  return (
+    <AuthPages
+      mode={mode}
+      onLogin={() => {
+        const raw = localStorage.getItem("seal_user");
+        if (!raw) return;
+        const user = JSON.parse(raw);
+        setAuth(user);
+        const nextRole = roleFromUserType(user.userType);
+        navigate(from || getDefaultPath(nextRole), { replace: true });
+      }}
+      onSwitchToLogin={() => navigate("/login", { state: location.state })}
+      onSwitchToRegister={() => navigate("/register", { state: location.state })}
+    />
+  );
 }
 
 function MainLayout() {
@@ -123,7 +137,8 @@ function roleFromUserType(userType: string): Role {
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomeRoute /> },
-  { path: "/login", element: <AuthRoute /> },
+  { path: "/login", element: <AuthRoute mode="login" /> },
+  { path: "/register", element: <AuthRoute mode="register" /> },
   { path: "/403", element: <ForbiddenPage /> },
   {
     path: "/",

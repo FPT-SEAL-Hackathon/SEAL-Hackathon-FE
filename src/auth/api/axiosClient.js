@@ -1,4 +1,5 @@
 import axios from "axios";
+import { REFRESH_KEY, TOKEN_KEY } from "@/lib/api/apiClient";
 
 const axiosClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080/api",
@@ -9,7 +10,7 @@ const axiosClient = axios.create({
 
 axiosClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem(TOKEN_KEY);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -25,7 +26,7 @@ axiosClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       try {
-        const refreshToken = localStorage.getItem("refreshToken");
+        const refreshToken = localStorage.getItem(REFRESH_KEY);
         if (!refreshToken) {
           throw new Error("No refresh token available");
         }
@@ -35,17 +36,18 @@ axiosClient.interceptors.response.use(
           refreshToken,
         });
 
-        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem(TOKEN_KEY, data.accessToken);
         
         if (data.refreshToken) {
-          localStorage.setItem("refreshToken", data.refreshToken);
+          localStorage.setItem(REFRESH_KEY, data.refreshToken);
         }
 
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         return axiosClient(originalRequest);
       } catch (err) {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(REFRESH_KEY);
+        localStorage.removeItem("seal_user");
         window.location.href = "/login";
         return Promise.reject(err);
       }
