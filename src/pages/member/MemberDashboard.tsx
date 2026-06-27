@@ -314,7 +314,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const renderTeam = () => (
     <>
-      <SectionHeader title="My Team" subtitle="Team membership and join requests from backend data" />
+      <SectionHeader title="My Team" />
       <TeamApiPanel />
     </>
   );

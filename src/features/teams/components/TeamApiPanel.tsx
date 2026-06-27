@@ -190,6 +190,8 @@ export function TeamApiPanel({
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [leaderActionPanel, setLeaderActionPanel] = useState<LeaderActionPanel>(null);
   const [removeMemberName, setRemoveMemberName] = useState("");
+  const [joinTeamName, setJoinTeamName] = useState("");
+  const [joinCategoryId, setJoinCategoryId] = useState("");
   const [joinRequestsLoaded, setJoinRequestsLoaded] = useState(false);
 
   const setField = (key: keyof typeof form, value: string) => {
@@ -205,6 +207,10 @@ export function TeamApiPanel({
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
   const canCreate = canUseEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
+  const joinTeams = useMemo(
+    () => joinCategoryId ? teams.filter(team => team.categoryId === joinCategoryId) : teams,
+    [joinCategoryId, teams],
+  );
 
   useEffect(() => {
     run(
@@ -407,6 +413,18 @@ export function TeamApiPanel({
     run("join", () => teamService.requestJoin(teamId), undefined, "Join request sent.");
   };
 
+  const requestJoinByName = () => {
+    const normalizedName = joinTeamName.trim().toLowerCase();
+    const team = joinTeams.find(item => item.teamName.trim().toLowerCase() === normalizedName);
+
+    if (!team) {
+      setMessage({ tone: "error", text: "No team with that name was found in the selected event." });
+      return;
+    }
+
+    requestJoin(team.teamId);
+  };
+
   const decideRequest = (requestId: string, action: "APPROVED" | "REJECTED") => {
     run(
       action === "APPROVED" ? "approve" : "reject",
@@ -557,10 +575,7 @@ export function TeamApiPanel({
 
         {teamFlow === "create" && (
           <Card className="p-5">
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 4 }}>Create Team</div>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
-              Required by backend: Event ID, Category ID, and Team Name.
-            </div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 16 }}>Create Team</div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
@@ -608,22 +623,41 @@ export function TeamApiPanel({
 
         {teamFlow === "join" && (
           <Card className="p-5">
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 4 }}>Join Team</div>
-            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
-              Required by backend: Team ID. You can load teams from an event, then request to join one.
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 16 }}>Join Team</div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-4 items-end">
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
                 <select
                   value={form.eventId}
-                  onChange={event => setField("eventId", event.target.value)}
+                  onChange={event => {
+                    setField("eventId", event.target.value);
+                    setJoinCategoryId("");
+                    setJoinTeamName("");
+                    setTeams([]);
+                  }}
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
                   {events.length === 0 && <option value="">No events found</option>}
                   {events.map(event => (
                     <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</span>
+                <select
+                  value={joinCategoryId}
+                  onChange={event => {
+                    setJoinCategoryId(event.target.value);
+                    setJoinTeamName("");
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <option value="">All categories</option>
+                  {categories.map(category => (
+                    <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
                   ))}
                 </select>
               </label>
@@ -638,13 +672,13 @@ export function TeamApiPanel({
               </Button>
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end mt-4">
-              <Field label="TEAM ID" value={form.teamId} onChange={value => setField("teamId", value)} placeholder="Team UUID" />
+              <Field label="TEAM NAME" value={joinTeamName} onChange={setJoinTeamName} placeholder="Enter team name" />
               <Button
                 variant="primary"
                 size="md"
                 icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={!canUseTeam || loading.join}
-                onClick={() => requestJoin()}
+                disabled={!joinTeamName.trim() || joinTeams.length === 0 || loading.join}
+                onClick={requestJoinByName}
               >
                 {loading.join ? "Sending..." : "Request Join"}
               </Button>
@@ -658,7 +692,7 @@ export function TeamApiPanel({
             <DataTable
               columns={[
                 { key: "teamName", label: "Team" },
-                { key: "teamId", label: "Team ID" },
+                { key: "categoryName", label: "Category" },
                 { key: "memberCount", label: "Members" },
                 {
                   key: "action",
@@ -676,10 +710,11 @@ export function TeamApiPanel({
                   ),
                 },
               ]}
-              data={teams.map(team => ({
+              data={joinTeams.map(team => ({
                 teamName: team.teamName,
-                teamId: team.teamId,
+                categoryName: categories.find(category => category.categoryId === team.categoryId)?.categoryName || "-",
                 memberCount: team.members.length,
+                teamId: team.teamId,
                 action: team.teamId,
               }))}
             />
