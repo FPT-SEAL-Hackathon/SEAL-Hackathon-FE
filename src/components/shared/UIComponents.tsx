@@ -32,6 +32,10 @@ const glassSurface: React.CSSProperties = {
 export function StatusBadge({ status }: { status: string }) {
   const configs: Record<string, { bg: string; color: string; label: string; border: string }> = {
     active:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Active",       border: "rgba(0,148,68,0.22)" },
+    pending_approval: { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Pending Approval", border: "rgba(245,158,11,0.22)" },
+    temporary:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Temporary", border: "rgba(244,121,32,0.22)" },
+    unverified:    { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Unverified", border: "rgba(100,70,30,0.14)" },
+    suspended:     { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Suspended", border: "rgba(229,62,46,0.2)" },
     pending:       { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Pending",      border: "rgba(245,158,11,0.22)" },
     submitted:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Submitted",    border: "rgba(244,121,32,0.22)" },
     approved:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Approved",     border: "rgba(0,148,68,0.22)" },
