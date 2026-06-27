@@ -327,11 +327,12 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
   const [oauthProvider, setOauthProvider] = useState<OAuthProvider | null>(null);
 
   const handleLogin = async () => {
-    if (!email || !password) { setApiError("Please enter your email and password."); return; }
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) { setApiError("Please enter your email and password."); return; }
     setLoading(true);
     setApiError("");
     try {
-      const res = await login({ email, password });
+      const res = await login({ email: normalizedEmail, password });
       onLogin(userTypeToRole(res.user.userType));
     } catch (err) {
       setApiError(err instanceof ApiError ? err.message : "Login failed. Please check your credentials.");
@@ -490,18 +491,28 @@ function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: 
 }
 
 // ─── AuthPages (entry point) ─────────────────────────────────────────────────
-export function AuthPages({ onLogin, onBackToLanding }: { onLogin: (role: string) => void; onBackToLanding: () => void }) {
-  const [page, setPage] = useState<"login" | "register">("login");
-
-  if (page === "register") {
+export function AuthPages({
+  mode,
+  onLogin,
+  onBackToLanding,
+  onSwitchToLogin,
+  onSwitchToRegister,
+}: {
+  mode: "login" | "register";
+  onLogin: (role: string) => void;
+  onBackToLanding: () => void;
+  onSwitchToLogin: () => void;
+  onSwitchToRegister: () => void;
+}) {
+  if (mode === "register") {
     return (
       <div className="min-h-screen flex items-center justify-center p-8" style={{ background: "var(--gradient-bg)", backgroundAttachment: "fixed" }}>
         <div className="w-full" style={{ maxWidth: 480 }}>
-          <RegisterCard onSwitchToLogin={() => setPage("login")} />
+          <RegisterCard onSwitchToLogin={onSwitchToLogin} />
         </div>
       </div>
     );
   }
 
-  return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} onBackToLanding={onBackToLanding} />;
+  return <LoginPage onLogin={onLogin} onSwitchToRegister={onSwitchToRegister} onBackToLanding={onBackToLanding} />;
 }

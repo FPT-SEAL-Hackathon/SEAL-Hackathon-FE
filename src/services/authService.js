@@ -1,4 +1,5 @@
 import axiosClient from "../auth/api/axiosClient";
+import { REFRESH_KEY, TOKEN_KEY } from "@/lib/api/apiClient";
 
 const authService = {
   login: async (credentials) => {
@@ -12,15 +13,18 @@ const authService = {
   },
   
   logout: async () => {
-    // If backend requires a logout request:
-    // await axiosClient.post("/auth/logout");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
+    const refreshToken = localStorage.getItem(REFRESH_KEY);
+    if (refreshToken) {
+      await axiosClient.post("/auth/logout", { refreshToken });
+    }
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem("seal_user");
   },
 
   getCurrentUser: async () => {
-    const response = await axiosClient.get("/auth/me");
-    return response.data;
+    const rawUser = localStorage.getItem("seal_user");
+    return rawUser ? JSON.parse(rawUser) : null;
   }
 };
 

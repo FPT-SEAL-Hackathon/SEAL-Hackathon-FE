@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, useContext } from "react";
 import authService from "../services/authService";
+import { REFRESH_KEY, TOKEN_KEY } from "@/lib/api/apiClient";
 
 const AuthContext = createContext(null);
 
@@ -9,7 +10,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initAuth = async () => {
-      const token = localStorage.getItem("accessToken");
+      const token = localStorage.getItem(TOKEN_KEY);
       if (token) {
         try {
           const userData = await authService.getCurrentUser();
@@ -26,9 +27,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const data = await authService.login(credentials);
-    localStorage.setItem("accessToken", data.accessToken);
+    localStorage.setItem(TOKEN_KEY, data.accessToken);
     if (data.refreshToken) {
-      localStorage.setItem("refreshToken", data.refreshToken);
+      localStorage.setItem(REFRESH_KEY, data.refreshToken);
     }
     setUser(data.user);
     return data;
