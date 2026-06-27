@@ -3,6 +3,7 @@ import { DEFAULT_PAGE_BY_ROLE, canAccessPage } from "@/auth/permissions/permissi
 import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, type Role } from "@/auth/rbac/roles";
 import { useAuth } from "@/features/auth/store/authStore";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
+import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { LandingPage } from "@/pages/landing/LandingPage";
 import { Layout } from "@/components/layouts/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
@@ -24,7 +25,14 @@ function RequireAuth() {
 function HomeRoute() {
   const { isAuthenticated, role } = useAuth();
   const navigate = useNavigate();
-  if (!isAuthenticated || !role) return <LandingPage onGoToAuth={() => navigate("/login")} />;
+  if (!isAuthenticated || !role) {
+    return (
+      <LandingPage
+        onGoToLogin={() => navigate("/login")}
+        onGoToRegister={() => navigate("/register")}
+      />
+    );
+  }
   return <Navigate to={getDefaultPath(role)} replace />;
 }
 
@@ -34,7 +42,7 @@ function RoleRedirect() {
   return <Navigate to={getDefaultPath(role)} replace />;
 }
 
-function AuthRoute() {
+function AuthRoute({ mode }: { mode: "login" | "register" }) {
   const { isAuthenticated, role, setAuth } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,6 +54,7 @@ function AuthRoute() {
 
   return (
     <AuthPages
+      mode={mode}
       onBackToLanding={() => navigate("/", { replace: true })}
       onLogin={() => {
         const raw = localStorage.getItem("seal_user");
@@ -55,6 +64,8 @@ function AuthRoute() {
         const nextRole = roleFromUserType(user.userType);
         navigate(from || getDefaultPath(nextRole), { replace: true });
       }}
+      onSwitchToLogin={() => navigate("/login", { state: location.state })}
+      onSwitchToRegister={() => navigate("/register", { state: location.state })}
     />
   );
 }
@@ -128,7 +139,9 @@ function roleFromUserType(userType: string): Role {
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomeRoute /> },
-  { path: "/login", element: <AuthRoute /> },
+  { path: "/login", element: <AuthRoute mode="login" /> },
+  { path: "/register", element: <AuthRoute mode="register" /> },
+  { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "/403", element: <ForbiddenPage /> },
   {
     path: "/",

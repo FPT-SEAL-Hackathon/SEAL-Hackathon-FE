@@ -1,12 +1,17 @@
 import { api } from "@/lib/api/apiClient";
 
+export interface EventStatus {
+  eventStatusId: string;
+  eventStatusName: string;
+}
+
 export interface EventResponse {
   eventId: string;
   eventName: string;
   description: string;
   location: string;
   bannerImageUrl: string;
-  eventStatusId: string;
+  eventStatus?: EventStatus;
   registrationStart: string;
   registrationEnd: string;
   eventStartDate: string;
