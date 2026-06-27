@@ -1,10 +1,13 @@
 function normalizeApiBaseUrl(value?: string): string {
-  const raw = (value || "http://localhost:8080").trim().replace(/\/+$/, "");
+  const raw = (value ?? "").trim().replace(/\/+$/, "");
+  if (!raw) {
+    throw new Error("Missing VITE_API_URL environment variable.");
+  }
   return raw.replace(/\/api\/v1$/i, "").replace(/\/api$/i, "");
 }
 
 export const API_BASE_URL = normalizeApiBaseUrl(
-  import.meta.env.VITE_API_URL ?? import.meta.env.VITE_API_BASE_URL,
+  import.meta.env.VITE_API_URL,
 );
 
 // ─── Token helpers ──────────────────────────────────────────────────────────

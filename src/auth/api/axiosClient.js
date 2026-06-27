@@ -1,14 +1,5 @@
 import axios from "axios";
-import { REFRESH_KEY, TOKEN_KEY } from "@/lib/api/apiClient";
-
-function normalizeApiBaseUrl(value) {
-  const raw = (value || "http://localhost:8080").trim().replace(/\/+$/, "");
-  return raw.replace(/\/api\/v1$/i, "").replace(/\/api$/i, "");
-}
-
-const API_BASE_URL = normalizeApiBaseUrl(
-  import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL
-);
+import { API_BASE_URL, REFRESH_KEY, TOKEN_KEY } from "@/lib/api/apiClient";
 
 const PUBLIC_OR_AUTH_PATHS = [
   "/auth/login",
@@ -59,7 +50,7 @@ axiosClient.interceptors.response.use(
           throw new Error("No refresh token available");
         }
         
-        const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+        const { data } = await axiosClient.post("/auth/refresh", {
           refreshToken,
         });
 

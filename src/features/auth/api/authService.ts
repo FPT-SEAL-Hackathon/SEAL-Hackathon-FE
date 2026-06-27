@@ -95,5 +95,5 @@ export async function refreshAccessToken(): Promise<TokenResponse> {
 }
 
 export async function verifyEmail(token: string): Promise<string> {
-  return api.get<string>(`/auth/verify-email?token=${token}`, false);
+  return api.get<string>(`/auth/verify-email?token=${encodeURIComponent(token)}`, false);
 }

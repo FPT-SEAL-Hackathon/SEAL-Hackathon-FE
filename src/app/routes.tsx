@@ -3,6 +3,7 @@ import { DEFAULT_PAGE_BY_ROLE, canAccessPage } from "@/auth/permissions/permissi
 import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, type Role } from "@/auth/rbac/roles";
 import { useAuth } from "@/features/auth/store/authStore";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
+import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { LandingPage } from "@/pages/landing/LandingPage";
 import { Layout } from "@/components/layouts/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
@@ -140,6 +141,7 @@ export const router = createBrowserRouter([
   { path: "/", element: <HomeRoute /> },
   { path: "/login", element: <AuthRoute mode="login" /> },
   { path: "/register", element: <AuthRoute mode="register" /> },
+  { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "/403", element: <ForbiddenPage /> },
   {
     path: "/",
