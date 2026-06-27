@@ -50,7 +50,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     description: event?.description ?? "",
     location: event?.location ?? "",
     bannerImageUrl: event?.bannerImageUrl ?? "",
-    eventStatusId: event?.eventStatusId ?? STATUS_OPTIONS[0].value,
+    eventStatusId: event?.eventStatus?.eventStatusId ?? STATUS_OPTIONS[0].value,
     registrationStart: event?.registrationStart?.slice(0, 16) ?? "",
     registrationEnd: event?.registrationEnd?.slice(0, 16) ?? "",
     eventStartDate: event?.eventStartDate ?? "",
@@ -58,6 +58,41 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     maxTeamSize: String(event?.maxTeamSize ?? 5),
     minTeamSize: String(event?.minTeamSize ?? 2),
   });
+
+  useEffect(() => {
+    if (!event) return;
+
+    setForm({
+      eventName: event.eventName ?? "",
+      description: event.description ?? "",
+      location: event.location ?? "",
+      bannerImageUrl: event.bannerImageUrl ?? "",
+
+      eventStatusId:
+        event.eventStatus?.eventStatusId ??
+        STATUS_OPTIONS[0].value,
+
+      registrationStart:
+        event.registrationStart?.slice(0,16) ?? "",
+
+      registrationEnd:
+        event.registrationEnd?.slice(0,16) ?? "",
+
+      eventStartDate:
+        event.eventStartDate ?? "",
+
+      eventEndDate:
+        event.eventEndDate ?? "",
+
+      maxTeamSize:
+        String(event.maxTeamSize ?? 5),
+
+      minTeamSize:
+        String(event.minTeamSize ?? 2),
+    });
+
+  }, [event]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
