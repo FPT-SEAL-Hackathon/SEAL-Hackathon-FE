@@ -1,6 +1,14 @@
-export const API_BASE_URL = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL 
-  : (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080");
+function normalizeApiBaseUrl(value?: string): string {
+  const raw = (value ?? "").trim().replace(/\/+$/, "");
+  if (!raw) {
+    throw new Error("Missing VITE_API_URL environment variable.");
+  }
+  return raw.replace(/\/api\/v1$/i, "").replace(/\/api$/i, "");
+}
+
+export const API_BASE_URL = normalizeApiBaseUrl(
+  import.meta.env.VITE_API_URL,
+);
 
 // ─── Token helpers ──────────────────────────────────────────────────────────
 export const TOKEN_KEY = "seal_access_token";
@@ -53,8 +61,8 @@ async function attemptRefresh(): Promise<string | null> {
     if (!res.ok) { clearTokens(); return null; }
     const data = await res.json();
     const newAccess: string = data.accessToken;
-    const stored = getRefreshToken()!;
-    setTokens(newAccess, stored);
+    const nextRefresh: string = data.refreshToken ?? getRefreshToken()!;
+    setTokens(newAccess, nextRefresh);
     return newAccess;
   } catch {
     clearTokens();
@@ -68,6 +76,7 @@ export async function request<T>(
   options: RequestInit = {},
   authenticated = true,
 ): Promise<T> {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -79,7 +88,7 @@ export async function request<T>(
   }
 
   const doFetch = (token?: string) =>
-    fetch(`${API_BASE_URL}${path}`, {
+    fetch(`${API_BASE_URL}${normalizedPath}`, {
       ...options,
       headers: token ? { ...headers, Authorization: `Bearer ${token}` } : headers,
     });

@@ -16,6 +16,11 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
+import {
+  eventParticipantService,
+  type EventParticipantResponse,
+  type EventParticipantStatus,
+} from "@/features/eventParticipants/api/eventParticipantService";
 
 
 
@@ -62,6 +67,15 @@ type MemberEvent = {
   prizePool: string;
 };
 
+const participantStatusLabels: Record<EventParticipantStatus, string> = {
+  PENDING_APPROVAL: "Pending Approval",
+  ACTIVE: "Approved",
+  REJECTED: "Rejected",
+  SUSPENDED: "Suspended",
+  TEMPORARY: "Temporary",
+  UNVERIFIED: "Unverified",
+};
+
 type MemberNotification = {
   id: string;
   title: string;
@@ -97,6 +111,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   // ── Events ──────────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<MemberEvent[]>([]);
+  const [participations, setParticipations] = useState<Record<string, EventParticipantResponse>>({});
+  const [eventActionLoading, setEventActionLoading] = useState<Record<string, boolean>>({});
+  const [eventActionMessage, setEventActionMessage] = useState<Record<string, string>>({});
+  const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [teamMembers] = useState<MemberTeamMember[]>([]);
   // Load leaderboard when on that page — needs eventId + categoryId from user's team
@@ -124,6 +142,32 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       }))))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (apiEvents.length === 0) return;
+    let cancelled = false;
+    eventParticipantService.getMyParticipations()
+      .then(data => {
+        if (cancelled) return;
+        const byEvent = Object.fromEntries(data.map(item => [item.eventId, item]));
+        setParticipations(byEvent);
+      })
+      .catch(() => {
+        Promise.all(apiEvents.map(event =>
+          eventParticipantService.getMyParticipation(event.id).then(item => [event.id, item] as const).catch(() => null)
+        )).then(results => {
+          if (cancelled) return;
+          const byEvent: Record<string, EventParticipantResponse> = {};
+          results.forEach(result => {
+            if (result) byEvent[result[0]] = result[1];
+          });
+          setParticipations(byEvent);
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiEvents]);
 
   // ── Notifications ────────────────────────────────────────────────────────────
   const [notifs, setNotifs] = useState<MemberNotification[]>([]);
@@ -254,6 +298,30 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
   };
 
+  const handleRegisterEvent = async (eventId: string) => {
+    setEventActionLoading(prev => ({ ...prev, [eventId]: true }));
+    setEventActionMessage(prev => ({ ...prev, [eventId]: "" }));
+    try {
+      const participation = await eventParticipantService.register(eventId);
+      setParticipations(prev => ({ ...prev, [eventId]: participation }));
+      setEventActionMessage(prev => ({ ...prev, [eventId]: "Registration submitted for organizer approval." }));
+    } catch (error) {
+      if (eventParticipantService.isDuplicateRegistrationError(error)) {
+        try {
+          const participation = await eventParticipantService.getMyParticipation(eventId);
+          setParticipations(prev => ({ ...prev, [eventId]: participation }));
+          setEventActionMessage(prev => ({ ...prev, [eventId]: `Already registered: ${participantStatusLabels[participation.status] ?? participation.status}.` }));
+        } catch (lookupError) {
+          setEventActionMessage(prev => ({ ...prev, [eventId]: lookupError instanceof Error ? lookupError.message : "Already registered, but status could not be loaded." }));
+        }
+      } else {
+        setEventActionMessage(prev => ({ ...prev, [eventId]: error instanceof Error ? error.message : "Registration failed." }));
+      }
+    } finally {
+      setEventActionLoading(prev => ({ ...prev, [eventId]: false }));
+    }
+  };
+
   const renderDashboard = () => (
     <>
       <SectionHeader
@@ -328,43 +396,76 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         </Card>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {apiEvents.map(ev => (
-          <Card key={ev.id} className="p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{ev.name}</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{ev.category}</div>
-              </div>
-              <StatusBadge status={ev.status} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {[
-                { label: "Deadline", value: ev.deadline, icon: <Calendar size={13} /> },
-                { label: "Teams", value: ev.participants, icon: <Users size={13} /> },
-                { label: "Tracks", value: ev.tracks, icon: <Target size={13} /> },
-                { label: "Prize Pool", value: ev.prizePool, icon: <Award size={13} /> },
-              ].map(info => (
-                <div key={info.label} className="flex items-center gap-2">
-                  <span style={{ color: COLORS.textSecondary }}>{info.icon}</span>
-                  <div>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{info.label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{info.value}</div>
-                  </div>
+        {apiEvents.map(ev => {
+          const participation = participations[ev.id];
+          const isRegistered = !!participation;
+          const participantStatus = participation?.status;
+          const statusLabel = participantStatus ? participantStatusLabels[participantStatus] : "Register for Event";
+          const isSelected = selectedEventDetailId === ev.id;
+          return (
+            <Card key={ev.id} className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{ev.name}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{ev.category}</div>
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              {ev.registered === true ? (
-                <Button variant="outline" size="sm" icon={<CheckCircle size={13} />}>Registered</Button>
-              ) : ev.registered === false && ev.status !== "completed" ? (
-                <Button variant="primary" size="sm" icon={<PlusCircle size={13} />}>Register</Button>
-              ) : (
-                <Button variant="ghost" size="sm">View Event</Button>
+                <StatusBadge status={participantStatus ? participantStatus.toLowerCase() : ev.status} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {[
+                  { label: "Deadline", value: ev.deadline, icon: <Calendar size={13} /> },
+                  { label: "Teams", value: ev.participants, icon: <Users size={13} /> },
+                  { label: "Tracks", value: ev.tracks, icon: <Target size={13} /> },
+                  { label: "Participation", value: statusLabel, icon: <Award size={13} /> },
+                ].map(info => (
+                  <div key={info.label} className="flex items-center gap-2">
+                    <span style={{ color: COLORS.textSecondary }}>{info.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{info.label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{info.value}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {isSelected && (
+                <div className="rounded-xl p-3 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Participation Status</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
+                    {isRegistered ? statusLabel : "You have not registered for this event yet."}
+                  </div>
+                  {participation?.status === "REJECTED" && participation.rejectedReason && (
+                    <div style={{ fontSize: 13, color: COLORS.error, marginTop: 6 }}>
+                      Reason: {participation.rejectedReason}
+                    </div>
+                  )}
+                </div>
               )}
-              <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />}>Details</Button>
-            </div>
-          </Card>
-        ))}
+              {eventActionMessage[ev.id] && (
+                <div className="rounded-xl px-3 py-2 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
+                  {eventActionMessage[ev.id]}
+                </div>
+              )}
+              <div className="flex gap-2">
+                {isRegistered ? (
+                  <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>{statusLabel}</Button>
+                ) : ev.status !== "completed" ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={eventActionLoading[ev.id] ? <Clock size={13} /> : <PlusCircle size={13} />}
+                    disabled={eventActionLoading[ev.id]}
+                    onClick={() => handleRegisterEvent(ev.id)}
+                  >
+                    {eventActionLoading[ev.id] ? "Registering..." : "Register for Event"}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm">View Event</Button>
+                )}
+                <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(isSelected ? null : ev.id)}>Details</Button>
+              </div>
+            </Card>
+          );
+        })}
       </div>
     </>
   );

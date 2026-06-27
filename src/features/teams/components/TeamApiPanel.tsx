@@ -21,6 +21,10 @@ import {
   type TeamMemberResponse,
   type TeamResponse,
 } from "@/features/teams/api/teamService";
+import {
+  eventParticipantService,
+  type EventParticipantResponse,
+} from "@/features/eventParticipants/api/eventParticipantService";
 
 type ActionKey =
   | "create"
@@ -121,6 +125,12 @@ function displayValue(value?: string | null) {
   return value && value.trim() ? value : "-";
 }
 
+function participationLabel(participation?: EventParticipantResponse | null) {
+  if (!participation) return "You must register and be approved by the organizer before participating.";
+  if (participation.status === "ACTIVE") return "";
+  return "You must be approved by the organizer before participating.";
+}
+
 function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
   return [
     { label: "Full Name", value: displayValue(detail.fullName) },
@@ -183,6 +193,8 @@ export function TeamApiPanel({
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [requests, setRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>({});
+  const [eventParticipation, setEventParticipation] = useState<EventParticipantResponse | null>(null);
+  const [participationLoading, setParticipationLoading] = useState(false);
   const [loading, setLoading] = useState<Partial<Record<ActionKey, boolean>>>({});
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [leaderActionPanel, setLeaderActionPanel] = useState<LeaderActionPanel>(null);
@@ -201,7 +213,9 @@ export function TeamApiPanel({
 
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
-  const canCreate = canUseEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
+  const canParticipateInEvent = eventParticipation?.status === "ACTIVE";
+  const participantGateMessage = participationLabel(eventParticipation);
+  const canCreate = canUseEvent && canParticipateInEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
 
   useEffect(() => {
     run(
@@ -281,8 +295,21 @@ export function TeamApiPanel({
   useEffect(() => {
     if (!form.eventId) {
       setCategories([]);
+      setEventParticipation(null);
       return;
     }
+    let cancelled = false;
+    setParticipationLoading(true);
+    eventParticipantService.getMyParticipation(form.eventId)
+      .then(participation => {
+        if (!cancelled) setEventParticipation(participation);
+      })
+      .catch(() => {
+        if (!cancelled) setEventParticipation(null);
+      })
+      .finally(() => {
+        if (!cancelled) setParticipationLoading(false);
+      });
     run(
       "categories",
       () => categoryService.getByEvent(form.eventId),
@@ -294,6 +321,9 @@ export function TeamApiPanel({
       },
       "Categories loaded.",
     );
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.eventId]);
 
@@ -381,6 +411,10 @@ export function TeamApiPanel({
   };
 
   const createTeam = () => {
+    if (!canParticipateInEvent) {
+      setMessage({ tone: "error", text: "You must be approved by the organizer before participating." });
+      return;
+    }
     run(
       "create",
       () => teamService.create({
@@ -400,6 +434,10 @@ export function TeamApiPanel({
 
   const requestJoin = (teamId = form.teamId.trim()) => {
     if (!teamId) return;
+    if (!canParticipateInEvent) {
+      setMessage({ tone: "error", text: "You must be approved by the organizer before participating." });
+      return;
+    }
     setField("teamId", teamId);
     run("join", () => teamService.requestJoin(teamId), undefined, "Join request sent.");
   };
@@ -558,6 +596,9 @@ export function TeamApiPanel({
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
               Required by backend: Event ID, Category ID, and Team Name.
             </div>
+            {!canParticipateInEvent && !participationLoading && (
+              <InlineMessage tone="info" message={participantGateMessage} />
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
@@ -609,6 +650,9 @@ export function TeamApiPanel({
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 16 }}>
               Required by backend: Team ID. You can load teams from an event, then request to join one.
             </div>
+            {!canParticipateInEvent && !participationLoading && (
+              <InlineMessage tone="info" message={participantGateMessage} />
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
@@ -640,7 +684,7 @@ export function TeamApiPanel({
                 variant="primary"
                 size="md"
                 icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={!canUseTeam || loading.join}
+                disabled={!canUseTeam || !canParticipateInEvent || loading.join}
                 onClick={() => requestJoin()}
               >
                 {loading.join ? "Sending..." : "Request Join"}
@@ -665,7 +709,7 @@ export function TeamApiPanel({
                       variant="primary"
                       size="sm"
                       icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                      disabled={loading.join}
+                      disabled={!canParticipateInEvent || loading.join}
                       onClick={() => requestJoin(row.teamId)}
                     >
                       Request Join
@@ -959,7 +1003,7 @@ export function TeamApiPanel({
                 variant="primary"
                 size="sm"
                 icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={!canUseTeam || loading.join}
+                disabled={!canUseTeam || !canParticipateInEvent || loading.join}
                 onClick={requestJoin}
               >
                 Request Join
@@ -986,6 +1030,9 @@ export function TeamApiPanel({
           <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
             Create a new team for the selected event and category.
           </div>
+          {!canParticipateInEvent && !participationLoading && (
+            <div className="mb-4"><InlineMessage tone="info" message={participantGateMessage} /></div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px] gap-4">
             <Field label="TEAM NAME" value={form.teamName} onChange={value => setField("teamName", value)} placeholder="Team name" />
             <div className="flex items-end">
@@ -1053,13 +1100,16 @@ export function TeamApiPanel({
           <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
             Load teams by Event ID, then send a join request to the team you want.
           </div>
+          {!canParticipateInEvent && !participationLoading && (
+            <div className="mb-4"><InlineMessage tone="info" message={participantGateMessage} /></div>
+          )}
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
             <Field label="TEAM ID TO JOIN" value={form.teamId} onChange={value => setField("teamId", value)} placeholder="Team UUID" />
             <Button
               variant="primary"
               size="md"
               icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-              disabled={!canUseTeam || loading.join}
+              disabled={!canUseTeam || !canParticipateInEvent || loading.join}
               onClick={() => requestJoin()}
             >
               Request Join
@@ -1089,7 +1139,7 @@ export function TeamApiPanel({
                         variant="primary"
                         size="sm"
                         icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                        disabled={loading.join}
+                        disabled={!canParticipateInEvent || loading.join}
                         onClick={() => requestJoin(row.teamId)}
                       >
                         Request Join
