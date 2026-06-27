@@ -778,7 +778,12 @@ export function TeamApiPanel({
                   style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}
                 >
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Applicant</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                      {request.fullName}
+                    </div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                      University: {request.universityName}
+                    </div>
                     <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
                       {request.requestStatus} - {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : "-"}
                     </div>

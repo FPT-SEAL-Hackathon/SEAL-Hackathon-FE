@@ -39,6 +39,8 @@ export interface JoinTeamRequestResponse {
   requestId: string;
   teamId: string;
   userId: string;
+  fullName: string;
+  universityName: string;
   requestStatus: string;
   requestedAt: string;
   respondedAt: string;
