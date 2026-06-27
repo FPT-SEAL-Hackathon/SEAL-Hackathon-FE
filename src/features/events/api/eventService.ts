@@ -11,7 +11,7 @@ export interface EventResponse {
   description: string;
   location: string;
   bannerImageUrl: string;
-  eventStatus?: EventStatus;
+  eventStatus: EventStatus;
   registrationStart: string;
   registrationEnd: string;
   eventStartDate: string;

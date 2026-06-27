@@ -6,6 +6,7 @@ export type PageKey =
   | "events"
   | "event-participants"
   | "leaderboard"
+  | "certificates"
   | "notifications"
   | "profile"
   | "submissions"
@@ -39,6 +40,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   events: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
   "event-participants": [...ORGANIZER_ROLES],
   leaderboard: [...STUDENT_ROLES],
+  certificates: [...STUDENT_ROLES],
   notifications: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
   profile: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
   submissions: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],

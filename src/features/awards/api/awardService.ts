@@ -91,4 +91,6 @@ export const awardService = {
   // Certificate
   getCertificateUrl: (awardId: string) =>
     `${API_BASE_URL}/api/v1/certificates/download/${awardId}`,
+  downloadCertificate: (awardId: string) =>
+    api.blob(`/api/v1/certificates/download/${awardId}`),
 };
