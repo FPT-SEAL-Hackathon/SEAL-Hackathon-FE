@@ -59,6 +59,18 @@ export interface RankingAwardCandidateResponse {
   isAdvanced: boolean;
 }
 
+export interface EventPrizeSummary {
+  eventId: string;
+  eventName: string;
+  totalPrize: number;
+  currency: string;
+}
+
+export interface TotalPrizeSummary {
+  totalPrize: number;
+  currency: string;
+}
+
 export const awardService = {
   getById: (id: string) =>
     api.get<AwardResponse>(`/api/v1/awards/${id}`),
@@ -93,4 +105,8 @@ export const awardService = {
     `${API_BASE_URL}/api/v1/certificates/download/${awardId}`,
   downloadCertificate: (awardId: string) =>
     api.blob(`/api/v1/certificates/download/${awardId}`),
+
+  // Public prize summary (no auth required)
+  getTotalPrize: () =>
+    api.get<TotalPrizeSummary>(`/api/v1/events/total-prize`, false),
 };

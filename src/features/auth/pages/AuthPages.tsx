@@ -7,6 +7,10 @@ import { motion, AnimatePresence } from "motion/react";
 import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService";
 import { ApiError } from "@/lib/api/apiClient";
 
+// ─── Dev bypass credential ───────────────────────────────────────────────────
+const DEV_EMAIL = "dev@seal.dev";
+const DEV_PASSWORD = "dev";
+
 // ─── Demo roles (bypass API for dev/demo) ───────────────────────────────────
 const DEMO_ROLES = [
   { role: "member",   label: "Member",   color: "#F47920" },
@@ -329,6 +333,15 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
   const handleLogin = async () => {
     const normalizedEmail = email.trim();
     if (!normalizedEmail || !password) { setApiError("Please enter your email and password."); return; }
+
+    // ── Dev bypass ──────────────────────────────────────────────────────────
+    if (normalizedEmail === DEV_EMAIL && password === DEV_PASSWORD) {
+      localStorage.setItem("seal_dev_mode", "true");
+      onLogin("__dev__");
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     setLoading(true);
     setApiError("");
     try {

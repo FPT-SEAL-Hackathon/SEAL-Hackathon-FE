@@ -128,10 +128,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         categoryService.getByEvent(evs[0].eventId).then(cats => {
           if (!cats[0]) return;
           rankingService.getLeaderboard(evs[0].eventId, cats[0].categoryId)
-            .then(setApiLeaderboard).catch(() => {});
+            .then(setApiLeaderboard).catch(() => { });
         })
       );
-    }).catch(() => {});
+    }).catch(() => { });
   }, [currentPage]);
 
   useEffect(() => {
@@ -139,9 +139,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       .then(data => setApiEvents(data.map(e => ({
         id: e.eventId, name: e.eventName,
         category: e.description ?? "", deadline: e.registrationEnd ?? e.eventEndDate ?? "",
-        status: e.eventStatusId || "unknown", participants: "N/A", tracks: "N/A", prizePool: "N/A",
+        status: e.eventStatus?.eventStatusId || "unknown", participants: "N/A", tracks: "N/A", prizePool: "N/A",
       }))))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -182,7 +182,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           })));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const [profileForm, setProfileForm] = useState({
@@ -884,59 +884,59 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return (
       <>
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
-      <Card className="p-5">
-        <div className="grid md:grid-cols-2 gap-4">
-          {[
-            { label: "Team ID", key: "teamId", icon: <Users size={14} /> },
-            { label: "Round ID", key: "roundId", icon: <Clock size={14} /> },
-            { label: "Repository URL", key: "repositoryUrl", icon: <Github size={14} /> },
-            { label: "Demo URL", key: "demoUrl", icon: <Globe size={14} /> },
-            { label: "Report URL", key: "reportUrl", icon: <FileText size={14} /> },
-            { label: "Slide URL", key: "slideUrl", icon: <FileText size={14} /> },
-          ].map(field => (
-            <label key={field.key} className="block">
-              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
-                {field.icon} {field.label}
+        <Card className="p-5">
+          <div className="grid md:grid-cols-2 gap-4">
+            {[
+              { label: "Team ID", key: "teamId", icon: <Users size={14} /> },
+              { label: "Round ID", key: "roundId", icon: <Clock size={14} /> },
+              { label: "Repository URL", key: "repositoryUrl", icon: <Github size={14} /> },
+              { label: "Demo URL", key: "demoUrl", icon: <Globe size={14} /> },
+              { label: "Report URL", key: "reportUrl", icon: <FileText size={14} /> },
+              { label: "Slide URL", key: "slideUrl", icon: <FileText size={14} /> },
+            ].map(field => (
+              <label key={field.key} className="block">
+                <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
+                  {field.icon} {field.label}
+                </span>
+                <input
+                  value={submissionForm[field.key as keyof typeof submissionForm]}
+                  onChange={e => setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </label>
+            ))}
+          </div>
+          <label className="block mt-4">
+            <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
+            <textarea
+              value={submissionForm.notes}
+              onChange={e => setSubmissionForm(prev => ({ ...prev, notes: e.target.value }))}
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg outline-none resize-none mt-1"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
+              {submissionLoading ? "Saving..." : "Submit Work"}
+            </Button>
+            <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading}>
+              {submissionLookupLoading ? "Loading..." : "Load Current"}
+            </Button>
+            <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null}>
+              {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
+            </Button>
+            <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null}>
+              {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
+            </Button>
+            {submissionStatus && (
+              <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
+                {submissionStatus}
               </span>
-              <input
-                value={submissionForm[field.key as keyof typeof submissionForm]}
-                onChange={e => setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </label>
-          ))}
-        </div>
-        <label className="block mt-4">
-          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
-          <textarea
-            value={submissionForm.notes}
-            onChange={e => setSubmissionForm(prev => ({ ...prev, notes: e.target.value }))}
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg outline-none resize-none mt-1"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-          />
-        </label>
-        <div className="flex flex-wrap items-center gap-3 mt-4">
-          <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
-            {submissionLoading ? "Saving..." : "Submit Work"}
-          </Button>
-          <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading}>
-            {submissionLookupLoading ? "Loading..." : "Load Current"}
-          </Button>
-          <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null}>
-            {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
-          </Button>
-          <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null}>
-            {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
-          </Button>
-          {submissionStatus && (
-            <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
-              {submissionStatus}
-            </span>
-          )}
-        </div>
-      </Card>
+            )}
+          </div>
+        </Card>
       </>
     );
   };

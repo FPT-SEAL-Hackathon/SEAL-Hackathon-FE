@@ -10,6 +10,7 @@ import { MemberDashboard } from "@/pages/member/MemberDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { ForbiddenPage } from "@/pages/ForbiddenPage";
+import { DevHub } from "@/pages/dev/DevHub";
 
 function RequireAuth() {
   const { isAuthenticated, role } = useAuth();
@@ -20,6 +21,24 @@ function RequireAuth() {
   }
 
   return <Outlet />;
+}
+
+// ─── Dev Hub guard ──────────────────────────────────────────────────────────
+function DevRoute() {
+  const navigate = useNavigate();
+  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
+  if (!isDevMode) return <Navigate to="/login" replace />;
+
+  const handleNavigate = (role: string, page: string) => {
+    navigate(`/${role}/${page}`);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("seal_dev_mode");
+    navigate("/", { replace: true });
+  };
+
+  return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
 }
 
 function HomeRoute() {
@@ -56,7 +75,12 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
     <AuthPages
       mode={mode}
       onBackToLanding={() => navigate("/", { replace: true })}
-      onLogin={() => {
+      onLogin={(roleOrMarker) => {
+        // Dev bypass shortcut
+        if (roleOrMarker === "__dev__") {
+          navigate("/dev", { replace: true });
+          return;
+        }
         const raw = localStorage.getItem("seal_user");
         if (!raw) return;
         const user = JSON.parse(raw);
@@ -143,6 +167,7 @@ export const router = createBrowserRouter([
   { path: "/register", element: <AuthRoute mode="register" /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "/403", element: <ForbiddenPage /> },
+  { path: "/dev", element: <DevRoute /> },
   {
     path: "/",
     element: <RequireAuth />,
