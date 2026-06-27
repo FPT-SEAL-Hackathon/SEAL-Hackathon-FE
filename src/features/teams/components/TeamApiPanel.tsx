@@ -122,12 +122,15 @@ function displayValue(value?: string | null) {
 }
 
 function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
+  const fptStudentCode = detail.fptStudentCode?.trim();
+  const externalStudentCode = detail.externalStudentCode?.trim();
+
   return [
     { label: "Full Name", value: displayValue(detail.fullName) },
     { label: "Email", value: displayValue(detail.email) },
     { label: "Phone", value: displayValue(detail.phone) },
-    { label: "FPT Student Code", value: displayValue(detail.fptStudentCode) },
-    { label: "External Student Code", value: detail.externalStudentCode?.trim() ? detail.externalStudentCode : "None" },
+    { label: "FPT Student Code", value: externalStudentCode ? "None" : fptStudentCode || "None" },
+    { label: "External Student Code", value: fptStudentCode ? "None" : externalStudentCode || "None" },
     { label: "University", value: displayValue(detail.universityName) },
     { label: "User Type", value: displayValue(detail.userTypeName) },
     { label: "Account Status", value: displayValue(detail.accountStatusName) },
