@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api/apiClient";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
+import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService";
 
 interface Props {
   onGoToLogin: () => void;
@@ -216,9 +217,9 @@ function hasEnded(endDate: string): boolean {
 }
 
 function getCompetitionStatus(event: EventResponse, startDate: string, endDate: string): LandingCompetition["status"] {
-  if (event.eventStatusId === EVENT_STATUS.ONGOING) return "ongoing";
-  if (event.eventStatusId === EVENT_STATUS.UPCOMING) return "upcoming";
-  if (event.eventStatusId === EVENT_STATUS.COMPLETED) return "completed";
+  if (event.eventStatus?.eventStatusId === EVENT_STATUS.ONGOING) return "ongoing";
+  if (event.eventStatus?.eventStatusId === EVENT_STATUS.UPCOMING) return "upcoming";
+  if (event.eventStatus?.eventStatusId === EVENT_STATUS.COMPLETED) return "completed";
 
   const now = Date.now();
   const start = parseDateTime(startDate);
@@ -229,9 +230,9 @@ function getCompetitionStatus(event: EventResponse, startDate: string, endDate: 
 }
 
 function getCompetitionPhase(event: EventResponse, startDate: string, endDate: string): string {
-  if (event.eventStatusId === EVENT_STATUS.COMPLETED) return "Completed";
-  if (event.eventStatusId === EVENT_STATUS.ONGOING) return "In Progress";
-  if (event.eventStatusId === EVENT_STATUS.UPCOMING) return "Registration Open";
+  if (event.eventStatus?.eventStatusId === EVENT_STATUS.COMPLETED) return "Completed";
+  if (event.eventStatus?.eventStatusId === EVENT_STATUS.ONGOING) return "In Progress";
+  if (event.eventStatus?.eventStatusId === EVENT_STATUS.UPCOMING) return "Registration Open";
 
   const now = Date.now();
   const regEnd = event.registrationEnd ? parseDateTime(event.registrationEnd) : NaN;
@@ -263,6 +264,23 @@ function normalizeDateTime(date: string): string {
 async function getPublicTeamCount() {
   const response = await api.get<TeamCountResponse>("/api/v1/public/teams/count", false);
   return response.totalTeams;
+}
+
+function formatPrizeMoney(summary: TotalPrizeSummary): string {
+  const { totalPrize, currency } = summary;
+  if (!totalPrize || totalPrize === 0) return "N/A";
+  const cur = (currency || "VND").toUpperCase();
+  let display: string;
+  if (totalPrize >= 1_000_000_000) {
+    display = `${(totalPrize / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  } else if (totalPrize >= 1_000_000) {
+    display = `${(totalPrize / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  } else if (totalPrize >= 1_000) {
+    display = `${(totalPrize / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  } else {
+    display = totalPrize.toLocaleString();
+  }
+  return `${display} ${cur}`;
 }
 
 export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
@@ -310,6 +328,13 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
     getPublicTeamCount()
       .then(teamCount => setStats(prev => ({ ...prev, teams: String(teamCount) })))
       .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
+  }, []);
+
+  // Fetch total prize money across all events
+  useEffect(() => {
+    awardService.getTotalPrize()
+      .then(summary => setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(summary) })))
+      .catch(() => setStats(prev => ({ ...prev, prizeMoney: "N/A" })));
   }, []);
 
   // Fetch Hall of Fame from real API
@@ -699,7 +724,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
               { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
               { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", sub: "from API", color: "#FF8C2A" },
               { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
-              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", sub: "N/A", color: "#0EA5E9" },
+              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", sub: "from API", color: "#0EA5E9" },
             ].map((s, i) => (
               <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}

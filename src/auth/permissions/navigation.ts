@@ -14,6 +14,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
+    { icon: "Award", label: "Certificates", key: "certificates" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXTERNAL_STUDENT]: [
@@ -22,6 +23,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
+    { icon: "Award", label: "Certificates", key: "certificates" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.INTERNAL_JUDGE]: [

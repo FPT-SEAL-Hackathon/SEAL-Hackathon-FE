@@ -4,7 +4,7 @@ import {
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save
+  MapPin, Phone, Save, Download, Eye
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -16,6 +16,7 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
+import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import {
   eventParticipantService,
   type EventParticipantResponse,
@@ -127,10 +128,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         categoryService.getByEvent(evs[0].eventId).then(cats => {
           if (!cats[0]) return;
           rankingService.getLeaderboard(evs[0].eventId, cats[0].categoryId)
-            .then(setApiLeaderboard).catch(() => {});
+            .then(setApiLeaderboard).catch(() => { });
         })
       );
-    }).catch(() => {});
+    }).catch(() => { });
   }, [currentPage]);
 
   useEffect(() => {
@@ -138,9 +139,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       .then(data => setApiEvents(data.map(e => ({
         id: e.eventId, name: e.eventName,
         category: e.description ?? "", deadline: e.registrationEnd ?? e.eventEndDate ?? "",
-        status: e.eventStatusId || "unknown", participants: "N/A", tracks: "N/A", prizePool: "N/A",
+        status: e.eventStatus?.eventStatusId || "unknown", participants: "N/A", tracks: "N/A", prizePool: "N/A",
       }))))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -181,7 +182,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           })));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const [profileForm, setProfileForm] = useState({
@@ -207,6 +208,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
+  const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
+  const [certificateCategoryId, setCertificateCategoryId] = useState("all");
+  const [certificateLoading, setCertificateLoading] = useState(false);
+  const [certificateError, setCertificateError] = useState("");
+  const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
   useEffect(() => {
     if (currentPage !== "submissions") return;
@@ -217,6 +223,49 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     } else {
       setSubmissionForm(prev => ({ ...prev, teamId: "" }));
     }
+  }, [currentPage, user?.id]);
+
+  useEffect(() => {
+    if (currentPage !== "certificates") return;
+    const storedTeam = getStoredActiveTeam(user?.id);
+    setActiveTeamContext(storedTeam);
+
+    if (!storedTeam?.eventId) {
+      setCertificateAwards([]);
+      setCertificateError("");
+      setCertificateCategoryId("all");
+      return;
+    }
+
+    let cancelled = false;
+    setCertificateLoading(true);
+    setCertificateError("");
+    awardService.getByEvent(storedTeam.eventId)
+      .then(awards => {
+        if (cancelled) return;
+        const visibleAwards = awards.filter(award => (
+          (!storedTeam.teamId || award.teamId === storedTeam.teamId)
+          && (!storedTeam.categoryId || award.categoryId === storedTeam.categoryId)
+          && award.isPublished
+        ));
+        setCertificateAwards(visibleAwards);
+        setCertificateCategoryId(prev => {
+          if (prev === "all" || visibleAwards.some(award => award.categoryId === prev)) return prev;
+          return storedTeam.categoryId ?? "all";
+        });
+      })
+      .catch(error => {
+        if (cancelled) return;
+        setCertificateAwards([]);
+        setCertificateError(error instanceof Error ? error.message : "Could not load certificates.");
+      })
+      .finally(() => {
+        if (!cancelled) setCertificateLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentPage, user?.id]);
 
   const unread = notifs.filter(n => !n.read).length;
@@ -295,6 +344,43 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus(error instanceof Error ? error.message : "Problem download failed.");
     } finally {
       setProblemDownloadLoading(null);
+    }
+  };
+
+  const handleCertificateFile = async (award: AwardResponse, mode: "view" | "download") => {
+    setCertificateActionLoading(prev => ({ ...prev, [award.id]: mode }));
+    setCertificateError("");
+    try {
+      const blob = await awardService.downloadCertificate(award.id);
+      const url = URL.createObjectURL(blob);
+      if (mode === "view") {
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (!opened) {
+          const link = document.createElement("a");
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          link.click();
+        }
+        window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+      } else {
+        const link = document.createElement("a");
+        const filename = `${award.eventName}-${award.categoryName}-${award.awardTitle}-certificate.pdf`
+          .replace(/[^a-z0-9._-]+/gi, "-")
+          .replace(/^-+|-+$/g, "");
+        link.href = url;
+        link.download = filename || "certificate.pdf";
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      setCertificateError(error instanceof Error ? error.message : "Certificate download failed.");
+    } finally {
+      setCertificateActionLoading(prev => {
+        const next = { ...prev };
+        delete next[award.id];
+        return next;
+      });
     }
   };
 
@@ -537,6 +623,158 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
+  const renderCertificates = () => {
+    if (!activeTeamContext?.eventId) {
+      return (
+        <>
+          <SectionHeader title="Certificates" subtitle="View and download certificates by event category" />
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.warning}14`, color: COLORS.warning }}
+                >
+                  <Award size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>No active event team</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    Select or create a team first so certificates can be matched to your event and category.
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button variant="primary" size="md" icon={<Users size={14} />} onClick={() => onNavigate("team")}>
+                  Open My Team
+                </Button>
+                <Button variant="outline" size="md" icon={<Calendar size={14} />} onClick={() => onNavigate("events")}>
+                  Browse Events
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </>
+      );
+    }
+
+    const categoryOptions = Array.from(
+      new Map(certificateAwards.map(award => [award.categoryId, award.categoryName])).entries(),
+    );
+    const filteredAwards = certificateCategoryId === "all"
+      ? certificateAwards
+      : certificateAwards.filter(award => award.categoryId === certificateCategoryId);
+
+    return (
+      <>
+        <SectionHeader
+          title="Certificates"
+          subtitle={`Certificates for ${activeTeamContext.teamName ?? "your team"}`}
+          action={
+            <select
+              value={certificateCategoryId}
+              onChange={event => setCertificateCategoryId(event.target.value)}
+              className="px-3 py-2 rounded-lg outline-none"
+              style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              disabled={certificateLoading || categoryOptions.length === 0}
+            >
+              <option value="all">All categories</option>
+              {categoryOptions.map(([categoryId, categoryName]) => (
+                <option key={categoryId} value={categoryId}>{categoryName}</option>
+              ))}
+            </select>
+          }
+        />
+
+        {certificateError && (
+          <Card className="p-4">
+            <div className="flex items-center gap-2" style={{ color: COLORS.error, fontSize: 13, fontWeight: 600 }}>
+              <AlertCircle size={15} />
+              {certificateError}
+            </div>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
+          <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
+          <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
+        </div>
+
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: COLORS.bg }}>
+                  {["Award", "Event", "Category", "Published", "Actions"].map(h => (
+                    <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {certificateLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                      Loading certificates...
+                    </td>
+                  </tr>
+                ) : filteredAwards.length > 0 ? filteredAwards.map(award => {
+                  const actionLoading = certificateActionLoading[award.id];
+                  return (
+                    <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                      <td className="px-4 py-3">
+                        <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
+                      </td>
+                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
+                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
+                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                        {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={<Eye size={13} />}
+                            disabled={!!actionLoading}
+                            onClick={() => handleCertificateFile(award, "view")}
+                          >
+                            {actionLoading === "view" ? "Opening..." : "View"}
+                          </Button>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={<Download size={13} />}
+                            disabled={!!actionLoading}
+                            onClick={() => handleCertificateFile(award, "download")}
+                          >
+                            {actionLoading === "download" ? "Downloading..." : "Download"}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center">
+                      <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
+                        No published certificates are available for this category.
+                      </div>
+                      <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                        Certificates will appear here after awards are published by the organizer.
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </>
+    );
+  };
+
   const renderNotifications = () => (
     <>
       <SectionHeader
@@ -646,59 +884,59 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return (
       <>
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
-      <Card className="p-5">
-        <div className="grid md:grid-cols-2 gap-4">
-          {[
-            { label: "Team ID", key: "teamId", icon: <Users size={14} /> },
-            { label: "Round ID", key: "roundId", icon: <Clock size={14} /> },
-            { label: "Repository URL", key: "repositoryUrl", icon: <Github size={14} /> },
-            { label: "Demo URL", key: "demoUrl", icon: <Globe size={14} /> },
-            { label: "Report URL", key: "reportUrl", icon: <FileText size={14} /> },
-            { label: "Slide URL", key: "slideUrl", icon: <FileText size={14} /> },
-          ].map(field => (
-            <label key={field.key} className="block">
-              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
-                {field.icon} {field.label}
+        <Card className="p-5">
+          <div className="grid md:grid-cols-2 gap-4">
+            {[
+              { label: "Team ID", key: "teamId", icon: <Users size={14} /> },
+              { label: "Round ID", key: "roundId", icon: <Clock size={14} /> },
+              { label: "Repository URL", key: "repositoryUrl", icon: <Github size={14} /> },
+              { label: "Demo URL", key: "demoUrl", icon: <Globe size={14} /> },
+              { label: "Report URL", key: "reportUrl", icon: <FileText size={14} /> },
+              { label: "Slide URL", key: "slideUrl", icon: <FileText size={14} /> },
+            ].map(field => (
+              <label key={field.key} className="block">
+                <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
+                  {field.icon} {field.label}
+                </span>
+                <input
+                  value={submissionForm[field.key as keyof typeof submissionForm]}
+                  onChange={e => setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </label>
+            ))}
+          </div>
+          <label className="block mt-4">
+            <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
+            <textarea
+              value={submissionForm.notes}
+              onChange={e => setSubmissionForm(prev => ({ ...prev, notes: e.target.value }))}
+              rows={3}
+              className="w-full px-3 py-2 rounded-lg outline-none resize-none mt-1"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            />
+          </label>
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
+              {submissionLoading ? "Saving..." : "Submit Work"}
+            </Button>
+            <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading}>
+              {submissionLookupLoading ? "Loading..." : "Load Current"}
+            </Button>
+            <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null}>
+              {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
+            </Button>
+            <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null}>
+              {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
+            </Button>
+            {submissionStatus && (
+              <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
+                {submissionStatus}
               </span>
-              <input
-                value={submissionForm[field.key as keyof typeof submissionForm]}
-                onChange={e => setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }))}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
-            </label>
-          ))}
-        </div>
-        <label className="block mt-4">
-          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
-          <textarea
-            value={submissionForm.notes}
-            onChange={e => setSubmissionForm(prev => ({ ...prev, notes: e.target.value }))}
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg outline-none resize-none mt-1"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-          />
-        </label>
-        <div className="flex flex-wrap items-center gap-3 mt-4">
-          <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
-            {submissionLoading ? "Saving..." : "Submit Work"}
-          </Button>
-          <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading}>
-            {submissionLookupLoading ? "Loading..." : "Load Current"}
-          </Button>
-          <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null}>
-            {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
-          </Button>
-          <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null}>
-            {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
-          </Button>
-          {submissionStatus && (
-            <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
-              {submissionStatus}
-            </span>
-          )}
-        </div>
-      </Card>
+            )}
+          </div>
+        </Card>
       </>
     );
   };
@@ -799,6 +1037,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "team": return renderTeam();
       case "events": return renderEvents();
       case "leaderboard": return renderLeaderboard();
+      case "certificates": return renderCertificates();
       case "submissions": return renderSubmissions();
       case "notifications": return renderNotifications();
       case "profile": return renderProfile();
