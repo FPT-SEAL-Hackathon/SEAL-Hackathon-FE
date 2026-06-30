@@ -9,7 +9,7 @@ import { awardService, type AwardResponse } from "@/features/awards/api/awardSer
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { researchService } from "@/features/research/api/researchService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
-import { api, getAccessToken } from "@/lib/api/apiClient";
+import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
 import { CategoryModal } from "@/features/categories/components/CategoryModal";
 import { RoundModal } from "@/features/judging/components/RoundModal";
@@ -250,11 +250,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }).catch(error => {
       setCategoryLoadError(error instanceof Error ? error.message : "Failed to load categories.");
     });
-    if (getAccessToken()) {
-      teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
-    } else {
-      setApiTeamEligibility([]);
-    }
+    teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
     awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
   }, [selectedEventId]);
 
@@ -411,7 +407,16 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setDataExportError("");
     setDataExportDone(false);
     try {
-      const blob = await api.blob(researchService.exportPath(selectedEventId));
+      const token = getAccessToken();
+      const response = await fetch(researchService.exportUrl(selectedEventId), {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      if (!response.ok) {
+        const message = await response.text().catch(() => "");
+        throw new Error(message || `Export failed (${response.status})`);
+      }
+
+      const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -727,7 +732,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
       case "criteria": return <AdminCriteriaView context={viewContext} />;
-      case "users": return <AdminUsersView />;
+      case "users": return <AdminUsersView context={viewContext} />;
       case "assignments": return <AdminAssignmentsView context={viewContext} />;
       case "submissions": return <AdminSubmissionsView context={viewContext} />;
       case "rankings": return <AdminRankingsView context={viewContext} />;
@@ -745,10 +750,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
-  const usesFixedViewport = currentPage === "users";
-
   return (
-    <div className={usesFixedViewport ? "h-full min-h-0 overflow-hidden p-6" : "p-6 space-y-6"}>
+    <div className="p-6 space-y-6">
       {renderPage()}
 
       {/* ── Modals ─────────────────────────────────────────────────── */}

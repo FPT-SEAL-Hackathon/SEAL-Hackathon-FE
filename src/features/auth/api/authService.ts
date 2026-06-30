@@ -1,5 +1,5 @@
 import { normalizeRole, type Role } from "@/auth/rbac/roles";
-import { api, clearTokens, getAccessToken, getRefreshToken, saveUser, setTokens } from "@/lib/api/apiClient";
+import { API_BASE_URL, api, clearTokens, getAccessToken, getRefreshToken, saveUser, setTokens } from "@/lib/api/apiClient";
 
 export interface LoginRequest {
   email: string;
@@ -74,7 +74,14 @@ export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken();
   if (accessToken && refreshToken) {
     try {
-      await api.post<void>("/auth/logout", { refreshToken });
+      await fetch(`${API_BASE_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
     } catch {
       // Clear local session even if the backend logout call fails.
     }
