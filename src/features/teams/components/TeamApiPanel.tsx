@@ -21,6 +21,10 @@ import {
   type TeamMemberResponse,
   type TeamResponse,
 } from "@/features/teams/api/teamService";
+import {
+  eventParticipantService,
+  type EventParticipantResponse,
+} from "@/features/eventParticipants/api/eventParticipantService";
 
 type ActionKey =
   | "create"
@@ -121,6 +125,43 @@ function displayValue(value?: string | null) {
   return value && value.trim() ? value : "-";
 }
 
+function participationLabel(participation?: EventParticipantResponse | null) {
+  if (!participation) return "Register for this event first, then wait for organizer approval before joining or creating a team.";
+  if (participation.status === "ACTIVE") return "";
+  if (participation.status === "PENDING") return "Pending approval.";
+  if (participation.status === "REJECTED") return "Your registration was rejected.";
+  return "You must be approved by the organizer before joining or creating a team.";
+}
+
+function isApprovedParticipant(participation?: EventParticipantResponse | null) {
+  return participation?.status === "ACTIVE";
+}
+
+function normalizeParticipantStatus(status?: string | null) {
+  const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
+  if (value === "PENDING_APPROVAL") return "PENDING";
+  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED") return value;
+  return "PENDING";
+}
+
+function participationFromEvent(event?: EventResponse): EventParticipantResponse | null {
+  const status = event?.userParticipationStatus ?? event?.participantStatus ?? event?.myRegistrationStatus ?? event?.registrationStatus;
+  if (!event || !status || status === "NOT_REGISTERED") return null;
+  return {
+    participantId: String(event.eventParticipantId ?? ""),
+    eventParticipantId: event.eventParticipantId ? String(event.eventParticipantId) : undefined,
+    userId: "",
+    fullName: "",
+    email: "",
+    eventId: event.eventId,
+    eventName: event.eventName,
+    status: normalizeParticipantStatus(status) as EventParticipantResponse["status"],
+    rejectedReason: event.rejectedReason ?? undefined,
+    appliedAt: event.appliedAt ?? undefined,
+    approvedAt: event.approvedAt ?? undefined,
+  };
+}
+
 function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
   const fptStudentCode = detail.fptStudentCode?.trim();
   const externalStudentCode = detail.externalStudentCode?.trim();
@@ -186,6 +227,8 @@ export function TeamApiPanel({
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [requests, setRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>({});
+  const [eventParticipation, setEventParticipation] = useState<EventParticipantResponse | null>(null);
+  const [participationLoading, setParticipationLoading] = useState(false);
   const [loading, setLoading] = useState<Partial<Record<ActionKey, boolean>>>({});
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [leaderActionPanel, setLeaderActionPanel] = useState<LeaderActionPanel>(null);
@@ -206,7 +249,9 @@ export function TeamApiPanel({
 
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
-  const canCreate = canUseEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
+  const canParticipateInEvent = isApprovedParticipant(eventParticipation);
+  const participantGateMessage = participationLabel(eventParticipation);
+  const canCreate = canUseEvent && canParticipateInEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
   const joinTeams = useMemo(
     () => joinCategoryId ? teams.filter(team => team.categoryId === joinCategoryId) : teams,
     [joinCategoryId, teams],
@@ -215,7 +260,7 @@ export function TeamApiPanel({
   useEffect(() => {
     run(
       "events",
-      () => eventService.getAll(),
+      () => eventService.getAll(true),
       data => {
         setEvents(data);
         if (data[0] && !form.eventId) setField("eventId", data[0].eventId);
@@ -290,7 +335,30 @@ export function TeamApiPanel({
   useEffect(() => {
     if (!form.eventId) {
       setCategories([]);
+      setEventParticipation(null);
       return;
+    }
+    let cancelled = false;
+    setParticipationLoading(true);
+    const eventFromList = events.find(event => event.eventId === form.eventId);
+    const eventParticipationFromList = participationFromEvent(eventFromList);
+    if (eventParticipationFromList) {
+      setEventParticipation(eventParticipationFromList);
+      setParticipationLoading(false);
+    } else if (eventFromList?.userParticipationStatus === "NOT_REGISTERED") {
+      setEventParticipation(null);
+      setParticipationLoading(false);
+    } else {
+      eventParticipantService.getMyParticipation(form.eventId)
+        .then(participation => {
+          if (!cancelled) setEventParticipation(participation);
+        })
+        .catch(() => {
+          if (!cancelled) setEventParticipation(null);
+        })
+        .finally(() => {
+          if (!cancelled) setParticipationLoading(false);
+        });
     }
     run(
       "categories",
@@ -303,8 +371,11 @@ export function TeamApiPanel({
       },
       "Categories loaded.",
     );
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.eventId]);
+  }, [form.eventId, events]);
 
   useEffect(() => {
     if (!selectedTeam) {
@@ -390,6 +461,10 @@ export function TeamApiPanel({
   };
 
   const createTeam = () => {
+    if (!canParticipateInEvent) {
+      setMessage({ tone: "error", text: "You must be approved by the organizer before joining or creating a team." });
+      return;
+    }
     run(
       "create",
       () => teamService.create({
@@ -409,6 +484,10 @@ export function TeamApiPanel({
 
   const requestJoin = (teamId = form.teamId.trim()) => {
     if (!teamId) return;
+    if (!canParticipateInEvent) {
+      setMessage({ tone: "error", text: "You must be approved by the organizer before joining or creating a team." });
+      return;
+    }
     setField("teamId", teamId);
     run("join", () => teamService.requestJoin(teamId), undefined, "Join request sent.");
   };
@@ -607,6 +686,9 @@ export function TeamApiPanel({
               </label>
               <Field label="TEAM NAME" value={form.teamName} onChange={value => setField("teamName", value)} placeholder="Enter team name" />
             </div>
+            {!canParticipateInEvent && !participationLoading && (
+              <div className="mt-4"><InlineMessage tone="info" message={participantGateMessage} /></div>
+            )}
             <div className="mt-5">
               <Button
                 variant="primary"
@@ -677,12 +759,15 @@ export function TeamApiPanel({
                 variant="primary"
                 size="md"
                 icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={!joinTeamName.trim() || joinTeams.length === 0 || loading.join}
+                disabled={!joinTeamName.trim() || joinTeams.length === 0 || !canParticipateInEvent || loading.join}
                 onClick={requestJoinByName}
               >
                 {loading.join ? "Sending..." : "Request Join"}
               </Button>
             </div>
+            {!canParticipateInEvent && !participationLoading && (
+              <div className="mt-4"><InlineMessage tone="info" message={participantGateMessage} /></div>
+            )}
           </Card>
         )}
 
@@ -702,7 +787,7 @@ export function TeamApiPanel({
                       variant="primary"
                       size="sm"
                       icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                      disabled={loading.join}
+                      disabled={!canParticipateInEvent || loading.join}
                       onClick={() => requestJoin(row.teamId)}
                     >
                       Request Join
@@ -1013,7 +1098,7 @@ export function TeamApiPanel({
                 variant="primary"
                 size="sm"
                 icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={!canUseTeam || loading.join}
+                disabled={!canUseTeam || !canParticipateInEvent || loading.join}
                 onClick={requestJoin}
               >
                 Request Join
@@ -1113,7 +1198,7 @@ export function TeamApiPanel({
               variant="primary"
               size="md"
               icon={loading.join ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-              disabled={!canUseTeam || loading.join}
+              disabled={!canUseTeam || !canParticipateInEvent || loading.join}
               onClick={() => requestJoin()}
             >
               Request Join
@@ -1143,7 +1228,7 @@ export function TeamApiPanel({
                         variant="primary"
                         size="sm"
                         icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                        disabled={loading.join}
+                        disabled={!canParticipateInEvent || loading.join}
                         onClick={() => requestJoin(row.teamId)}
                       >
                         Request Join

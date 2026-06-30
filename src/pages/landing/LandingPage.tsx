@@ -267,8 +267,18 @@ async function getPublicTeamCount() {
 }
 
 function formatPrizeMoney(summary: TotalPrizeSummary): string {
+  if (summary.totalPrizes?.length) {
+    return summary.totalPrizes
+      .filter(item => item.totalPrize && item.totalPrize > 0)
+      .map(item => formatPrizeAmount(item.totalPrize, item.prizeCurrency))
+      .join(" + ") || "N/A";
+  }
   const { totalPrize, currency } = summary;
   if (!totalPrize || totalPrize === 0) return "N/A";
+  return formatPrizeAmount(totalPrize, currency);
+}
+
+function formatPrizeAmount(totalPrize: number, currency?: string): string {
   const cur = (currency || "VND").toUpperCase();
   let display: string;
   if (totalPrize >= 1_000_000_000) {
