@@ -4,8 +4,8 @@ import {
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService";
-import { ApiError } from "@/lib/api/apiClient";
+import { login, register, REGISTER_USER_TYPES, type UserResponse } from "@/features/auth/api/authService.ts";
+import { ApiError } from "@/lib/api/apiClient.ts";
 
 // ─── Dev bypass credential ───────────────────────────────────────────────────
 const DEV_EMAIL = "dev@seal.dev";
@@ -322,7 +322,9 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
 }
 
 // ─── Login Card ───────────────────────────────────────────────────────────────
-export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
+type LoginSuccessPayload = UserResponse | "__dev__" | string;
+
+export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (payload: LoginSuccessPayload) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -346,9 +348,9 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
     setApiError("");
     try {
       const res = await login({ email: normalizedEmail, password });
-      onLogin(userTypeToRole(res.user.userType));
+      onLogin(res.user);
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.message : "Login failed. Please check your credentials.");
+      setApiError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -440,7 +442,7 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
 }
 
 // ─── Full-page Login (with left panel) ───────────────────────────────────────
-function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
+function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (payload: LoginSuccessPayload) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const stats = [
     { label: "Active Teams", value: "127", icon: "🚀" },
     { label: "Submissions", value: "89",  icon: "📦" },
@@ -512,7 +514,7 @@ export function AuthPages({
   onSwitchToRegister,
 }: {
   mode: "login" | "register";
-  onLogin: (role: string) => void;
+  onLogin: (payload: LoginSuccessPayload) => void;
   onBackToLanding: () => void;
   onSwitchToLogin: () => void;
   onSwitchToRegister: () => void;
