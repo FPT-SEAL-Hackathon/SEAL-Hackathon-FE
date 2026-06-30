@@ -43,6 +43,10 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
   );
 }
 
+const formatDateTime = (value: string) => {
+    return value ? `${value}:00` : undefined;
+};
+
 export function EventModal({ event, onClose, onSaved }: Props) {
   const isEdit = !!event;
   const [form, setForm] = useState({
@@ -108,8 +112,8 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         location: form.location || undefined,
         bannerImageUrl: form.bannerImageUrl || undefined,
         eventStatusId: form.eventStatusId,
-        registrationStart: form.registrationStart ? new Date(form.registrationStart).toISOString() : undefined,
-        registrationEnd: form.registrationEnd ? new Date(form.registrationEnd).toISOString() : undefined,
+        registrationStart: formatDateTime(form.registrationStart),
+        registrationEnd: formatDateTime(form.registrationEnd),
         eventStartDate: form.eventStartDate || undefined,
         eventEndDate: form.eventEndDate || undefined,
         maxTeamSize: parseInt(form.maxTeamSize) || undefined,

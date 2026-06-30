@@ -520,7 +520,10 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           <Card key={request.requestId} className="p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>User ID: {request.userId}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{request.fullName}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                  University: {request.universityName}
+                </div>
                 <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Requested: {formatDate(request.requestedAt)}</div>
                 <div className="mt-2"><StatusBadge status={request.requestStatus.toLowerCase()} /></div>
               </div>
