@@ -4,8 +4,8 @@ import {
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService.ts";
-import { ApiError } from "@/lib/api/apiClient.ts";
+import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService";
+import { ApiError } from "@/lib/api/apiClient";
 
 // ─── Dev bypass credential ───────────────────────────────────────────────────
 const DEV_EMAIL = "dev@seal.dev";

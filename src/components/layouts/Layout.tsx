@@ -89,7 +89,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean; eventId?: string }>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
   const [appSettings, setAppSettings] = useState({
     dateFormat: "DD/MM/YYYY",
     itemsPerPage: "10",
@@ -106,7 +106,6 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const accentColor = roleColors[role] || COLORS.primary;
   const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const notifCount = notifications.filter(notification => !notification.read).length;
-  const usesFixedContent = currentPage === "users";
 
   useEffect(() => {
     notificationService.getMyNotifications(0, 5)
@@ -115,7 +114,6 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
           id: notification.notificationId,
           title: notification.title,
           body: notification.body,
-          eventId: notification.eventId,
           time: new Date(notification.createdAt).toLocaleString(),
           read: notification.read,
         })));
@@ -130,14 +128,6 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     try {
       await notificationService.markAsRead(id);
     } catch { /* keep local read state */ }
-  };
-
-  const handleNotificationClick = async (notification: { id: string; eventId?: string }) => {
-    await markNotificationRead(notification.id);
-    if (notification.eventId) {
-      setNotifOpen(false);
-      onNavigate("events");
-    }
   };
 
   const markAllNotificationsRead = async () => {
@@ -441,7 +431,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                         key={n.id}
                         whileHover={{ background: "rgba(244,121,32,0.04)" }}
                         className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
-                        onClick={() => handleNotificationClick(n)}
+                        onClick={() => markNotificationRead(n.id)}
                         style={{
                           borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
                           background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
@@ -499,7 +489,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
         </header>
 
         {/* Page content */}
-        <main className={usesFixedContent ? "flex-1 min-h-0 overflow-hidden" : "flex-1 overflow-y-auto"} style={{ background: "transparent" }}>
+        <main className="flex-1 overflow-y-auto" style={{ background: "transparent" }}>
           {children}
         </main>
       </div>

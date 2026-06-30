@@ -1,3 +1,5 @@
+import { API_BASE_URL } from "@/lib/api/apiClient";
+
 export interface ResearchQuery {
   roundId?: string;
   categoryId?: string;
@@ -15,8 +17,6 @@ function buildQuery(params: ResearchQuery & { type?: string } = {}) {
 }
 
 export const researchService = {
-  exportPath: (eventId: string, params?: ResearchQuery) =>
-    `/api/v1/research/events/${eventId}/export${buildQuery(params)}`,
   exportUrl: (eventId: string, params?: ResearchQuery) =>
-    `/api/v1/research/events/${eventId}/export${buildQuery(params)}`,
+    `${API_BASE_URL}/api/v1/research/events/${eventId}/export${buildQuery(params)}`,
 };
