@@ -181,9 +181,6 @@ export const authApi = {
 // ==================== ADMIN ====================
 
 export const adminApi = {
-  approveUser: (id: number) =>
-    request<void>(`/admin/users/${id}/approve`, { method: "PUT" }),
-
   createGuestJudge: (body: GuestJudgeRequest) =>
     request<UserProfileResponse>("/admin/users/guest-judge", { method: "POST", body: JSON.stringify(body) }),
 

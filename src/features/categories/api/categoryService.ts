@@ -42,7 +42,7 @@ function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
 
 export const categoryService = {
   getByEvent: async (eventId: string) =>
-    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`)),
+    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`, false)),
   getById: (id: string) =>
     api.get<CategoryResponse>(`/api/v1/categories/category/${id}`),
   create: (eventId: string, data: CreateCategoryRequest) =>

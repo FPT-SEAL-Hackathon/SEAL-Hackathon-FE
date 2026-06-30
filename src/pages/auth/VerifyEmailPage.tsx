@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { AlertCircle, CheckCircle, Loader, LogIn, MailCheck } from "lucide-react";
-import { verifyEmail } from "@/features/auth/api/authService";
-import { ApiError } from "@/lib/api/apiClient";
+import { verifyEmail } from "@/features/auth/api/authService.ts";
+import { ApiError } from "@/lib/api/apiClient.ts";
 
 type VerificationState = "loading" | "success" | "invalid" | "expired" | "already-verified";
 

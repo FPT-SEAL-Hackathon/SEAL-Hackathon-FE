@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle, Loader, Search, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
@@ -18,7 +19,18 @@ function normalizeStatus(status: string) {
 }
 
 function labelStatus(status: string) {
+  if (status === "ACTIVE") return "Approved";
+  if (status === "PENDING") return "Pending";
   return status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function isPendingStatus(status: EventParticipantStatus) {
+  return status === "PENDING";
+}
+
+function participantBadgeStatus(status: EventParticipantStatus) {
+  if (status === "ACTIVE") return "approved";
+  return normalizeStatus(status);
 }
 
 function participantId(row: EventParticipantResponse) {
@@ -152,12 +164,20 @@ export function AdminEventParticipantsView() {
       } else {
         await eventParticipantService.bulkUpdateStatus(ids, status, reason);
       }
-      setMessage({ tone: "success", text: "Participant status updated." });
+      const successText = status === "ACTIVE"
+        ? "User approved successfully"
+        : status === "REJECTED"
+          ? "User rejected successfully"
+          : "Participant status updated.";
+      setMessage({ tone: "success", text: successText });
+      toast.success(successText);
       setRejectTarget(null);
       setRejectedReason("");
       await loadParticipants();
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Failed to update participant status." });
+      const errorText = error instanceof Error ? error.message : "Failed to update participant status.";
+      setMessage({ tone: "error", text: errorText });
+      toast.error(errorText);
     } finally {
       setMutating(false);
     }
@@ -278,20 +298,33 @@ export function AdminEventParticipantsView() {
                     <Td>{row.email}</Td>
                     <Td>{row.eventName}</Td>
                     <Td>{row.categoryName || "-"}</Td>
-                    <Td><StatusBadge status={normalizeStatus(row.status)} /></Td>
+                    <Td><StatusBadge status={participantBadgeStatus(row.status)} /></Td>
                     <Td>{formatDate(row.appliedAt ?? row.registeredAt)}</Td>
                     <Td>{formatDate(row.approvedAt)}</Td>
                     <Td>{getApprovedBy(row)}</Td>
                     <Td>
-                      <select
-                        value={row.status}
-                        disabled={mutating}
-                        onChange={event => applyStatus([id], event.target.value as EventParticipantStatus)}
-                        className="px-2 py-1.5 rounded-lg outline-none"
-                        style={{ fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                      >
-                        {EVENT_PARTICIPANT_STATUSES.map(status => <option key={status} value={status}>{labelStatus(status)}</option>)}
-                      </select>
+                      {isPendingStatus(row.status) ? (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={mutating}
+                            onClick={() => applyStatus([id], "ACTIVE")}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={mutating}
+                            onClick={() => setRejectTarget({ ids: [id], status: "REJECTED" })}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>No pending action</span>
+                      )}
                     </Td>
                   </tr>
                 );

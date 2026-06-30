@@ -67,15 +67,19 @@ export interface EventPrizeSummary {
 }
 
 export interface TotalPrizeSummary {
-  totalPrize: number;
-  currency: string;
+  totalPrize?: number;
+  currency?: string;
+  totalPrizes?: Array<{
+    totalPrize: number;
+    prizeCurrency: string;
+  }>;
 }
 
 export const awardService = {
   getById: (id: string) =>
     api.get<AwardResponse>(`/api/v1/awards/${id}`),
   getByEvent: (eventId: string) =>
-    api.get<AwardResponse[]>(`/api/v1/awards/events/${eventId}`),
+    api.get<AwardResponse[]>(`/api/v1/awards/events/${eventId}`, false),
   grant: (data: {
     eventId: string; categoryId?: string; teamId: string;
     awardTierId: string; awardTitle: string;
@@ -108,5 +112,5 @@ export const awardService = {
 
   // Public prize summary (no auth required)
   getTotalPrize: () =>
-    api.get<TotalPrizeSummary>(`/api/v1/events/total-prize`, false),
+    api.get<TotalPrizeSummary>(`/api/v1/awards/events/total-prize`, false),
 };

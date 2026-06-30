@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { X, Calendar, MapPin, Users, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { toast } from "sonner";
 import { eventService, type EventResponse, type CreateEventRequest } from "@/features/events/api/eventService";
-import { ApiError } from "@/lib/api/apiClient";
+import { parseApiError } from "@/lib/api/apiClient";
 import { COLORS } from "@/components/shared/UIComponents";
 
 interface Props {
@@ -21,31 +22,88 @@ const STATUS_OPTIONS = [
   { label: "Cancelled", value: "30000000-0000-0000-0000-000000000005" },
 ];
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div>
-      <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em" }}>
+      <label style={{ fontSize: 11, fontWeight: 700, color: error ? COLORS.error : COLORS.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em" }}>
         {label.toUpperCase()}
       </label>
       {children}
+      {error && <div style={{ color: COLORS.error, fontSize: 12, marginTop: 4 }}>{error}</div>}
     </div>
   );
 }
 
-function Input({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
+function Input({ value, onChange, placeholder, type = "text", error }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string; error?: boolean }) {
   return (
     <input
       type={type} value={value} onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
       className="w-full px-3 py-2.5 rounded-xl outline-none transition-all"
-      style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+      style={{ fontSize: 14, border: `1px solid ${error ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
     />
   );
 }
 
 const formatDateTime = (value: string) => {
-    return value ? `${value}:00` : undefined;
+  if (!value) return "";
+  return value.length === 16 ? `${value}:00` : value;
 };
+
+const requiredMessage = (label: string) => `${label} is required.`;
+
+function validateEventForm(form: {
+  eventName: string;
+  location: string;
+  registrationStart: string;
+  registrationEnd: string;
+  eventStartDate: string;
+  eventEndDate: string;
+  minTeamSize: string;
+  maxTeamSize: string;
+}) {
+  const errors: Record<string, string> = {};
+  const minTeamSize = Number(form.minTeamSize);
+  const maxTeamSize = Number(form.maxTeamSize);
+
+  if (!form.eventName.trim()) errors.eventName = requiredMessage("Event name");
+  if (!form.location.trim()) errors.location = requiredMessage("Location");
+  if (!form.registrationStart) errors.registrationStart = requiredMessage("Registration start");
+  if (!form.registrationEnd) errors.registrationEnd = requiredMessage("Registration end");
+  if (!form.eventStartDate) errors.eventStartDate = requiredMessage("Event start date");
+  if (!form.eventEndDate) errors.eventEndDate = requiredMessage("Event end date");
+
+  if (!form.minTeamSize) {
+    errors.minTeamSize = requiredMessage("Min team size");
+  } else if (!Number.isFinite(minTeamSize) || minTeamSize < 1) {
+    errors.minTeamSize = "Min team size must be at least 1.";
+  }
+
+  if (!form.maxTeamSize) {
+    errors.maxTeamSize = requiredMessage("Max team size");
+  } else if (!Number.isFinite(maxTeamSize) || maxTeamSize < 1) {
+    errors.maxTeamSize = "Max team size must be at least 1.";
+  }
+
+  if (!errors.minTeamSize && !errors.maxTeamSize && minTeamSize > maxTeamSize) {
+    errors.minTeamSize = "Min team size cannot exceed max team size.";
+    errors.maxTeamSize = "Max team size cannot be less than min team size.";
+  }
+
+  if (form.registrationStart && form.registrationEnd && form.registrationStart > form.registrationEnd) {
+    errors.registrationEnd = "Registration end must be after or equal to registration start.";
+  }
+
+  if (form.eventStartDate && form.eventEndDate && form.eventStartDate > form.eventEndDate) {
+    errors.eventEndDate = "Event end date must be after or equal to event start date.";
+  }
+
+  if (form.registrationEnd && form.eventStartDate && form.registrationEnd.slice(0, 10) > form.eventStartDate) {
+    errors.registrationEnd = "Registration end date cannot be after event start date.";
+  }
+
+  return errors;
+}
 
 export function EventModal({ event, onClose, onSaved }: Props) {
   const isEdit = !!event;
@@ -99,32 +157,48 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const set = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }));
+  const set = (k: keyof typeof form, v: string) => {
+    setForm(p => ({ ...p, [k]: v }));
+    if (fieldErrors[k]) {
+      setFieldErrors(prev => ({ ...prev, [k]: "" }));
+    }
+  };
 
   const handleSave = async () => {
-    if (!form.eventName.trim()) { setError("Event name is required."); return; }
+    const errors = validateEventForm(form);
+    setFieldErrors(errors);
+    setError("");
+    if (Object.keys(errors).length > 0) return;
+
     setLoading(true); setError("");
+    const minTeamSize = Number(form.minTeamSize);
+    const maxTeamSize = Number(form.maxTeamSize);
     try {
       const payload: CreateEventRequest = {
-        eventName: form.eventName,
+        eventName: form.eventName.trim(),
         description: form.description || undefined,
-        location: form.location || undefined,
+        location: form.location.trim(),
         bannerImageUrl: form.bannerImageUrl || undefined,
         eventStatusId: form.eventStatusId,
         registrationStart: formatDateTime(form.registrationStart),
         registrationEnd: formatDateTime(form.registrationEnd),
-        eventStartDate: form.eventStartDate || undefined,
-        eventEndDate: form.eventEndDate || undefined,
-        maxTeamSize: parseInt(form.maxTeamSize) || undefined,
-        minTeamSize: parseInt(form.minTeamSize) || undefined,
+        eventStartDate: form.eventStartDate,
+        eventEndDate: form.eventEndDate,
+        maxTeamSize,
+        minTeamSize,
       };
       const result = isEdit
         ? await eventService.update(event!.eventId, { ...payload, eventName: payload.eventName, eventStatusId: payload.eventStatusId! })
         : await eventService.create(payload);
+      toast.success(isEdit ? "Event updated successfully." : "Event created successfully.");
       onSaved(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      const parsed = parseApiError(err);
+      setFieldErrors(parsed.fieldErrors ?? {});
+      setError(parsed.message);
+      toast.error(parsed.message);
     } finally {
       setLoading(false);
     }
@@ -156,59 +230,59 @@ export function EventModal({ event, onClose, onSaved }: Props) {
               </div>
             )}
 
-            <Field label="Event Name *">
-              <Input value={form.eventName} onChange={v => set("eventName", v)} placeholder="SEAL Hackathon 2026" />
+            <Field label="Event Name *" error={fieldErrors.eventName}>
+              <Input value={form.eventName} onChange={v => set("eventName", v)} placeholder="SEAL Hackathon 2026" error={!!fieldErrors.eventName} />
             </Field>
 
-            <Field label="Description">
+            <Field label="Description" error={fieldErrors.description}>
               <textarea value={form.description} onChange={e => set("description", e.target.value)}
                 placeholder="Brief description of the event..."
                 rows={3} className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
+                style={{ fontSize: 14, border: `1px solid ${fieldErrors.description ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
             </Field>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Location">
-                <Input value={form.location} onChange={v => set("location", v)} placeholder="FPT University, Hanoi" />
+              <Field label="Location" error={fieldErrors.location}>
+                <Input value={form.location} onChange={v => set("location", v)} placeholder="FPT University, Hanoi" error={!!fieldErrors.location} />
               </Field>
-              <Field label="Status">
+              <Field label="Status" error={fieldErrors.eventStatusId}>
                 <select value={form.eventStatusId} onChange={e => set("eventStatusId", e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                  style={{ fontSize: 14, border: `1px solid ${fieldErrors.eventStatusId ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
                   {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Registration Start">
-                <Input type="datetime-local" value={form.registrationStart} onChange={v => set("registrationStart", v)} />
+              <Field label="Registration Start" error={fieldErrors.registrationStart}>
+                <Input type="datetime-local" value={form.registrationStart} onChange={v => set("registrationStart", v)} error={!!fieldErrors.registrationStart} />
               </Field>
-              <Field label="Registration End">
-                <Input type="datetime-local" value={form.registrationEnd} onChange={v => set("registrationEnd", v)} />
-              </Field>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Event Start Date">
-                <Input type="date" value={form.eventStartDate} onChange={v => set("eventStartDate", v)} />
-              </Field>
-              <Field label="Event End Date">
-                <Input type="date" value={form.eventEndDate} onChange={v => set("eventEndDate", v)} />
+              <Field label="Registration End" error={fieldErrors.registrationEnd}>
+                <Input type="datetime-local" value={form.registrationEnd} onChange={v => set("registrationEnd", v)} error={!!fieldErrors.registrationEnd} />
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Min Team Size">
-                <Input type="number" value={form.minTeamSize} onChange={v => set("minTeamSize", v)} placeholder="2" />
+              <Field label="Event Start Date" error={fieldErrors.eventStartDate}>
+                <Input type="date" value={form.eventStartDate} onChange={v => set("eventStartDate", v)} error={!!fieldErrors.eventStartDate} />
               </Field>
-              <Field label="Max Team Size">
-                <Input type="number" value={form.maxTeamSize} onChange={v => set("maxTeamSize", v)} placeholder="5" />
+              <Field label="Event End Date" error={fieldErrors.eventEndDate}>
+                <Input type="date" value={form.eventEndDate} onChange={v => set("eventEndDate", v)} error={!!fieldErrors.eventEndDate} />
               </Field>
             </div>
 
-            <Field label="Banner Image URL">
-              <Input value={form.bannerImageUrl} onChange={v => set("bannerImageUrl", v)} placeholder="https://..." />
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Min Team Size" error={fieldErrors.minTeamSize}>
+                <Input type="number" value={form.minTeamSize} onChange={v => set("minTeamSize", v)} placeholder="2" error={!!fieldErrors.minTeamSize} />
+              </Field>
+              <Field label="Max Team Size" error={fieldErrors.maxTeamSize}>
+                <Input type="number" value={form.maxTeamSize} onChange={v => set("maxTeamSize", v)} placeholder="5" error={!!fieldErrors.maxTeamSize} />
+              </Field>
+            </div>
+
+            <Field label="Banner Image URL" error={fieldErrors.bannerImageUrl}>
+              <Input value={form.bannerImageUrl} onChange={v => set("bannerImageUrl", v)} placeholder="https://..." error={!!fieldErrors.bannerImageUrl} />
             </Field>
           </div>
 
