@@ -1,6 +1,6 @@
-const BASE_URL = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/api/v1`
-  : (import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080/api/v1");
+import { API_BASE_URL, TOKEN_KEY } from "@/lib/api/apiClient";
+
+const API_V1_BASE_URL = `${API_BASE_URL}/api/v1`;
 
 // ==================== REQUEST TYPES ====================
 
@@ -142,8 +142,10 @@ export interface NotificationDTO {
 // ==================== HTTP CLIENT ====================
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem("seal-token");
-  const res = await fetch(`${BASE_URL}${url}`, {
+  const token = localStorage.getItem(TOKEN_KEY);
+  const normalizedUrl = url.startsWith("/") ? url : `/${url}`;
+  const baseUrl = normalizedUrl.startsWith("/auth/") ? API_BASE_URL : API_V1_BASE_URL;
+  const res = await fetch(`${baseUrl}${normalizedUrl}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -170,7 +172,7 @@ export const authApi = {
     request<{ accessToken: string; refreshToken: string }>("/auth/login", { method: "POST", body: JSON.stringify(body) }),
 
   refreshToken: (refreshToken: string) =>
-    request<{ accessToken: string }>("/auth/refresh-token", { method: "POST", body: JSON.stringify({ refreshToken }) }),
+    request<{ accessToken: string }>("/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken }) }),
 
   getMe: () =>
     request<UserProfileResponse>("/users/me"),
