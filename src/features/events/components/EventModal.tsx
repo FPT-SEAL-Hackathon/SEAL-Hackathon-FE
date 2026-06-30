@@ -14,10 +14,11 @@ interface Props {
 // Event status IDs — these need to match your backend seed data UUIDs
 // Using placeholder values; replace with real UUIDs from your DB
 const STATUS_OPTIONS = [
-  { label: "Draft / Upcoming", value: "00000000-0000-0000-0000-000000000001" },
-  { label: "Open (Registration)", value: "00000000-0000-0000-0000-000000000002" },
-  { label: "Active / In Progress", value: "00000000-0000-0000-0000-000000000003" },
-  { label: "Completed", value: "00000000-0000-0000-0000-000000000004" },
+  { label: "Draft", value: "30000000-0000-0000-0000-000000000001" },
+  { label: "Registration Open", value: "30000000-0000-0000-0000-000000000002" },
+  { label: "Ongoing", value: "30000000-0000-0000-0000-000000000003" },
+  { label: "Completed", value: "30000000-0000-0000-0000-000000000004" },
+  { label: "Cancelled", value: "30000000-0000-0000-0000-000000000005" },
 ];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -42,6 +43,10 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
   );
 }
 
+const formatDateTime = (value: string) => {
+    return value ? `${value}:00` : undefined;
+};
+
 export function EventModal({ event, onClose, onSaved }: Props) {
   const isEdit = !!event;
   const [form, setForm] = useState({
@@ -49,7 +54,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     description: event?.description ?? "",
     location: event?.location ?? "",
     bannerImageUrl: event?.bannerImageUrl ?? "",
-    eventStatusId: event?.eventStatusId ?? STATUS_OPTIONS[0].value,
+    eventStatusId: event?.eventStatus?.eventStatusId ?? STATUS_OPTIONS[0].value,
     registrationStart: event?.registrationStart?.slice(0, 16) ?? "",
     registrationEnd: event?.registrationEnd?.slice(0, 16) ?? "",
     eventStartDate: event?.eventStartDate ?? "",
@@ -57,6 +62,41 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     maxTeamSize: String(event?.maxTeamSize ?? 5),
     minTeamSize: String(event?.minTeamSize ?? 2),
   });
+
+  useEffect(() => {
+    if (!event) return;
+
+    setForm({
+      eventName: event.eventName ?? "",
+      description: event.description ?? "",
+      location: event.location ?? "",
+      bannerImageUrl: event.bannerImageUrl ?? "",
+
+      eventStatusId:
+        event.eventStatus?.eventStatusId ??
+        STATUS_OPTIONS[0].value,
+
+      registrationStart:
+        event.registrationStart?.slice(0,16) ?? "",
+
+      registrationEnd:
+        event.registrationEnd?.slice(0,16) ?? "",
+
+      eventStartDate:
+        event.eventStartDate ?? "",
+
+      eventEndDate:
+        event.eventEndDate ?? "",
+
+      maxTeamSize:
+        String(event.maxTeamSize ?? 5),
+
+      minTeamSize:
+        String(event.minTeamSize ?? 2),
+    });
+
+  }, [event]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,8 +112,8 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         location: form.location || undefined,
         bannerImageUrl: form.bannerImageUrl || undefined,
         eventStatusId: form.eventStatusId,
-        registrationStart: form.registrationStart ? new Date(form.registrationStart).toISOString() : undefined,
-        registrationEnd: form.registrationEnd ? new Date(form.registrationEnd).toISOString() : undefined,
+        registrationStart: formatDateTime(form.registrationStart),
+        registrationEnd: formatDateTime(form.registrationEnd),
         eventStartDate: form.eventStartDate || undefined,
         eventEndDate: form.eventEndDate || undefined,
         maxTeamSize: parseInt(form.maxTeamSize) || undefined,

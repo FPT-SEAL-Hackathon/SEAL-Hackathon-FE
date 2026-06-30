@@ -1,148 +1,181 @@
-import { createBrowserRouter, Navigate, Outlet, useParams, useNavigate, useLocation } from "react-router";
-import { useState, useEffect } from "react";
-import { useAuth, AuthProvider } from "@/features/auth/store/authStore";
-import { loadUser } from "@/lib/api/apiClient";
+import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router";
+import { DEFAULT_PAGE_BY_ROLE, canAccessPage } from "@/auth/permissions/permissions";
+import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, type Role } from "@/auth/rbac/roles";
+import { useAuth } from "@/features/auth/store/authStore";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
+import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { LandingPage } from "@/pages/landing/LandingPage";
-import { DevHub } from "@/pages/dev/DevHub";
 import { Layout } from "@/components/layouts/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
-import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
-import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
-
-const roleDefaultPages: Record<string, string> = {
-  member:   "dashboard",
-  leader:   "dashboard",
-  judge:    "rounds",
-  mentor:   "tracks",
-  admin:    "dashboard",
-};
+import { ForbiddenPage } from "@/pages/ForbiddenPage";
+import { DevHub } from "@/pages/dev/DevHub";
 
 function RequireAuth() {
-  const { user } = useAuth();
+  const { isAuthenticated, role } = useAuth();
   const location = useLocation();
 
-  if (!user) {
+  if (!isAuthenticated || !role) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   return <Outlet />;
 }
 
-function HubRoute() {
+// ─── Dev Hub guard ──────────────────────────────────────────────────────────
+function DevRoute() {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
-  
+  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
+  if (!isDevMode) return <Navigate to="/login" replace />;
+
   const handleNavigate = (role: string, page: string) => {
     navigate(`/${role}/${page}`);
   };
 
-  const handleLogout = async () => {
-    await signOut();
-    navigate("/");
+  const handleLogout = () => {
+    localStorage.removeItem("seal_dev_mode");
+    navigate("/", { replace: true });
   };
 
   return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
 }
 
+function HomeRoute() {
+  const { isAuthenticated, role } = useAuth();
+  const navigate = useNavigate();
+  if (!isAuthenticated || !role) {
+    return (
+      <LandingPage
+        onGoToLogin={() => navigate("/login")}
+        onGoToRegister={() => navigate("/register")}
+      />
+    );
+  }
+  return <Navigate to={getDefaultPath(role)} replace />;
+}
+
+function RoleRedirect() {
+  const { role } = useAuth();
+  if (!role) return <Navigate to="/login" replace />;
+  return <Navigate to={getDefaultPath(role)} replace />;
+}
+
+function AuthRoute({ mode }: { mode: "login" | "register" }) {
+  const { isAuthenticated, role, setAuth } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from?.pathname;
+
+  if (isAuthenticated && role) {
+    return <Navigate to={from || getDefaultPath(role)} replace />;
+  }
+
+  return (
+    <AuthPages
+      mode={mode}
+      onBackToLanding={() => navigate("/", { replace: true })}
+      onLogin={(roleOrMarker) => {
+        // Dev bypass shortcut
+        if (roleOrMarker === "__dev__") {
+          navigate("/dev", { replace: true });
+          return;
+        }
+        const raw = localStorage.getItem("seal_user");
+        if (!raw) return;
+        const user = JSON.parse(raw);
+        setAuth(user);
+        const nextRole = roleFromUserType(user.userType);
+        navigate(from || getDefaultPath(nextRole), { replace: true });
+      }}
+      onSwitchToLogin={() => navigate("/login", { state: location.state })}
+      onSwitchToRegister={() => navigate("/register", { state: location.state })}
+    />
+  );
+}
+
 function MainLayout() {
-  const { user } = useAuth();
-  const { role, page } = useParams();
+  const { role, user, signOut } = useAuth();
+  const params = useParams();
   const navigate = useNavigate();
 
-  const [isDark, setIsDark] = useState(() => localStorage.getItem("seal-theme") === "dark");
+  if (!role) return <Navigate to="/login" replace />;
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-    localStorage.setItem("seal-theme", isDark ? "dark" : "light");
-  }, [isDark]);
+  const routeRole = params.role;
+  const page = params.page ?? DEFAULT_PAGE_BY_ROLE[role];
+
+  if (routeRole !== getRoleRouteSegment(role)) {
+    return <Navigate to="/403" replace />;
+  }
+
+  if (!canAccessPage(role, page)) {
+    return <Navigate to="/403" replace />;
+  }
 
   const handlePageNavigate = (newPage: string) => {
-    navigate(`/${role}/${newPage}`);
-  };
-
-  const handleRoleChange = () => {
-    navigate("/hub");
-  };
-
-  if (!user || !role) return null;
-
-  const renderDashboard = () => {
-    const currentPage = page || "dashboard";
-    switch (role) {
-      case "member":   return <MemberDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "leader":   return <LeaderDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "judge":    return <JudgeDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "mentor":   return <MentorDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      case "admin":    return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
-      default:         return <AdminDashboard currentPage={currentPage} onNavigate={handlePageNavigate} />;
+    if (!canAccessPage(role, newPage)) {
+      navigate("/403");
+      return;
     }
+    navigate(`/${getRoleRouteSegment(role)}/${newPage}`);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/", { replace: true });
   };
 
   return (
     <Layout
       role={role}
-      currentPage={page || "dashboard"}
+      currentPage={page}
       onNavigate={handlePageNavigate}
-      onRoleChange={handleRoleChange}
-      isDark={isDark}
-      onToggleDark={() => setIsDark(v => !v)}
+      onRoleChange={handleLogout}
+      userName={user?.fullName ?? "User"}
     >
-      {renderDashboard()}
+      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} />
     </Layout>
   );
 }
 
-
-
-function AuthRoute() {
-  const { user, setAuth } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const from = location.state?.from?.pathname || "/hub";
-
-  if (user) {
-    return <Navigate to={from} replace />;
+function DashboardByRole({ role, currentPage, onNavigate }: { role: Role; currentPage: string; onNavigate: (page: string) => void }) {
+  if (isStudent(role)) {
+    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
-
-  return <AuthPages onLogin={() => {
-    const freshUser = loadUser<any>();
-    if (freshUser) {
-      setAuth(freshUser);
-    }
-    navigate("/hub");
-  }} />;
+  if (isJudge(role)) {
+    return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+  }
+  if (isOrganizer(role)) {
+    return <AdminDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+  }
+  return null;
 }
 
-function LandingRoute() {
-  const navigate = useNavigate();
-  return <LandingPage onGoToAuth={() => navigate("/login")} />;
+function getDefaultPath(role: Role): string {
+  return `/${getRoleRouteSegment(role)}/${DEFAULT_PAGE_BY_ROLE[role]}`;
+}
+
+function roleFromUserType(userType: string): Role {
+  const role = normalizeRole(userType);
+  if (!role) throw new Error(`Unsupported user type: ${userType}`);
+  return role;
 }
 
 export const router = createBrowserRouter([
+  { path: "/", element: <HomeRoute /> },
+  { path: "/login", element: <AuthRoute mode="login" /> },
+  { path: "/register", element: <AuthRoute mode="register" /> },
+  { path: "/verify-email", element: <VerifyEmailPage /> },
+  { path: "/403", element: <ForbiddenPage /> },
+  { path: "/dev", element: <DevRoute /> },
   {
     path: "/",
-    element: <Outlet />,
+    element: <RequireAuth />,
     children: [
-      {
-        index: true,
-        element: <LandingRoute />,
-      },
-      {
-        path: "login",
-        element: <AuthRoute />,
-      },
-      {
-        path: "/",
-        element: <RequireAuth />,
-        children: [
-          { path: "hub", element: <HubRoute /> },
-          { path: ":role", element: <Navigate to="/hub" replace /> },
-          { path: ":role/:page", element: <MainLayout /> },
-        ],
-      },
+      { path: "dashboard", element: <RoleRedirect /> },
+      { path: ":role", element: <RoleRedirect /> },
+      { path: ":role/:page", element: <MainLayout /> },
     ],
   },
+  { path: "*", element: <Navigate to="/" replace /> },
 ]);

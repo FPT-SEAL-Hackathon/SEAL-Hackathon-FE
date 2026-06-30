@@ -1,4 +1,7 @@
 import { useState, useRef, useEffect } from "react";
+import { getMenuForRole } from "@/auth/permissions/navigation";
+import { ROLES, getRoleLabel, type Role } from "@/auth/rbac/roles";
+import { notificationService } from "@/features/notifications/api/notificationService";
 import { motion, AnimatePresence } from "motion/react";
 import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
@@ -8,7 +11,6 @@ import {
   UserCheck, FolderOpen,
   Target, TrendingUp, MessageSquare, User, Wrench
 } from "lucide-react";
-import { notificationService } from "@/features/notifications/api/notificationService";
 
 
 const COLORS = {
@@ -36,81 +38,44 @@ const glassSurface: React.CSSProperties = {
   boxShadow: "var(--glass-shadow)",
 };
 
-const roleMenus: Record<string, { icon: React.ElementType; label: string; key: string }[]> = {
-  member: [
-    { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
-    { icon: Users, label: "My Team", key: "team" },
-    { icon: Calendar, label: "Events", key: "events" },
-    { icon: Trophy, label: "Leaderboard", key: "leaderboard" },
-    { icon: Bell, label: "Notifications", key: "notifications" },
-  ],
-  leader: [
-    { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
-    { icon: Users, label: "Team Management", key: "team" },
-    { icon: UserCheck, label: "Join Requests", key: "requests" },
-    { icon: FolderOpen, label: "Submission Center", key: "submissions" },
-    { icon: Trophy, label: "Rankings", key: "rankings" },
-    { icon: Bell, label: "Notifications", key: "notifications" },
-    { icon: MessageSquare, label: "Judge Feedback", key: "feedback" },
-    { icon: Wrench, label: "Settings", key: "settings" },
-  ],
-  judge: [
-    { icon: ClipboardList, label: "Assigned Rounds", key: "rounds" },
-    { icon: FileText, label: "Submissions", key: "submissions" },
-    { icon: Star, label: "Scoring", key: "scoring" },
-    { icon: BarChart2, label: "Calibration", key: "calibration" },
-    { icon: Clock, label: "History", key: "history" },
-  ],
-  mentor: [
-    { icon: Target, label: "Assigned Tracks", key: "tracks" },
-    { icon: Users, label: "Teams", key: "teams" },
-    { icon: TrendingUp, label: "Mentoring Progress", key: "progress" },
-    { icon: Calendar, label: "Schedule", key: "schedule" },
-  ],
-  admin: [
-    { icon: LayoutDashboard, label: "Dashboard", key: "dashboard" },
-    { icon: Calendar, label: "Events", key: "events" },
-    { icon: BookOpen, label: "Categories", key: "categories" },
-    { icon: GitBranch, label: "Rounds", key: "rounds" },
-    { icon: Star, label: "Criteria", key: "criteria" },
-    { icon: Users, label: "Users", key: "users" },
-    { icon: UserCheck, label: "Assignments", key: "assignments" },
-    { icon: Trophy, label: "Rankings", key: "rankings" },
-    { icon: BarChart2, label: "Reports", key: "reports" },
-    { icon: Database, label: "Data Export", key: "data-export" },
-    { icon: Bell, label: "Notifications", key: "notifications" },
-    { icon: Award, label: "Awards", key: "awards" },
-    { icon: Shield, label: "Audit Logs", key: "audit" },
-    { icon: Wrench, label: "Settings", key: "settings" },
-  ],
+const iconRegistry: Record<string, React.ElementType> = {
+  LayoutDashboard,
+  Users,
+  Calendar,
+  Trophy,
+  Bell,
+  FileText,
+  Star,
+  ClipboardList,
+  BarChart2,
+  Shield,
+  GitBranch,
+  Clock,
+  Award,
+  BookOpen,
+  UserCheck,
+  FolderOpen,
+  Wrench,
 };
 
-const roleProfileKey: Record<string, string | null> = {
-  member: "profile",
-  leader: "profile",
-  judge: "profile",
-  mentor: "profile",
-  admin: "profile",
+const roleProfileKey: Record<Role, string> = {
+  [ROLES.FPT_STUDENT]: "profile",
+  [ROLES.EXTERNAL_STUDENT]: "profile",
+  [ROLES.INTERNAL_JUDGE]: "profile",
+  [ROLES.GUEST_JUDGE]: "profile",
+  [ROLES.ORGANIZER]: "profile",
 };
 
-const roleLabels: Record<string, string> = {
-  member: "Team Member",
-  leader: "Team Leader",
-  judge: "Judge",
-  mentor: "Mentor",
-  admin: "Event Coordinator",
-};
-
-const roleColors: Record<string, string> = {
-  member: "#F47920",
-  leader: "#009444",
-  judge: "#F59E0B",
-  mentor: "#009444",
-  admin: "#e53e2e",
+const roleColors: Record<Role, string> = {
+  [ROLES.FPT_STUDENT]: "#F47920",
+  [ROLES.EXTERNAL_STUDENT]: "#009444",
+  [ROLES.INTERNAL_JUDGE]: "#F59E0B",
+  [ROLES.GUEST_JUDGE]: "#7C3AED",
+  [ROLES.ORGANIZER]: "#e53e2e",
 };
 
 interface LayoutProps {
-  role: string;
+  role: Role;
   currentPage: string;
   onNavigate: (page: string) => void;
   onRoleChange: () => void;
@@ -137,7 +102,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     soundEnabled: false,
   });
   const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const menus = roleMenus[role] || [];
+  const menus = getMenuForRole(role);
   const accentColor = roleColors[role] || COLORS.primary;
   const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const notifCount = notifications.filter(notification => !notification.read).length;
@@ -261,7 +226,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto py-2 space-y-0.5" style={{ width: 260 }}>
           {menus.map((item) => {
-            const Icon = item.icon;
+            const Icon = iconRegistry[item.icon] ?? LayoutDashboard;
             const isActive = currentPage === item.key;
             return (
               <button
@@ -494,11 +459,11 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
             {/* User — click navigates directly to profile */}
             <motion.div
               whileHover={{ scale: 1.02 }}
-              onClick={() => { if (roleProfileKey[role]) onNavigate(roleProfileKey[role]!); }}
+              onClick={() => onNavigate(roleProfileKey[role])}
               className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl transition-colors"
               style={{
                 background: "rgba(244,121,32,0.05)",
-                cursor: roleProfileKey[role] ? "pointer" : "default",
+                cursor: "pointer",
               }}
             >
               <div
@@ -517,7 +482,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               </div>
               <div className="hidden md:block">
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{userName}</div>
-                <div style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.02em" }}>{roleLabels[role]}</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", letterSpacing: "0.02em" }}>{getRoleLabel(role)}</div>
               </div>
             </motion.div>
           </div>
@@ -753,4 +718,4 @@ function SettingsToggle({ label, desc, value, accent, onChange }: { label: strin
   );
 }
 
-export { COLORS, roleLabels, roleColors };
+export { COLORS, roleColors };
