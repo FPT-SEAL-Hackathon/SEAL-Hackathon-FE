@@ -1,5 +1,4 @@
-import { normalizeRole, type Role } from "@/auth/rbac/roles";
-import { API_BASE_URL, api, clearTokens, getAccessToken, getRefreshToken, saveUser, setTokens } from "@/lib/api/apiClient";
+import { api, clearTokens, getAccessToken, getRefreshToken, saveUser, setTokens } from "@/lib/api/apiClient";
 
 export interface LoginRequest {
   email: string;
@@ -29,14 +28,17 @@ export const REGISTER_USER_TYPES = [
 ] as const;
 
 export interface UserResponse {
-  id: string;
+  userId: string;
   email: string;
   fullName: string;
-  phone: string;
-  userType: string;
+  phone?: string;
+  role: string;
+  roleName?: string;
   accountStatus: string;
-  studentCode: string;
-  universityName: string;
+  accountStatusName?: string;
+  fptStudentCode?: string;
+  externalStudentCode?: string;
+  universityName?: string;
   createdAt: string;
 }
 
@@ -50,19 +52,37 @@ export interface TokenResponse {
   accessToken: string;
 }
 
-export function userTypeToRole(userType: string): Role {
-  const role = normalizeRole(userType);
-  if (!role) {
-    throw new Error(`Unsupported user type: ${userType}`);
-  }
-  return role;
+type RawUserResponse = UserResponse & {
+  id?: string;
+  userType?: string;
+  userTypeName?: string;
+  studentCode?: string;
+};
+
+function normalizeAuthUser(raw: RawUserResponse): UserResponse {
+  const role = raw.role ?? raw.userType ?? "";
+  return {
+    userId: raw.userId ?? raw.id ?? "",
+    email: raw.email,
+    fullName: raw.fullName,
+    phone: raw.phone,
+    role,
+    roleName: raw.roleName ?? raw.userTypeName,
+    accountStatus: raw.accountStatus,
+    accountStatusName: raw.accountStatusName,
+    fptStudentCode: raw.fptStudentCode ?? (role === "FPT_STUDENT" ? raw.studentCode : undefined),
+    externalStudentCode: raw.externalStudentCode ?? (role === "EXTERNAL_STUDENT" ? raw.studentCode : undefined),
+    universityName: raw.universityName,
+    createdAt: raw.createdAt,
+  };
 }
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
-  const res = await api.post<LoginResponse>("/auth/login", data, false);
-  setTokens(res.accessToken, res.refreshToken);
-  saveUser(res.user);
-  return res;
+  const res = await api.post<LoginResponse & { user: RawUserResponse }>("/api/v1/auth/login", data, false);
+  const normalized = { ...res, user: normalizeAuthUser(res.user) };
+  setTokens(normalized.accessToken, normalized.refreshToken);
+  saveUser(normalized.user);
+  return normalized;
 }
 
 export async function register(data: RegisterRequest): Promise<UserResponse> {
@@ -74,14 +94,7 @@ export async function logout(): Promise<void> {
   const refreshToken = getRefreshToken();
   if (accessToken && refreshToken) {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ refreshToken }),
-      });
+      await api.post<void>("/auth/logout", { refreshToken });
     } catch {
       // Clear local session even if the backend logout call fails.
     }

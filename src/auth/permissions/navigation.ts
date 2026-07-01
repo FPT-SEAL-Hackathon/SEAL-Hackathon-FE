@@ -27,17 +27,15 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.INTERNAL_JUDGE]: [
-    { icon: "ClipboardList", label: "Assigned Rounds", key: "rounds" },
-    { icon: "FileText", label: "Assigned Submissions", key: "submissions" },
-    { icon: "Star", label: "Scoring", key: "scoring" },
+    { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
+    { icon: "Calendar", label: "Schedule", key: "schedule" },
     { icon: "Clock", label: "History", key: "history" },
   ],
   [ROLES.GUEST_JUDGE]: [
-    { icon: "ClipboardList", label: "Assigned Rounds", key: "rounds" },
-    { icon: "FileText", label: "Assigned Submissions", key: "submissions" },
-    { icon: "Star", label: "Scoring", key: "scoring" },
+    { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
+    { icon: "Calendar", label: "Schedule", key: "schedule" },
     { icon: "Clock", label: "History", key: "history" },
   ],
   [ROLES.ORGANIZER]: [
