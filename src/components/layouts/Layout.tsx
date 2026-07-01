@@ -43,6 +43,7 @@ export function Layout({
   });
 
   const accentColor = roleColors[role] || COLORS.primary;
+  const lockRouteScroll = role === "ROLE_ORGANIZER" && (currentPage === "users" || currentPage === "event-participants");
 
   return (
     <div
@@ -67,7 +68,10 @@ export function Layout({
         />
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto" style={{ background: "transparent" }}>
+        <main
+          className={`flex-1 min-h-0 ${lockRouteScroll ? "overflow-hidden" : "overflow-y-auto"}`}
+          style={{ background: "transparent" }}
+        >
           {children}
         </main>
       </div>
