@@ -70,7 +70,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [hoveredNavKey, setHoveredNavKey] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; senderName?: string; time: string; read: boolean }>>([]); 
   const [appSettings, setAppSettings] = useState({
     dateFormat: "DD/MM/YYYY",
     itemsPerPage: "10",
@@ -116,12 +116,40 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifCount = notifications.filter(n => !n.read).length;
 
+  // Fetch real notifications from API and keep in sync
+  useEffect(() => {
+    const fetchNotifs = () => {
+      notificationService.getMyNotifications(0, 20)
+        .then(page => {
+          setNotifications(
+            page.content.map(n => ({
+              id: n.notificationId,
+              title: n.title,
+              body: n.body,
+              senderName: n.senderName,
+              time: n.createdAt
+                ? new Date(n.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                : "",
+              read: n.read,
+            }))
+          );
+        })
+        .catch(() => { /* silently ignore if user has no notifications endpoint */ });
+    };
+
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30_000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
+
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    notificationService.markAllAsRead().catch(() => {});
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    notificationService.markAsRead(id).catch(() => {});
   };
 
   // ── User avatar ───────────────────────────────────────────────────────────
@@ -441,8 +469,15 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                           style={{ width: 7, height: 7, marginTop: 6, flexShrink: 0, background: n.read ? "var(--text-muted)" : accentColor }}
                         />
                         <div className="min-w-0">
-                          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 }}>{n.body}</div>
+                          {/* Sender name */}
+                          {n.senderName && (
+                            <div style={{ fontSize: 11, fontWeight: 600, color: accentColor, marginBottom: 1 }}>
+                              {n.senderName}
+                            </div>
+                          )}
+                          {/* Title */}
+                          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", lineHeight: 1.35 }}>{n.title}</div>
+                          {/* Time only — no body in compact dropdown */}
                           <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
                         </div>
                       </motion.div>

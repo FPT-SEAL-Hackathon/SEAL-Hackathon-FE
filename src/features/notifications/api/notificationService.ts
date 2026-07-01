@@ -4,6 +4,7 @@ export interface NotificationItem {
   notificationId: string;
   title: string;
   body: string;
+  senderName?: string;
   eventId?: string;
   read: boolean;
   createdAt: string;
@@ -25,6 +26,7 @@ interface BackendNotification {
   body: string;
   sentAt: string;
   sentByUserId?: string;
+  senderName?: string;
   isRead: boolean;
 }
 
@@ -48,6 +50,7 @@ function mapNotification(item: BackendNotification): NotificationItem {
     notificationId: item.id,
     title: item.title,
     body: item.body,
+    senderName: item.senderName,
     eventId: item.eventId,
     read: item.isRead,
     createdAt: item.sentAt,

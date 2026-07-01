@@ -144,6 +144,7 @@ type MemberNotification = {
   id: string;
   title: string;
   body: string;
+  senderName?: string;
   eventId?: string;
   type: "info" | "success" | "warning";
   time: string;
@@ -272,6 +273,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             else if (title.includes("Rejected")) type = "warning";
             return {
               id: n.notificationId, title: n.title, body: n.body,
+              senderName: n.senderName,
               eventId: n.eventId,
               type, time: new Date(n.createdAt).toLocaleDateString("en-US"), read: n.read,
             };
@@ -1040,7 +1042,14 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <span style={{ fontSize: 14, fontWeight: n.read ? 500 : 700, color: COLORS.textPrimary }}>{n.title}</span>
+                    <div>
+                      {n.senderName && (
+                        <div style={{ fontSize: 11, fontWeight: 600, color: iconColor, marginBottom: 2 }}>
+                          {n.senderName}
+                        </div>
+                      )}
+                      <span style={{ fontSize: 14, fontWeight: n.read ? 500 : 700, color: COLORS.textPrimary }}>{n.title}</span>
+                    </div>
                     {!n.read && <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: COLORS.primary }} />}
                   </div>
                   <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{n.body}</p>

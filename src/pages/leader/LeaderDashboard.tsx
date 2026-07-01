@@ -96,7 +96,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
 
-  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; senderName?: string; time: string; read: boolean }>>([]);
   const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
@@ -119,6 +119,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           id: notification.notificationId,
           title: notification.title,
           body: notification.body,
+          senderName: notification.senderName,
           time: formatDate(notification.createdAt),
           read: notification.read,
         })));
@@ -398,10 +399,15 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         ) : notifications.map(notification => (
           <Card key={notification.id} className="p-4" style={{ opacity: notification.read ? 0.75 : 1 }}>
             <div className="flex items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0">
+                {notification.senderName && (
+                  <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.primary, marginBottom: 2 }}>
+                    {notification.senderName}
+                  </div>
+                )}
                 <div style={{ fontSize: 14, fontWeight: notification.read ? 500 : 700, color: COLORS.textPrimary }}>{notification.title}</div>
-                <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{notification.body}</p>
-                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{notification.time}</span>
+                <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4, lineHeight: 1.5 }}>{notification.body}</p>
+                <span style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4, display: "block" }}>{notification.time}</span>
               </div>
               {!notification.read && <Button variant="ghost" size="sm" onClick={() => markRead(notification.id)}>Mark as read</Button>}
             </div>

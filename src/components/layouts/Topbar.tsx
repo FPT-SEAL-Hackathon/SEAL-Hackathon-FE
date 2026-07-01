@@ -13,7 +13,7 @@ interface TopbarProps {
 
 export function Topbar({ userName, role, onNavigate }: TopbarProps) {
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
+  const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; senderName?: string; time: string; read: boolean }>>([]);
   const accentColor = roleColors[role] || COLORS.primary;
   const initials = userName.split(" ").map(n => n[0]).join("").slice(0, 2);
   const notifCount = notifications.filter(notification => !notification.read).length;
@@ -25,6 +25,7 @@ export function Topbar({ userName, role, onNavigate }: TopbarProps) {
           id: notification.notificationId,
           title: notification.title,
           body: notification.body,
+          senderName: notification.senderName,
           time: new Date(notification.createdAt).toLocaleString(),
           read: notification.read,
         })));
@@ -184,8 +185,12 @@ export function Topbar({ userName, role, onNavigate }: TopbarProps) {
                       style={{ width: 7, height: 7, marginTop: 6, flexShrink: 0, background: n.read ? "var(--text-muted)" : accentColor }}
                     />
                     <div className="min-w-0">
-                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
-                      <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 }}>{n.body}</div>
+                      {n.senderName && (
+                        <div style={{ fontSize: 11, fontWeight: 600, color: accentColor, marginBottom: 1 }}>
+                          {n.senderName}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", lineHeight: 1.35 }}>{n.title}</div>
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
                     </div>
                   </motion.div>
