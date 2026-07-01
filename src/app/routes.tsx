@@ -89,12 +89,23 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
     <AuthPages
       mode={mode}
       onBackToLanding={() => navigate("/", { replace: true })}
-      onLogin={(roleOrMarker) => {
+      onLogin={(loginPayload) => {
         // Dev bypass shortcut
-        if (roleOrMarker === "__dev__") {
+        if (loginPayload === "__dev__") {
           navigate("/dev", { replace: true });
           return;
         }
+        if (typeof loginPayload === "string") {
+          const nextRole = roleFromUser(loginPayload);
+          navigate(from || getDefaultPath(nextRole), { replace: true });
+          return;
+        }
+        const nextRole = roleFromUser(loginPayload.role);
+        if (!loginPayload.accountStatus || loginPayload.accountStatus.toUpperCase() !== "ACTIVE") {
+          throw new Error("Login succeeded, but your account is not active.");
+        }
+        setAuth(loginPayload);
+        navigate(from || getDefaultPath(nextRole), { replace: true });
         const raw = localStorage.getItem("seal_user");
         if (!raw) return;
         const user = JSON.parse(raw);
@@ -169,9 +180,9 @@ function getDefaultPath(role: Role): string {
   return `/${getRoleRouteSegment(role)}/${DEFAULT_PAGE_BY_ROLE[role]}`;
 }
 
-function roleFromUserType(userType: string): Role {
-  const role = normalizeRole(userType);
-  if (!role) throw new Error(`Unsupported user type: ${userType}`);
+function roleFromUser(roleCode: string): Role {
+  const role = normalizeRole(roleCode);
+  if (!role) throw new Error("Login succeeded, but the app could not open your dashboard.");
   return role;
 }
 
