@@ -8,6 +8,7 @@ import { rankingService, type EventRankingDTO } from "@/features/rankings/api/ra
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { researchService } from "@/features/research/api/researchService";
+import { settingsService } from "@/features/settings/api/settingsService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
@@ -124,6 +125,16 @@ const createEmptyAwardPattern = (rankPosition: number) => ({
   prizeCurrency: "VND",
 });
 
+const createEmptyManualAwardForm = () => ({
+  categoryId: "",
+  teamId: "",
+  awardTierId: AWARD_TIER_OPTIONS[6].value,
+  awardTitle: "Special Award",
+  description: "",
+  prizeValue: "",
+  prizeCurrency: "VND",
+});
+
 export function AdminDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { t } = useLanguage();
 
@@ -183,6 +194,10 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [autoGrantMessage, setAutoGrantMessage] = useState("");
   const [autoGrantError, setAutoGrantError] = useState("");
   const [autoGrantPreview, setAutoGrantPreview] = useState<Array<{ teamId: string; teamName: string; rankPosition: number; totalScore: number }>>([]);
+  const [manualAwardForm, setManualAwardForm] = useState(createEmptyManualAwardForm);
+  const [manualAwardLoading, setManualAwardLoading] = useState(false);
+  const [manualAwardMessage, setManualAwardMessage] = useState("");
+  const [manualAwardError, setManualAwardError] = useState("");
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
@@ -196,6 +211,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [notificationStatus, setNotificationStatus] = useState("");
   const [notificationError, setNotificationError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaveError, setSettingsSaveError] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
     platformName: "SEAL FPT Hackathon Platform",
     maxTeamSize: "5",
@@ -206,6 +223,24 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     requireEmailVerification: true,
     contactEmail: "seal@fpt.edu.vn",
   });
+
+  // Load system settings from API on mount
+  useEffect(() => {
+    settingsService.getSettings()
+      .then(data => {
+        setSystemSettings({
+          platformName: data.platformName ?? "SEAL FPT Hackathon Platform",
+          maxTeamSize: String(data.maxTeamSize ?? 5),
+          minTeamSize: String(data.minTeamSize ?? 2),
+          submissionGracePeriod: String(data.submissionGracePeriod ?? 30),
+          contactEmail: data.contactEmail ?? "seal@fpt.edu.vn",
+          allowLateSubmissions: data.allowLateSubmissions ?? true,
+          enablePublicLeaderboard: data.enablePublicLeaderboard ?? true,
+          requireEmailVerification: data.requireEmailVerification ?? true,
+        });
+      })
+      .catch(() => { /* use default values on error */ });
+  }, []);
 
   useEffect(() => {
     eventService.getAll()
@@ -236,6 +271,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setCategoryLoadError("");
     setApiCategories([]);
     setAwardPatternCategoryId("");
+    setManualAwardForm(createEmptyManualAwardForm());
     setSelectedSubmissionCategoryId("");
     setSelectedSubmissionRoundId("");
     categoryService.getByEvent(selectedEventId).then(data => {
@@ -245,6 +281,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       if (data[0]) {
         roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
         setAwardPatternCategoryId(data[0].categoryId);
+        setManualAwardForm(prev => ({ ...prev, categoryId: data[0].categoryId }));
         setSelectedSubmissionCategoryId(data[0].categoryId);
       }
     }).catch(error => {
@@ -567,6 +604,96 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsSaveError("");
+    setSettingsSaved(false);
+    try {
+      const saved = await settingsService.updateSettings({
+        platformName: systemSettings.platformName,
+        maxTeamSize: Number(systemSettings.maxTeamSize),
+        minTeamSize: Number(systemSettings.minTeamSize),
+        submissionGracePeriod: Number(systemSettings.submissionGracePeriod),
+        contactEmail: systemSettings.contactEmail,
+        allowLateSubmissions: systemSettings.allowLateSubmissions,
+        enablePublicLeaderboard: systemSettings.enablePublicLeaderboard,
+        requireEmailVerification: systemSettings.requireEmailVerification,
+      });
+      // Sync back with server response
+      setSystemSettings({
+        platformName: saved.platformName ?? systemSettings.platformName,
+        maxTeamSize: String(saved.maxTeamSize ?? systemSettings.maxTeamSize),
+        minTeamSize: String(saved.minTeamSize ?? systemSettings.minTeamSize),
+        submissionGracePeriod: String(saved.submissionGracePeriod ?? systemSettings.submissionGracePeriod),
+        contactEmail: saved.contactEmail ?? systemSettings.contactEmail,
+        allowLateSubmissions: saved.allowLateSubmissions ?? systemSettings.allowLateSubmissions,
+        enablePublicLeaderboard: saved.enablePublicLeaderboard ?? systemSettings.enablePublicLeaderboard,
+        requireEmailVerification: saved.requireEmailVerification ?? systemSettings.requireEmailVerification,
+      });
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+    } catch (error) {
+      setSettingsSaveError(error instanceof Error ? error.message : "Failed to save settings.");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleManualGrantAward = async () => {
+    if (!selectedEventId) {
+      setManualAwardError("Select an event before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.teamId) {
+      setManualAwardError("Select a team before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.awardTierId || !manualAwardForm.awardTitle.trim()) {
+      setManualAwardError("Choose an award tier and enter an award title.");
+      return;
+    }
+
+    const prizeValue = manualAwardForm.prizeValue.trim()
+      ? Number(manualAwardForm.prizeValue)
+      : undefined;
+    if (prizeValue !== undefined && (!Number.isFinite(prizeValue) || prizeValue < 0)) {
+      setManualAwardError("Prize value must be zero or a positive number.");
+      return;
+    }
+
+    setManualAwardLoading(true);
+    setManualAwardError("");
+    setManualAwardMessage("");
+
+    try {
+      const granted = await awardService.grant({
+        eventId: selectedEventId,
+        categoryId: manualAwardForm.categoryId || undefined,
+        teamId: manualAwardForm.teamId,
+        awardTierId: manualAwardForm.awardTierId,
+        awardTitle: manualAwardForm.awardTitle.trim(),
+        description: manualAwardForm.description.trim() || undefined,
+        prizeValue,
+        prizeCurrency: manualAwardForm.prizeCurrency.trim() || "VND",
+      });
+      setApiAwards(prev => [granted, ...prev.filter(award => award.id !== granted.id)]);
+      setManualAwardMessage(`Granted "${granted.awardTitle}" to ${granted.teamName}.`);
+      setManualAwardForm(prev => ({
+        ...prev,
+        teamId: "",
+        awardTierId: AWARD_TIER_OPTIONS[6].value,
+        awardTitle: "Special Award",
+        description: "",
+        prizeValue: "",
+      }));
+      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+    } catch (error) {
+      setManualAwardError(error instanceof Error ? error.message : "Failed to grant manual award.");
+    } finally {
+      setManualAwardLoading(false);
+    }
+  };
+
 
   const viewContext = {
     t,
@@ -677,6 +804,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setAutoGrantError,
     autoGrantPreview,
     setAutoGrantPreview,
+    manualAwardForm,
+    setManualAwardForm,
+    manualAwardLoading,
+    setManualAwardLoading,
+    manualAwardMessage,
+    setManualAwardMessage,
+    manualAwardError,
+    setManualAwardError,
     broadcastTitle,
     setBroadcastTitle,
     broadcastMessage,
@@ -703,8 +838,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setNotificationError,
     settingsSaved,
     setSettingsSaved,
+    settingsSaveError,
+    setSettingsSaveError,
+    settingsSaving,
+    setSettingsSaving,
     systemSettings,
     setSystemSettings,
+    handleSaveSettings,
     filteredUsers,
     updateAwardPattern,
     addAwardPattern,
@@ -718,6 +858,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     handleComputeRankings,
     handlePublishRankings,
     handleAutoGrantAwards,
+    handleManualGrantAward,
     handleBroadcast,
     handleSendTargetedNotification,
     handleDataExport,

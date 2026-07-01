@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { motion } from "motion/react";
 
@@ -347,6 +347,8 @@ export function EmptyState({ icon, title, subtitle, action }: { icon: ReactNode;
 
 // Tabs
 export function Tabs({ tabs, activeTab, onTabChange }: { tabs: { key: string; label: string }[]; activeTab: string; onTabChange: (key: string) => void }) {
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
+
   return (
     <div
       className="flex gap-1 p-1 rounded-2xl mb-6"
@@ -358,24 +360,35 @@ export function Tabs({ tabs, activeTab, onTabChange }: { tabs: { key: string; la
         WebkitBackdropFilter: "blur(16px)",
       }}
     >
-      {tabs.map((tab) => (
-        <motion.button
-          key={tab.key}
-          onClick={() => onTabChange(tab.key)}
-          whileTap={{ scale: 0.97 }}
-          className="px-4 py-2 rounded-xl transition-all duration-150 relative"
-          style={{
-            background: activeTab === tab.key ? "rgba(255,255,255,0.9)" : "transparent",
-            color: activeTab === tab.key ? "#c06010" : "#a07850",
-            fontSize: 13,
-            fontWeight: activeTab === tab.key ? 600 : 400,
-            border: activeTab === tab.key ? "1px solid rgba(244,121,32,0.2)" : "1px solid transparent",
-            boxShadow: activeTab === tab.key ? "0 2px 8px rgba(244,121,32,0.12)" : "none",
-          }}
-        >
-          {tab.label}
-        </motion.button>
-      ))}
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.key;
+        const isHovered = hoveredTab === tab.key;
+        return (
+          <motion.button
+            key={tab.key}
+            onClick={() => onTabChange(tab.key)}
+            onMouseEnter={() => setHoveredTab(tab.key)}
+            onMouseLeave={() => setHoveredTab(null)}
+            whileTap={{ scale: 0.97 }}
+            className="px-4 py-2 rounded-xl transition-all duration-200 relative"
+            style={{
+              background: isActive ? "rgba(255,255,255,0.9)" : isHovered ? "rgba(255,255,255,0.55)" : "transparent",
+              color: isActive || isHovered ? "#c06010" : "#a07850",
+              fontSize: 13,
+              fontWeight: isActive || isHovered ? 600 : 400,
+              border: isActive || isHovered ? "1px solid rgba(244,121,32,0.2)" : "1px solid transparent",
+              boxShadow: isActive
+                ? "0 2px 8px rgba(244,121,32,0.12)"
+                : isHovered
+                  ? "0 4px 14px rgba(244,121,32,0.12)"
+                  : "none",
+              transform: isHovered && !isActive ? "translateY(-1px)" : "translateY(0)",
+            }}
+          >
+            {tab.label}
+          </motion.button>
+        );
+      })}
     </div>
   );
 }
