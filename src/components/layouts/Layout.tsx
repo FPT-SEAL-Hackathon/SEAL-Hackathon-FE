@@ -1,4 +1,4 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { getMenuForRole } from "@/auth/permissions/navigation";
 import { ROLES, getRoleLabel, type Role } from "@/auth/rbac/roles";
 import { notificationService } from "@/features/notifications/api/notificationService";
@@ -11,6 +11,15 @@ import {
   UserCheck, FolderOpen,
   Target, TrendingUp, MessageSquare, User, Wrench
 } from "lucide-react";
+import { COLORS } from "@/components/shared/UIComponents";
+
+const roleColors: Record<string, string> = {
+  ROLE_MEMBER:    COLORS.primary,
+  ROLE_LEADER:    COLORS.secondary,
+  ROLE_JUDGE:     COLORS.warning,
+  ROLE_MENTOR:    COLORS.success,
+  ROLE_ORGANIZER: COLORS.error,
+};
 
 export { COLORS, roleColors };
 
@@ -21,6 +30,40 @@ interface LayoutProps {
   onRoleChange: () => void;
   children: React.ReactNode;
   userName?: string;
+}
+
+/** Reusable toggle row used inside the App Settings panel. */
+function SettingsToggle({
+  label,
+  desc,
+  value,
+  accent,
+  onChange,
+}: {
+  label: string;
+  desc: string;
+  value: boolean;
+  accent: string;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{label}</div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{desc}</div>
+      </div>
+      <div
+        className="rounded-full flex items-center cursor-pointer transition-all"
+        style={{ width: 40, height: 22, background: value ? accent : "var(--glass-border-subtle)", padding: "2px", flexShrink: 0 }}
+        onClick={() => onChange(!value)}
+      >
+        <div
+          className="rounded-full bg-white"
+          style={{ width: 18, height: 18, transform: value ? "translateX(18px)" : "translateX(0)", transition: "transform 0.2s ease" }}
+        />
+      </div>
+    </div>
+  );
 }
 
 export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson" }: LayoutProps) {
@@ -42,6 +85,65 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   const accentColor = roleColors[role] || COLORS.primary;
   const lockRouteScroll = role === "ROLE_ORGANIZER" && (currentPage === "users" || currentPage === "event-participants");
+
+  // Hover-delay: open sidebar only after cursor lingers 200ms to avoid accidental triggers
+  const sidebarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startOpenTimer = () => {
+    if (sidebarTimerRef.current) clearTimeout(sidebarTimerRef.current);
+    sidebarTimerRef.current = setTimeout(() => setSidebarOpen(true), 200);
+  };
+
+  const handleSidebarLeave = () => {
+    if (sidebarTimerRef.current) clearTimeout(sidebarTimerRef.current);
+    setSidebarOpen(false);
+  };
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  const menus = getMenuForRole(role) ?? [];
+
+  // Maps icon string names (from NavItem) to actual Lucide components
+  const iconRegistry: Record<string, React.ComponentType<{ size?: number; style?: React.CSSProperties }>> = {
+    LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
+    FileText, Star, ClipboardList, BarChart2, Shield, Database,
+    GitBranch, Clock, Award, Zap, BookOpen,
+    LogOut, Search, ChevronDown,
+    UserCheck, FolderOpen,
+    Target, TrendingUp, MessageSquare, User, Wrench,
+  };
+
+  // ── Notifications ─────────────────────────────────────────────────────────
+  const [notifOpen, setNotifOpen] = useState(false);
+  const notifCount = notifications.filter(n => !n.read).length;
+
+  const markAllNotificationsRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  };
+
+  const markNotificationRead = (id: string) => {
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  };
+
+  // ── User avatar ───────────────────────────────────────────────────────────
+  const initials = userName
+    .split(" ")
+    .map(w => w[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
+  // Maps role to the profile page key used in navigation
+  const roleProfileKey: Record<string, string> = {
+    ROLE_ORGANIZER:       "profile",
+    ROLE_MEMBER:          "profile",
+    ROLE_LEADER:          "profile",
+    ROLE_JUDGE:           "profile",
+    ROLE_MENTOR:          "profile",
+    ROLE_FPT_STUDENT:     "profile",
+    ROLE_EXTERNAL_STUDENT:"profile",
+    ROLE_INTERNAL_JUDGE:  "profile",
+    ROLE_GUEST_JUDGE:     "profile",
+  };
 
   return (
     <div
