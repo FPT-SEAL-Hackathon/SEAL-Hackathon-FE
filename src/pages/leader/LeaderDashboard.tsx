@@ -31,6 +31,8 @@ import { submissionService, type SubmissionResponse } from "@/features/submissio
 import { teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
+import { MyMentor } from "@/pages/team/MyMentor";
+import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
@@ -565,6 +567,8 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "requests": return renderRequests();
       case "settings": return renderSettings();
       case "profile": return renderProfile();
+      case "mentor": return <MyMentor isLeader={true} onNavigate={onNavigate} />;
+      case "consultations": return <TeamConsultations isLeader={true} />;
       default: return renderDashboard();
     }
   };

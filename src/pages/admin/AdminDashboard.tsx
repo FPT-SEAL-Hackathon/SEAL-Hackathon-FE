@@ -23,6 +23,8 @@ import { AdminRoundsView } from "./components/AdminRoundsView";
 import { AdminCriteriaView } from "./components/AdminCriteriaView";
 import { AdminUsersView } from "./components/AdminUsersView";
 import { AdminAssignmentsView } from "./components/AdminAssignmentsView";
+import { AdminMentorAssignmentsView } from "./components/AdminMentorAssignmentsView";
+import { AssignMentorModal } from "@/features/categories/components/AssignMentorModal";
 import { AdminSubmissionsView } from "./components/AdminSubmissionsView";
 import { AdminRankingsView } from "./components/AdminRankingsView";
 import { AdminReportsView } from "./components/AdminReportsView";
@@ -169,6 +171,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [categoryModal, setCategoryModal] = useState<{ open: boolean; edit?: CategoryResponse }>({ open: false });
   const [roundModal, setRoundModal] = useState<{ open: boolean; edit?: RoundResponse; categoryId?: string }>({ open: false });
   const [assignJudgeModal, setAssignJudgeModal] = useState<{ open: boolean; roundId?: string; roundName?: string }>({ open: false });
+  const [assignMentorModal, setAssignMentorModal] = useState<{ open: boolean; categoryId?: string }>({ open: false });
+  const [mentorAssignmentReloadKey, setMentorAssignmentReloadKey] = useState(0);
 
   const [userSearch, setUserSearch] = useState("");
   const [approvedUsers, setApprovedUsers] = useState<number[]>([]);
@@ -782,6 +786,9 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setRoundModal,
     assignJudgeModal,
     setAssignJudgeModal,
+    assignMentorModal,
+    setAssignMentorModal,
+    mentorAssignmentReloadKey,
     userSearch,
     setUserSearch,
     approvedUsers,
@@ -893,6 +900,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "criteria": return <AdminCriteriaView context={viewContext} />;
       case "users": return <AdminUsersView context={viewContext} />;
       case "assignments": return <AdminAssignmentsView context={viewContext} />;
+      case "assign-mentors": return <AdminMentorAssignmentsView context={viewContext} />;
       case "submissions": return <AdminSubmissionsView context={viewContext} />;
       case "rankings": return <AdminRankingsView context={viewContext} />;
       case "reports": return <AdminReportsView context={viewContext} />;
@@ -969,6 +977,17 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           roundName={assignJudgeModal.roundName ?? ""}
           onClose={() => setAssignJudgeModal({ open: false })}
           onSaved={() => setAssignJudgeModal({ open: false })}
+        />
+      )}
+
+      {assignMentorModal.open && assignMentorModal.categoryId && (
+        <AssignMentorModal
+          categoryId={assignMentorModal.categoryId}
+          onClose={() => setAssignMentorModal({ open: false })}
+          onAssigned={() => {
+            setAssignMentorModal({ open: false });
+            setMentorAssignmentReloadKey(prev => prev + 1);
+          }}
         />
       )}
 
