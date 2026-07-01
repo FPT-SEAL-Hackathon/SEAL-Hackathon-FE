@@ -421,14 +421,32 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setNotificationStatus("");
     setNotificationSending(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      if (notificationTargetMode === "user") {
+        // Send by email directly
+        await notificationService.sendToEmail({
+          recipientEmail: notificationEmail,
+          title: notificationTitle,
+          body: notificationMessage,
+          eventId: selectedEventId ?? undefined,
+        });
+      } else {
+        // Team mode: find all member userIds for the selected team and broadcast
+        const team = apiTeamEligibility.find((t: any) => t.teamId === notificationTeamId);
+        const memberIds: string[] = team?.memberUserIds ?? (team?.leaderUserId ? [team.leaderUserId] : []);
+        if (memberIds.length === 0) throw new Error("No members found for the selected team.");
+        await notificationService.broadcast({
+          recipientUserIds: memberIds,
+          title: notificationTitle,
+          body: notificationMessage,
+          eventId: selectedEventId ?? undefined,
+        });
+      }
       setNotificationStatus("Notification sent successfully!");
       setNotificationTitle("");
       setNotificationMessage("");
       setTimeout(() => setNotificationStatus(""), 3000);
     } catch (err) {
-      setNotificationError("Failed to send notification.");
+      setNotificationError(err instanceof Error ? err.message : "Failed to send notification.");
     } finally {
       setNotificationSending(false);
     }
