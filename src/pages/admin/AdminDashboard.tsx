@@ -891,9 +891,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
+  const lockPageScroll = currentPage === "users" || currentPage === "event-participants";
+
   return (
-    <div className="p-6 space-y-6">
-      {renderPage()}
+    <div className={`h-full min-h-0 p-6 ${lockPageScroll ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+      <div className={lockPageScroll ? "flex-1 min-h-0 overflow-hidden" : ""}>
+        {renderPage()}
+      </div>
 
       {/* ── Modals ─────────────────────────────────────────────────── */}
       {eventModal.open && (

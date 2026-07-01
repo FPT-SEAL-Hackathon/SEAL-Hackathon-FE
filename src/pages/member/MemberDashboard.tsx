@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
+import { toast } from "sonner";
 import {
   Calendar, Trophy, Users, Clock, Bell, CheckCircle,
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
@@ -11,7 +12,8 @@ import {
   ProgressBar, DataTable, Button, AvatarGroup, TimelineItem
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
-import { eventService } from "@/features/events/api/eventService";
+import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
+import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
@@ -57,30 +59,92 @@ function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
 }
 
 type MemberEvent = {
-  id: string;
-  name: string;
-  category: string;
-  deadline: string;
-  status: string;
+  eventId: string;
+  eventName: string;
+  description?: string;
+  eventStartDate?: string;
+  eventEndDate?: string;
+  registrationEnd?: string;
+  location?: string;
+  mode?: string;
+  eventStatus: EventLifecycleStatus | string;
+  participantStatus: EventCardParticipationStatus;
   participants: string;
   tracks: string;
   registered?: boolean;
   prizePool: string;
+  eventParticipantId?: string | null;
+  rejectedReason?: string | null;
+  appliedAt?: string | null;
+  approvedAt?: string | null;
 };
 
-const participantStatusLabels: Record<EventParticipantStatus, string> = {
-  PENDING_APPROVAL: "Pending Approval",
+type EventCardParticipationStatus = UserParticipationStatus;
+
+const participantStatusLabels: Record<EventCardParticipationStatus, string> = {
+  NOT_REGISTERED: "Register for Event",
+  PENDING: "Pending Approval",
   ACTIVE: "Approved",
   REJECTED: "Rejected",
-  SUSPENDED: "Suspended",
-  TEMPORARY: "Temporary",
-  UNVERIFIED: "Unverified",
 };
+
+const restrictedParticipationMessage: Record<Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">, string> = {
+  PENDING: "Waiting for organizer approval.",
+  REJECTED: "Registration rejected.",
+};
+
+function normalizeParticipationStatus(status?: string | null): EventCardParticipationStatus {
+  const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
+  if (!value || value === "NOT_REGISTERED") return "NOT_REGISTERED";
+  if (value === "PENDING_APPROVAL") return "PENDING";
+  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED") return value as EventCardParticipationStatus;
+  return "NOT_REGISTERED";
+}
+
+function mapEvent(event: EventResponse): MemberEvent {
+  const participantStatus = normalizeParticipationStatus(event.participantStatus);
+  return {
+    eventId: event.eventId,
+    eventName: event.eventName,
+    description: event.description ?? "",
+    eventStartDate: event.eventStartDate,
+    eventEndDate: event.eventEndDate,
+    registrationEnd: event.registrationEnd,
+    location: event.location,
+    eventStatus: typeof event.eventStatus === "object" ? event.eventStatus.eventStatusName : event.eventStatusName,
+    participants: "N/A",
+    tracks: "N/A",
+    prizePool: "N/A",
+    participantStatus,
+  };
+}
+
+function mergeEventParticipation(event: MemberEvent, participation?: EventParticipantResponse): MemberEvent {
+  if (!participation) return event;
+  return {
+    ...event,
+    eventParticipantId: participation.eventParticipantId ?? event.eventParticipantId,
+    participantStatus: statusFromParticipation(participation),
+    rejectedReason: participation.rejectedReason ?? event.rejectedReason,
+    appliedAt: participation.appliedAt ?? event.appliedAt,
+    approvedAt: participation.approvedAt ?? event.approvedAt,
+  };
+}
+
+function registrationUnavailableReason(eventStatus?: string | null) {
+  const status = eventStatus?.toUpperCase();
+  if (status === "DRAFT") return "Not open yet";
+  if (status === "CANCELLED") return "Cancelled";
+  if (status === "COMPLETED") return "Completed";
+  if (status === "ONGOING") return "Already started";
+  return "";
+}
 
 type MemberNotification = {
   id: string;
   title: string;
   body: string;
+  eventId?: string;
   type: "info" | "success" | "warning";
   time: string;
   read: boolean;
@@ -105,14 +169,24 @@ const getInitials = (name?: string) =>
     .map(part => part[0]?.toUpperCase())
     .join("") || "U";
 
+function statusFromParticipation(participation: EventParticipantResponse): EventCardParticipationStatus {
+  return normalizeParticipationStatus(participation.participantStatus);
+}
+
+function isApprovedParticipationStatus(status?: string | null) {
+  return status === "ACTIVE";
+}
+
 export function MemberDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { user } = useAuth();
   const displayName = user?.fullName || user?.email || "Member";
   const userInitials = getInitials(displayName);
+  const studentCode = user?.fptStudentCode ?? user?.externalStudentCode ?? "";
 
   // ── Events ──────────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<MemberEvent[]>([]);
   const [participations, setParticipations] = useState<Record<string, EventParticipantResponse>>({});
+  const [eventsError, setEventsError] = useState("");
   const [eventActionLoading, setEventActionLoading] = useState<Record<string, boolean>>({});
   const [eventActionMessage, setEventActionMessage] = useState<Record<string, string>>({});
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
@@ -134,41 +208,56 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }).catch(() => { });
   }, [currentPage]);
 
-  useEffect(() => {
-    eventService.getAll()
-      .then(data => setApiEvents(data.map(e => ({
-        id: e.eventId, name: e.eventName,
-        category: e.description ?? "", deadline: e.registrationEnd ?? e.eventEndDate ?? "",
-        status: e.eventStatus?.eventStatusId || "unknown", participants: "N/A", tracks: "N/A", prizePool: "N/A",
-      }))))
-      .catch(() => { });
-  }, []);
-
-  useEffect(() => {
-    if (apiEvents.length === 0) return;
+  const loadEvents = useCallback(() => {
     let cancelled = false;
-    eventParticipantService.getMyParticipations()
-      .then(data => {
-        if (cancelled) return;
-        const byEvent = Object.fromEntries(data.map(item => [item.eventId, item]));
-        setParticipations(byEvent);
+    const hasToken = !!getAccessToken();
+    const eventsRequest = hasToken ? eventService.getAll(true) : eventService.getPublic();
+    const participationsRequest = hasToken
+      ? eventParticipantService.getMyParticipations().catch(error => {
+        const parsed = parseApiError(error);
+        if (parsed.status === 401) {
+          setEventsError("Your session has expired. Please sign in again.");
+        } else {
+          setEventsError(parsed.message || "Could not load your registration statuses.");
+        }
+        return [] as EventParticipantResponse[];
       })
-      .catch(() => {
-        Promise.all(apiEvents.map(event =>
-          eventParticipantService.getMyParticipation(event.id).then(item => [event.id, item] as const).catch(() => null)
-        )).then(results => {
-          if (cancelled) return;
-          const byEvent: Record<string, EventParticipantResponse> = {};
-          results.forEach(result => {
-            if (result) byEvent[result[0]] = result[1];
-          });
-          setParticipations(byEvent);
-        });
+      : Promise.resolve([] as EventParticipantResponse[]);
+
+    Promise.all([eventsRequest, participationsRequest])
+      .then(([data, myParticipations]) => {
+        if (cancelled) return;
+        const participationByEvent = Object.fromEntries(
+          myParticipations
+            .filter(participation => participation.eventId)
+            .map(participation => [participation.eventId, participation]),
+        );
+        setParticipations(participationByEvent);
+        setApiEvents(data.map(event => mergeEventParticipation(mapEvent(event), participationByEvent[event.eventId])));
+        if (myParticipations.length > 0 || !hasToken) setEventsError("");
+      })
+      .catch(error => {
+        if (cancelled) return;
+        setApiEvents([]);
+        setParticipations({});
+        setEventsError(parseApiError(error).message || "Could not load events.");
       });
     return () => {
       cancelled = true;
     };
-  }, [apiEvents]);
+  }, []);
+
+  useEffect(() => {
+    return loadEvents();
+  }, [loadEvents]);
+
+  useEffect(() => {
+    const handleFocus = () => {
+      loadEvents();
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [loadEvents]);
 
   // ── Notifications ────────────────────────────────────────────────────────────
   const [notifs, setNotifs] = useState<MemberNotification[]>([]);
@@ -176,10 +265,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     notificationService.getMyNotifications()
       .then(page => {
         if (page?.content?.length) {
-          setNotifs(page.content.map((n: any) => ({
-            id: n.notificationId, title: n.title, body: n.body,
-            type: "info", time: new Date(n.createdAt).toLocaleDateString("en-US"), read: n.read,
-          })));
+          setNotifs(page.content.map((n: any) => {
+            const title = n.title || "";
+            let type: "info" | "success" | "warning" = "info";
+            if (title.includes("Approved")) type = "success";
+            else if (title.includes("Rejected")) type = "warning";
+            return {
+              id: n.notificationId, title: n.title, body: n.body,
+              eventId: n.eventId,
+              type, time: new Date(n.createdAt).toLocaleDateString("en-US"), read: n.read,
+            };
+          }));
         }
       })
       .catch(() => { });
@@ -187,14 +283,16 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const [profileForm, setProfileForm] = useState({
     fullName: user?.fullName ?? "",
-    studentId: user?.studentCode ?? "",
+    studentId: studentCode ?? "",
     email: user?.email ?? "",
     phone: user?.phone ?? "",
     github: "", portfolio: "",
     bio: "", major: "",
   });
   const [profileSaved, setProfileSaved] = useState(false);
-  const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.id));
+  const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.userId));
+  const [submissionParticipation, setSubmissionParticipation] = useState<EventParticipantResponse | null>(null);
+  const [submissionParticipationLoading, setSubmissionParticipationLoading] = useState(false);
   const [submissionForm, setSubmissionForm] = useState({
     teamId: activeTeamContext?.teamId ?? "",
     roundId: "",
@@ -216,18 +314,18 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   useEffect(() => {
     if (currentPage !== "submissions") return;
-    const storedTeam = getStoredActiveTeam(user?.id);
+    const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
     if (storedTeam?.teamId) {
       setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
     } else {
       setSubmissionForm(prev => ({ ...prev, teamId: "" }));
     }
-  }, [currentPage, user?.id]);
+  }, [currentPage, user?.userId]);
 
   useEffect(() => {
     if (currentPage !== "certificates") return;
-    const storedTeam = getStoredActiveTeam(user?.id);
+    const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
 
     if (!storedTeam?.eventId) {
@@ -266,7 +364,29 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return () => {
       cancelled = true;
     };
-  }, [currentPage, user?.id]);
+  }, [currentPage, user?.userId]);
+
+  useEffect(() => {
+    if (currentPage !== "submissions" || !activeTeamContext?.eventId) {
+      setSubmissionParticipation(null);
+      return;
+    }
+    let cancelled = false;
+    setSubmissionParticipationLoading(true);
+    eventParticipantService.getMyParticipation(activeTeamContext.eventId)
+      .then(participation => {
+        if (!cancelled) setSubmissionParticipation(participation);
+      })
+      .catch(() => {
+        if (!cancelled) setSubmissionParticipation(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSubmissionParticipationLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTeamContext?.eventId, currentPage]);
 
   const unread = notifs.filter(n => !n.read).length;
   const markRead = async (id: string) => {
@@ -277,9 +397,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setNotifs(prev => prev.map(n => ({ ...n, read: true })));
     try { await notificationService.markAllAsRead(); } catch { /* ignore */ }
   };
+  const openNotification = async (notification: MemberNotification) => {
+    await markRead(notification.id);
+    if (notification.eventId) onNavigate("events");
+  };
 
   const handleSubmitWork = async () => {
-    if (activeTeamContext?.leaderUserId !== user?.id) {
+    if (activeTeamContext?.eventId && !isApprovedParticipationStatus(submissionParticipation?.participantStatus)) {
+      setSubmissionStatus("You must be approved by the organizer before accessing competition activities.");
+      return;
+    }
+    if (activeTeamContext?.leaderUserId !== user?.userId) {
       setSubmissionStatus("Only the team leader can submit or update team work.");
       return;
     }
@@ -385,27 +513,110 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   };
 
   const handleRegisterEvent = async (eventId: string) => {
+    if (!eventId) {
+      toast.error("Event not found.");
+      return;
+    }
+
+    const targetEvent = apiEvents.find(event => event.eventId === eventId);
+    if (!targetEvent) {
+      setEventActionMessage(prev => ({ ...prev, [eventId]: "Event not found." }));
+      toast.error("Event not found.");
+      return;
+    }
+
+    if (!getAccessToken()) {
+      setEventActionMessage(prev => ({ ...prev, [eventId]: "Please log in before registering for this event." }));
+      toast.error("Please log in before registering for this event.");
+      return;
+    }
+
+    const participantStatus = normalizeParticipationStatus(participations[eventId]?.participantStatus ?? targetEvent.participantStatus);
+    const unavailableReason = registrationUnavailableReason(String(targetEvent.eventStatus || ""));
+    if (unavailableReason) {
+      setEventActionMessage(prev => ({ ...prev, [eventId]: `Registration unavailable: ${unavailableReason}.` }));
+      return;
+    }
+    if (participantStatus !== "NOT_REGISTERED") {
+      const message = participantStatus === "PENDING"
+        ? "Registration already submitted. Waiting for organizer approval."
+        : participantStatus === "REJECTED"
+          ? "Your registration was rejected."
+          : "You are already registered for this event.";
+      setEventActionMessage(prev => ({ ...prev, [eventId]: message }));
+      return;
+    }
+
     setEventActionLoading(prev => ({ ...prev, [eventId]: true }));
     setEventActionMessage(prev => ({ ...prev, [eventId]: "" }));
     try {
-      const participation = await eventParticipantService.register(eventId);
+      const participation = await eventParticipantService.registerForEvent(eventId);
+      const nextStatus = statusFromParticipation(participation);
       setParticipations(prev => ({ ...prev, [eventId]: participation }));
-      setEventActionMessage(prev => ({ ...prev, [eventId]: "Registration submitted for organizer approval." }));
+      setApiEvents(prev => prev.map(event => event.eventId === eventId ? {
+        ...event,
+        eventParticipantId: participation.eventParticipantId ?? event.eventParticipantId,
+        participantStatus: nextStatus === "ACTIVE" ? "ACTIVE" : "PENDING",
+        rejectedReason: null,
+        appliedAt: participation.appliedAt ?? event.appliedAt,
+        approvedAt: null,
+      } : event));
+      const successMessage = nextStatus === "ACTIVE"
+        ? "Registration approved."
+        : "Registration submitted. Waiting for organizer approval.";
+      setEventActionMessage(prev => ({ ...prev, [eventId]: successMessage }));
+      toast.success(successMessage);
+      loadEvents();
     } catch (error) {
       if (eventParticipantService.isDuplicateRegistrationError(error)) {
+        const duplicateMessage = registrationMessageForError(error, parseApiError(error).message);
         try {
           const participation = await eventParticipantService.getMyParticipation(eventId);
+          if (!participation) {
+            setEventActionMessage(prev => ({ ...prev, [eventId]: duplicateMessage }));
+            toast.error(duplicateMessage);
+            return;
+          }
           setParticipations(prev => ({ ...prev, [eventId]: participation }));
-          setEventActionMessage(prev => ({ ...prev, [eventId]: `Already registered: ${participantStatusLabels[participation.status] ?? participation.status}.` }));
+          setApiEvents(prev => prev.map(event => event.eventId === eventId ? {
+            ...event,
+            eventParticipantId: participation.eventParticipantId ?? event.eventParticipantId,
+            participantStatus: statusFromParticipation(participation),
+            rejectedReason: participation.rejectedReason ?? event.rejectedReason,
+            appliedAt: participation.appliedAt ?? event.appliedAt,
+            approvedAt: participation.approvedAt ?? event.approvedAt,
+          } : event));
+          const participantStatus = statusFromParticipation(participation);
+          const message = `${duplicateMessage} Current status: ${participantStatusLabels[participantStatus] ?? participantStatus}.`;
+          setEventActionMessage(prev => ({ ...prev, [eventId]: message }));
+          toast.error(message);
+          loadEvents();
         } catch (lookupError) {
-          setEventActionMessage(prev => ({ ...prev, [eventId]: lookupError instanceof Error ? lookupError.message : "Already registered, but status could not be loaded." }));
+          const parsedLookupError = parseApiError(lookupError);
+          const message = parsedLookupError.status === 404 ? duplicateMessage : parsedLookupError.message;
+          setEventActionMessage(prev => ({ ...prev, [eventId]: message }));
+          toast.error(message);
         }
       } else {
-        setEventActionMessage(prev => ({ ...prev, [eventId]: error instanceof Error ? error.message : "Registration failed." }));
+        const parsedError = parseApiError(error);
+        const message = registrationMessageForError(error, parsedError.message);
+        setEventActionMessage(prev => ({ ...prev, [eventId]: message }));
+        toast.error(message);
       }
     } finally {
       setEventActionLoading(prev => ({ ...prev, [eventId]: false }));
     }
+  };
+
+  const registrationMessageForError = (error: unknown, fallback: string) => {
+    if (!(error instanceof ApiError)) return fallback || "Registration failed.";
+    if (error.status === 400) return error.message || "Registration request is invalid.";
+    if (error.status === 401) return "Your session has expired. Please sign in again.";
+    if (error.status === 403) return error.message || "You do not have permission to register for this event.";
+    if (error.status === 404) return error.message || "Event not found.";
+    if (error.status === 409) return error.message || "You have already registered for this event.";
+    if (error.status === 500) return "Something went wrong. Please try again later.";
+    return fallback || "Registration failed.";
   };
 
   const renderDashboard = () => (
@@ -447,9 +658,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Upcoming Deadline</span>
           </div>
           <div className="rounded-xl p-4 mb-4" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30` }}>
-            <div style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{apiEvents[0]?.name ?? "No active event"}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary, margin: "8px 0" }}>{apiEvents[0]?.deadline ? "Deadline available" : "N/A"}</div>
-            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {apiEvents[0]?.deadline || "No deadline data"}</div>
+            <div style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{apiEvents[0]?.eventName ?? "No active event"}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary, margin: "8px 0" }}>{apiEvents[0]?.registrationEnd ? "Deadline available" : "N/A"}</div>
+            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {apiEvents[0]?.registrationEnd || "No deadline data"}</div>
           </div>
           <Button variant="primary" size="sm" className="mt-4 w-full" icon={<ExternalLink size={14} />} onClick={() => onNavigate("submissions")}>
             Open Submission
@@ -476,32 +687,47 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderEvents = () => (
     <>
       <SectionHeader title="Browse Events" subtitle="Discover and register for hackathon events" />
+      {eventsError && (
+        <Card className="p-4">
+          <div className="flex items-center gap-2" style={{ color: COLORS.error, fontSize: 13, fontWeight: 600 }}>
+            <AlertCircle size={15} />
+            {eventsError}
+          </div>
+        </Card>
+      )}
       {apiEvents.length === 0 && (
         <Card className="p-5">
-          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No events are available.</div>
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>
+            {eventsError ? "Events could not be loaded." : "No events are available."}
+          </div>
         </Card>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {apiEvents.map(ev => {
-          const participation = participations[ev.id];
-          const isRegistered = !!participation;
-          const participantStatus = participation?.status;
-          const statusLabel = participantStatus ? participantStatusLabels[participantStatus] : "Register for Event";
-          const isSelected = selectedEventDetailId === ev.id;
+          const participation = participations[ev.eventId];
+          const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
+          const isRegistered = participantStatus !== "NOT_REGISTERED";
+          const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
+          const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+          const unavailableReason = registrationUnavailableReason(lifecycleStatus);
+          const isSelected = selectedEventDetailId === ev.eventId;
+          const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
+          const isPendingParticipant = participantStatus === "PENDING";
+          const isRejectedParticipant = participantStatus === "REJECTED";
           return (
-            <Card key={ev.id} className="p-5">
+            <Card key={ev.eventId} className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{ev.name}</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{ev.category}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{ev.eventName}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{ev.description}</div>
                 </div>
-                <StatusBadge status={participantStatus ? participantStatus.toLowerCase() : ev.status} />
+                <StatusBadge status={lifecycleStatus.toLowerCase()} />
               </div>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {[
-                  { label: "Deadline", value: ev.deadline, icon: <Calendar size={13} /> },
-                  { label: "Teams", value: ev.participants, icon: <Users size={13} /> },
-                  { label: "Tracks", value: ev.tracks, icon: <Target size={13} /> },
+                  { label: "Event Status", value: lifecycleStatus, icon: <Info size={13} /> },
+                  { label: "Deadline", value: ev.registrationEnd || "N/A", icon: <Calendar size={13} /> },
+                  { label: "Location", value: ev.location || "N/A", icon: <MapPin size={13} /> },
                   { label: "Participation", value: statusLabel, icon: <Award size={13} /> },
                 ].map(info => (
                   <div key={info.label} className="flex items-center gap-2">
@@ -517,37 +743,52 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 <div className="rounded-xl p-3 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Participation Status</div>
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                    {isRegistered ? statusLabel : "You have not registered for this event yet."}
+                    {!isRegistered && "You have not registered for this event yet."}
+                    {isPendingParticipant && "Waiting for organizer approval. Team features and competition activities are locked for this event."}
+                    {isActiveParticipant && "You are approved for this event. Team features and competition activities are available."}
+                    {isRegistered && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
                   </div>
-                  {participation?.status === "REJECTED" && participation.rejectedReason && (
+                  {isRejectedParticipant && (ev.rejectedReason || participation?.rejectedReason) && (
                     <div style={{ fontSize: 13, color: COLORS.error, marginTop: 6 }}>
-                      Reason: {participation.rejectedReason}
+                      Reason: {ev.rejectedReason || participation?.rejectedReason}
+                    </div>
+                  )}
+                  {!isActiveParticipant && (
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 8 }}>
+                      Competition-only features are hidden until this event participation is approved.
                     </div>
                   )}
                 </div>
               )}
-              {eventActionMessage[ev.id] && (
+              {eventActionMessage[ev.eventId] && (
                 <div className="rounded-xl px-3 py-2 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
-                  {eventActionMessage[ev.id]}
+                  {eventActionMessage[ev.eventId]}
                 </div>
               )}
               <div className="flex gap-2">
-                {isRegistered ? (
+                {isActiveParticipant ? (
+                  <>
+                    <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>Joined</Button>
+                    <Button variant="primary" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(ev.eventId)}>Enter Event</Button>
+                  </>
+                ) : isPendingParticipant ? (
+                  <Button variant="outline" size="sm" disabled icon={<Clock size={13} />}>Pending Approval</Button>
+                ) : isRegistered ? (
                   <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>{statusLabel}</Button>
-                ) : ev.status !== "completed" ? (
+                ) : unavailableReason ? (
+                  <Button variant="ghost" size="sm" disabled>{unavailableReason}</Button>
+                ) : (
                   <Button
                     variant="primary"
                     size="sm"
-                    icon={eventActionLoading[ev.id] ? <Clock size={13} /> : <PlusCircle size={13} />}
-                    disabled={eventActionLoading[ev.id]}
-                    onClick={() => handleRegisterEvent(ev.id)}
+                    icon={eventActionLoading[ev.eventId] ? <Clock size={13} /> : <PlusCircle size={13} />}
+                    disabled={eventActionLoading[ev.eventId]}
+                    onClick={() => handleRegisterEvent(ev.eventId)}
                   >
-                    {eventActionLoading[ev.id] ? "Registering..." : "Register for Event"}
+                    {eventActionLoading[ev.eventId] ? "Registering..." : "Register for Event"}
                   </Button>
-                ) : (
-                  <Button variant="ghost" size="sm">View Event</Button>
                 )}
-                <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(isSelected ? null : ev.id)}>Details</Button>
+                <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(isSelected ? null : ev.eventId)}>Details</Button>
               </div>
             </Card>
           );
@@ -805,7 +1046,19 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{n.body}</p>
                   <div className="flex items-center justify-between mt-2">
                     <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{n.time}</span>
-                    {!n.read && <Button variant="ghost" size="sm" onClick={() => markRead(n.id)}>Mark as read</Button>}
+                    <div className="flex items-center gap-2">
+                      {n.eventId && (
+                        <button
+                          type="button"
+                          onClick={() => openNotification(n)}
+                          className="px-2 py-1 rounded-lg"
+                          style={{ fontSize: 12, color: COLORS.primary, background: `${COLORS.primary}10` }}
+                        >
+                          Open Event
+                        </button>
+                      )}
+                      {!n.read && <Button variant="ghost" size="sm" onClick={() => markRead(n.id)}>Mark as read</Button>}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -851,7 +1104,47 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       );
     }
 
-    const isSubmissionLeader = activeTeamContext.leaderUserId === user?.id;
+    if (submissionParticipationLoading) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Checking event approval status" />
+          <Card className="p-8">
+            <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Checking your event participation...</div>
+          </Card>
+        </>
+      );
+    }
+
+    if (activeTeamContext.eventId && !isApprovedParticipationStatus(submissionParticipation?.participantStatus)) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Organizer approval required" />
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.warning}14`, color: COLORS.warning }}
+                >
+                  <AlertCircle size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Approval required</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    You must be approved by the organizer before accessing competition activities for this event.
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" size="md" icon={<Calendar size={14} />} onClick={() => onNavigate("events")}>
+                View Event Status
+              </Button>
+            </div>
+          </Card>
+        </>
+      );
+    }
+
+    const isSubmissionLeader = activeTeamContext.leaderUserId === user?.userId;
     if (!isSubmissionLeader) {
       return (
         <>
@@ -959,7 +1252,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             {[
               { icon: <Mail size={14} />, label: user?.email || "No email" },
               { icon: <Phone size={14} />, label: user?.phone || "No phone" },
-              { icon: <User size={14} />, label: user?.studentCode || "No student code" },
+              { icon: <User size={14} />, label: studentCode || "No student code" },
             ].map((info, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span style={{ color: COLORS.textSecondary }}>{info.icon}</span>

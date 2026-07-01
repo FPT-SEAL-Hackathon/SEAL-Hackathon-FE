@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle, Loader, Search, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
@@ -18,11 +19,22 @@ function normalizeStatus(status: string) {
 }
 
 function labelStatus(status: string) {
+  if (status === "ACTIVE") return "Approved";
+  if (status === "PENDING") return "Pending";
   return status.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 }
 
-function participantId(row: EventParticipantResponse) {
-  return row.participantId ?? row.eventParticipantId ?? "";
+function isPendingStatus(status: EventParticipantStatus) {
+  return status === "PENDING";
+}
+
+function participantBadgeStatus(status: EventParticipantStatus) {
+  if (status === "ACTIVE") return "approved";
+  return normalizeStatus(status);
+}
+
+function getEventParticipantId(row: EventParticipantResponse) {
+  return row.eventParticipantId;
 }
 
 function formatDate(value?: string) {
@@ -30,7 +42,7 @@ function formatDate(value?: string) {
 }
 
 function getStudentCode(row: EventParticipantResponse) {
-  return row.studentCode || row.fptStudentCode || row.externalStudentCode || "-";
+  return row.fptStudentCode || row.externalStudentCode || "-";
 }
 
 function getUniversity(row: EventParticipantResponse) {
@@ -70,7 +82,7 @@ export function AdminEventParticipantsView() {
   const [rejectTarget, setRejectTarget] = useState<{ ids: string[]; status: EventParticipantStatus } | null>(null);
   const [rejectedReason, setRejectedReason] = useState("");
 
-  const allVisibleSelected = rows.length > 0 && rows.every(row => selectedIds.includes(participantId(row)));
+  const allVisibleSelected = rows.length > 0 && rows.every(row => selectedIds.includes(getEventParticipantId(row)));
   const selectedCount = selectedIds.length;
 
   const universities = useMemo(() => {
@@ -97,7 +109,7 @@ export function AdminEventParticipantsView() {
       setRows(page.content);
       setTotalPages(Math.max(page.totalPages, 1));
       setTotalElements(page.totalElements);
-      setSelectedIds(prev => prev.filter(id => page.content.some(row => participantId(row) === id)));
+      setSelectedIds(prev => prev.filter(id => page.content.some(row => getEventParticipantId(row) === id)));
     } catch (error) {
       setRows([]);
       setMessage({ tone: "error", text: error instanceof Error ? error.message : "Failed to load event participants." });
@@ -133,7 +145,7 @@ export function AdminEventParticipantsView() {
   };
 
   const toggleAllVisible = () => {
-    const visibleIds = rows.map(participantId).filter(Boolean);
+    const visibleIds = rows.map(getEventParticipantId).filter(Boolean);
     setSelectedIds(prev => allVisibleSelected ? prev.filter(id => !visibleIds.includes(id)) : Array.from(new Set([...prev, ...visibleIds])));
   };
 
@@ -152,26 +164,36 @@ export function AdminEventParticipantsView() {
       } else {
         await eventParticipantService.bulkUpdateStatus(ids, status, reason);
       }
-      setMessage({ tone: "success", text: "Participant status updated." });
+      const successText = status === "ACTIVE"
+        ? "User approved successfully"
+        : status === "REJECTED"
+          ? "User rejected successfully"
+          : "Participant status updated.";
+      setMessage({ tone: "success", text: successText });
+      toast.success(successText);
       setRejectTarget(null);
       setRejectedReason("");
       await loadParticipants();
     } catch (error) {
-      setMessage({ tone: "error", text: error instanceof Error ? error.message : "Failed to update participant status." });
+      const errorText = error instanceof Error ? error.message : "Failed to update participant status.";
+      setMessage({ tone: "error", text: errorText });
+      toast.error(errorText);
     } finally {
       setMutating(false);
     }
   };
 
   return (
-    <div className="space-y-5">
-      <SectionHeader
-        title="Event Participants"
-        subtitle="Approve and manage participant status per event."
-        action={<Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />} onClick={loadParticipants} disabled={loading}>Refresh</Button>}
-      />
+    <div className="h-full min-h-0 overflow-hidden flex flex-col gap-5">
+      <div className="flex-shrink-0">
+        <SectionHeader
+          title="Event Participants"
+          subtitle="Approve and manage participant status per event."
+          action={<Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />} onClick={loadParticipants} disabled={loading}>Refresh</Button>}
+        />
+      </div>
 
-      <Card className="p-5">
+      <Card className="p-5 flex-shrink-0">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
           <FilterSelect label="Event" value={filters.eventId} onChange={value => setFilter("eventId", value)}>
             <option value="">All events</option>
@@ -209,7 +231,7 @@ export function AdminEventParticipantsView() {
         </div>
       </Card>
 
-      <Card className="p-4">
+      <Card className="p-4 flex-shrink-0">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.textPrimary }}>Bulk Actions</div>
@@ -244,9 +266,9 @@ export function AdminEventParticipantsView() {
         )}
       </Card>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 1280 }}>
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 overflow-auto" style={{ overscrollBehavior: "contain" }}>
+          <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: 1280 }}>
             <thead>
               <tr style={{ background: "rgba(244,121,32,0.04)" }}>
                 <Th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} /></Th>
@@ -255,13 +277,13 @@ export function AdminEventParticipantsView() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={12} className="px-4 py-10 text-center" style={{ color: COLORS.textSecondary }}><Loader size={18} className="animate-spin inline-block mr-2" />Loading participants...</td></tr>
+                <tr><td colSpan={13} className="px-4 py-10 text-center" style={{ color: COLORS.textSecondary }}><Loader size={18} className="animate-spin inline-block mr-2" />Loading participants...</td></tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={12} className="px-4 py-12 text-center" style={{ color: COLORS.textSecondary }}><Users size={22} className="inline-block mr-2" />No participants found.</td></tr>
+                <tr><td colSpan={13} className="px-4 py-12 text-center" style={{ color: COLORS.textSecondary }}><Users size={22} className="inline-block mr-2" />No participants found.</td></tr>
               )}
               {!loading && rows.map(row => {
-                const id = participantId(row);
+                const id = getEventParticipantId(row);
                 return (
                   <tr key={id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <Td><input type="checkbox" checked={selectedIds.includes(id)} onChange={() => toggleSelected(id)} /></Td>
@@ -269,29 +291,42 @@ export function AdminEventParticipantsView() {
                       {row.avatarUrl ? (
                         <img src={row.avatarUrl} alt="" className="rounded-full" style={{ width: 32, height: 32, objectFit: "cover" }} />
                       ) : (
-                        <div className="rounded-full flex items-center justify-center text-white" style={{ width: 32, height: 32, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, fontSize: 11, fontWeight: 800 }}>{initials(row.fullName)}</div>
+                        <div className="rounded-full flex items-center justify-center text-white" style={{ width: 32, height: 32, background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, fontSize: 11, fontWeight: 800 }}>{initials(row.studentName)}</div>
                       )}
                     </Td>
-                    <Td strong>{row.fullName}</Td>
+                    <Td strong>{row.studentName}</Td>
                     <Td>{getStudentCode(row)}</Td>
                     <Td>{getUniversity(row)}</Td>
-                    <Td>{row.email}</Td>
+                    <Td>{row.studentEmail}</Td>
                     <Td>{row.eventName}</Td>
                     <Td>{row.categoryName || "-"}</Td>
-                    <Td><StatusBadge status={normalizeStatus(row.status)} /></Td>
-                    <Td>{formatDate(row.appliedAt ?? row.registeredAt)}</Td>
+                    <Td><StatusBadge status={participantBadgeStatus(row.participantStatus)} /></Td>
+                    <Td>{formatDate(row.appliedAt)}</Td>
                     <Td>{formatDate(row.approvedAt)}</Td>
                     <Td>{getApprovedBy(row)}</Td>
                     <Td>
-                      <select
-                        value={row.status}
-                        disabled={mutating}
-                        onChange={event => applyStatus([id], event.target.value as EventParticipantStatus)}
-                        className="px-2 py-1.5 rounded-lg outline-none"
-                        style={{ fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                      >
-                        {EVENT_PARTICIPANT_STATUSES.map(status => <option key={status} value={status}>{labelStatus(status)}</option>)}
-                      </select>
+                      {isPendingStatus(row.participantStatus) ? (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={mutating}
+                            onClick={() => applyStatus([id], "ACTIVE")}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            disabled={mutating}
+                            onClick={() => setRejectTarget({ ids: [id], status: "REJECTED" })}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>No pending action</span>
+                      )}
                     </Td>
                   </tr>
                 );
@@ -299,7 +334,7 @@ export function AdminEventParticipantsView() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
           <Button variant="ghost" size="sm" disabled={filters.page <= 0 || loading} onClick={() => setFilter("page", Math.max(filters.page - 1, 0))}>Previous</Button>
           <span style={{ fontSize: 13, color: COLORS.textSecondary }}>Page {filters.page + 1} of {totalPages}</span>
           <Button variant="ghost" size="sm" disabled={filters.page + 1 >= totalPages || loading} onClick={() => setFilter("page", filters.page + 1)}>Next</Button>
@@ -353,7 +388,25 @@ function FilterSelect({ label, value, onChange, children, disabled }: { label: s
 }
 
 function Th({ children }: { children: ReactNode }) {
-  return <th className="text-left px-4 py-3" style={{ fontSize: 10, fontWeight: 800, color: "#a07850", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>{children}</th>;
+  return (
+    <th
+      className="text-left px-4 py-3"
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 2,
+        background: COLORS.bg,
+        fontSize: 10,
+        fontWeight: 800,
+        color: "#a07850",
+        letterSpacing: "0.08em",
+        borderBottom: `1px solid ${COLORS.border}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </th>
+  );
 }
 
 function Td({ children, strong }: { children: ReactNode; strong?: boolean }) {

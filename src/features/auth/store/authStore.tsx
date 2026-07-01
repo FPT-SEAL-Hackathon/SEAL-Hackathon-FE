@@ -18,7 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Restore session from localStorage on app load
     if (!getAccessToken()) return null;
     const storedUser = loadUser<UserResponse>();
-    if (storedUser && !normalizeRole(storedUser.userType)) {
+    if (storedUser && !normalizeRole(storedUser.role)) {
       clearTokens();
       return null;
     }
@@ -34,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
-  const role = user ? normalizeRole(user.userType) : null;
+  const role = user ? normalizeRole(user.role) : null;
 
   return (
     <AuthContext.Provider value={{ user, role, isAuthenticated: !!user, setAuth, signOut }}>
