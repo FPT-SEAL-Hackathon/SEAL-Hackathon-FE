@@ -8,6 +8,7 @@ import { rankingService, type EventRankingDTO } from "@/features/rankings/api/ra
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { researchService } from "@/features/research/api/researchService";
+import { settingsService } from "@/features/settings/api/settingsService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
@@ -210,6 +211,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [notificationStatus, setNotificationStatus] = useState("");
   const [notificationError, setNotificationError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaveError, setSettingsSaveError] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
     platformName: "SEAL FPT Hackathon Platform",
     maxTeamSize: "5",
@@ -220,6 +223,24 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     requireEmailVerification: true,
     contactEmail: "seal@fpt.edu.vn",
   });
+
+  // Load system settings from API on mount
+  useEffect(() => {
+    settingsService.getSettings()
+      .then(data => {
+        setSystemSettings({
+          platformName: data.platformName ?? "SEAL FPT Hackathon Platform",
+          maxTeamSize: String(data.maxTeamSize ?? 5),
+          minTeamSize: String(data.minTeamSize ?? 2),
+          submissionGracePeriod: String(data.submissionGracePeriod ?? 30),
+          contactEmail: data.contactEmail ?? "seal@fpt.edu.vn",
+          allowLateSubmissions: data.allowLateSubmissions ?? true,
+          enablePublicLeaderboard: data.enablePublicLeaderboard ?? true,
+          requireEmailVerification: data.requireEmailVerification ?? true,
+        });
+      })
+      .catch(() => { /* use default values on error */ });
+  }, []);
 
   useEffect(() => {
     eventService.getAll()
@@ -583,6 +604,41 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsSaveError("");
+    setSettingsSaved(false);
+    try {
+      const saved = await settingsService.updateSettings({
+        platformName: systemSettings.platformName,
+        maxTeamSize: Number(systemSettings.maxTeamSize),
+        minTeamSize: Number(systemSettings.minTeamSize),
+        submissionGracePeriod: Number(systemSettings.submissionGracePeriod),
+        contactEmail: systemSettings.contactEmail,
+        allowLateSubmissions: systemSettings.allowLateSubmissions,
+        enablePublicLeaderboard: systemSettings.enablePublicLeaderboard,
+        requireEmailVerification: systemSettings.requireEmailVerification,
+      });
+      // Sync back with server response
+      setSystemSettings({
+        platformName: saved.platformName ?? systemSettings.platformName,
+        maxTeamSize: String(saved.maxTeamSize ?? systemSettings.maxTeamSize),
+        minTeamSize: String(saved.minTeamSize ?? systemSettings.minTeamSize),
+        submissionGracePeriod: String(saved.submissionGracePeriod ?? systemSettings.submissionGracePeriod),
+        contactEmail: saved.contactEmail ?? systemSettings.contactEmail,
+        allowLateSubmissions: saved.allowLateSubmissions ?? systemSettings.allowLateSubmissions,
+        enablePublicLeaderboard: saved.enablePublicLeaderboard ?? systemSettings.enablePublicLeaderboard,
+        requireEmailVerification: saved.requireEmailVerification ?? systemSettings.requireEmailVerification,
+      });
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+    } catch (error) {
+      setSettingsSaveError(error instanceof Error ? error.message : "Failed to save settings.");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   const handleManualGrantAward = async () => {
     if (!selectedEventId) {
       setManualAwardError("Select an event before granting a manual award.");
@@ -782,8 +838,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setNotificationError,
     settingsSaved,
     setSettingsSaved,
+    settingsSaveError,
+    setSettingsSaveError,
+    settingsSaving,
+    setSettingsSaving,
     systemSettings,
     setSystemSettings,
+    handleSaveSettings,
     filteredUsers,
     updateAwardPattern,
     addAwardPattern,
