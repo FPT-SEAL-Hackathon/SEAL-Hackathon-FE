@@ -184,14 +184,16 @@ export function AdminEventParticipantsView() {
   };
 
   return (
-    <div className="space-y-5">
-      <SectionHeader
-        title="Event Participants"
-        subtitle="Approve and manage participant status per event."
-        action={<Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />} onClick={loadParticipants} disabled={loading}>Refresh</Button>}
-      />
+    <div className="h-full min-h-0 overflow-hidden flex flex-col gap-5">
+      <div className="flex-shrink-0">
+        <SectionHeader
+          title="Event Participants"
+          subtitle="Approve and manage participant status per event."
+          action={<Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />} onClick={loadParticipants} disabled={loading}>Refresh</Button>}
+        />
+      </div>
 
-      <Card className="p-5">
+      <Card className="p-5 flex-shrink-0">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
           <FilterSelect label="Event" value={filters.eventId} onChange={value => setFilter("eventId", value)}>
             <option value="">All events</option>
@@ -229,7 +231,7 @@ export function AdminEventParticipantsView() {
         </div>
       </Card>
 
-      <Card className="p-4">
+      <Card className="p-4 flex-shrink-0">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.textPrimary }}>Bulk Actions</div>
@@ -264,9 +266,9 @@ export function AdminEventParticipantsView() {
         )}
       </Card>
 
-      <Card>
-        <div className="overflow-x-auto">
-          <table className="w-full" style={{ borderCollapse: "collapse", minWidth: 1280 }}>
+      <Card className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 overflow-auto" style={{ overscrollBehavior: "contain" }}>
+          <table className="w-full" style={{ borderCollapse: "separate", borderSpacing: 0, minWidth: 1280 }}>
             <thead>
               <tr style={{ background: "rgba(244,121,32,0.04)" }}>
                 <Th><input type="checkbox" checked={allVisibleSelected} onChange={toggleAllVisible} /></Th>
@@ -275,10 +277,10 @@ export function AdminEventParticipantsView() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={12} className="px-4 py-10 text-center" style={{ color: COLORS.textSecondary }}><Loader size={18} className="animate-spin inline-block mr-2" />Loading participants...</td></tr>
+                <tr><td colSpan={13} className="px-4 py-10 text-center" style={{ color: COLORS.textSecondary }}><Loader size={18} className="animate-spin inline-block mr-2" />Loading participants...</td></tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={12} className="px-4 py-12 text-center" style={{ color: COLORS.textSecondary }}><Users size={22} className="inline-block mr-2" />No participants found.</td></tr>
+                <tr><td colSpan={13} className="px-4 py-12 text-center" style={{ color: COLORS.textSecondary }}><Users size={22} className="inline-block mr-2" />No participants found.</td></tr>
               )}
               {!loading && rows.map(row => {
                 const id = getEventParticipantId(row);
@@ -332,7 +334,7 @@ export function AdminEventParticipantsView() {
             </tbody>
           </table>
         </div>
-        <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
           <Button variant="ghost" size="sm" disabled={filters.page <= 0 || loading} onClick={() => setFilter("page", Math.max(filters.page - 1, 0))}>Previous</Button>
           <span style={{ fontSize: 13, color: COLORS.textSecondary }}>Page {filters.page + 1} of {totalPages}</span>
           <Button variant="ghost" size="sm" disabled={filters.page + 1 >= totalPages || loading} onClick={() => setFilter("page", filters.page + 1)}>Next</Button>
@@ -386,7 +388,25 @@ function FilterSelect({ label, value, onChange, children, disabled }: { label: s
 }
 
 function Th({ children }: { children: ReactNode }) {
-  return <th className="text-left px-4 py-3" style={{ fontSize: 10, fontWeight: 800, color: "#a07850", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>{children}</th>;
+  return (
+    <th
+      className="text-left px-4 py-3"
+      style={{
+        position: "sticky",
+        top: 0,
+        zIndex: 2,
+        background: COLORS.bg,
+        fontSize: 10,
+        fontWeight: 800,
+        color: "#a07850",
+        letterSpacing: "0.08em",
+        borderBottom: `1px solid ${COLORS.border}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </th>
+  );
 }
 
 function Td({ children, strong }: { children: ReactNode; strong?: boolean }) {
