@@ -74,9 +74,25 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
           />
         );
       case "calibration":
-        return <JudgeCalibrationView />;
+        return (
+          <JudgeCalibrationView 
+            apiRounds={apiRounds}
+            selectedRoundId={selectedRoundId || apiRounds[0]?.roundId} 
+            onSelectRound={loadRoundData}
+          />
+        );
       case "history":
-        return <JudgeHistoryView />;
+        return (
+          <JudgeHistoryView 
+            apiRounds={apiRounds}
+            selectedRoundId={selectedRoundId}
+            onSelectRound={loadRoundData}
+            apiSubmissions={apiSubmissions}
+            apiCriteria={apiCriteria}
+            onSelectSubmission={setSelectedSubmission}
+            onNavigate={onNavigate}
+          />
+        );
       case "profile":
         return <JudgeProfileView />;
       default:
