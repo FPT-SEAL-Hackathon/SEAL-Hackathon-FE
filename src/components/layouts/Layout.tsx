@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { getMenuForRole } from "@/auth/permissions/navigation";
 import { ROLES, getRoleLabel, type Role } from "@/auth/rbac/roles";
 import { notificationService } from "@/features/notifications/api/notificationService";
@@ -81,14 +81,13 @@ interface LayoutProps {
   onRoleChange: () => void;
   children: React.ReactNode;
   userName?: string;
-  isDark?: boolean;
-  onToggleDark?: () => void;
 }
 
-export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson", isDark = false, onToggleDark }: LayoutProps) {
+export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson" }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
+  const [hoveredNavKey, setHoveredNavKey] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
   const [appSettings, setAppSettings] = useState({
     dateFormat: "DD/MM/YYYY",
@@ -167,10 +166,10 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
       className="flex h-screen overflow-hidden"
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
     >
-      {/* 64px placeholder — holds space in flex layout, never changes */}
+      {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 
-      {/* Sidebar — absolute, overlays content when expanded */}
+      {/* Sidebar â€” absolute, overlays content when expanded */}
       <motion.aside
         animate={{ width: sidebarOpen ? 260 : 64 }}
         transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
@@ -187,7 +186,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
         onMouseEnter={startOpenTimer}
         onMouseLeave={handleSidebarLeave}
       >
-        {/* Logo — icon fixed at left, text fades in-place */}
+        {/* Logo â€” icon fixed at left, text fades in-place */}
         <div
           className="flex items-center flex-shrink-0"
           style={{
@@ -224,48 +223,65 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto py-2 space-y-0.5" style={{ width: 260 }}>
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 space-y-0.5" style={{ width: 260 }}>
           {menus.map((item) => {
             const Icon = iconRegistry[item.icon] ?? LayoutDashboard;
             const isActive = currentPage === item.key;
+            const isHovered = hoveredNavKey === item.key;
+            const isHighlighted = isActive || isHovered;
             return (
               <button
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
-                className="relative flex items-center rounded-xl transition-colors duration-150"
+                onMouseEnter={() => setHoveredNavKey(item.key)}
+                onMouseLeave={() => setHoveredNavKey(null)}
+                className="relative flex items-center rounded-xl transition-all duration-200 ease-out"
                 style={{
-                  width: 260,
+                  width: "100%",
                   height: 40,
                   paddingLeft: 12,
                   paddingRight: 12,
-                  background: isActive ? `${accentColor}14` : "transparent",
+                  boxSizing: "border-box",
+                  background: isActive ? `${accentColor}18` : isHovered ? `${accentColor}0F` : "transparent",
+                  boxShadow: isActive
+                    ? `inset 0 0 0 1px ${accentColor}24`
+                    : isHovered
+                      ? `inset 0 0 0 1px ${accentColor}18, 0 6px 18px ${accentColor}12`
+                      : "none",
                 }}
                 title={!sidebarOpen ? item.label : undefined}
               >
-                {/* Active bar — absolutely positioned so it never affects icon */}
+                {/* Active bar â€” absolutely positioned so it never affects icon */}
                 {isActive && (
                   <div
                     className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full"
                     style={{ width: 3, height: 20, background: accentColor, boxShadow: `0 0 8px ${accentColor}60` }}
                   />
                 )}
-                {/* Icon — always at same x position */}
+                {/* Icon â€” always at same x position */}
                 <div
                   className="flex items-center justify-center flex-shrink-0"
-                  style={{ width: 24, height: 24 }}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    transform: isHovered ? "scale(1.08)" : "scale(1)",
+                    transition: "transform 0.2s ease",
+                  }}
                 >
-                  <Icon size={17} style={{ color: isActive ? accentColor : "var(--text-muted)" }} />
+                  <Icon size={17} style={{ color: isHighlighted ? accentColor : "var(--text-muted)" }} />
                 </div>
-                {/* Label — always mounted, fades via opacity only */}
+                {/* Label â€” always mounted, fades via opacity only */}
                 <span
                   style={{
                     marginLeft: 10,
                     fontSize: 13.5,
-                    fontWeight: isActive ? 600 : 400,
-                    color: isActive ? accentColor : "var(--text-secondary)",
+                    fontWeight: isHighlighted ? 600 : 400,
+                    color: isHighlighted ? accentColor : "var(--text-secondary)",
                     whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                     opacity: sidebarOpen ? 1 : 0,
-                    transition: "opacity 0.18s ease",
+                    transition: "opacity 0.18s ease, color 0.2s ease",
                     pointerEvents: "none",
                   }}
                 >
@@ -297,7 +313,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
             onClick={onRoleChange}
             className="relative flex items-center rounded-xl transition-colors duration-150"
             style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
-            title={!sidebarOpen ? "← Dev Hub" : undefined}
+            title={!sidebarOpen ? "â† Dev Hub" : undefined}
             onMouseEnter={e => (e.currentTarget.style.background = "rgba(244,121,32,0.06)")}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
@@ -305,7 +321,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               <LogOut size={17} style={{ color: "#F47920" }} />
             </div>
             <span style={{ marginLeft: 10, fontSize: 13.5, color: "#F47920", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
-              ← Dev Hub
+              â† Dev Hub
             </span>
           </button>
         </div>
@@ -456,7 +472,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
             {/* Divider */}
             <div style={{ width: 1, height: 28, background: "var(--glass-border-subtle)" }} />
 
-            {/* User — click navigates directly to profile */}
+            {/* User â€” click navigates directly to profile */}
             <motion.div
               whileHover={{ scale: 1.02 }}
               onClick={() => onNavigate(roleProfileKey[role])}
@@ -538,49 +554,13 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                   className="flex items-center justify-center rounded-xl w-8 h-8 transition-colors hover:bg-orange-50"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  ✕
+                  âœ•
                 </motion.button>
               </div>
 
               {/* Content */}
               <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
 
-                {/* Appearance */}
-                <section>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>Appearance</div>
-                  <div
-                    className="flex items-center justify-between rounded-2xl px-4 py-3"
-                    style={{ background: isDark ? "rgba(244,121,32,0.1)" : "rgba(244,121,32,0.05)", border: "1px solid var(--glass-border-subtle)" }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="flex items-center justify-center rounded-xl flex-shrink-0"
-                        style={{ width: 36, height: 36, background: isDark ? "rgba(244,121,32,0.2)" : "rgba(30,15,5,0.08)" }}
-                      >
-                        <span style={{ fontSize: 18 }}>{isDark ? "🌙" : "☀️"}</span>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Dark Mode</div>
-                        <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{isDark ? "Dark theme is active" : "Light theme is active"}</div>
-                      </div>
-                    </div>
-                    <motion.button
-                      onClick={onToggleDark}
-                      className="flex-shrink-0 rounded-full"
-                      animate={{ backgroundColor: isDark ? accentColor : "rgba(180,150,120,0.25)" }}
-                      style={{ width: 44, height: 24, position: "relative", cursor: "pointer", backgroundColor: isDark ? accentColor : "rgba(180,150,120,0.25)" }}
-                    >
-                      <motion.div
-                        animate={{ x: isDark ? 22 : 2 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 28 }}
-                        className="absolute rounded-full bg-white"
-                        style={{ width: 20, height: 20, top: 2, boxShadow: "0 1px 4px rgba(0,0,0,0.25)" }}
-                      />
-                    </motion.button>
-                  </div>
-                </section>
-
-                <div style={{ height: 1, background: "var(--glass-border-subtle)" }} />
 
                 {/* Display */}
                 <section>

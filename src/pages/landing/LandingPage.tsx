@@ -130,11 +130,16 @@ function tierRank(tierName: string): number {
   return 99;
 }
 
+function isPodiumAward(item: HallOfFameResponse): boolean {
+  return tierRank(`${item.awardTierName} ${item.awardTitle}`) < 3;
+}
+
 interface HofGroup {
   groupKey: string;
   eventName: string;
   categoryName: string;
   podium: Array<HallOfFameResponse & { rank: number; entryKey: string }>;
+  specialAwards: Array<HallOfFameResponse & { entryKey: string }>;
 }
 
 function stableKey(value: string): string {
@@ -149,8 +154,18 @@ function groupHallOfFame(data: HallOfFameResponse[]): HofGroup[] {
   const map = new Map<string, HofGroup>();
   for (const item of data) {
     const key = `${item.eventName}||${item.categoryName}`;
-    if (!map.has(key)) map.set(key, { groupKey: `hof-${stableKey(key)}`, eventName: item.eventName, categoryName: item.categoryName, podium: [] });
-    map.get(key)!.podium.push({ ...item, rank: 0, entryKey: "" });
+    if (!map.has(key)) {
+      map.set(key, { groupKey: `hof-${stableKey(key)}`, eventName: item.eventName, categoryName: item.categoryName, podium: [], specialAwards: [] });
+    }
+    const group = map.get(key)!;
+    if (isPodiumAward(item)) {
+      group.podium.push({ ...item, rank: 0, entryKey: "" });
+    } else {
+      group.specialAwards.push({
+        ...item,
+        entryKey: `${group.groupKey}-special-${stableKey(`${item.awardTierName}|${item.awardTitle}|${item.teamName}|${item.leaderName}`)}`,
+      });
+    }
   }
   const groups = Array.from(map.values());
   for (const g of groups) {
@@ -160,6 +175,7 @@ function groupHallOfFame(data: HallOfFameResponse[]): HofGroup[] {
       rank: i + 1,
       entryKey: `${g.groupKey}-entry-${stableKey(`${p.awardTierName}|${p.awardTitle}|${p.leaderName}|${i}`)}`,
     }));
+    g.specialAwards = g.specialAwards.slice(0, 4);
   }
   return groups.slice(0, 3);
 }
@@ -384,7 +400,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
               { id: "nav-stats", href: "#stats", label: "Stats" },
             ].map(item => (
               <a key={item.id} href={item.href}
-                className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/40 transition-all">
+                className="px-4 py-2 rounded-lg text-sm text-muted-foreground transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-orange-600 hover:bg-orange-500/10 hover:shadow-[0_8px_20px_rgba(244,121,32,0.14)]">
                 {item.label}
               </a>
             ))}
@@ -392,7 +408,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
 
           <div className="flex items-center gap-2">
             <button onClick={onGoToLogin}
-              className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/40 transition-all">
+              className="px-4 py-2 rounded-lg text-sm text-muted-foreground transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-orange-600 hover:bg-orange-500/10 hover:shadow-[0_8px_20px_rgba(244,121,32,0.14)]">
               Sign In
             </button>
             <button onClick={onGoToRegister}
@@ -715,6 +731,38 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                       });
                     })()}
                   </div>
+
+                  {(hofGroups[activeHof]?.specialAwards?.length ?? 0) > 0 && (
+                    <div className="mt-10 max-w-4xl mx-auto">
+                      <div className="flex items-center justify-center gap-2 mb-4">
+                        <Star size={15} style={{ color: "#F47920" }} />
+                        <div className="text-sm font-semibold" style={{ color: "#F47920" }}>Special Awards</div>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {hofGroups[activeHof].specialAwards.map((award) => {
+                          const initials = award.teamName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                          return (
+                            <motion.div
+                              key={award.entryKey}
+                              initial={{ opacity: 0, y: 16 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="glass rounded-2xl border border-orange-400/25 p-4 flex items-center gap-4"
+                            >
+                              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                                style={{ background: "linear-gradient(135deg, #F47920, #FFD700)" }}>
+                                {initials}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs text-muted-foreground mb-0.5">{award.awardTierName}</div>
+                                <div className="text-sm font-semibold truncate">{award.awardTitle}</div>
+                                <div className="text-xs text-muted-foreground truncate">{award.teamName}</div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </>

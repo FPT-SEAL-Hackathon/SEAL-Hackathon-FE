@@ -124,6 +124,16 @@ const createEmptyAwardPattern = (rankPosition: number) => ({
   prizeCurrency: "VND",
 });
 
+const createEmptyManualAwardForm = () => ({
+  categoryId: "",
+  teamId: "",
+  awardTierId: AWARD_TIER_OPTIONS[6].value,
+  awardTitle: "Special Award",
+  description: "",
+  prizeValue: "",
+  prizeCurrency: "VND",
+});
+
 export function AdminDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { t } = useLanguage();
 
@@ -183,6 +193,10 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [autoGrantMessage, setAutoGrantMessage] = useState("");
   const [autoGrantError, setAutoGrantError] = useState("");
   const [autoGrantPreview, setAutoGrantPreview] = useState<Array<{ teamId: string; teamName: string; rankPosition: number; totalScore: number }>>([]);
+  const [manualAwardForm, setManualAwardForm] = useState(createEmptyManualAwardForm);
+  const [manualAwardLoading, setManualAwardLoading] = useState(false);
+  const [manualAwardMessage, setManualAwardMessage] = useState("");
+  const [manualAwardError, setManualAwardError] = useState("");
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
@@ -236,6 +250,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setCategoryLoadError("");
     setApiCategories([]);
     setAwardPatternCategoryId("");
+    setManualAwardForm(createEmptyManualAwardForm());
     setSelectedSubmissionCategoryId("");
     setSelectedSubmissionRoundId("");
     categoryService.getByEvent(selectedEventId).then(data => {
@@ -245,6 +260,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       if (data[0]) {
         roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
         setAwardPatternCategoryId(data[0].categoryId);
+        setManualAwardForm(prev => ({ ...prev, categoryId: data[0].categoryId }));
         setSelectedSubmissionCategoryId(data[0].categoryId);
       }
     }).catch(error => {
@@ -567,6 +583,61 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
+  const handleManualGrantAward = async () => {
+    if (!selectedEventId) {
+      setManualAwardError("Select an event before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.teamId) {
+      setManualAwardError("Select a team before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.awardTierId || !manualAwardForm.awardTitle.trim()) {
+      setManualAwardError("Choose an award tier and enter an award title.");
+      return;
+    }
+
+    const prizeValue = manualAwardForm.prizeValue.trim()
+      ? Number(manualAwardForm.prizeValue)
+      : undefined;
+    if (prizeValue !== undefined && (!Number.isFinite(prizeValue) || prizeValue < 0)) {
+      setManualAwardError("Prize value must be zero or a positive number.");
+      return;
+    }
+
+    setManualAwardLoading(true);
+    setManualAwardError("");
+    setManualAwardMessage("");
+
+    try {
+      const granted = await awardService.grant({
+        eventId: selectedEventId,
+        categoryId: manualAwardForm.categoryId || undefined,
+        teamId: manualAwardForm.teamId,
+        awardTierId: manualAwardForm.awardTierId,
+        awardTitle: manualAwardForm.awardTitle.trim(),
+        description: manualAwardForm.description.trim() || undefined,
+        prizeValue,
+        prizeCurrency: manualAwardForm.prizeCurrency.trim() || "VND",
+      });
+      setApiAwards(prev => [granted, ...prev.filter(award => award.id !== granted.id)]);
+      setManualAwardMessage(`Granted "${granted.awardTitle}" to ${granted.teamName}.`);
+      setManualAwardForm(prev => ({
+        ...prev,
+        teamId: "",
+        awardTierId: AWARD_TIER_OPTIONS[6].value,
+        awardTitle: "Special Award",
+        description: "",
+        prizeValue: "",
+      }));
+      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+    } catch (error) {
+      setManualAwardError(error instanceof Error ? error.message : "Failed to grant manual award.");
+    } finally {
+      setManualAwardLoading(false);
+    }
+  };
+
 
   const viewContext = {
     t,
@@ -677,6 +748,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setAutoGrantError,
     autoGrantPreview,
     setAutoGrantPreview,
+    manualAwardForm,
+    setManualAwardForm,
+    manualAwardLoading,
+    setManualAwardLoading,
+    manualAwardMessage,
+    setManualAwardMessage,
+    manualAwardError,
+    setManualAwardError,
     broadcastTitle,
     setBroadcastTitle,
     broadcastMessage,
@@ -718,6 +797,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     handleComputeRankings,
     handlePublishRankings,
     handleAutoGrantAwards,
+    handleManualGrantAward,
     handleBroadcast,
     handleSendTargetedNotification,
     handleDataExport,
