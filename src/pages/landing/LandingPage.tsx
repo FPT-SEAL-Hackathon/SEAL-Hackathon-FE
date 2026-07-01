@@ -69,7 +69,7 @@ const EVENT_STATUS = {
 
 const RANK_META = [
   { bg: "from-yellow-400/30 to-amber-300/20", border: "border-yellow-400/50", text: "text-yellow-600", label: "Champion" },
-  { bg: "from-slate-300/30 to-gray-200/20",   border: "border-slate-400/50",  text: "text-slate-600",  label: "Runner-up" },
+  { bg: "from-slate-300/30 to-gray-200/20", border: "border-slate-400/50", text: "text-slate-600", label: "Runner-up" },
   { bg: "from-orange-300/30 to-amber-200/20", border: "border-orange-400/50", text: "text-orange-600", label: "3rd Place" },
 ];
 
@@ -330,11 +330,17 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
       .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
   }, []);
 
-  // Fetch total prize money across all events
+  // Fetch total prize money across all events (public endpoint, no auth needed)
   useEffect(() => {
     awardService.getTotalPrize()
-      .then(summary => setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(summary) })))
-      .catch(() => setStats(prev => ({ ...prev, prizeMoney: "N/A" })));
+      .then(summary => {
+        console.log("[LandingPage] getTotalPrize raw summary:", summary);
+        setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(summary) }));
+      })
+      .catch((err) => {
+        console.error("[LandingPage] getTotalPrize error:", err);
+        setStats(prev => ({ ...prev, prizeMoney: "N/A" }));
+      });
   }, []);
 
   // Fetch Hall of Fame from real API
