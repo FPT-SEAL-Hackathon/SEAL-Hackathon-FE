@@ -106,12 +106,6 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
         }
         setAuth(loginPayload);
         navigate(from || getDefaultPath(nextRole), { replace: true });
-        const raw = localStorage.getItem("seal_user");
-        if (!raw) return;
-        const user = JSON.parse(raw);
-        setAuth(user);
-        const nextRole = roleFromUserType(user.userType);
-        navigate(getValidRedirectPath(nextRole, from), { replace: true });
       }}
       onSwitchToLogin={() => navigate("/login", { state: location.state })}
       onSwitchToRegister={() => navigate("/register", { state: location.state })}
