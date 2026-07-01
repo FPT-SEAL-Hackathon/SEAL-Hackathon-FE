@@ -24,7 +24,8 @@ export type PageKey =
   | "audit"
   | "awards"
   | "award-patterns"
-  | "settings";
+  | "settings"
+  | "schedule";
 
 export const DEFAULT_PAGE_BY_ROLE: Record<Role, PageKey> = {
   [ROLES.FPT_STUDENT]: "dashboard",
@@ -59,6 +60,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   awards: [...ORGANIZER_ROLES],
   "award-patterns": [...ORGANIZER_ROLES],
   settings: [...ORGANIZER_ROLES],
+  schedule: [...JUDGE_ROLES],
 };
 
 export function hasRole(userRole: Role | null | undefined, role: Role): boolean {

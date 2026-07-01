@@ -41,6 +41,20 @@ function DevRoute() {
   return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
 }
 
+function getValidRedirectPath(role: Role, fromPath?: string): string {
+  const defaultPath = getDefaultPath(role);
+  if (!fromPath) return defaultPath;
+  
+  const roleSegment = getRoleRouteSegment(role);
+  const validPrefix = `/${roleSegment}`;
+  
+  if (fromPath.startsWith(validPrefix + "/") || fromPath === validPrefix) {
+    return fromPath;
+  }
+  
+  return defaultPath;
+}
+
 function HomeRoute() {
   const { isAuthenticated, role } = useAuth();
   const navigate = useNavigate();
@@ -68,7 +82,7 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
   const from = location.state?.from?.pathname;
 
   if (isAuthenticated && role) {
-    return <Navigate to={from || getDefaultPath(role)} replace />;
+    return <Navigate to={getValidRedirectPath(role, from)} replace />;
   }
 
   return (
@@ -86,7 +100,7 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
         const user = JSON.parse(raw);
         setAuth(user);
         const nextRole = roleFromUserType(user.userType);
-        navigate(from || getDefaultPath(nextRole), { replace: true });
+        navigate(getValidRedirectPath(nextRole, from), { replace: true });
       }}
       onSwitchToLogin={() => navigate("/login", { state: location.state })}
       onSwitchToRegister={() => navigate("/register", { state: location.state })}
@@ -122,7 +136,7 @@ function MainLayout() {
 
   const handleLogout = async () => {
     await signOut();
-    navigate("/", { replace: true });
+    navigate("/login", { replace: true, state: null });
   };
 
   return (
