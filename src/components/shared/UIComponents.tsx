@@ -394,9 +394,9 @@ export function Tabs({ tabs, activeTab, onTabChange }: { tabs: { key: string; la
 }
 
 // Score Slider
-export function ScoreSlider({ label, value, max, onChange }: { label: string; value: number; max: number; onChange: (v: number) => void }) {
+export function ScoreSlider({ label, value, max, onChange, disabled }: { label: string; value: number; max: number; onChange: (v: number) => void; disabled?: boolean }) {
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${disabled ? 'opacity-70 cursor-not-allowed' : ''}`}>
       <div className="flex justify-between items-center">
         <span style={{ fontSize: 13, fontWeight: 500, color: COLORS.textPrimary }}>{label}</span>
         <span
@@ -418,8 +418,9 @@ export function ScoreSlider({ label, value, max, onChange }: { label: string; va
         max={max}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
-        style={{ accentColor: COLORS.primary, height: 4 }}
+        disabled={disabled}
+        className={`w-full ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+        style={{ accentColor: disabled ? COLORS.textSecondary : COLORS.primary, height: 4 }}
       />
       <div className="flex justify-between" style={{ fontSize: 10, color: "rgba(100,70,30,0.45)" }}>
         <span>0</span>

@@ -56,11 +56,12 @@ export const judgingService = {
     api.get<JudgingDTO[]>(`/api/v1/judging/judge/${judgeUserId}`),
   getAuditLogs: (eventId: string) =>
     api.get<EvaluationAuditLogDTO[]>(`/api/v1/judging/audit-logs/event/${eventId}`),
-  getCalibrationMetrics: (eventId: string, roundId?: string, categoryId?: string) => {
+  getCalibrationMetrics: (eventId?: string, roundId?: string, categoryId?: string) => {
     const params = new URLSearchParams();
-    if (roundId) params.set("roundId", roundId);
-    if (categoryId) params.set("categoryId", categoryId);
+    if (eventId) params.append("eventId", eventId);
+    if (roundId) params.append("roundId", roundId);
+    if (categoryId) params.append("categoryId", categoryId);
     const query = params.toString();
-    return api.get<ReliabilityMetricResponse[]>(`/api/v1/judging/events/${eventId}/calibration-metrics${query ? `?${query}` : ""}`);
+    return api.get<ReliabilityMetricResponse[]>(`/api/v1/judging/calibration-metrics${query ? `?${query}` : ""}`);
   },
 };
