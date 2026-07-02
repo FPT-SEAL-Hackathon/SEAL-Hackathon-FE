@@ -15,6 +15,8 @@ import { useAuth } from "@/features/auth/store/authStore";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { notificationService } from "@/features/notifications/api/notificationService";
+import { MyMentor } from "@/pages/team/MyMentor";
+import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
@@ -1334,6 +1336,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "submissions": return renderSubmissions();
       case "notifications": return renderNotifications();
       case "profile": return renderProfile();
+      case "mentor": return <MyMentor isLeader={false} onNavigate={onNavigate} />;
+      case "consultations": return <TeamConsultations isLeader={false} />;
       default: return renderDashboard();
     }
   };

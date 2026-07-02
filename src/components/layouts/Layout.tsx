@@ -8,16 +8,16 @@ import {
   FileText, Star, ClipboardList, BarChart2, Shield, Database,
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
-  UserCheck, FolderOpen,
+  UserCheck, FolderOpen, UserPlus,
   Target, TrendingUp, MessageSquare, User, Wrench
 } from "lucide-react";
 import { COLORS } from "@/components/shared/UIComponents";
 
 const roleColors: Record<string, string> = {
-  ROLE_MEMBER:    COLORS.primary,
-  ROLE_LEADER:    COLORS.secondary,
-  ROLE_JUDGE:     COLORS.warning,
-  ROLE_MENTOR:    COLORS.success,
+  ROLE_MEMBER: COLORS.primary,
+  ROLE_LEADER: COLORS.secondary,
+  ROLE_JUDGE: COLORS.warning,
+  ROLE_MENTOR: COLORS.success,
   ROLE_ORGANIZER: COLORS.error,
 };
 
@@ -108,7 +108,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     FileText, Star, ClipboardList, BarChart2, Shield, Database,
     GitBranch, Clock, Award, Zap, BookOpen,
     LogOut, Search, ChevronDown,
-    UserCheck, FolderOpen,
+    UserCheck, FolderOpen, UserPlus,
     Target, TrendingUp, MessageSquare, User, Wrench,
   };
 
@@ -134,15 +134,15 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   // Maps role to the profile page key used in navigation
   const roleProfileKey: Record<string, string> = {
-    ROLE_ORGANIZER:       "profile",
-    ROLE_MEMBER:          "profile",
-    ROLE_LEADER:          "profile",
-    ROLE_JUDGE:           "profile",
-    ROLE_MENTOR:          "profile",
-    ROLE_FPT_STUDENT:     "profile",
-    ROLE_EXTERNAL_STUDENT:"profile",
-    ROLE_INTERNAL_JUDGE:  "profile",
-    ROLE_GUEST_JUDGE:     "profile",
+    ROLE_ORGANIZER: "profile",
+    ROLE_MEMBER: "profile",
+    ROLE_LEADER: "profile",
+    ROLE_JUDGE: "profile",
+    ROLE_MENTOR: "profile",
+    ROLE_FPT_STUDENT: "profile",
+    ROLE_EXTERNAL_STUDENT: "profile",
+    ROLE_INTERNAL_JUDGE: "profile",
+    ROLE_GUEST_JUDGE: "profile",
   };
 
   return (
@@ -153,163 +153,161 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
       {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 
-      {/* Sidebar â€” absolute, overlays content when expanded */}
-      <motion.aside
-        animate={{ width: sidebarOpen ? 260 : 64 }}
-        transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
-        className="absolute top-0 left-0 h-full flex flex-col overflow-hidden"
-        style={{
-          background: "var(--sidebar-surface)",
-          backdropFilter: "blur(32px) saturate(180%)",
-          WebkitBackdropFilter: "blur(32px) saturate(180%)",
-          borderRight: "1px solid var(--glass-border-subtle)",
-          boxShadow: sidebarOpen
-            ? "var(--sidebar-shadow-open, 4px 0 32px rgba(0,0,0,0.18))"
-            : "var(--sidebar-shadow, 2px 0 8px rgba(0,0,0,0.08))",
-        }}
-        onMouseEnter={startOpenTimer}
-        onMouseLeave={handleSidebarLeave}
-      >
-        {/* Logo â€” icon fixed at left, text fades in-place */}
-        <div
-          className="flex items-center flex-shrink-0"
+        {/* Sidebar â€” absolute, overlays content when expanded */}
+        <motion.aside
+          animate={{ width: sidebarOpen ? 260 : 64 }}
+          transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+          className="absolute top-0 left-0 h-full flex flex-col overflow-hidden"
           style={{
-            borderBottom: "1px solid var(--glass-border-subtle)",
-            width: 260,
-            height: 72,
-            paddingLeft: 12,
-            paddingRight: 12,
+            background: "var(--sidebar-surface)",
+            backdropFilter: "blur(32px) saturate(180%)",
+            WebkitBackdropFilter: "blur(32px) saturate(180%)",
+            borderRight: "1px solid var(--glass-border-subtle)",
+            boxShadow: sidebarOpen
+              ? "var(--sidebar-shadow-open, 4px 0 32px rgba(0,0,0,0.18))"
+              : "var(--sidebar-shadow, 2px 0 8px rgba(0,0,0,0.08))",
           }}
+          onMouseEnter={startOpenTimer}
+          onMouseLeave={handleSidebarLeave}
         >
+          {/* Logo â€” icon fixed at left, text fades in-place */}
           <div
-            className="flex items-center justify-center rounded-2xl flex-shrink-0"
+            className="flex items-center flex-shrink-0"
             style={{
-              width: 40,
-              height: 40,
-              background: "linear-gradient(135deg, #F47920, #FF9040)",
-              boxShadow: "0 4px 16px rgba(244,121,32,0.4)",
+              borderBottom: "1px solid var(--glass-border-subtle)",
+              width: 260,
+              height: 72,
+              paddingLeft: 12,
+              paddingRight: 12,
             }}
           >
-            <Zap size={20} color="white" />
+            <div
+              className="flex items-center justify-center rounded-2xl flex-shrink-0"
+              style={{
+                width: 40,
+                height: 40,
+                background: "linear-gradient(135deg, #F47920, #FF9040)",
+                boxShadow: "0 4px 16px rgba(244,121,32,0.4)",
+              }}
+            >
+              <Zap size={20} color="white" />
+            </div>
+            <div
+              style={{
+                marginLeft: 12,
+                opacity: sidebarOpen ? 1 : 0,
+                transition: "opacity 0.18s ease",
+                pointerEvents: "none",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 16, letterSpacing: "-0.02em" }}>SEAL</div>
+              <div style={{ color: "var(--text-secondary)", fontSize: 11, opacity: 0.7 }}>FPT Hackathon</div>
+            </div>
           </div>
-          <div
-            style={{
-              marginLeft: 12,
-              opacity: sidebarOpen ? 1 : 0,
-              transition: "opacity 0.18s ease",
-              pointerEvents: "none",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 16, letterSpacing: "-0.02em" }}>SEAL</div>
-            <div style={{ color: "var(--text-secondary)", fontSize: 11, opacity: 0.7 }}>FPT Hackathon</div>
-          </div>
-        </div>
 
-        {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 space-y-0.5" style={{ width: 260 }}>
-          {menus.map((item) => {
-            const Icon = iconRegistry[item.icon] ?? LayoutDashboard;
-            const isActive = currentPage === item.key;
-            const isHovered = hoveredNavKey === item.key;
-            const isHighlighted = isActive || isHovered;
-            return (
-              <button
-                key={item.key}
-                onClick={() => onNavigate(item.key)}
-                onMouseEnter={() => setHoveredNavKey(item.key)}
-                onMouseLeave={() => setHoveredNavKey(null)}
-                className="relative flex items-center rounded-xl transition-all duration-200 ease-out"
-                style={{
-                  width: "100%",
-                  height: 40,
-                  paddingLeft: 12,
-                  paddingRight: 12,
-                  boxSizing: "border-box",
-                  background: isActive ? `${accentColor}18` : isHovered ? `${accentColor}0F` : "transparent",
-                  boxShadow: isActive
-                    ? `inset 0 0 0 1px ${accentColor}24`
-                    : isHovered
-                      ? `inset 0 0 0 1px ${accentColor}18, 0 6px 18px ${accentColor}12`
-                      : "none",
-                }}
-                title={!sidebarOpen ? item.label : undefined}
-              >
-                {/* Active bar â€” absolutely positioned so it never affects icon */}
-                {isActive && (
+          {/* Nav items */}
+          <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 space-y-0.5" style={{ width: 260 }}>
+            {menus.map((item) => {
+              const Icon = iconRegistry[item.icon] ?? LayoutDashboard;
+              const isActive = currentPage === item.key;
+              const isHovered = hoveredNavKey === item.key;
+              const isHighlighted = isActive || isHovered;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => onNavigate(item.key)}
+                  onMouseEnter={() => setHoveredNavKey(item.key)}
+                  onMouseLeave={() => setHoveredNavKey(null)}
+                  className="relative flex items-center rounded-xl transition-all duration-200 ease-out"
+                  style={{
+                    width: "100%",
+                    height: 40,
+                    paddingLeft: 12,
+                    paddingRight: 12,
+                    boxSizing: "border-box",
+                    background: isActive ? `${accentColor}18` : isHovered ? `${accentColor}0F` : "transparent",
+                    boxShadow: isActive
+                      ? `inset 0 0 0 1px ${accentColor}24`
+                      : isHovered
+                        ? `inset 0 0 0 1px ${accentColor}18, 0 6px 18px ${accentColor}12`
+                        : "none",
+                  }}
+                  title={!sidebarOpen ? item.label : undefined}
+                >
+                  {/* Active bar â€” absolutely positioned so it never affects icon */}
+                  {isActive && (
+                    <div
+                      className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full"
+                      style={{ width: 3, height: 20, background: accentColor, boxShadow: `0 0 8px ${accentColor}60` }}
+                    />
+                  )}
+                  {/* Icon â€” always at same x position */}
                   <div
-                    className="absolute left-0 top-1/2 -translate-y-1/2 rounded-r-full"
-                    style={{ width: 3, height: 20, background: accentColor, boxShadow: `0 0 8px ${accentColor}60` }}
-                  />
-                )}
-                {/* Icon â€” always at same x position */}
-                <div
-                  className="flex items-center justify-center flex-shrink-0"
-                  style={{
-                    width: 24,
-                    height: 24,
-                    transform: isHovered ? "scale(1.08)" : "scale(1)",
-                    transition: "transform 0.2s ease",
-                  }}
-                >
-                  <Icon size={17} style={{ color: isHighlighted ? accentColor : "var(--text-muted)" }} />
-                </div>
-                {/* Label â€” always mounted, fades via opacity only */}
-                <span
-                  style={{
-                    marginLeft: 10,
-                    fontSize: 13.5,
-                    fontWeight: isHighlighted ? 600 : 400,
-                    color: isHighlighted ? accentColor : "var(--text-secondary)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    opacity: sidebarOpen ? 1 : 0,
-                    transition: "opacity 0.18s ease, color 0.2s ease",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+                    className="flex items-center justify-center flex-shrink-0"
+                    style={{
+                      width: 24,
+                      height: 24,
+                      transform: isHovered ? "scale(1.08)" : "scale(1)",
+                      transition: "transform 0.2s ease",
+                    }}
+                  >
+                    <Icon size={17} style={{ color: isHighlighted ? accentColor : "var(--text-muted)" }} />
+                  </div>
+                  {/* Label â€” always mounted, fades via opacity only */}
+                  <span
+                    style={{
+                      marginLeft: 10,
+                      fontSize: 13.5,
+                      fontWeight: isHighlighted ? 600 : 400,
+                      color: isHighlighted ? accentColor : "var(--text-secondary)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      opacity: sidebarOpen ? 1 : 0,
+                      transition: "opacity 0.18s ease, color 0.2s ease",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
-        {/* Bottom actions */}
-        <div style={{ borderTop: "1px solid var(--glass-border-subtle)", width: 260 }} className="py-2 space-y-0.5">
-          {/* App Settings */}
-          <button
-            onClick={() => setAppSettingsOpen(true)}
-            className="relative flex items-center rounded-xl transition-colors duration-150 hover:bg-orange-50"
-            style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
-            title={!sidebarOpen ? "App Settings" : undefined}
-          >
-            <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
-              <Settings size={17} style={{ color: "var(--text-muted)" }} />
-            </div>
-            <span style={{ marginLeft: 10, fontSize: 13.5, color: "var(--text-secondary)", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
-              App Settings
-            </span>
-          </button>
-          {/* Back to Dev Hub */}
-          <button
-            onClick={onRoleChange}
-            className="relative flex items-center rounded-xl transition-colors duration-150"
-            style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
-            title={!sidebarOpen ? "â† Dev Hub" : undefined}
-            onMouseEnter={e => (e.currentTarget.style.background = "rgba(244,121,32,0.06)")}
-            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-          >
-            <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
-              <LogOut size={17} style={{ color: "#F47920" }} />
-            </div>
-            <span style={{ marginLeft: 10, fontSize: 13.5, color: "#F47920", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
-              â† Dev Hub
-            </span>
-          </button>
-        </div>
-      </motion.aside>
+          {/* Bottom actions */}
+          <div style={{ borderTop: "1px solid var(--glass-border-subtle)", width: 260 }} className="py-2 space-y-0.5">
+            {/* App Settings */}
+            <button
+              onClick={() => setAppSettingsOpen(true)}
+              className="relative flex items-center rounded-xl transition-colors duration-150 hover:bg-orange-50"
+              style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
+              title="Logout"
+            >
+              <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
+                <Settings size={17} style={{ color: "var(--text-muted)" }} />
+              </div>
+              <span style={{ marginLeft: 10, fontSize: 13.5, color: "var(--text-secondary)", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
+                App Settings
+              </span>
+            </button>
+            {/* Back to Dev Hub */}
+            <button
+              onClick={onRoleChange}
+              className="relative flex items-center rounded-xl transition-colors duration-150"
+              style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
+              title="Logout"
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(244,121,32,0.06)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
+                <LogOut size={17} style={{ color: "#F47920" }} />
+              </div>
+              
+            </button>
+          </div>
+        </motion.aside>
       </div>
 
       <div className="flex flex-col flex-1 overflow-hidden">
@@ -540,7 +538,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                   className="flex items-center justify-center rounded-xl w-8 h-8 transition-colors hover:bg-orange-50"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  âœ•
+                  ✕
                 </motion.button>
               </div>
 

@@ -1,9 +1,9 @@
-﻿import {
+import {
   LayoutDashboard, Users, Calendar, Trophy, Bell, Settings,
   FileText, Star, ClipboardList, BarChart2, Shield, Database,
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
-  UserCheck, FolderOpen,
+  UserCheck, FolderOpen, UserPlus,
   Target, TrendingUp, MessageSquare, User, Wrench
 } from "lucide-react";
 import { ROLES, type Role } from "@/auth/rbac/roles";
@@ -49,6 +49,7 @@ export const iconRegistry: Record<string, React.ElementType> = {
   Award,
   BookOpen,
   UserCheck,
+  UserPlus,
   FolderOpen,
   Wrench,
 };
