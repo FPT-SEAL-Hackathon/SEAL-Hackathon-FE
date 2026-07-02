@@ -187,6 +187,13 @@ function MainLayout() {
 }
 
 function DashboardByRole({ role, currentPage, onNavigate }: { role: Role; currentPage: string; onNavigate: (page: string) => void }) {
+  if (role === ROLES.EXPERT || role === ROLES.INTERNAL_JUDGE) {
+    const mentorPages = ["dashboard", "categories", "tracks", "teams", "consultations", "progress", "schedule"];
+    if (mentorPages.includes(currentPage)) {
+      return <MentorDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    }
+    return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+  }
   if (isStudent(role)) {
     return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }

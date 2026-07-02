@@ -366,13 +366,15 @@ export function MentorDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const renderPage = () => {
     switch (currentPage) {
+      case "dashboard": return renderProgress();
+      case "categories": return renderTracks();
       case "tracks": return renderTracks();
       case "teams": return renderTeams();
       case "progress": return renderProgress();
       case "schedule": return renderSchedule();
       case "profile": return renderProfile();
       case "consultations": return <MentorConsultations onNavigate={onNavigate} />;
-      default: return renderTracks();
+      default: return renderProgress();
     }
   };
 
