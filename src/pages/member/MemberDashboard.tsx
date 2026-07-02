@@ -343,14 +343,14 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     awardService.getByEvent(storedTeam.eventId)
       .then(awards => {
         if (cancelled) return;
-        const visibleAwards = awards.filter(award => (
+        const visibleAwards = awards.filter((award: any) => (
           (!storedTeam.teamId || award.teamId === storedTeam.teamId)
           && (!storedTeam.categoryId || award.categoryId === storedTeam.categoryId)
           && award.isPublished
         ));
         setCertificateAwards(visibleAwards);
         setCertificateCategoryId(prev => {
-          if (prev === "all" || visibleAwards.some(award => award.categoryId === prev)) return prev;
+          if (prev === "all" || visibleAwards.some((award: any) => award.categoryId === prev)) return prev;
           return storedTeam.categoryId ?? "all";
         });
       })
@@ -902,11 +902,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
 
     const categoryOptions = Array.from(
-      new Map(certificateAwards.map(award => [award.categoryId, award.categoryName])).entries(),
+      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
     );
     const filteredAwards = certificateCategoryId === "all"
       ? certificateAwards
-      : certificateAwards.filter(award => award.categoryId === certificateCategoryId);
+      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
 
     return (
       <>
@@ -961,7 +961,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                       Loading certificates...
                     </td>
                   </tr>
-                ) : filteredAwards.length > 0 ? filteredAwards.map(award => {
+                ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
                   const actionLoading = certificateActionLoading[award.id];
                   return (
                     <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>

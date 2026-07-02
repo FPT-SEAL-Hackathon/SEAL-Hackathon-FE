@@ -233,9 +233,10 @@ function hasEnded(endDate: string): boolean {
 }
 
 function getCompetitionStatus(event: EventResponse, startDate: string, endDate: string): LandingCompetition["status"] {
-  if (event.eventStatus?.eventStatusId === EVENT_STATUS.ONGOING) return "ongoing";
-  if (event.eventStatus?.eventStatusId === EVENT_STATUS.UPCOMING) return "upcoming";
-  if (event.eventStatus?.eventStatusId === EVENT_STATUS.COMPLETED) return "completed";
+  const statusId = typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus;
+  if (statusId === EVENT_STATUS.ONGOING) return "ongoing";
+  if (statusId === EVENT_STATUS.UPCOMING) return "upcoming";
+  if (statusId === EVENT_STATUS.COMPLETED) return "completed";
 
   const now = Date.now();
   const start = parseDateTime(startDate);
@@ -246,9 +247,10 @@ function getCompetitionStatus(event: EventResponse, startDate: string, endDate: 
 }
 
 function getCompetitionPhase(event: EventResponse, startDate: string, endDate: string): string {
-  if (event.eventStatus?.eventStatusId === EVENT_STATUS.COMPLETED) return "Completed";
-  if (event.eventStatus?.eventStatusId === EVENT_STATUS.ONGOING) return "In Progress";
-  if (event.eventStatus?.eventStatusId === EVENT_STATUS.UPCOMING) return "Registration Open";
+  const statusId = typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus;
+  if (statusId === EVENT_STATUS.COMPLETED) return "Completed";
+  if (statusId === EVENT_STATUS.ONGOING) return "In Progress";
+  if (statusId === EVENT_STATUS.UPCOMING) return "Registration Open";
 
   const now = Date.now();
   const regEnd = event.registrationEnd ? parseDateTime(event.registrationEnd) : NaN;
@@ -688,7 +690,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                         if (!entry) return null;
                         const meta = RANK_META[rankIdx];
                         const isFirst = rankIdx === 0;
-                        const initials = entry.teamName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                        const initials = entry.teamName.split(" ").map((w: any) => w[0]).join("").slice(0, 2).toUpperCase();
                         return (
                           <motion.div key={entry.entryKey}
                             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
@@ -739,8 +741,8 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                         <div className="text-sm font-semibold" style={{ color: "#F47920" }}>Special Awards</div>
                       </div>
                       <div className="grid sm:grid-cols-2 gap-3">
-                        {hofGroups[activeHof].specialAwards.map((award) => {
-                          const initials = award.teamName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                        {hofGroups[activeHof].specialAwards.map((award: any) => {
+                          const initials = award.teamName.split(" ").map((w: any) => w[0]).join("").slice(0, 2).toUpperCase();
                           return (
                             <motion.div
                               key={award.entryKey}

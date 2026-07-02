@@ -256,7 +256,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           id: e.eventId, 
           name: e.eventName,
           description: e.description ?? "—", 
-          status: e.eventStatus?.eventStatusName,
+          status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
           teams: 0,
           rounds: 0, 
           deadline: e.eventEndDate ?? "—", 
@@ -436,7 +436,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       } else {
         // Team mode: find all member userIds for the selected team and broadcast
         const team = apiTeamEligibility.find((t: any) => t.teamId === notificationTeamId);
-        const memberIds: string[] = team?.memberUserIds ?? (team?.leaderUserId ? [team.leaderUserId] : []);
+        const memberIds: string[] = (team as any)?.memberUserIds ?? (team?.leaderUserId ? [team.leaderUserId] : []);
         if (memberIds.length === 0) throw new Error("No members found for the selected team.");
         await notificationService.broadcast({
           recipientUserIds: memberIds,
@@ -605,7 +605,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
     try {
       const topCandidates = await awardService.getTopCandidates(awardPatternCategoryId, undefined, limit);
-      setAutoGrantPreview(topCandidates.map(candidate => ({
+      setAutoGrantPreview(topCandidates.map((candidate: any) => ({
         teamId: candidate.teamId,
         teamName: candidate.teamName,
         rankPosition: candidate.rankPosition,
@@ -614,8 +614,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
       const granted = await awardService.autoGrant(awardPatternCategoryId, undefined, limit);
       setApiAwards(prev => {
-        const existingIds = new Set(prev.map(award => award.id));
-        return [...granted.filter(award => !existingIds.has(award.id)), ...prev];
+        const existingIds = new Set(prev.map((award: any) => award.id));
+        return [...granted.filter((award: any) => !existingIds.has(award.id)), ...prev];
       });
       setAutoGrantMessage(`Granted ${granted.length} award(s) for top ${limit} ranking team(s).`);
       if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
@@ -698,7 +698,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         prizeValue,
         prizeCurrency: manualAwardForm.prizeCurrency.trim() || "VND",
       });
-      setApiAwards(prev => [granted, ...prev.filter(award => award.id !== granted.id)]);
+      setApiAwards(prev => [granted, ...prev.filter((award: any) => award.id !== granted.id)]);
       setManualAwardMessage(`Granted "${granted.awardTitle}" to ${granted.teamName}.`);
       setManualAwardForm(prev => ({
         ...prev,
@@ -898,7 +898,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
       case "criteria": return <AdminCriteriaView context={viewContext} />;
-      case "users": return <AdminUsersView context={viewContext} />;
+      case "users": return <AdminUsersView />;
       case "assignments": return <AdminAssignmentsView context={viewContext} />;
       case "assign-mentors": return <AdminMentorAssignmentsView context={viewContext} />;
       case "submissions": return <AdminSubmissionsView context={viewContext} />;
@@ -933,8 +933,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           onSaved={saved => {
             setApiEvents(prev => eventModal.edit
               ? prev.map((e: any) => e.eventId === saved.eventId ? { ...e, ...saved,
-                 name: saved.eventName, description: saved.description ?? "-", status: saved.eventStatus?.eventStatusName ?? "Unknow", deadline: saved.eventEndDate } : e)
-              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: saved.eventStatus?.eventStatusName, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
+                 name: saved.eventName, description: saved.description ?? "-", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, deadline: saved.eventEndDate } : e)
+              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
             );
             setEventModal({ open: false });
           }}

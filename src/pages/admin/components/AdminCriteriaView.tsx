@@ -157,7 +157,7 @@ export function AdminCriteriaView({ context }: AdminViewProps) {
       />
       <div className="space-y-4">
         {(apiCriteriaTemplates.length > 0
-          ? apiCriteriaTemplates.map(template => ({
+          ? apiCriteriaTemplates.map((template: any) => ({
             id: template.templateId,
             name: template.criterionName,
             fields: [
@@ -169,7 +169,7 @@ export function AdminCriteriaView({ context }: AdminViewProps) {
             status: template.isActive ? "active" : "draft",
           }))
           : criteria
-        ).map(c => (
+        ).map((c: any) => (
           <Card key={c.id} className="p-5">
             <div className="flex items-start justify-between mb-3">
               <div>
@@ -183,7 +183,7 @@ export function AdminCriteriaView({ context }: AdminViewProps) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {c.fields.map(f => (
+              {c.fields.map((f: any) => (
                 <span key={f} className="px-2 py-1 rounded-xl text-xs font-medium" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
                   {f}
                 </span>

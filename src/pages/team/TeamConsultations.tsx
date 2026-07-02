@@ -140,18 +140,20 @@ export function TeamConsultations({ isLeader }: { isLeader: boolean }) {
       <SectionHeader title="Consultation Requests" subtitle="Your team's consultation history with the mentor" />
       <div className="space-y-4">
         {loading ? <div>Loading requests...</div> : requests.length === 0 ? <div>No requests found.</div> : requests.map(req => (
-          <Card key={req.id} className="p-5 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-colors" onClick={() => openRequestDetail(req)}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{req.title}</div>
-              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                Mentor: {req.mentorName} • Priority: {req.priority}
+          <div key={req.id} onClick={() => openRequestDetail(req)}>
+            <Card className="p-5 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition-colors">
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{req.title}</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
+                  Mentor: {req.mentorName} • Priority: {req.priority}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <StatusBadge status={req.status.toLowerCase()} />
-              <Button variant="ghost" size="sm" icon={<MessageSquare size={14} />}>View</Button>
-            </div>
-          </Card>
+              <div className="flex items-center gap-4">
+                <StatusBadge status={req.status.toLowerCase()} />
+                <Button variant="ghost" size="sm" icon={<MessageSquare size={14} />}>View</Button>
+              </div>
+            </Card>
+          </div>
         ))}
       </div>
     </>

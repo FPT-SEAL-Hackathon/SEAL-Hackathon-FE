@@ -175,7 +175,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
 
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Scoring Progress — SEAL Fall 2025</div>
-            {rounds.filter(r => r.event === "SEAL Fall 2025").map(r => (
+            {rounds.filter((r: any) => r.event === "SEAL Fall 2025").map((r: any) => (
               <div key={r.id} className="mb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</span>
@@ -214,7 +214,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
 
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Recent Activity</div>
-            {auditLogs.slice(0, 4).map((log, i) => (
+            {auditLogs.slice(0, 4).map((log: any, i: number) => (
               <div key={log.id} className="mb-3 last:mb-0">
                 <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{log.action}</div>
                 <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{log.actor} • {log.timestamp.split(" ")[0]}</div>

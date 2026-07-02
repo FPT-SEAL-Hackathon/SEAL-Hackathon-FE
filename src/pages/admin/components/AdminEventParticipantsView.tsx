@@ -46,11 +46,14 @@ function getStudentCode(row: EventParticipantResponse) {
 }
 
 function getUniversity(row: EventParticipantResponse) {
-  return row.university || row.universityName || "-";
+  return (row as any).university || row.universityName || "-";
 }
 
 function getApprovedBy(row: EventParticipantResponse) {
-  return row.approvedByName || row.approvedBy || "-";
+  if (typeof row.approvedBy === 'object' && row.approvedBy !== null) {
+    return row.approvedByName || (row.approvedBy as any).fullName || (row.approvedBy as any).email || "-";
+  }
+  return row.approvedByName || (row.approvedBy as string) || "-";
 }
 
 function initials(name: string) {
@@ -201,7 +204,7 @@ export function AdminEventParticipantsView() {
           </FilterSelect>
           <FilterSelect label="Category" value={filters.categoryId} onChange={value => setFilter("categoryId", value)} disabled={!filters.eventId}>
             <option value="">All categories</option>
-            {categories.map(category => <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>)}
+            {categories.map((category: any) => <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>)}
           </FilterSelect>
           <FilterSelect label="Status" value={filters.status} onChange={value => setFilter("status", value)}>
             <option value="">All statuses</option>

@@ -156,7 +156,7 @@ export function AdminCategoriesView({ context }: AdminViewProps) {
         action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setCategoryModal({ open: true })}>New Category</Button>}
       />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {categories.map(cat => (
+        {categories.map((cat: any) => (
           <Card key={cat.id} className="p-5">
             <div className="flex items-start justify-between mb-3">
               <div>
