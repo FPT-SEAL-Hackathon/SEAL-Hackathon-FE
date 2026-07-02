@@ -13,14 +13,17 @@ interface JudgeSubmissionsViewProps {
 export function JudgeSubmissionsView({ apiSubmissions, apiRounds, onSelectSubmission, onNavigate }: JudgeSubmissionsViewProps) {
   const displaySubmissions = apiSubmissions.map(s => ({
     id: s.submissionId,
-    team: s.teamId,
+    team: s.teamName || s.teamId,
     title: s.notes || `Submission ${s.submissionId.slice(0, 8)}`,
     track: "—",
     github: s.repositoryUrl ?? "",
     demo: s.demoUrl ?? "",
+    slide: s.slideUrl ?? "",
+    report: s.reportUrl ?? "",
     status: s.submissionStatusName?.toLowerCase() === "scored" ? "completed" : "pending",
     score: undefined,
     round: apiRounds.find(r => r.roundId === s.roundId)?.roundName || "Unknown Round",
+    raw: s,
   }));
 
   return (
