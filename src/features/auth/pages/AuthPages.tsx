@@ -485,6 +485,14 @@ function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: 
     awardService.getTotalPrize()
       .then(summary => setPanelStats(prev => ({ ...prev, prizePool: formatPrizeMoney(summary) })))
       .catch(() => setPanelStats(prev => ({ ...prev, prizePool: "N/A" })));
+
+    api.get<{ count: number }>("/api/v1/public/submissions/count", false)
+      .then(res => setPanelStats(prev => ({ ...prev, submissions: String(res.count) })))
+      .catch(() => setPanelStats(prev => ({ ...prev, submissions: "N/A" })));
+
+    api.get<{ count: number }>("/api/v1/public/judges/count", false)
+      .then(res => setPanelStats(prev => ({ ...prev, judges: String(res.count) })))
+      .catch(() => setPanelStats(prev => ({ ...prev, judges: "N/A" })));
   }, []);
 
   const displayStats = [
