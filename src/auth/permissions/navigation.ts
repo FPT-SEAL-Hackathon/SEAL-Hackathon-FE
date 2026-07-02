@@ -82,6 +82,16 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
+  [ROLES.EXPERT]: [
+    { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
+    { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
+    { icon: "BarChart2", label: "Calibration", key: "calibration" },
+    { icon: "BookOpen", label: "Assigned Categories", key: "categories" },
+    { icon: "Users", label: "Category Teams", key: "teams" },
+    { icon: "MessageSquare", label: "Consultation Requests", key: "consultations" },
+    { icon: "Clock", label: "History", key: "history" },
+    { icon: "User", label: "Profile", key: "profile" },
+  ],
 };
 
 export function getMenuForRole(role: Role): NavItem[] {

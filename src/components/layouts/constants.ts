@@ -55,14 +55,15 @@ export const iconRegistry: Record<string, React.ElementType> = {
 };
 
 export const roleProfileKey: Record<Role, string> = {
-  [ROLES.FPT_STUDENT]: "profile",
-  [ROLES.EXTERNAL_STUDENT]: "profile",
-  [ROLES.INTERNAL_JUDGE]: "profile",
-  [ROLES.GUEST_JUDGE]: "profile",
-  [ROLES.ORGANIZER]: "profile",
-  [ROLES.MENTOR]: "profile",
-  [ROLES.LEADER]: "profile",
-  [ROLES.MEMBER]: "profile",
+  [ROLES.FPT_STUDENT]: "fptStudentCode",
+  [ROLES.EXTERNAL_STUDENT]: "externalStudentCode",
+  [ROLES.INTERNAL_JUDGE]: "email",
+  [ROLES.GUEST_JUDGE]: "email",
+  [ROLES.ORGANIZER]: "email",
+  [ROLES.MENTOR]: "email",
+  [ROLES.LEADER]: "email",
+  [ROLES.MEMBER]: "email",
+  [ROLES.EXPERT]: "email",
 };
 
 export const roleColors: Record<Role, string> = {
@@ -74,4 +75,5 @@ export const roleColors: Record<Role, string> = {
   [ROLES.MENTOR]: "#2563eb",
   [ROLES.LEADER]: "#16a34a",
   [ROLES.MEMBER]: "#0284c7",
+  [ROLES.EXPERT]: "#4f46e5",
 };
