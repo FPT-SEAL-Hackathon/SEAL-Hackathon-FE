@@ -19,6 +19,7 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiSubmissions, setApiSubmissions] = useState<SubmissionResponse[]>([]);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
+  const [isFetchingRounds, setIsFetchingRounds] = useState(true);
 
   const loadRoundData = (roundId: string) => {
     setSelectedRoundId(roundId);
@@ -31,15 +32,17 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
   };
 
   useEffect(() => {
-    if (!user?.id) return;
-    roundService.getRoundsByJudge(user.id)
+    if (!user?.userId) return;
+    setIsFetchingRounds(true);
+    roundService.getRoundsByJudge(user.userId)
       .then(rounds => {
         setApiRounds(rounds);
         const active = rounds.find(r => r.roundStatusId) ?? rounds[0];
         if (active) loadRoundData(active.roundId);
       })
-      .catch(() => {});
-  }, [user?.id]);
+      .catch(() => {})
+      .finally(() => setIsFetchingRounds(false));
+  }, [user?.userId]);
 
   const handleNavigate = (page: string) => {
     onNavigate(page);
@@ -53,6 +56,7 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
             apiRounds={apiRounds}
             onSelectRound={loadRoundData}
             onNavigate={handleNavigate}
+            isLoadingRounds={isFetchingRounds}
           />
         );
       case "submissions":
@@ -71,6 +75,7 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
             apiRounds={apiRounds}
             selectedRoundId={selectedRoundId}
             selectedSubmission={selectedSubmission}
+            onNavigate={handleNavigate}
           />
         );
       case "calibration":
