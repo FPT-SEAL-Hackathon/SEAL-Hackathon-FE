@@ -65,13 +65,13 @@ export function JudgeHistoryView({
   }, [apiRounds, selectedCategoryId, selectedEventId, categories]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.userId) return;
     setLoading(true);
-    judgingService.getByJudge(user.id)
+    judgingService.getByJudge(user.userId)
       .then(res => setScores(res || []))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [user?.id]);
+  }, [user?.userId]);
 
   // Aggregate scores by submission
   const historyData = useMemo(() => {
@@ -328,7 +328,11 @@ export function JudgeHistoryView({
                                 status: "completed",
                                 score: row.total,
                                 round: row.roundName,
-                                ...row.originalSub // retain original submission data
+                                github: row.originalSub.repositoryUrl ?? "",
+                                demo: row.originalSub.demoUrl ?? "",
+                                slide: row.originalSub.slideUrl ?? "",
+                                report: row.originalSub.reportUrl ?? "",
+                                raw: row.originalSub
                               });
                               onNavigate("scoring");
                             }
