@@ -21,7 +21,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate }: JudgeR
   const [roundSubmissions, setRoundSubmissions] = useState<Record<string, SubmissionResponse[]>>({});
 
   useEffect(() => {
-    if (!user?.id || !apiRounds || apiRounds.length === 0) {
+    if (!user?.userId || !apiRounds || apiRounds.length === 0) {
       return;
     }
 
@@ -35,7 +35,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate }: JudgeR
     );
     
     fetches.push(
-      judgingService.getByJudge(user.id)
+      judgingService.getByJudge(user.userId)
         .then(res => setScores(res || []))
         .catch(() => setScores([])) as any
     );
@@ -52,7 +52,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate }: JudgeR
       setLoading(false);
     });
 
-  }, [user?.id, apiRounds]);
+  }, [user?.userId, apiRounds]);
 
   // Aggregate stats
   const { roundStats, globalStats } = useMemo(() => {
