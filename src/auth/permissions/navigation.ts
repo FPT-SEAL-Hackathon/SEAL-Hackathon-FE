@@ -34,13 +34,11 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "BookOpen", label: "Assigned Tracks", key: "tracks" },
     { icon: "Users", label: "Category Teams", key: "teams" },
     { icon: "MessageSquare", label: "Consultation Requests", key: "consultations" },
-    { icon: "Calendar", label: "Schedule", key: "schedule" },
     { icon: "User", label: "Profile", key: "profile" },
   ],
   [ROLES.GUEST_JUDGE]: [
     { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
-    { icon: "Calendar", label: "Schedule", key: "schedule" },
     { icon: "Clock", label: "History", key: "history" },
   ],
   [ROLES.ORGANIZER]: [
@@ -63,10 +61,9 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   ],
   [ROLES.MENTOR]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
-    { icon: "BookOpen", label: "Assigned Tracks", key: "tracks" },
+    { icon: "BookOpen", label: "Assigned Categories", key: "categories" },
     { icon: "Users", label: "Category Teams", key: "teams" },
     { icon: "MessageSquare", label: "Consultation Requests", key: "consultations" },
-    { icon: "Calendar", label: "Schedule", key: "schedule" },
     { icon: "User", label: "Profile", key: "profile" },
   ],
   [ROLES.LEADER]: [

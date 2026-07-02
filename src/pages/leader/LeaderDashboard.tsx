@@ -107,7 +107,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     setTeamId(stored.teamId);
     setSubmissionForm(prev => ({ ...prev, teamId: stored.teamId ?? "" }));
     teamService.getById(stored.teamId)
-      .then(team => {
+      .then((team: any) => {
         setActiveTeam(team);
         setSubmissionForm(prev => ({ ...prev, teamId: team.teamId }));
       })
@@ -460,7 +460,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           <InfoPill label="Full Name" value={user?.fullName} />
           <InfoPill label="Email" value={user?.email} />
           <InfoPill label="Phone" value={user?.phone} />
-          <InfoPill label="Student Code" value={user?.studentCode} />
+          <InfoPill label="Student Code" value={user?.fptStudentCode} />
         </div>
         <div className="mt-4">
           <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000); }}>

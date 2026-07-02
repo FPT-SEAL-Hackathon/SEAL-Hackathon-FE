@@ -63,7 +63,7 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
     setScoreError("");
     try {
       const isCalibrationRound = apiRounds.find(r => r.roundId === selectedRoundId)?.isCalibrationRound || false;
-      const scorePayload: ScoreSubmissionDTO[] = apiCriteria.map((c) => ({
+      const scorePayload: ScoreSubmissionDTO[] = apiCriteria.map((c: any) => ({
         submissionId: selectedSubmission.id?.toString() ?? "",
         roundCriterionId: c.roundCriterionId,
         scoreValue: scores[c.roundCriterionId] || 0,

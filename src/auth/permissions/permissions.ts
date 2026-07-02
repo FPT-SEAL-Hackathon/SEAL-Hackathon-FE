@@ -41,7 +41,7 @@ export const DEFAULT_PAGE_BY_ROLE: Record<Role, PageKey> = {
   [ROLES.ORGANIZER]: "dashboard",
   [ROLES.INTERNAL_JUDGE]: "rounds",
   [ROLES.GUEST_JUDGE]: "rounds",
-  [ROLES.MENTOR]: "tracks",
+  [ROLES.MENTOR]: "dashboard",
   [ROLES.LEADER]: "dashboard",
   [ROLES.MEMBER]: "dashboard",
 };
@@ -50,7 +50,7 @@ const MENTOR_ROLES = [ROLES.MENTOR] as Role[];
 const LEADER_MEMBER_ROLES = [ROLES.LEADER, ROLES.MEMBER] as Role[];
 
 export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
-  dashboard: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES, ROLES.INTERNAL_JUDGE],
+  dashboard: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES, ROLES.INTERNAL_JUDGE, ...MENTOR_ROLES],
   team: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   events: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
   "event-participants": [...ORGANIZER_ROLES],
@@ -63,7 +63,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   scoring: [...JUDGE_ROLES],
   calibration: [...JUDGE_ROLES],
   history: [...JUDGE_ROLES],
-  categories: [...ORGANIZER_ROLES],
+  categories: [...ORGANIZER_ROLES, ...MENTOR_ROLES],
   criteria: [...ORGANIZER_ROLES],
   users: [...ORGANIZER_ROLES],
   assignments: [...ORGANIZER_ROLES],
@@ -75,7 +75,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   awards: [...ORGANIZER_ROLES],
   "award-patterns": [...ORGANIZER_ROLES],
   settings: [...ORGANIZER_ROLES],
-  schedule: [...JUDGE_ROLES, ...MENTOR_ROLES],
+  schedule: [],
   // Mentor pages
   tracks: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
   teams: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],

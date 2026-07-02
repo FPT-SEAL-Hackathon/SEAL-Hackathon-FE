@@ -60,6 +60,9 @@ export const roleProfileKey: Record<Role, string> = {
   [ROLES.INTERNAL_JUDGE]: "profile",
   [ROLES.GUEST_JUDGE]: "profile",
   [ROLES.ORGANIZER]: "profile",
+  [ROLES.MENTOR]: "profile",
+  [ROLES.LEADER]: "profile",
+  [ROLES.MEMBER]: "profile",
 };
 
 export const roleColors: Record<Role, string> = {
@@ -68,4 +71,7 @@ export const roleColors: Record<Role, string> = {
   [ROLES.INTERNAL_JUDGE]: "#F59E0B",
   [ROLES.GUEST_JUDGE]: "#7C3AED",
   [ROLES.ORGANIZER]: "#e53e2e",
+  [ROLES.MENTOR]: "#2563eb",
+  [ROLES.LEADER]: "#16a34a",
+  [ROLES.MEMBER]: "#0284c7",
 };

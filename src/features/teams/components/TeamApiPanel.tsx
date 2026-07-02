@@ -176,7 +176,7 @@ export function TeamApiPanel({
     teamName: "",
     requestId: "",
     responseNote: "",
-    memberUserId: user?.id ?? "",
+    memberUserId: user?.userId ?? "",
   });
   const [teams, setTeams] = useState<TeamResponse[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(null);
@@ -201,14 +201,14 @@ export function TeamApiPanel({
   const isLeader = useMemo(() => {
     if (mode === "leader") return true;
     if (mode === "member") return false;
-    return !!selectedTeam && !!user?.id && selectedTeam.leaderUserId === user.id;
-  }, [mode, selectedTeam, user?.id]);
+    return !!selectedTeam && !!user?.userId && selectedTeam.leaderUserId === user.userId;
+  }, [mode, selectedTeam, user?.userId]);
 
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
   const canCreate = canUseEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
   const joinTeams = useMemo(
-    () => joinCategoryId ? teams.filter(team => team.categoryId === joinCategoryId) : teams,
+    () => joinCategoryId ? teams.filter((team: any) => team.categoryId === joinCategoryId) : teams,
     [joinCategoryId, teams],
   );
 
@@ -227,16 +227,16 @@ export function TeamApiPanel({
   }, []);
 
   useEffect(() => {
-    if (!user?.id || selectedTeam || teamDiscoveryDone) return;
-    const storedTeam = getStoredActiveTeam(user.id);
+    if (!user?.userId || selectedTeam || teamDiscoveryDone) return;
+    const storedTeam = getStoredActiveTeam(user.userId);
     if (storedTeam?.teamId) {
       let cancelled = false;
       setLoading(prev => ({ ...prev, discover: true }));
       teamService.getById(storedTeam.teamId)
-        .then(team => {
+        .then((team: any) => {
           if (cancelled) return;
           setSelectedTeam(team);
-          saveActiveTeam(team, user.id);
+          saveActiveTeam(team, user.userId);
           setField("teamId", team.teamId);
           setField("eventId", team.eventId);
           setField("categoryId", team.categoryId);
@@ -265,10 +265,10 @@ export function TeamApiPanel({
     Promise.all(events.map(event => teamService.getByEvent(event.eventId).catch(() => [] as TeamResponse[])))
       .then(results => {
         if (cancelled) return;
-        const team = results.flat().find(item => userBelongsToTeam(item, user.id));
+        const team = results.flat().find(item => userBelongsToTeam(item, user.userId));
         if (team) {
           setSelectedTeam(team);
-          saveActiveTeam(team, user.id);
+          saveActiveTeam(team, user.userId);
           setField("teamId", team.teamId);
           setField("eventId", team.eventId);
           setField("categoryId", team.categoryId);
@@ -285,7 +285,7 @@ export function TeamApiPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, selectedTeam, teamDiscoveryDone, user?.id]);
+  }, [events, selectedTeam, teamDiscoveryDone, user?.userId]);
 
   useEffect(() => {
     if (!form.eventId) {
@@ -297,7 +297,7 @@ export function TeamApiPanel({
       () => categoryService.getByEvent(form.eventId),
       data => {
         setCategories(data);
-        if (data[0] && !data.some(category => category.categoryId === form.categoryId)) {
+        if (data[0] && !data.some((category: any) => category.categoryId === form.categoryId)) {
           setField("categoryId", data[0].categoryId);
         }
       },
@@ -352,10 +352,10 @@ export function TeamApiPanel({
     run(
       "getById",
       () => teamService.getById(teamId),
-      team => {
+      (team: any) => {
         setSelectedTeam(team);
-        if (userBelongsToTeam(team, user?.id)) {
-          saveActiveTeam(team, user?.id);
+        if (userBelongsToTeam(team, user?.userId)) {
+          saveActiveTeam(team, user?.userId);
         }
         setField("teamId", team.teamId);
         setField("eventId", team.eventId);
@@ -397,9 +397,9 @@ export function TeamApiPanel({
         categoryId: form.categoryId.trim(),
         teamName: form.teamName.trim(),
       }),
-      team => {
+      (team: any) => {
         setSelectedTeam(team);
-        saveActiveTeam(team, user?.id);
+        saveActiveTeam(team, user?.userId);
         setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
         setField("teamId", team.teamId);
       },
@@ -436,7 +436,7 @@ export function TeamApiPanel({
 
   const removeMember = (userId = form.memberUserId.trim()) => {
     if (!form.teamId.trim() || !userId) return;
-    const removingCurrentUser = userId === user?.id;
+    const removingCurrentUser = userId === user?.userId;
     run(
       "remove",
       async () => {
@@ -490,7 +490,7 @@ export function TeamApiPanel({
       setMessage({ tone: "error", text: "No team member matches that name or email." });
       return;
     }
-    if (target.userId === user?.id || target.userId === team.leaderUserId) {
+    if (target.userId === user?.userId || target.userId === team.leaderUserId) {
       setMessage({ tone: "error", text: "The team leader cannot be removed from the team." });
       return;
     }
@@ -600,7 +600,7 @@ export function TeamApiPanel({
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
                   {categories.length === 0 && <option value="">No categories found</option>}
-                  {categories.map(category => (
+                  {categories.map((category: any) => (
                     <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
                   ))}
                 </select>
@@ -656,7 +656,7 @@ export function TeamApiPanel({
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
                   <option value="">All categories</option>
-                  {categories.map(category => (
+                  {categories.map((category: any) => (
                     <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
                   ))}
                 </select>
@@ -710,9 +710,9 @@ export function TeamApiPanel({
                   ),
                 },
               ]}
-              data={joinTeams.map(team => ({
+              data={joinTeams.map((team: any) => ({
                 teamName: team.teamName,
-                categoryName: categories.find(category => category.categoryId === team.categoryId)?.categoryName || "-",
+                categoryName: categories.find((category: any) => category.categoryId === team.categoryId)?.categoryName || "-",
                 memberCount: team.members.length,
                 teamId: team.teamId,
                 action: team.teamId,
@@ -872,13 +872,13 @@ export function TeamApiPanel({
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {message && <InlineMessage tone={message.tone} message={message.text} />}
-              {!isLeader && user?.id && (
+              {!isLeader && user?.userId && (
                 <Button
                   variant="danger"
                   size="sm"
                   icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
                   disabled={loading.remove}
-                  onClick={() => removeMember(user.id)}
+                  onClick={() => removeMember(user.userId)}
                 >
                   {loading.remove ? "Leaving..." : "Leave Team"}
                 </Button>
@@ -975,7 +975,7 @@ export function TeamApiPanel({
               <StatusBadge status={isLeader ? "active" : "pending"} />
             </div>
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 5 }}>
-              {selectedTeam ? `${selectedTeam.teamName} - ${selectedTeam.members.length} member(s)` : "Load an event or team to begin."}
+              Load an event or team to begin.
             </div>
           </div>
           {message && <InlineMessage tone={message.tone} message={message.text} />}
@@ -1032,7 +1032,7 @@ export function TeamApiPanel({
         </div>
       </Card>
 
-      {(!selectedTeam || isLeader) && (
+      {isLeader && (
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 14 }}>
             Create Team
@@ -1153,7 +1153,7 @@ export function TeamApiPanel({
                 ),
               },
             ]}
-            data={teams.map(team => ({
+            data={teams.map((team: any) => ({
               teamName: team.teamName,
               teamId: team.teamId,
               memberCount: team.members.length,
@@ -1163,36 +1163,7 @@ export function TeamApiPanel({
         </Card>
       )}
 
-      {selectedTeam && (
-        <Card className="p-5">
-          <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{selectedTeam.teamName}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-                Leader: {selectedTeam.leaderUserId}
-              </div>
-            </div>
-            <StatusBadge status={isLeader ? "active" : "pending"} />
-          </div>
-          <DataTable
-            columns={[
-              { key: "userId", label: "User ID" },
-              { key: "active", label: "Status" },
-              { key: "joinedAt", label: "Joined" },
-              {
-                key: "action",
-                label: "Action",
-                render: (_value, row) => isLeader ? (
-                  <Button variant="danger" size="sm" icon={<Trash2 size={13} />} onClick={() => removeMember(row.userId)}>
-                    Remove
-                  </Button>
-                ) : null,
-              },
-            ]}
-            data={memberRows(selectedTeam.members)}
-          />
-        </Card>
-      )}
+
 
       {isLeader && requests.length > 0 && (
         <Card className="p-5">

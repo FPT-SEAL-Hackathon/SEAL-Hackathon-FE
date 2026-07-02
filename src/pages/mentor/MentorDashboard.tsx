@@ -139,7 +139,7 @@ export function MentorDashboard({ currentPage, onNavigate }: { currentPage: stri
     <>
       <SectionHeader title="Mentoring Notes" subtitle="Track team progress and leave consultation notes" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {assignedTeams.map(team => (
+        {assignedTeams.map((team: any) => (
           <button
             key={team.id}
             onClick={() => { setSelectedTeam(team); setNoteText(team.notes); }}

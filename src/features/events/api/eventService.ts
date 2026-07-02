@@ -145,7 +145,7 @@ export function normalizeEventResponse(raw: EventResponse | RawEventRecord): Eve
     location: stringValue(record.location) ?? "",
     bannerImageUrl: stringValue(record.bannerImageUrl) ?? "",
     eventStatus: {
-      ...(rawEventStatus as EventStatusResponse),
+      ...(rawEventStatus as unknown as EventStatusResponse),
       eventStatusId,
       eventStatusName,
     },

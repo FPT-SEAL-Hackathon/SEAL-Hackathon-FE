@@ -127,7 +127,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   // ── User avatar ───────────────────────────────────────────────────────────
   const initials = userName
     .split(" ")
-    .map(w => w[0])
+    .map((w: any) => w[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
@@ -283,7 +283,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               onClick={() => setAppSettingsOpen(true)}
               className="relative flex items-center rounded-xl transition-colors duration-150 hover:bg-orange-50"
               style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
-              title="Logout"
+              title={!sidebarOpen ? "App Settings" : undefined}
             >
               <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
                 <Settings size={17} style={{ color: "var(--text-muted)" }} />
@@ -297,14 +297,16 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               onClick={onRoleChange}
               className="relative flex items-center rounded-xl transition-colors duration-150"
               style={{ width: 260, height: 40, paddingLeft: 12, paddingRight: 12 }}
-              title="Logout"
+              title={!sidebarOpen ? "Log Out" : undefined}
               onMouseEnter={e => (e.currentTarget.style.background = "rgba(244,121,32,0.06)")}
               onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
               <div className="flex items-center justify-center flex-shrink-0" style={{ width: 24, height: 24 }}>
                 <LogOut size={17} style={{ color: "#F47920" }} />
               </div>
-              
+              <span style={{ marginLeft: 10, fontSize: 13.5, fontWeight: 500, color: "#F47920", whiteSpace: "nowrap", opacity: sidebarOpen ? 1 : 0, transition: "opacity 0.18s ease", pointerEvents: "none" }}>
+                Log Out
+              </span>
             </button>
           </div>
         </motion.aside>

@@ -31,15 +31,15 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
   };
 
   useEffect(() => {
-    if (!user?.id) return;
-    roundService.getRoundsByJudge(user.id)
+    if (!user?.userId) return;
+    roundService.getRoundsByJudge(user.userId)
       .then(rounds => {
         setApiRounds(rounds);
         const active = rounds.find(r => r.roundStatusId) ?? rounds[0];
         if (active) loadRoundData(active.roundId);
       })
       .catch(() => {});
-  }, [user?.id]);
+  }, [user?.userId]);
 
   const handleNavigate = (page: string) => {
     onNavigate(page);

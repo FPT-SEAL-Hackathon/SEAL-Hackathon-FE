@@ -233,7 +233,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               >
                 <option value="">Select category</option>
                 {apiCategories.length === 0 && selectedEventId && <option value="" disabled>No categories found</option>}
-                {apiCategories.map(category => (
+                {apiCategories.map((category: any) => (
                   <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
                 ))}
               </select>
@@ -268,7 +268,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
             <div className="mt-6">
               <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 10 }}>Top Ranking Used</div>
               <div className="space-y-2">
-                {autoGrantPreview.map(candidate => (
+                {autoGrantPreview.map((candidate: any) => (
                   <div key={candidate.teamId} className="flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                     <div className="flex items-center gap-3">
                       <span className="inline-flex items-center justify-center rounded-lg" style={{ width: 30, height: 30, background: `${COLORS.primary}12`, color: COLORS.primary, fontWeight: 700, fontSize: 12 }}>
@@ -418,7 +418,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               No awards have been granted for this event yet.
             </div>
           )}
-          {apiAwards.map(award => (
+          {apiAwards.map((award: any) => (
             <div key={award.id} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
               <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: `${COLORS.primary}12`, color: COLORS.primary }}>
                 <Award size={18} />

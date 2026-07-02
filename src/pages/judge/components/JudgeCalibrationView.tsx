@@ -95,7 +95,7 @@ export function JudgeCalibrationView({
     }
 
     // Find current judge
-    const currentUserObj = data.find(j => j.judgeUserId === user?.id);
+    const currentUserObj = data.find(j => j.judgeUserId === user?.userId);
     const myAvg = currentUserObj?.averageScore?.toFixed(1) || "0.0";
     const myStdDev = currentUserObj?.rootMeanSquareDeviation?.toFixed(1) || "0.0";
     
@@ -105,8 +105,8 @@ export function JudgeCalibrationView({
 
     // Sort data so current judge is at the top
     const sortedData = [...data].sort((a, b) => {
-      if (a.judgeUserId === user?.id) return -1;
-      if (b.judgeUserId === user?.id) return 1;
+      if (a.judgeUserId === user?.userId) return -1;
+      if (b.judgeUserId === user?.userId) return 1;
       return (a.averageAbsoluteDeviation || 0) - (b.averageAbsoluteDeviation || 0);
     });
 
@@ -122,7 +122,7 @@ export function JudgeCalibrationView({
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Judge Panel Comparison</div>
           <div className="space-y-4">
             {sortedData.map((j, i) => {
-              const isMe = j.judgeUserId === user?.id;
+              const isMe = j.judgeUserId === user?.userId;
               const avg = j.averageScore?.toFixed(1) || "0";
               const min = j.minScore || 0;
               const max = j.maxScore || 100;
