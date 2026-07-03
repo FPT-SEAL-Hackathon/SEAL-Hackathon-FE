@@ -181,9 +181,9 @@ function unwrapList<T>(response: T[] | BackendEnvelope<T[] | PageEnvelope<T>> | 
 export const eventService = {
   getAll: async (auth = false) => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events", auth))),
   getPublic: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[] | PageEnvelope<EventResponse>> | PageEnvelope<EventResponse>>("/api/v1/public/events", false))),
-  getById: async (id: string, auth = false) => normalizeEventResponse(await api.get<EventResponse>(`/api/v1/events/${id}`, auth)),
-  create: (data: CreateEventRequest) => api.post<EventResponse>("/api/v1/events", data),
-  update: (id: string, data: UpdateEventRequest) => api.put<EventResponse>(`/api/v1/events/${id}`, data),
-  updateStatus: (id: string, data: UpdateEventStatusRequest) => api.patch<EventResponse>(`/api/v1/events/${id}/status`, data),
-  delete: (id: string) => api.delete(`/api/v1/events/${id}`),
+  getById: async (id: string, auth = false) => normalizeEventResponse(await api.get<EventResponse>(`/api/v1/event/${id}`, auth)),
+  create: (data: CreateEventRequest) => api.post<EventResponse>("/api/v1/event", data),
+  update: (id: string, data: UpdateEventRequest) => api.put<EventResponse>(`/api/v1/event/${id}`, data),
+  updateStatus: (id: string, data: UpdateEventStatusRequest) => api.patch<EventResponse>(`/api/v1/event/status/${id}`, data),
+  delete: (id: string) => api.delete(`/api/v1/event/${id}`),
 };
