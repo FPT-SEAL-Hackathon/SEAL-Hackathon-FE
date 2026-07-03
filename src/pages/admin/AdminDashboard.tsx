@@ -266,7 +266,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           prize: "—",
         }));
         setApiEvents(mapped as any);
-        if (data[0]) setSelectedEventId(data[0].eventId);
       })
       .catch(error => {
         setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
