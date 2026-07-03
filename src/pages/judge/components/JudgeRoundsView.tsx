@@ -199,9 +199,6 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
                         )}
                         
                         <Card className="p-5 flex flex-col h-full bg-white border-2 hover:border-primary/30 transition-all z-10" style={{ opacity: isCompleted ? 0.8 : 1, borderColor: isCompleted ? COLORS.success + '40' : 'transparent', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
-                          <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white" style={{ background: isCompleted ? COLORS.success : COLORS.textPrimary }}>
-                            {index + 1}
-                          </div>
                           
                           <div className="flex items-start justify-between mb-3">
                             <div>
@@ -249,6 +246,10 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
                             </Button>
                           </div>
                         </Card>
+                        
+                        <div className="absolute -top-3 -right-3 w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-bold shadow-md border-2 border-white z-20 pointer-events-none" style={{ background: isCompleted ? COLORS.success : COLORS.textPrimary }}>
+                          {r.roundOrder || index + 1}
+                        </div>
                       </div>
                     );
                   })}
