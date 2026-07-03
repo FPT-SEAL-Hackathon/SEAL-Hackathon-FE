@@ -10,6 +10,7 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { researchService } from "@/features/research/api/researchService";
 import { settingsService } from "@/features/settings/api/settingsService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { userService, type UserManagementUser } from "@/features/users/api/userService";
 import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
 import { CategoryModal } from "@/features/categories/components/CategoryModal";
@@ -145,10 +146,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
+  const [apiDashboardRounds, setApiDashboardRounds] = useState<RoundResponse[]>([]);
   const [apiTeamEligibility, setApiTeamEligibility] = useState<TeamEligibilityReviewResponse[]>([]);
   const [apiRankings, setApiRankings] = useState<EventRankingDTO[]>([]);
   const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
+  const [apiUsers, setApiUsers] = useState<UserManagementUser[]>([]);
   const [eventLoadError, setEventLoadError] = useState("");
   const [categoryLoadError, setCategoryLoadError] = useState("");
   const [selectedSubmissionCategoryId, setSelectedSubmissionCategoryId] = useState("");
@@ -271,9 +274,16 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
+    userService.getUsers({ page: 0, size: 500 })
+      .then(data => setApiUsers(data.content))
+      .catch(() => setApiUsers([]));
+  }, []);
+
+  useEffect(() => {
     if (!selectedEventId) return;
     setCategoryLoadError("");
     setApiCategories([]);
+    setApiDashboardRounds([]);
     setAwardPatternCategoryId("");
     setManualAwardForm(createEmptyManualAwardForm());
     setSelectedSubmissionCategoryId("");
@@ -281,6 +291,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     categoryService.getByEvent(selectedEventId).then(data => {
       setCategoryLoadError("");
       setApiCategories(data);
+      Promise.all(data.map(category => roundService.getByCategory(category.categoryId).catch(() => [])))
+        .then(roundGroups => setApiDashboardRounds(roundGroups.flat()));
       // Load rounds for first category
       if (data[0]) {
         roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
@@ -337,14 +349,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, [apiRounds, selectedSubmissionRoundId]);
 
   useEffect(() => {
-    if (currentPage !== "submissions") return;
+    if (currentPage !== "dashboard" && currentPage !== "submissions") return;
 
     const loadSubmissions = async () => {
       setSubmissionsLoading(true);
-      setSubmissionsError("");
+      if (currentPage === "submissions") setSubmissionsError("");
       setSubmissionActionMessage("");
       try {
-        const data = submissionScope === "event"
+        const data = currentPage === "dashboard" || submissionScope === "event"
           ? await submissionService.getByEvent(selectedEventId ?? "")
           : submissionScope === "unreview"
             ? await submissionService.getUnreviewByRound(selectedSubmissionRoundId)
@@ -352,7 +364,9 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         setAdminSubmissions(data);
       } catch (error) {
         setAdminSubmissions([]);
-        setSubmissionsError(error instanceof Error ? error.message : "Failed to load submissions.");
+        if (currentPage === "submissions") {
+          setSubmissionsError(error instanceof Error ? error.message : "Failed to load submissions.");
+        }
       } finally {
         setSubmissionsLoading(false);
       }
@@ -738,6 +752,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setApiCategories,
     apiRounds,
     setApiRounds,
+    apiDashboardRounds,
+    setApiDashboardRounds,
     apiTeamEligibility,
     setApiTeamEligibility,
     apiRankings,
@@ -746,6 +762,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setApiAwards,
     apiCriteriaTemplates,
     setApiCriteriaTemplates,
+    apiUsers,
+    setApiUsers,
     eventLoadError,
     setEventLoadError,
     categoryLoadError,

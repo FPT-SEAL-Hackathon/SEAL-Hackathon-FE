@@ -44,9 +44,10 @@ export const DEFAULT_PAGE_BY_ROLE: Record<Role, PageKey> = {
   [ROLES.MENTOR]: "dashboard",
   [ROLES.LEADER]: "dashboard",
   [ROLES.MEMBER]: "dashboard",
+  [ROLES.EXPERT]: "dashboard",
 };
 
-const MENTOR_ROLES = [ROLES.MENTOR] as Role[];
+const MENTOR_ROLES = [ROLES.MENTOR, ROLES.EXPERT] as Role[];
 const LEADER_MEMBER_ROLES = [ROLES.LEADER, ROLES.MEMBER] as Role[];
 
 export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {

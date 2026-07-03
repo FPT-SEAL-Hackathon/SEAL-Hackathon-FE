@@ -21,9 +21,20 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
 
   useEffect(() => {
     setLoading(true);
-    userService.getUsers({ role: ROLES.MENTOR })
-      .then(res => setMentors(res.content || []))
-      .catch(() => setError("Failed to load mentors"))
+    // Fetch both MENTOR and EXPERT roles
+    Promise.all([
+      userService.getUsers({ role: ROLES.MENTOR }),
+      userService.getUsers({ role: ROLES.EXPERT })
+    ])
+      .then(([mentorsRes, expertsRes]) => {
+        const mentorUsers = mentorsRes.content || [];
+        const expertUsers = expertsRes.content || [];
+        // Deduplicate in case backend returns same user or just combine
+        const combined = [...mentorUsers, ...expertUsers];
+        const unique = combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i);
+        setMentors(unique);
+      })
+      .catch(() => setError("Failed to load mentors/experts"))
       .finally(() => setLoading(false));
   }, []);
 

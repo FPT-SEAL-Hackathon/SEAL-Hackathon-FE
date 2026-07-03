@@ -23,6 +23,19 @@ const roleColors: Record<string, string> = {
 
 export { COLORS, roleColors };
 
+function formatNotificationTime(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const diffMs = Date.now() - date.getTime();
+  const diffMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return date.toLocaleDateString();
+}
+
 interface LayoutProps {
   role: Role;
   currentPage: string;
@@ -116,12 +129,53 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const [notifOpen, setNotifOpen] = useState(false);
   const notifCount = notifications.filter(n => !n.read).length;
 
+  useEffect(() => {
+    let cancelled = false;
+    notificationService.getMyNotifications(0, 10)
+      .then(page => {
+        if (cancelled) return;
+        setNotifications(page.content.map(item => ({
+          id: item.notificationId,
+          title: item.title,
+          body: item.body,
+          time: formatNotificationTime(item.createdAt),
+          read: item.read,
+        })));
+      })
+      .catch(() => {
+        if (!cancelled) setNotifications([]);
+      });
+
+    const stream = notificationService.createStream();
+    stream?.addEventListener("message", event => {
+      try {
+        const item = JSON.parse(event.data);
+        setNotifications(prev => [{
+          id: item.notificationId ?? item.id,
+          title: item.title ?? "Notification",
+          body: item.body ?? "",
+          time: formatNotificationTime(item.createdAt ?? item.sentAt),
+          read: Boolean(item.read ?? item.isRead),
+        }, ...prev].slice(0, 10));
+      } catch {
+        // Ignore malformed SSE payloads.
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      stream?.close();
+    };
+  }, []);
+
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    notificationService.markAllAsRead().catch(() => {});
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    notificationService.markAsRead(id).catch(() => {});
   };
 
   // ── User avatar ───────────────────────────────────────────────────────────
