@@ -257,3 +257,30 @@ export const userService = {
   deleteUser: (userId: string) =>
     api.delete<void>(`/api/v1/users/${userId}`),
 };
+
+// ─── Self-service profile (any authenticated user) ────────────────────────────
+
+export interface UpdateMyProfileRequest {
+  fullName?: string;
+  phone?: string;
+  universityName?: string;
+}
+
+export interface MyProfileResponse {
+  userId: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  role: string;
+  universityName?: string;
+  fptStudentCode?: string;
+  externalStudentCode?: string;
+  accountStatus: string;
+  createdAt?: string;
+}
+
+export const meService = {
+  getMe: () => api.get<MyProfileResponse>("/api/v1/me"),
+  updateMe: (data: UpdateMyProfileRequest) =>
+    api.put<MyProfileResponse>("/api/v1/me", data),
+};
