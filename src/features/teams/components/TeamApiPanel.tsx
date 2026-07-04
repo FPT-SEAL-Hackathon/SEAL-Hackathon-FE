@@ -3,6 +3,7 @@ import {
   CheckCircle,
   Eye,
   Loader,
+  LogOut,
   PlusCircle,
   Search,
   Trash2,
@@ -463,6 +464,11 @@ export function TeamApiPanel({
     );
   };
 
+  const leaveTeam = () => {
+    if (!selectedTeam || !user?.userId) return;
+    removeMember(user.userId);
+  };
+
   const getMemberDetail = () => {
     run(
       "memberDetail",
@@ -872,13 +878,13 @@ export function TeamApiPanel({
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {message && <InlineMessage tone={message.tone} message={message.text} />}
-              {!isLeader && user?.userId && (
+              {user?.userId && (
                 <Button
                   variant="danger"
                   size="sm"
-                  icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <LogOut size={13} />}
                   disabled={loading.remove}
-                  onClick={() => removeMember(user.userId)}
+                  onClick={leaveTeam}
                 >
                   {loading.remove ? "Leaving..." : "Leave Team"}
                 </Button>
