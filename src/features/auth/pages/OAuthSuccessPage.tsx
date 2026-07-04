@@ -37,7 +37,21 @@ export function OAuthSuccessPage() {
 
     if (oauthError) {
       setState("error");
-      setErrorMessage("Google sign-in was cancelled or failed. Please try again.");
+      // Phân biệt lỗi để dễ chẩn đoán:
+      // - oauth_failed: Google/Spring từ chối (client id/secret, redirect URI, session)
+      // - oauth_login_failed: Google OK nhưng backend lỗi khi tạo/tìm user (DB/migration)
+      if (oauthError === "oauth_login_failed") {
+        setErrorMessage(
+          "Google verified your account, but the server could not sign you in. " +
+          "Please contact support. (error: oauth_login_failed)",
+        );
+      } else if (oauthError === "unsupported_provider") {
+        setErrorMessage("This sign-in provider is not supported yet. (error: unsupported_provider)");
+      } else {
+        setErrorMessage(
+          `Google sign-in was cancelled or failed. Please try again. (error: ${oauthError})`,
+        );
+      }
       return;
     }
 
