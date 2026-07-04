@@ -218,10 +218,15 @@ export function TeamApiPanel({
   const canCreate = approvedEvents.some(event => event.eventId === form.eventId.trim())
     && form.categoryId.trim().length > 0
     && form.teamName.trim().length > 0;
-  const joinTeams = useMemo(
-    () => joinCategoryId ? teams.filter(team => team.categoryId === joinCategoryId) : teams,
-    [joinCategoryId, teams],
-  );
+  const joinTeams = useMemo(() => {
+    const selectedEvent = events.find(event => event.eventId === form.eventId);
+    return teams.filter(team => {
+      const isPending = getTeamStatusInfo(team.teamStatusId).badge === "pending_approval";
+      const hasCapacity = !selectedEvent?.maxTeamSize || team.members.length < selectedEvent.maxTeamSize;
+      const matchesCategory = !joinCategoryId || team.categoryId === joinCategoryId;
+      return isPending && hasCapacity && matchesCategory;
+    });
+  }, [events, form.eventId, joinCategoryId, teams]);
   const selectedEventName = events.find(event => event.eventId === selectedTeam?.eventId)?.eventName
     ?? selectedTeam?.eventId
     ?? "-";
@@ -469,6 +474,16 @@ export function TeamApiPanel({
 
   const requestJoin = (teamId = form.teamId.trim()) => {
     if (!teamId) return;
+    const team = teams.find(item => item.teamId === teamId);
+    if (team && getTeamStatusInfo(team.teamStatusId).badge !== "pending_approval") {
+      setMessage({ tone: "error", text: "This team's roster is locked because it is no longer pending approval." });
+      return;
+    }
+    const selectedEvent = events.find(event => event.eventId === team?.eventId);
+    if (team && selectedEvent?.maxTeamSize && team.members.length >= selectedEvent.maxTeamSize) {
+      setMessage({ tone: "error", text: "This team has reached the event's maximum team size." });
+      return;
+    }
     setField("teamId", teamId);
     run("join", () => teamService.requestJoin(teamId), undefined, "Join request sent.");
   };
@@ -486,6 +501,10 @@ export function TeamApiPanel({
   };
 
   const decideRequest = (requestId: string, action: "APPROVED" | "REJECTED") => {
+    if (action === "APPROVED" && selectedTeam && getTeamStatusInfo(selectedTeam.teamStatusId).badge !== "pending_approval") {
+      setMessage({ tone: "error", text: "The team roster is locked and cannot accept new members." });
+      return;
+    }
     const teamId = selectedTeam?.teamId ?? form.teamId.trim();
     run(
       action === "APPROVED" ? "approve" : "reject",
@@ -513,6 +532,10 @@ export function TeamApiPanel({
 
   const removeMember = (userId = form.memberUserId.trim()) => {
     if (!form.teamId.trim() || !userId) return;
+    if (selectedTeam && getTeamStatusInfo(selectedTeam.teamStatusId).badge !== "pending_approval") {
+      setMessage({ tone: "error", text: "The team roster is locked after organizer approval." });
+      return;
+    }
     const removingCurrentUser = userId === user?.userId;
     run(
       "remove",
@@ -807,8 +830,8 @@ export function TeamApiPanel({
                 style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}
               >
                 {joinCategoryId
-                  ? "There are currently no teams registered in this category."
-                  : "There are currently no teams registered for this event."}
+                  ? "There are no pending teams with open slots in this category."
+                  : "There are no pending teams with open slots for this event."}
               </div>
             ) : (
               <DataTable
@@ -851,6 +874,7 @@ export function TeamApiPanel({
     const leaderDetail = memberDetails[selectedTeam.leaderUserId];
     const leaderLabel = leaderDetail?.fullName || leaderDetail?.email || "Team leader";
     const teamStatus = getTeamStatusInfo(selectedTeam.teamStatusId);
+    const canEditRoster = teamStatus.badge === "pending_approval";
     const memberTableRows = selectedTeam.members.map(member => {
       const detail = memberDetails[member.userId];
       return {
@@ -897,7 +921,7 @@ export function TeamApiPanel({
         );
       }
 
-      if (leaderActionPanel === "removeMember") {
+      if (leaderActionPanel === "removeMember" && canEditRoster) {
         return (
           <div className="mt-5 rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 8 }}>Remove Member</div>
@@ -993,7 +1017,7 @@ export function TeamApiPanel({
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {message && <InlineMessage tone={message.tone} message={message.text} />}
-              {user?.userId && (
+              {user?.userId && canEditRoster && (
                 <Button
                   variant="danger"
                   size="sm"
@@ -1006,6 +1030,14 @@ export function TeamApiPanel({
               )}
             </div>
           </div>
+          {!canEditRoster && teamStatus.badge === "active" && (
+            <div
+              className="rounded-xl px-4 py-3 mt-4"
+              style={{ background: `${COLORS.success}08`, border: `1px solid ${COLORS.success}20`, color: COLORS.success, fontSize: 13 }}
+            >
+              This team is approved. Its members and category are locked for competition submissions.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
             {[
@@ -1057,26 +1089,30 @@ export function TeamApiPanel({
               >
                 Member Detail
               </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                icon={<Trash2 size={14} />}
-                onClick={() => setLeaderActionPanel(current => current === "removeMember" ? null : "removeMember")}
-              >
-                Remove Member
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
-                disabled={loading.requests}
-                onClick={() => {
-                  setLeaderActionPanel("joinRequests");
-                  loadRequests(selectedTeam.teamId);
-                }}
-              >
-                {loading.requests ? "Loading..." : "Load Join Requests"}
-              </Button>
+              {canEditRoster && (
+                <>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={<Trash2 size={14} />}
+                    onClick={() => setLeaderActionPanel(current => current === "removeMember" ? null : "removeMember")}
+                  >
+                    Remove Member
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                    disabled={loading.requests}
+                    onClick={() => {
+                      setLeaderActionPanel("joinRequests");
+                      loadRequests(selectedTeam.teamId);
+                    }}
+                  >
+                    {loading.requests ? "Loading..." : "Load Join Requests"}
+                  </Button>
+                </>
+              )}
             </div>
             {renderLeaderActionPanel()}
           </Card>

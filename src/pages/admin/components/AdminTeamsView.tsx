@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle, Loader, RefreshCw, ShieldOff, Users, X, XCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckCircle, Loader, RefreshCw, Search, ShieldOff, Users, X, XCircle } from "lucide-react";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
+import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import {
   getTeamStatusInfo,
   teamService,
@@ -10,6 +11,8 @@ import {
 interface AdminTeamsViewProps {
   context: any;
 }
+
+const SELECTED_EVENT_STORAGE_KEY = "seal_admin_team_management_event";
 
 export function AdminTeamsView({ context }: AdminTeamsViewProps) {
   const {
@@ -27,16 +30,25 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
   const [error, setError] = useState("");
   const [disqualifyTarget, setDisqualifyTarget] = useState<TeamEligibilityReviewResponse | null>(null);
   const [disqualifyReason, setDisqualifyReason] = useState("");
+  const [teamCategories, setTeamCategories] = useState<CategoryResponse[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const loadTeams = useCallback(async () => {
     if (!selectedEventId) {
       setApiTeamEligibility([]);
+      setTeamCategories([]);
       return;
     }
     setLoading(true);
     setError("");
     try {
-      setApiTeamEligibility(await teamService.reviewEligibility(selectedEventId));
+      const [teams, categories] = await Promise.all([
+        teamService.reviewEligibility(selectedEventId),
+        categoryService.getByEvent(selectedEventId).catch(() => [] as CategoryResponse[]),
+      ]);
+      setApiTeamEligibility(teams);
+      setTeamCategories(categories);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load teams.");
     } finally {
@@ -47,6 +59,17 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
   useEffect(() => {
     void loadTeams();
   }, [loadTeams]);
+
+  useEffect(() => {
+    if (selectedEventId || apiEvents.length === 0) return;
+    const storedEventId = localStorage.getItem(SELECTED_EVENT_STORAGE_KEY);
+    const eventExists = apiEvents.some((event: any) => (event.eventId ?? event.id) === storedEventId);
+    if (storedEventId && eventExists) setSelectedEventId(storedEventId);
+  }, [apiEvents, selectedEventId, setSelectedEventId]);
+
+  useEffect(() => {
+    if (selectedEventId) localStorage.setItem(SELECTED_EVENT_STORAGE_KEY, selectedEventId);
+  }, [selectedEventId]);
 
   const decide = async (team: TeamEligibilityReviewResponse, approved: boolean) => {
     const note = notes[team.teamId]?.trim();
@@ -71,7 +94,35 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
   };
 
   const categoryName = (categoryId: string) =>
-    apiCategories.find((category: any) => category.categoryId === categoryId)?.categoryName ?? "None";
+    teamCategories.find(category => category.categoryId === categoryId)?.categoryName
+    ?? apiCategories.find((category: any) => category.categoryId === categoryId)?.categoryName
+    ?? "None";
+
+  const visibleTeams = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const statusOrder: Record<string, number> = {
+      pending_approval: 0,
+      active: 1,
+      disqualified: 2,
+      withdrawn: 3,
+      unverified: 4,
+    };
+    return [...apiTeamEligibility]
+      .filter((team: TeamEligibilityReviewResponse) => {
+        const status = getTeamStatusInfo(team.teamStatusId).badge;
+        const matchesStatus = statusFilter === "all" || status === statusFilter;
+        const matchesSearch = !query
+          || team.teamName.toLowerCase().includes(query)
+          || categoryName(team.categoryId).toLowerCase().includes(query);
+        return matchesStatus && matchesSearch;
+      })
+      .sort((left: TeamEligibilityReviewResponse, right: TeamEligibilityReviewResponse) => {
+        const leftStatus = getTeamStatusInfo(left.teamStatusId).badge;
+        const rightStatus = getTeamStatusInfo(right.teamStatusId).badge;
+        return (statusOrder[leftStatus] ?? 99) - (statusOrder[rightStatus] ?? 99)
+          || left.teamName.localeCompare(right.teamName);
+      });
+  }, [apiTeamEligibility, search, statusFilter, teamCategories, apiCategories]);
 
   const confirmDisqualify = async () => {
     if (!disqualifyTarget) return;
@@ -121,7 +172,14 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
           </span>
           <select
             value={selectedEventId ?? ""}
-            onChange={event => setSelectedEventId(event.target.value || null)}
+            onChange={event => {
+              const eventId = event.target.value || null;
+              setSelectedEventId(eventId);
+              setSearch("");
+              setStatusFilter("all");
+              if (eventId) localStorage.setItem(SELECTED_EVENT_STORAGE_KEY, eventId);
+              else localStorage.removeItem(SELECTED_EVENT_STORAGE_KEY);
+            }}
             className="w-full px-3 py-2.5 rounded-xl outline-none"
             style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textPrimary }}
           >
@@ -133,6 +191,39 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
             ))}
           </select>
         </label>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_240px] gap-3 mt-4">
+          <label className="relative block">
+            <Search
+              size={16}
+              className="absolute"
+              style={{ left: 13, top: "50%", transform: "translateY(-50%)", color: COLORS.textSecondary }}
+            />
+            <input
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              placeholder="Search by team or category..."
+              className="w-full py-2.5 pr-3 rounded-xl outline-none"
+              style={{ paddingLeft: 40, background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textPrimary }}
+            />
+          </label>
+          <select
+            value={statusFilter}
+            onChange={event => setStatusFilter(event.target.value)}
+            className="w-full px-3 py-2.5 rounded-xl outline-none"
+            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textPrimary }}
+          >
+            <option value="all">All statuses</option>
+            <option value="pending_approval">Pending Approval</option>
+            <option value="active">Active</option>
+            <option value="disqualified">Disqualified</option>
+            <option value="withdrawn">Withdrawn</option>
+          </select>
+        </div>
+        {selectedEventId && (
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 10 }}>
+            Showing {visibleTeams.length} of {apiTeamEligibility.length} teams
+          </div>
+        )}
       </Card>
 
       {message && (
@@ -153,10 +244,12 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
         </Card>
       )}
 
-      {selectedEventId && !loading && apiTeamEligibility.length === 0 && (
+      {selectedEventId && !loading && visibleTeams.length === 0 && (
         <Card className="p-8 text-center">
           <Users size={34} className="mx-auto mb-3" style={{ color: COLORS.textSecondary }} />
-          <div style={{ color: COLORS.textSecondary }}>No teams found for this event.</div>
+          <div style={{ color: COLORS.textSecondary }}>
+            {apiTeamEligibility.length === 0 ? "No teams found for this event." : "No teams match the current search and status filter."}
+          </div>
         </Card>
       )}
 
@@ -166,9 +259,9 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
         </Card>
       )}
 
-      {!loading && apiTeamEligibility.length > 0 && (
+      {!loading && visibleTeams.length > 0 && (
         <div className="space-y-4">
-          {apiTeamEligibility.map((team: TeamEligibilityReviewResponse) => {
+          {visibleTeams.map((team: TeamEligibilityReviewResponse) => {
             const status = getTeamStatusInfo(team.teamStatusId);
             const isPending = status.badge === "pending_approval";
             const isActing = actionTeamId === team.teamId;
