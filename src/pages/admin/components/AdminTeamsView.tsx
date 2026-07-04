@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle, Loader, RefreshCw, Users, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle, Loader, RefreshCw, ShieldOff, Users, X, XCircle } from "lucide-react";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import {
   getTeamStatusInfo,
@@ -25,6 +25,8 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [disqualifyTarget, setDisqualifyTarget] = useState<TeamEligibilityReviewResponse | null>(null);
+  const [disqualifyReason, setDisqualifyReason] = useState("");
 
   const loadTeams = useCallback(async () => {
     if (!selectedEventId) {
@@ -71,11 +73,34 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
   const categoryName = (categoryId: string) =>
     apiCategories.find((category: any) => category.categoryId === categoryId)?.categoryName ?? "None";
 
+  const confirmDisqualify = async () => {
+    if (!disqualifyTarget) return;
+    if (!disqualifyReason.trim()) {
+      setError("Enter a violation reason before disqualifying this team.");
+      return;
+    }
+
+    setActionTeamId(disqualifyTarget.teamId);
+    setError("");
+    setMessage("");
+    try {
+      await teamService.disqualify(disqualifyTarget.teamId, disqualifyReason.trim());
+      setMessage(`${disqualifyTarget.teamName} has been disqualified.`);
+      setDisqualifyTarget(null);
+      setDisqualifyReason("");
+      await loadTeams();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Could not disqualify this team.");
+    } finally {
+      setActionTeamId("");
+    }
+  };
+
   return (
     <>
       <SectionHeader
-        title="Team Approvals"
-        subtitle="Approve eligible teams before they can submit competition work"
+        title="Team Management"
+        subtitle="Approve, reject, and enforce competition rules for teams"
         action={
           <Button
             variant="outline"
@@ -198,10 +223,108 @@ export function AdminTeamsView({ context }: AdminTeamsViewProps) {
                       </div>
                     </div>
                   )}
+                  {status.badge !== "disqualified" && status.badge !== "withdrawn" && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<ShieldOff size={13} />}
+                      disabled={isActing}
+                      onClick={() => {
+                        setError("");
+                        setDisqualifyReason("");
+                        setDisqualifyTarget(team);
+                      }}
+                    >
+                      Disqualify
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {disqualifyTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(35,20,10,0.42)", backdropFilter: "blur(4px)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="disqualify-team-title"
+        >
+          <Card className="p-6 w-full max-w-lg">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 42, height: 42, color: COLORS.error, background: `${COLORS.error}12` }}
+                >
+                  <AlertTriangle size={21} />
+                </div>
+                <div>
+                  <div id="disqualify-team-title" style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>
+                    Disqualify Team
+                  </div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>
+                    {disqualifyTarget.teamName}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Close"
+                className="p-2 rounded-lg"
+                style={{ color: COLORS.textSecondary }}
+                onClick={() => {
+                  setDisqualifyTarget(null);
+                  setDisqualifyReason("");
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <label className="block mt-5">
+              <span style={{ display: "block", fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 6 }}>
+                VIOLATION REASON
+              </span>
+              <textarea
+                value={disqualifyReason}
+                onChange={event => setDisqualifyReason(event.target.value)}
+                placeholder="Describe the rule violation..."
+                rows={4}
+                className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
+                style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textPrimary }}
+              />
+            </label>
+
+            <div className="rounded-xl px-3 py-2 mt-3" style={{ fontSize: 12, color: COLORS.error, background: `${COLORS.error}08` }}>
+              This action prevents the team from submitting work and disqualifies its existing submissions.
+            </div>
+
+            <div className="flex justify-end gap-2 mt-5">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDisqualifyTarget(null);
+                  setDisqualifyReason("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={actionTeamId === disqualifyTarget.teamId ? <Loader size={13} className="animate-spin" /> : <ShieldOff size={13} />}
+                disabled={!disqualifyReason.trim() || actionTeamId === disqualifyTarget.teamId}
+                onClick={() => void confirmDisqualify()}
+              >
+                Confirm Disqualify
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
     </>
