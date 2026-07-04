@@ -3,6 +3,7 @@ import {
   CheckCircle,
   Eye,
   Loader,
+  LogOut,
   PlusCircle,
   Search,
   Trash2,
@@ -13,6 +14,7 @@ import {
 import { useAuth } from "@/features/auth/store/authStore";
 import { Button, Card, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
+import { eventParticipantService } from "@/features/eventParticipants/api/eventParticipantService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import {
   teamService,
@@ -114,7 +116,7 @@ function saveActiveTeam(team: TeamResponse, currentUserId?: string) {
 
 function userBelongsToTeam(team: TeamResponse, currentUserId?: string) {
   if (!currentUserId) return false;
-  return team.leaderUserId === currentUserId || team.members.some(member => member.userId === currentUserId);
+  return team.members.some(member => member.userId === currentUserId && member.active);
 }
 
 function displayValue(value?: string | null) {
@@ -151,7 +153,6 @@ function getStoredActiveTeam(currentUserId?: string): { teamId: string } | null 
     };
     const belongsToUser = !currentUserId
       || team.userId === currentUserId
-      || team.leaderUserId === currentUserId
       || team.memberUserIds?.includes(currentUserId);
     return team.teamId && belongsToUser ? { teamId: team.teamId } : null;
   } catch {
@@ -163,10 +164,12 @@ export function TeamApiPanel({
   initialEventId = "",
   initialTeamId = "",
   mode = "auto",
+  onTeamLeft,
 }: {
   initialEventId?: string;
   initialTeamId?: string;
   mode?: RoleMode;
+  onTeamLeft?: () => void;
 }) {
   const { user } = useAuth();
   const [form, setForm] = useState({
@@ -183,6 +186,7 @@ export function TeamApiPanel({
   const [teamFlow, setTeamFlow] = useState<TeamFlow>(null);
   const [teamDiscoveryDone, setTeamDiscoveryDone] = useState(false);
   const [events, setEvents] = useState<EventResponse[]>([]);
+  const [approvedEvents, setApprovedEvents] = useState<EventResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [requests, setRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>({});
@@ -206,7 +210,10 @@ export function TeamApiPanel({
 
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
-  const canCreate = canUseEvent && form.categoryId.trim().length > 0 && form.teamName.trim().length > 0;
+  const canUseApprovedEvent = approvedEvents.some(event => event.eventId === form.eventId.trim());
+  const canCreate = approvedEvents.some(event => event.eventId === form.eventId.trim())
+    && form.categoryId.trim().length > 0
+    && form.teamName.trim().length > 0;
   const joinTeams = useMemo(
     () => joinCategoryId ? teams.filter((team: any) => team.categoryId === joinCategoryId) : teams,
     [joinCategoryId, teams],
@@ -215,12 +222,27 @@ export function TeamApiPanel({
   useEffect(() => {
     run(
       "events",
-      () => eventService.getAll(),
-      data => {
-        setEvents(data);
-        if (data[0] && !form.eventId) setField("eventId", data[0].eventId);
+      async () => {
+        const [allEvents, participations] = await Promise.all([
+          eventService.getAll(true),
+          eventParticipantService.getMyParticipations(),
+        ]);
+        const approvedEventIds = new Set(
+          participations
+            .filter(participation => participation.participantStatus === "ACTIVE")
+            .map(participation => participation.eventId),
+        );
+        return {
+          allEvents,
+          approved: allEvents.filter(event => approvedEventIds.has(event.eventId)),
+        };
       },
-      "Events loaded.",
+      ({ allEvents, approved }) => {
+        setEvents(allEvents);
+        setApprovedEvents(approved);
+        if (approved[0] && !form.eventId) setField("eventId", approved[0].eventId);
+      },
+      "Approved event registrations loaded.",
     );
     // Load once when the team panel opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,6 +257,11 @@ export function TeamApiPanel({
       teamService.getById(storedTeam.teamId)
         .then((team: any) => {
           if (cancelled) return;
+          if (!userBelongsToTeam(team, user.userId)) {
+            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+            setField("teamId", "");
+            return;
+          }
           setSelectedTeam(team);
           saveActiveTeam(team, user.userId);
           setField("teamId", team.teamId);
@@ -426,10 +453,27 @@ export function TeamApiPanel({
   };
 
   const decideRequest = (requestId: string, action: "APPROVED" | "REJECTED") => {
+    const teamId = selectedTeam?.teamId ?? form.teamId.trim();
     run(
       action === "APPROVED" ? "approve" : "reject",
-      () => teamService.handleJoinRequest(requestId, action, form.responseNote.trim() || undefined),
-      updated => setRequests(prev => prev.filter(request => request.requestId !== updated.requestId)),
+      async () => {
+        const updatedRequest = await teamService.handleJoinRequest(
+          requestId,
+          action,
+          form.responseNote.trim() || undefined,
+        );
+        const updatedTeam = action === "APPROVED" && teamId
+          ? await teamService.getById(teamId)
+          : null;
+        return { updatedRequest, updatedTeam };
+      },
+      ({ updatedRequest, updatedTeam }) => {
+        setRequests(prev => prev.filter(request => request.requestId !== updatedRequest.requestId));
+        if (updatedTeam) {
+          setSelectedTeam(updatedTeam);
+          saveActiveTeam(updatedTeam, user?.userId);
+        }
+      },
       action === "APPROVED" ? "Request approved." : "Request rejected.",
     );
   };
@@ -455,12 +499,18 @@ export function TeamApiPanel({
           setTeams([]);
           setMemberDetails({});
           setField("teamId", "");
+          onTeamLeft?.();
           return;
         }
         setSelectedTeam(prev => prev ? { ...prev, members: prev.members.filter(member => member.userId !== userId) } : prev);
       },
       removingCurrentUser ? "You left the team." : "Member removed.",
     );
+  };
+
+  const leaveTeam = () => {
+    if (!selectedTeam || !user?.userId) return;
+    removeMember(user.userId);
   };
 
   const getMemberDetail = () => {
@@ -537,7 +587,13 @@ export function TeamApiPanel({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
             <button
               type="button"
-              onClick={() => setTeamFlow(teamFlow === "create" ? null : "create")}
+              onClick={() => {
+                const openingCreateFlow = teamFlow !== "create";
+                setTeamFlow(openingCreateFlow ? "create" : null);
+                if (openingCreateFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
+                  setField("eventId", approvedEvents[0]?.eventId ?? "");
+                }
+              }}
               className="text-left rounded-2xl p-5 transition-all"
               style={{
                 border: `1px solid ${teamFlow === "create" ? COLORS.primary : COLORS.border}`,
@@ -555,7 +611,13 @@ export function TeamApiPanel({
 
             <button
               type="button"
-              onClick={() => setTeamFlow(teamFlow === "join" ? null : "join")}
+              onClick={() => {
+                const openingJoinFlow = teamFlow !== "join";
+                setTeamFlow(openingJoinFlow ? "join" : null);
+                if (openingJoinFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
+                  setField("eventId", approvedEvents[0]?.eventId ?? "");
+                }
+              }}
               className="text-left rounded-2xl p-5 transition-all"
               style={{
                 border: `1px solid ${teamFlow === "join" ? COLORS.primary : COLORS.border}`,
@@ -585,8 +647,11 @@ export function TeamApiPanel({
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
-                  {events.length === 0 && <option value="">No events found</option>}
-                  {events.map(event => (
+                  {loading.events && <option value="">Loading approved events...</option>}
+                  {!loading.events && approvedEvents.length === 0 && (
+                    <option value="">No approved event registrations</option>
+                  )}
+                  {approvedEvents.map(event => (
                     <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
                   ))}
                 </select>
@@ -608,6 +673,11 @@ export function TeamApiPanel({
               <Field label="TEAM NAME" value={form.teamName} onChange={value => setField("teamName", value)} placeholder="Enter team name" />
             </div>
             <div className="mt-5">
+              {!loading.events && approvedEvents.length === 0 && (
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
+                  Register for an event and wait for organizer approval before creating a team.
+                </div>
+              )}
               <Button
                 variant="primary"
                 size="md"
@@ -638,8 +708,11 @@ export function TeamApiPanel({
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
-                  {events.length === 0 && <option value="">No events found</option>}
-                  {events.map(event => (
+                  {loading.events && <option value="">Loading approved events...</option>}
+                  {!loading.events && approvedEvents.length === 0 && (
+                    <option value="">No approved event registrations</option>
+                  )}
+                  {approvedEvents.map(event => (
                     <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
                   ))}
                 </select>
@@ -665,12 +738,17 @@ export function TeamApiPanel({
                 variant="outline"
                 size="md"
                 icon={loading.getByEvent ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
-                disabled={!canUseEvent || loading.getByEvent}
+                disabled={!canUseApprovedEvent || loading.getByEvent}
                 onClick={loadTeamsByEvent}
               >
                 {loading.getByEvent ? "Loading..." : "Load Teams"}
               </Button>
             </div>
+            {!loading.events && approvedEvents.length === 0 && (
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>
+                Register for an event and wait for organizer approval before joining a team.
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end mt-4">
               <Field label="TEAM NAME" value={joinTeamName} onChange={setJoinTeamName} placeholder="Enter team name" />
               <Button
@@ -872,13 +950,13 @@ export function TeamApiPanel({
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {message && <InlineMessage tone={message.tone} message={message.text} />}
-              {!isLeader && user?.userId && (
+              {user?.userId && (
                 <Button
                   variant="danger"
                   size="sm"
-                  icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                  icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <LogOut size={13} />}
                   disabled={loading.remove}
-                  onClick={() => removeMember(user.userId)}
+                  onClick={leaveTeam}
                 >
                   {loading.remove ? "Leaving..." : "Leave Team"}
                 </Button>
@@ -1040,7 +1118,38 @@ export function TeamApiPanel({
           <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
             Create a new team for the selected event and category.
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px] gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_160px] gap-4">
+            <label className="block">
+              <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
+              <select
+                value={approvedEvents.some(event => event.eventId === form.eventId) ? form.eventId : ""}
+                onChange={event => setField("eventId", event.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {loading.events && <option value="">Loading approved events...</option>}
+                {!loading.events && approvedEvents.length === 0 && (
+                  <option value="">No approved event registrations</option>
+                )}
+                {approvedEvents.map(event => (
+                  <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</span>
+              <select
+                value={form.categoryId}
+                onChange={event => setField("categoryId", event.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {categories.length === 0 && <option value="">No categories found</option>}
+                {categories.map(category => (
+                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                ))}
+              </select>
+            </label>
             <Field label="TEAM NAME" value={form.teamName} onChange={value => setField("teamName", value)} placeholder="Team name" />
             <div className="flex items-end">
               <Button
@@ -1055,6 +1164,11 @@ export function TeamApiPanel({
               </Button>
             </div>
           </div>
+          {!loading.events && approvedEvents.length === 0 && (
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>
+              Register for an event and wait for organizer approval before creating a team.
+            </div>
+          )}
         </Card>
       )}
 

@@ -39,4 +39,9 @@ export const rankingService = {
     api.post<void>(`/api/v1/admin/rounds/${roundId}/publish-rankings?categoryId=${categoryId}`, {}),
   publishEvent: (eventId: string, categoryId: string) =>
     api.post<void>(`/api/v1/admin/events/${eventId}/publish-rankings?categoryId=${categoryId}`, {}),
+  // Admin get existing rankings
+  getRoundRankings: (roundId: string, categoryId: string) =>
+    api.get<RoundRankingDTO[]>(`/api/v1/admin/rounds/${roundId}/rankings?categoryId=${categoryId}`),
+  getEventRankings: (eventId: string) =>
+    api.get<EventRankingDTO[]>(`/api/v1/admin/events/${eventId}/rankings`),
 };

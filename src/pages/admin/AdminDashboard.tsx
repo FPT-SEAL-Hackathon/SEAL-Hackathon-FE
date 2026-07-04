@@ -38,6 +38,7 @@ import { AdminSettingsView } from "./components/AdminSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
 import { COLORS } from "@/components/shared/UIComponents";
+import { EventDetailPage } from "@/features/events/pages/EventDetailPage";
 
 // ===== DATA =====
 
@@ -144,6 +145,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<typeof events>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventResponse | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
   const [apiDashboardRounds, setApiDashboardRounds] = useState<RoundResponse[]>([]);
@@ -266,7 +268,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           prize: "—",
         }));
         setApiEvents(mapped as any);
-        if (data[0]) setSelectedEventId(data[0].eventId);
       })
       .catch(error => {
         setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
@@ -911,6 +912,32 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <AdminDashboardView context={viewContext} />;
+      case "events": return <AdminEventsView context={viewContext} 
+          onViewEvent={(event) => {
+            setSelectedEvent(event);
+            viewContext.onNavigate("event-detail");
+          }}
+      />;
+      case "event-detail": 
+          if (!selectedEvent) {
+            return (
+              <AdminEventsView 
+                  context={viewContext}
+                  onViewEvent={(event) => {
+                    setSelectedEvent(event);
+                  }}
+              />
+            );
+          }
+          return (
+            <EventDetailPage 
+                event={selectedEvent}
+                onBack={() => {
+                  setSelectedEvent(null);
+                  viewContext.onNavigate("events");
+                }}
+            />
+          );
       case "events": return <AdminEventsView context={viewContext} />;
       case "event-participants": return <AdminEventParticipantsView />;
       case "categories": return <AdminCategoriesView context={viewContext} />;

@@ -14,6 +14,8 @@ import {
 import { useAuth } from "@/features/auth/store/authStore";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
+import { roundService } from "@/features/events/service/roundService";
+import type { Round } from "@/features/events/types/round";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
@@ -298,12 +300,14 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionForm, setSubmissionForm] = useState({
     teamId: activeTeamContext?.teamId ?? "",
     roundId: "",
+    submissionName: "",
     repositoryUrl: "",
     demoUrl: "",
     reportUrl: "",
     slideUrl: "",
-    notes: "",
   });
+  const [submissionRounds, setSubmissionRounds] = useState<Round[]>([]);
+  const [submissionRoundsLoading, setSubmissionRoundsLoading] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
@@ -390,6 +394,35 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     };
   }, [activeTeamContext?.eventId, currentPage]);
 
+  useEffect(() => {
+    if (currentPage !== "submissions" || !activeTeamContext?.categoryId) {
+      setSubmissionRounds([]);
+      return;
+    }
+    let cancelled = false;
+    setSubmissionRoundsLoading(true);
+    roundService.getByCategory(activeTeamContext.categoryId)
+      .then(rounds => {
+        if (cancelled) return;
+        setSubmissionRounds(rounds);
+        setSubmissionForm(prev => ({
+          ...prev,
+          roundId: rounds.some(round => round.roundId === prev.roundId)
+            ? prev.roundId
+            : rounds[0]?.roundId ?? "",
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) setSubmissionRounds([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSubmissionRoundsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTeamContext?.categoryId, currentPage]);
+
   const unread = notifs.filter(n => !n.read).length;
   const markRead = async (id: string) => {
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -414,13 +447,25 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       return;
     }
     if (!submissionForm.teamId || !submissionForm.roundId) {
-      setSubmissionStatus("Team ID and Round ID are required by the backend submission API.");
+      setSubmissionStatus("Please select a round before submitting.");
+      return;
+    }
+    if (!submissionForm.submissionName.trim()) {
+      setSubmissionStatus("Submission name is required.");
       return;
     }
     setSubmissionLoading(true);
     setSubmissionStatus("");
     try {
-      await submissionService.submit(submissionForm);
+      await submissionService.submit({
+        teamId: submissionForm.teamId,
+        roundId: submissionForm.roundId,
+        repositoryUrl: submissionForm.repositoryUrl,
+        demoUrl: submissionForm.demoUrl,
+        reportUrl: submissionForm.reportUrl,
+        slideUrl: submissionForm.slideUrl,
+        notes: submissionForm.submissionName.trim(),
+      });
       setSubmissionStatus("Submission saved.");
     } catch (error) {
       setSubmissionStatus(error instanceof Error ? error.message : "Submission failed.");
@@ -431,7 +476,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const handleLoadSubmission = async () => {
     if (!submissionForm.teamId || !submissionForm.roundId) {
-      setSubmissionStatus("Enter Team ID and Round ID before loading the current submission.");
+      setSubmissionStatus("Please select a round before loading the current submission.");
       return;
     }
     setSubmissionLookupLoading(true);
@@ -440,11 +485,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       const submission = await submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId);
       setSubmissionForm(prev => ({
         ...prev,
+        submissionName: submission.notes ?? "",
         repositoryUrl: submission.repositoryUrl ?? "",
         demoUrl: submission.demoUrl ?? "",
         reportUrl: submission.reportUrl ?? "",
         slideUrl: submission.slideUrl ?? "",
-        notes: submission.notes ?? "",
       }));
       setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
     } catch (error) {
@@ -456,7 +501,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const handleDownloadProblem = async (type: "csv" | "zip") => {
     if (!submissionForm.roundId) {
-      setSubmissionStatus("Enter Round ID before downloading the round problem.");
+      setSubmissionStatus("Please select a round before downloading the problem.");
       return;
     }
     setProblemDownloadLoading(type);
@@ -1181,9 +1226,25 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
         <Card className="p-5">
           <div className="grid md:grid-cols-2 gap-4">
+            <label className="block">
+              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
+                <Clock size={14} /> Round
+              </span>
+              <select
+                value={submissionForm.roundId}
+                onChange={event => setSubmissionForm(prev => ({ ...prev, roundId: event.target.value }))}
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {submissionRoundsLoading && <option value="">Loading rounds...</option>}
+                {!submissionRoundsLoading && submissionRounds.length === 0 && <option value="">No rounds available</option>}
+                {submissionRounds.map(round => (
+                  <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
+                ))}
+              </select>
+            </label>
             {[
-              { label: "Team ID", key: "teamId", icon: <Users size={14} /> },
-              { label: "Round ID", key: "roundId", icon: <Clock size={14} /> },
+              { label: "Submission Name", key: "submissionName", icon: <FileText size={14} /> },
               { label: "Repository URL", key: "repositoryUrl", icon: <Github size={14} /> },
               { label: "Demo URL", key: "demoUrl", icon: <Globe size={14} /> },
               { label: "Report URL", key: "reportUrl", icon: <FileText size={14} /> },
@@ -1202,16 +1263,6 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               </label>
             ))}
           </div>
-          <label className="block mt-4">
-            <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
-            <textarea
-              value={submissionForm.notes}
-              onChange={e => setSubmissionForm(prev => ({ ...prev, notes: e.target.value }))}
-              rows={3}
-              className="w-full px-3 py-2 rounded-lg outline-none resize-none mt-1"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            />
-          </label>
           <div className="flex flex-wrap items-center gap-3 mt-4">
             <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading}>
               {submissionLoading ? "Saving..." : "Submit Work"}

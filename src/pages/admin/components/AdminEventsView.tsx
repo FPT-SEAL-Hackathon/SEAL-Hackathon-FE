@@ -9,12 +9,14 @@ import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
   ProgressBar, Button, DataTable, TimelineItem
 } from "@/components/shared/UIComponents";
+import { EventResponse } from "../../../features/events/api/eventService"
 
 interface AdminViewProps {
   context: any;
+  onViewEvent: (event: EventResponse) => void;
 }
 
-export function AdminEventsView({ context }: AdminViewProps) {
+export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
   const {
     t,
     onNavigate,
@@ -168,7 +170,8 @@ export function AdminEventsView({ context }: AdminViewProps) {
               </div>
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>
-                <Button variant="ghost" size="sm" icon={<Eye size={13} />}>View</Button>
+                <Button variant="ghost" size="sm" icon={<Eye size={13} />} 
+                    onClick={() => onViewEvent(ev)}>View</Button>
                 <Button variant="ghost" size="sm" icon={<Edit size={13}/>} 
                     onClick={() => setEventModal({open: true, edit: ev})}>Edit</Button>
                 {ev.status === "upcoming" && <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Delete</Button>}
