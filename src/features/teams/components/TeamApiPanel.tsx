@@ -185,9 +185,11 @@ export function TeamApiPanel({
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(null);
   const [teamFlow, setTeamFlow] = useState<TeamFlow>(null);
   const [teamDiscoveryDone, setTeamDiscoveryDone] = useState(false);
+  const [teamSearchEventId, setTeamSearchEventId] = useState("");
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [approvedEvents, setApprovedEvents] = useState<EventResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryResponse | null>(null);
   const [requests, setRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>({});
   const [loading, setLoading] = useState<Partial<Record<ActionKey, boolean>>>({});
@@ -215,9 +217,15 @@ export function TeamApiPanel({
     && form.categoryId.trim().length > 0
     && form.teamName.trim().length > 0;
   const joinTeams = useMemo(
-    () => joinCategoryId ? teams.filter((team: any) => team.categoryId === joinCategoryId) : teams,
+    () => joinCategoryId ? teams.filter(team => team.categoryId === joinCategoryId) : teams,
     [joinCategoryId, teams],
   );
+  const selectedEventName = events.find(event => event.eventId === selectedTeam?.eventId)?.eventName
+    ?? selectedTeam?.eventId
+    ?? "-";
+  const selectedCategoryName = selectedCategory?.categoryName
+    ?? categories.find(category => category.categoryId === selectedTeam?.categoryId)?.categoryName
+    ?? "None";
 
   useEffect(() => {
     run(
@@ -315,7 +323,7 @@ export function TeamApiPanel({
   }, [events, selectedTeam, teamDiscoveryDone, user?.userId]);
 
   useEffect(() => {
-    if (!form.eventId) {
+    if (!teamDiscoveryDone || selectedTeam || !form.eventId) {
       setCategories([]);
       return;
     }
@@ -331,7 +339,29 @@ export function TeamApiPanel({
       "Categories loaded.",
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.eventId]);
+  }, [form.eventId, selectedTeam, teamDiscoveryDone]);
+
+  useEffect(() => {
+    const categoryId = selectedTeam?.categoryId;
+    if (!categoryId) {
+      setSelectedCategory(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedCategory(current => current?.categoryId === categoryId ? current : null);
+    categoryService.getById(categoryId)
+      .then(category => {
+        if (!cancelled) setSelectedCategory(category);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedCategory(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTeam?.categoryId]);
 
   useEffect(() => {
     if (!selectedTeam) {
@@ -398,6 +428,7 @@ export function TeamApiPanel({
       () => teamService.getByEvent(form.eventId.trim()),
       data => {
         setTeams(data);
+        setTeamSearchEventId(form.eventId.trim());
       },
       "Teams loaded.",
     );
@@ -704,6 +735,7 @@ export function TeamApiPanel({
                     setJoinCategoryId("");
                     setJoinTeamName("");
                     setTeams([]);
+                    setTeamSearchEventId("");
                   }}
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
@@ -764,38 +796,49 @@ export function TeamApiPanel({
           </Card>
         )}
 
-        {teamFlow === "join" && teams.length > 0 && (
+        {teamFlow === "join" && !!teamSearchEventId && teamSearchEventId === form.eventId && (
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Teams In Event</div>
-            <DataTable
-              columns={[
-                { key: "teamName", label: "Team" },
-                { key: "categoryName", label: "Category" },
-                { key: "memberCount", label: "Members" },
-                {
-                  key: "action",
-                  label: "Action",
-                  render: (_value, row) => (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                      disabled={loading.join}
-                      onClick={() => requestJoin(row.teamId)}
-                    >
-                      Request Join
-                    </Button>
-                  ),
-                },
-              ]}
-              data={joinTeams.map((team: any) => ({
-                teamName: team.teamName,
-                categoryName: categories.find((category: any) => category.categoryId === team.categoryId)?.categoryName || "-",
-                memberCount: team.members.length,
-                teamId: team.teamId,
-                action: team.teamId,
-              }))}
-            />
+            {joinTeams.length === 0 ? (
+              <div
+                className="rounded-xl px-4 py-5 text-center"
+                style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}
+              >
+                {joinCategoryId
+                  ? "There are currently no teams registered in this category."
+                  : "There are currently no teams registered for this event."}
+              </div>
+            ) : (
+              <DataTable
+                columns={[
+                  { key: "teamName", label: "Team" },
+                  { key: "categoryName", label: "Category" },
+                  { key: "memberCount", label: "Members" },
+                  {
+                    key: "action",
+                    label: "Action",
+                    render: (_value, row) => (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                        disabled={loading.join}
+                        onClick={() => requestJoin(row.teamId)}
+                      >
+                        Request Join
+                      </Button>
+                    ),
+                  },
+                ]}
+                data={joinTeams.map(team => ({
+                  teamName: team.teamName,
+                  categoryName: categories.find(category => category.categoryId === team.categoryId)?.categoryName || "-",
+                  memberCount: team.members.length,
+                  teamId: team.teamId,
+                  action: team.teamId,
+                }))}
+              />
+            )}
           </Card>
         )}
       </div>
@@ -944,9 +987,6 @@ export function TeamApiPanel({
                 <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.textPrimary }}>My Team</div>
                 <StatusBadge status="active" />
               </div>
-              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 5 }}>
-                {selectedTeam.teamName} - {selectedTeam.members.length} member(s)
-              </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
               {message && <InlineMessage tone={message.tone} message={message.text} />}
@@ -964,9 +1004,11 @@ export function TeamApiPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
             {[
               { label: "Team Name", value: selectedTeam.teamName },
+              { label: "Event", value: selectedEventName },
+              { label: "Category", value: selectedCategoryName },
               { label: "Leader", value: leaderLabel },
               { label: "Members", value: String(selectedTeam.members.length) },
               { label: "Status", value: "Active" },

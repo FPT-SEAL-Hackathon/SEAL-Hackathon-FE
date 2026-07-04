@@ -42,11 +42,18 @@ function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
   throw new Error(response.message ?? "Unexpected categories response from server.");
 }
 
+function unwrapItem<T>(response: T | BackendEnvelope<T>): T {
+  if (typeof response === "object" && response !== null && "data" in response && response.data !== undefined) {
+    return response.data;
+  }
+  return response as T;
+}
+
 export const categoryService = {
   getByEvent: async (eventId: string) =>
     unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`)),
-  getById: (id: string) =>
-    api.get<CategoryResponse>(`/api/v1/categories/category/${id}`),
+  getById: async (id: string) =>
+    unwrapItem(await api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`)),
   create: (eventId: string, data: CreateCategoryRequest) =>
     api.post<CategoryResponse>(`/api/v1/categories/category/${eventId}`, data),
   update: (id: string, data: UpdateCategoryRequest) =>
