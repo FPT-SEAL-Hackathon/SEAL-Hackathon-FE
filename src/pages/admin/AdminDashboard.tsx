@@ -3,7 +3,6 @@ import { useLanguage } from "@/app/store/languageStore";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type CriterionTemplateResponse, type RoundResponse } from "@/features/judging/api/roundService";
-import { criteriaService } from "@/features/judging/api/roundService";
 import { teamService, type TeamEligibilityReviewResponse } from "@/features/teams/api/teamService";
 import { rankingService, type EventRankingDTO } from "@/features/rankings/api/rankingService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
@@ -328,7 +327,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   useEffect(() => {
     if (currentPage !== "criteria") return;
-    criteriaService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
+    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
   }, [currentPage]);
 
   useEffect(() => {
