@@ -210,6 +210,7 @@ export function TeamApiPanel({
 
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
+  const canUseApprovedEvent = approvedEvents.some(event => event.eventId === form.eventId.trim());
   const canCreate = approvedEvents.some(event => event.eventId === form.eventId.trim())
     && form.categoryId.trim().length > 0
     && form.teamName.trim().length > 0;
@@ -593,7 +594,13 @@ export function TeamApiPanel({
 
             <button
               type="button"
-              onClick={() => setTeamFlow(teamFlow === "join" ? null : "join")}
+              onClick={() => {
+                const openingJoinFlow = teamFlow !== "join";
+                setTeamFlow(openingJoinFlow ? "join" : null);
+                if (openingJoinFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
+                  setField("eventId", approvedEvents[0]?.eventId ?? "");
+                }
+              }}
               className="text-left rounded-2xl p-5 transition-all"
               style={{
                 border: `1px solid ${teamFlow === "join" ? COLORS.primary : COLORS.border}`,
@@ -684,8 +691,11 @@ export function TeamApiPanel({
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
-                  {events.length === 0 && <option value="">No events found</option>}
-                  {events.map(event => (
+                  {loading.events && <option value="">Loading approved events...</option>}
+                  {!loading.events && approvedEvents.length === 0 && (
+                    <option value="">No approved event registrations</option>
+                  )}
+                  {approvedEvents.map(event => (
                     <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
                   ))}
                 </select>
@@ -711,12 +721,17 @@ export function TeamApiPanel({
                 variant="outline"
                 size="md"
                 icon={loading.getByEvent ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
-                disabled={!canUseEvent || loading.getByEvent}
+                disabled={!canUseApprovedEvent || loading.getByEvent}
                 onClick={loadTeamsByEvent}
               >
                 {loading.getByEvent ? "Loading..." : "Load Teams"}
               </Button>
             </div>
+            {!loading.events && approvedEvents.length === 0 && (
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>
+                Register for an event and wait for organizer approval before joining a team.
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end mt-4">
               <Field label="TEAM NAME" value={joinTeamName} onChange={setJoinTeamName} placeholder="Enter team name" />
               <Button
