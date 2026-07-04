@@ -102,6 +102,11 @@ export function AdminAwardsView({ context }: AdminViewProps) {
     setAutoGrantError,
     autoGrantPreview,
     setAutoGrantPreview,
+    manualAwardForm,
+    setManualAwardForm,
+    manualAwardLoading,
+    manualAwardMessage,
+    manualAwardError,
     broadcastTitle,
     setBroadcastTitle,
     broadcastMessage,
@@ -142,11 +147,16 @@ export function AdminAwardsView({ context }: AdminViewProps) {
     handleComputeRankings,
     handlePublishRankings,
     handleAutoGrantAwards,
+    handleManualGrantAward,
     handleBroadcast,
     handleSendTargetedNotification,
     handleDataExport,
     createEmptyAwardPattern
   } = context;
+
+  const manualAwardTeams = apiTeamEligibility.filter((team: any) => (
+    !manualAwardForm.categoryId || team.categoryId === manualAwardForm.categoryId
+  ));
 
   return (
     <>
@@ -165,6 +175,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
         subtitle="Auto-grant awards from category rankings"
       />
       <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-6">
+        <div className="space-y-6">
         <Card className="p-5">
           <div className="flex items-center gap-2 mb-4">
             <Zap size={17} style={{ color: COLORS.primary }} />
@@ -222,7 +233,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               >
                 <option value="">Select category</option>
                 {apiCategories.length === 0 && selectedEventId && <option value="" disabled>No categories found</option>}
-                {apiCategories.map(category => (
+                {apiCategories.map((category: any) => (
                   <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
                 ))}
               </select>
@@ -257,7 +268,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
             <div className="mt-6">
               <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 10 }}>Top Ranking Used</div>
               <div className="space-y-2">
-                {autoGrantPreview.map(candidate => (
+                {autoGrantPreview.map((candidate: any) => (
                   <div key={candidate.teamId} className="flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                     <div className="flex items-center gap-3">
                       <span className="inline-flex items-center justify-center rounded-lg" style={{ width: 30, height: 30, background: `${COLORS.primary}12`, color: COLORS.primary, fontWeight: 700, fontSize: 12 }}>
@@ -277,13 +288,137 @@ export function AdminAwardsView({ context }: AdminViewProps) {
         </Card>
 
         <Card className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Award size={17} style={{ color: COLORS.warning }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Manual Special Award</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                Grant a non-ranking award such as Best Innovation, Best Presentation, or Sponsor Award.
+              </div>
+            </div>
+          </div>
+
+          {manualAwardError && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 13 }}>
+              {manualAwardError}
+            </div>
+          )}
+          {manualAwardMessage && (
+            <div className="px-4 py-3 rounded-xl mb-4" style={{ background: `${COLORS.success}10`, color: COLORS.success, fontSize: 13 }}>
+              {manualAwardMessage}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
+              <select
+                value={manualAwardForm.categoryId}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, categoryId: e.target.value, teamId: "" }))}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="">Any category</option>
+                {apiCategories.map((category: any) => (
+                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TEAM</label>
+              <select
+                value={manualAwardForm.teamId}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, teamId: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="">Select team</option>
+                {manualAwardTeams.length === 0 && selectedEventId && <option value="" disabled>No teams found</option>}
+                {manualAwardTeams.map((team: any) => (
+                  <option key={team.teamId} value={team.teamId}>{team.teamName}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>AWARD TIER</label>
+              <select
+                value={manualAwardForm.awardTierId}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, awardTierId: e.target.value }))}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {AWARD_TIER_OPTIONS.map((tier: any) => (
+                  <option key={tier.value} value={tier.value}>{tier.label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>AWARD TITLE</label>
+              <input
+                value={manualAwardForm.awardTitle}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, awardTitle: e.target.value }))}
+                placeholder="Best Innovation"
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>PRIZE VALUE</label>
+              <input
+                type="number"
+                min={0}
+                value={manualAwardForm.prizeValue}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, prizeValue: e.target.value }))}
+                placeholder="0"
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CURRENCY</label>
+              <input
+                value={manualAwardForm.prizeCurrency}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, prizeCurrency: e.target.value.toUpperCase() }))}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div className="lg:col-span-2">
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>DESCRIPTION</label>
+              <textarea
+                value={manualAwardForm.description}
+                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, description: e.target.value }))}
+                placeholder="Why this team receives the award"
+                rows={3}
+                className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 mt-5">
+            <Button
+              variant="primary"
+              size="lg"
+              icon={manualAwardLoading ? <Loader size={15} className="animate-spin" /> : <Send size={15} />}
+              onClick={handleManualGrantAward}
+              disabled={manualAwardLoading || !selectedEventId || !manualAwardForm.teamId}
+              style={{ background: COLORS.warning }}
+            >
+              {manualAwardLoading ? "Granting..." : "Grant Manual Award"}
+            </Button>
+          </div>
+        </Card>
+        </div>
+
+        <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Granted Awards</div>
           {apiAwards.length === 0 && (
             <div className="p-4 rounded-xl" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
               No awards have been granted for this event yet.
             </div>
           )}
-          {apiAwards.map(award => (
+          {apiAwards.map((award: any) => (
             <div key={award.id} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
               <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: `${COLORS.primary}12`, color: COLORS.primary }}>
                 <Award size={18} />

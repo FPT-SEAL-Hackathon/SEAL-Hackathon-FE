@@ -31,6 +31,8 @@ import { submissionService, type SubmissionResponse } from "@/features/submissio
 import { teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
+import { MyMentor } from "@/pages/team/MyMentor";
+import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
@@ -105,7 +107,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     setTeamId(stored.teamId);
     setSubmissionForm(prev => ({ ...prev, teamId: stored.teamId ?? "" }));
     teamService.getById(stored.teamId)
-      .then(team => {
+      .then((team: any) => {
         setActiveTeam(team);
         setSubmissionForm(prev => ({ ...prev, teamId: team.teamId }));
       })
@@ -458,7 +460,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           <InfoPill label="Full Name" value={user?.fullName} />
           <InfoPill label="Email" value={user?.email} />
           <InfoPill label="Phone" value={user?.phone} />
-          <InfoPill label="Student Code" value={user?.studentCode} />
+          <InfoPill label="Student Code" value={user?.fptStudentCode} />
         </div>
         <div className="mt-4">
           <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000); }}>
@@ -520,7 +522,10 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
           <Card key={request.requestId} className="p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>User ID: {request.userId}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{request.fullName}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                  University: {request.universityName}
+                </div>
                 <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Requested: {formatDate(request.requestedAt)}</div>
                 <div className="mt-2"><StatusBadge status={request.requestStatus.toLowerCase()} /></div>
               </div>
@@ -562,6 +567,8 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "requests": return renderRequests();
       case "settings": return renderSettings();
       case "profile": return renderProfile();
+      case "mentor": return <MyMentor isLeader={true} onNavigate={onNavigate} />;
+      case "consultations": return <TeamConsultations isLeader={true} />;
       default: return renderDashboard();
     }
   };

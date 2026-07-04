@@ -6,9 +6,11 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api/apiClient";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
+import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService";
 
 interface Props {
-  onGoToAuth: () => void;
+  onGoToLogin: () => void;
+  onGoToRegister: () => void;
 }
 
 // ─── Hall of Fame API type (matches backend HallOfFameResponse) ──────────────
@@ -18,6 +20,7 @@ interface HallOfFameResponse {
   teamName: string;
   awardTierName: string;  // e.g. "GOLD", "SILVER", "BRONZE"
   awardTitle: string;
+  leaderName: string;
 }
 
 const ORANGE_WHITE = "linear-gradient(135deg, #F47920 0%, #FF9040 55%, #FFE8D4 100%)";
@@ -66,7 +69,7 @@ const EVENT_STATUS = {
 
 const RANK_META = [
   { bg: "from-yellow-400/30 to-amber-300/20", border: "border-yellow-400/50", text: "text-yellow-600", label: "Champion" },
-  { bg: "from-slate-300/30 to-gray-200/20",   border: "border-slate-400/50",  text: "text-slate-600",  label: "Runner-up" },
+  { bg: "from-slate-300/30 to-gray-200/20", border: "border-slate-400/50", text: "text-slate-600", label: "Runner-up" },
   { bg: "from-orange-300/30 to-amber-200/20", border: "border-orange-400/50", text: "text-orange-600", label: "3rd Place" },
 ];
 
@@ -108,7 +111,7 @@ function ParticleField() {
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       {particles.map((p, i) => (
         <motion.div
-          key={i}
+          key={`particle-${i}`}
           className="absolute rounded-full"
           style={{ width: p.w, height: p.h, left: `${p.left}%`, top: `${p.top}%`, background: p.color, opacity: 0.3 }}
           animate={{ y: [0, -30, 0], opacity: [0.2, 0.6, 0.2] }}
@@ -127,23 +130,52 @@ function tierRank(tierName: string): number {
   return 99;
 }
 
+function isPodiumAward(item: HallOfFameResponse): boolean {
+  return tierRank(`${item.awardTierName} ${item.awardTitle}`) < 3;
+}
+
 interface HofGroup {
+  groupKey: string;
   eventName: string;
   categoryName: string;
-  podium: Array<HallOfFameResponse & { rank: number }>;
+  podium: Array<HallOfFameResponse & { rank: number; entryKey: string }>;
+  specialAwards: Array<HallOfFameResponse & { entryKey: string }>;
+}
+
+function stableKey(value: string): string {
+  let hash = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
 }
 
 function groupHallOfFame(data: HallOfFameResponse[]): HofGroup[] {
   const map = new Map<string, HofGroup>();
   for (const item of data) {
     const key = `${item.eventName}||${item.categoryName}`;
-    if (!map.has(key)) map.set(key, { eventName: item.eventName, categoryName: item.categoryName, podium: [] });
-    map.get(key)!.podium.push({ ...item, rank: 0 });
+    if (!map.has(key)) {
+      map.set(key, { groupKey: `hof-${stableKey(key)}`, eventName: item.eventName, categoryName: item.categoryName, podium: [], specialAwards: [] });
+    }
+    const group = map.get(key)!;
+    if (isPodiumAward(item)) {
+      group.podium.push({ ...item, rank: 0, entryKey: "" });
+    } else {
+      group.specialAwards.push({
+        ...item,
+        entryKey: `${group.groupKey}-special-${stableKey(`${item.awardTierName}|${item.awardTitle}|${item.teamName}|${item.leaderName}`)}`,
+      });
+    }
   }
   const groups = Array.from(map.values());
   for (const g of groups) {
     g.podium.sort((a, b) => tierRank(a.awardTierName) - tierRank(b.awardTierName));
-    g.podium = g.podium.slice(0, 3).map((p, i) => ({ ...p, rank: i + 1 }));
+    g.podium = g.podium.slice(0, 3).map((p, i) => ({
+      ...p,
+      rank: i + 1,
+      entryKey: `${g.groupKey}-entry-${stableKey(`${p.awardTierName}|${p.awardTitle}|${p.leaderName}|${i}`)}`,
+    }));
+    g.specialAwards = g.specialAwards.slice(0, 4);
   }
   return groups.slice(0, 3);
 }
@@ -201,9 +233,10 @@ function hasEnded(endDate: string): boolean {
 }
 
 function getCompetitionStatus(event: EventResponse, startDate: string, endDate: string): LandingCompetition["status"] {
-  if (event.eventStatusId === EVENT_STATUS.ONGOING) return "ongoing";
-  if (event.eventStatusId === EVENT_STATUS.UPCOMING) return "upcoming";
-  if (event.eventStatusId === EVENT_STATUS.COMPLETED) return "completed";
+  const statusId = typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus;
+  if (statusId === EVENT_STATUS.ONGOING) return "ongoing";
+  if (statusId === EVENT_STATUS.UPCOMING) return "upcoming";
+  if (statusId === EVENT_STATUS.COMPLETED) return "completed";
 
   const now = Date.now();
   const start = parseDateTime(startDate);
@@ -214,9 +247,10 @@ function getCompetitionStatus(event: EventResponse, startDate: string, endDate: 
 }
 
 function getCompetitionPhase(event: EventResponse, startDate: string, endDate: string): string {
-  if (event.eventStatusId === EVENT_STATUS.COMPLETED) return "Completed";
-  if (event.eventStatusId === EVENT_STATUS.ONGOING) return "In Progress";
-  if (event.eventStatusId === EVENT_STATUS.UPCOMING) return "Registration Open";
+  const statusId = typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus;
+  if (statusId === EVENT_STATUS.COMPLETED) return "Completed";
+  if (statusId === EVENT_STATUS.ONGOING) return "In Progress";
+  if (statusId === EVENT_STATUS.UPCOMING) return "Registration Open";
 
   const now = Date.now();
   const regEnd = event.registrationEnd ? parseDateTime(event.registrationEnd) : NaN;
@@ -250,7 +284,24 @@ async function getPublicTeamCount() {
   return response.totalTeams;
 }
 
-export function LandingPage({ onGoToAuth }: Props) {
+function formatPrizeMoney(summary: TotalPrizeSummary): string {
+  const { totalPrize, currency } = summary;
+  if (!totalPrize || totalPrize === 0) return "N/A";
+  const cur = (currency || "VND").toUpperCase();
+  let display: string;
+  if (totalPrize >= 1_000_000_000) {
+    display = `${(totalPrize / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  } else if (totalPrize >= 1_000_000) {
+    display = `${(totalPrize / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  } else if (totalPrize >= 1_000) {
+    display = `${(totalPrize / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  } else {
+    display = totalPrize.toLocaleString();
+  }
+  return `${display} ${cur}`;
+}
+
+export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   const [activeCompetition, setActiveCompetition] = useState(0);
   const [competitions, setCompetitions] = useState<LandingCompetition[]>([]);
   const [stats, setStats] = useState<LandingStats>({
@@ -297,6 +348,19 @@ export function LandingPage({ onGoToAuth }: Props) {
       .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
   }, []);
 
+  // Fetch total prize money across all events (public endpoint, no auth needed)
+  useEffect(() => {
+    awardService.getTotalPrize()
+      .then(summary => {
+        console.log("[LandingPage] getTotalPrize raw summary:", summary);
+        setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(summary) }));
+      })
+      .catch((err) => {
+        console.error("[LandingPage] getTotalPrize error:", err);
+        setStats(prev => ({ ...prev, prizeMoney: "N/A" }));
+      });
+  }, []);
+
   // Fetch Hall of Fame from real API
   useEffect(() => {
     api.get<HallOfFameResponse[]>("/api/v1/public/hall-of-fame", false)
@@ -333,23 +397,23 @@ export function LandingPage({ onGoToAuth }: Props) {
 
           <nav className="hidden md:flex items-center gap-1">
             {[
-              { href: "#competitions", label: "Competitions" },
-              { href: "#hall-of-fame", label: "Hall of Fame" },
-              { href: "#stats", label: "Stats" },
+              { id: "nav-competitions", href: "#competitions", label: "Competitions" },
+              { id: "nav-hall-of-fame", href: "#hall-of-fame", label: "Hall of Fame" },
+              { id: "nav-stats", href: "#stats", label: "Stats" },
             ].map(item => (
-              <a key={item.href} href={item.href}
-                className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/40 transition-all">
+              <a key={item.id} href={item.href}
+                className="px-4 py-2 rounded-lg text-sm text-muted-foreground transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-orange-600 hover:bg-orange-500/10 hover:shadow-[0_8px_20px_rgba(244,121,32,0.14)]">
                 {item.label}
               </a>
             ))}
           </nav>
 
           <div className="flex items-center gap-2">
-            <button onClick={onGoToAuth}
-              className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-white/40 transition-all">
+            <button onClick={onGoToLogin}
+              className="px-4 py-2 rounded-lg text-sm text-muted-foreground transition-all duration-200 ease-out hover:-translate-y-0.5 hover:text-orange-600 hover:bg-orange-500/10 hover:shadow-[0_8px_20px_rgba(244,121,32,0.14)]">
               Sign In
             </button>
-            <button onClick={onGoToAuth}
+            <button onClick={onGoToRegister}
               className="px-4 py-2 rounded-xl text-sm text-white transition-all hover:opacity-90 active:scale-95"
               style={{ background: ORANGE_PRIMARY }}>
               Register Now
@@ -396,7 +460,7 @@ export function LandingPage({ onGoToAuth }: Props) {
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.3 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={onGoToAuth}
+            <button onClick={onGoToRegister}
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl text-white transition-all hover:opacity-90 active:scale-95 shadow-lg"
               style={{ background: ORANGE_WHITE, boxShadow: "0 8px 32px rgba(244,121,32,0.35)" }}>
               <Zap size={18} />
@@ -413,12 +477,12 @@ export function LandingPage({ onGoToAuth }: Props) {
           <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.5 }}
             className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl mx-auto">
             {[
-              { icon: Trophy, value: stats.events, label: "Events Hosted" },
-              { icon: Users,  value: stats.teams, label: "Teams" },
-              { icon: Award,  value: stats.prizeMoney, label: "Total Prize" },
-              { icon: Star,   value: stats.topProjects, label: "Top Projects" },
+              { id: "hero-events", icon: Trophy, value: stats.events, label: "Events Hosted" },
+              { id: "hero-teams", icon: Users, value: stats.teams, label: "Teams" },
+              { id: "hero-prize", icon: Award, value: stats.prizeMoney, label: "Total Prize" },
+              { id: "hero-projects", icon: Star, value: stats.topProjects, label: "Top Projects" },
             ].map((s, i) => (
-              <div key={i} className="glass rounded-2xl p-4 text-center">
+              <div key={s.id} className="glass rounded-2xl p-4 text-center">
                 <s.icon size={20} className="mx-auto mb-1" style={{ color: "#F47920" }} />
                 <div style={{ fontWeight: 700, fontSize: "1.4rem", color: "#F47920" }}>{s.value}</div>
                 <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
@@ -525,7 +589,7 @@ export function LandingPage({ onGoToAuth }: Props) {
                           style={{ borderColor: c.color + "40", color: c.color, background: c.color + "12" }}>
                           {c.registrationEnd ? formatDate(c.registrationEnd) : "N/A"}
                         </div>
-                        <button onClick={onGoToAuth}
+                        <button onClick={onGoToRegister}
                           className="mt-6 w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-white text-sm transition-all hover:opacity-90"
                           style={{ background: c.color }}>
                           {c.status === "completed" ? "View Results" : c.status === "ongoing" ? "View Details" : "Register to Participate"}
@@ -604,7 +668,7 @@ export function LandingPage({ onGoToAuth }: Props) {
             <>
               <div className="flex flex-wrap justify-center gap-2 mb-10">
                 {hofGroups.map((g, i) => (
-                  <button key={i} onClick={() => setActiveHof(i)}
+                  <button key={g.groupKey} onClick={() => setActiveHof(i)}
                     className={`px-4 py-2 rounded-xl text-sm transition-all ${activeHof === i ? "text-white shadow-md" : "glass text-muted-foreground hover:text-foreground"}`}
                     style={activeHof === i ? { background: "linear-gradient(135deg, #F47920, #FFD700)" } : {}}>
                     <span className="hidden sm:inline">{g.eventName} — {g.categoryName}</span>
@@ -626,9 +690,9 @@ export function LandingPage({ onGoToAuth }: Props) {
                         if (!entry) return null;
                         const meta = RANK_META[rankIdx];
                         const isFirst = rankIdx === 0;
-                        const initials = entry.teamName.split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase();
+                        const initials = entry.teamName.split(" ").map((w: any) => w[0]).join("").slice(0, 2).toUpperCase();
                         return (
-                          <motion.div key={entry.teamName}
+                          <motion.div key={entry.entryKey}
                             initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: rankIdx === 0 ? 0.1 : rankIdx === 1 ? 0 : 0.2 }}
                             className={`flex-1 max-w-sm rounded-3xl border ${meta.border} bg-gradient-to-b ${meta.bg} glass p-6 relative ${isFirst ? "md:scale-105 md:-translate-y-4 z-10" : ""}`}>
@@ -669,6 +733,38 @@ export function LandingPage({ onGoToAuth }: Props) {
                       });
                     })()}
                   </div>
+
+                  {(hofGroups[activeHof]?.specialAwards?.length ?? 0) > 0 && (
+                    <div className="mt-10 max-w-4xl mx-auto">
+                      <div className="flex items-center justify-center gap-2 mb-4">
+                        <Star size={15} style={{ color: "#F47920" }} />
+                        <div className="text-sm font-semibold" style={{ color: "#F47920" }}>Special Awards</div>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {hofGroups[activeHof].specialAwards.map((award: any) => {
+                          const initials = award.teamName.split(" ").map((w: any) => w[0]).join("").slice(0, 2).toUpperCase();
+                          return (
+                            <motion.div
+                              key={award.entryKey}
+                              initial={{ opacity: 0, y: 16 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="glass rounded-2xl border border-orange-400/25 p-4 flex items-center gap-4"
+                            >
+                              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                                style={{ background: "linear-gradient(135deg, #F47920, #FFD700)" }}>
+                                {initials}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs text-muted-foreground mb-0.5">{award.awardTierName}</div>
+                                <div className="text-sm font-semibold truncate">{award.awardTitle}</div>
+                                <div className="text-xs text-muted-foreground truncate">{award.teamName}</div>
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </>
@@ -681,12 +777,12 @@ export function LandingPage({ onGoToAuth }: Props) {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
-              { icon: Users,  value: stats.teams, label: "Teams", sub: "", color: "#FF8C2A" },
-              { icon: Star,   value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
-              { icon: Award,  value: stats.prizeMoney, label: "Prize Money", sub: "N/A", color: "#0EA5E9" },
+              { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
+              { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", sub: "from API", color: "#FF8C2A" },
+              { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
+              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", sub: "from API", color: "#0EA5E9" },
             ].map((s, i) => (
-              <motion.div key={i} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
+              <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
                 className="glass rounded-2xl p-6 text-center border border-white/25 hover:scale-105 transition-transform">
                 <s.icon size={28} className="mx-auto mb-3" style={{ color: s.color }} />
@@ -713,7 +809,7 @@ export function LandingPage({ onGoToAuth }: Props) {
             Sign in to view your competition details, or register to step into the SEAL Tech Arena.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button onClick={onGoToAuth}
+            <button onClick={onGoToLogin}
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-xl text-white font-semibold transition-all hover:opacity-90 active:scale-95"
               style={{ background: ORANGE_WHITE, boxShadow: "0 8px 32px rgba(244,121,32,0.35)" }}>
               <Zap size={18} />

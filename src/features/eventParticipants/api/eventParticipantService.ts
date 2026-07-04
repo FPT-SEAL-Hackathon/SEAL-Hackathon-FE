@@ -1,0 +1,264 @@
+import { api, ApiError, request } from "@/lib/api/apiClient";
+
+export type EventParticipantStatus =
+  | "PENDING"
+  | "ACTIVE"
+  | "REJECTED";
+
+export const EVENT_PARTICIPANT_STATUSES: EventParticipantStatus[] = [
+  "PENDING",
+  "ACTIVE",
+  "REJECTED",
+];
+
+export interface EventParticipantResponse {
+  eventParticipantId: string;
+  eventId: string;
+  eventName: string;
+  eventStatus?: string;
+  studentId: string;
+  studentName: string;
+  studentEmail: string;
+  fptStudentCode?: string;
+  externalStudentCode?: string;
+  universityName?: string;
+  avatarUrl?: string;
+  categoryId?: string;
+  categoryName?: string;
+  participantStatus: EventParticipantStatus;
+  appliedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string | { fullName?: string; email?: string };
+  approvedByName?: string;
+  rejectedReason?: string;
+  user?: {
+    userId?: string;
+    fullName?: string;
+    email?: string;
+    fptStudentCode?: string;
+    externalStudentCode?: string;
+    universityName?: string;
+  };
+  event?: {
+    eventId?: string;
+    eventName?: string;
+  };
+}
+
+export interface EventParticipantsQuery {
+  eventId?: string;
+  categoryId?: string;
+  status?: string;
+  keyword?: string;
+  university?: string;
+  page?: number;
+  size?: number;
+  sortBy?: string;
+  sortDirection?: "asc" | "desc";
+}
+
+export interface EventParticipantsPage {
+  content: EventParticipantResponse[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+interface BackendEnvelope<T> {
+  data?: T;
+  content?: EventParticipantResponse[];
+  totalElements?: number;
+  totalPages?: number;
+  number?: number;
+  page?: number;
+  size?: number;
+  message?: string;
+}
+
+type RawParticipantRecord = EventParticipantResponse & {
+  id?: string;
+  participantId?: string;
+  userId?: string;
+  fullName?: string;
+  studentCode?: string;
+  university?: string;
+  email?: string;
+  status?: EventParticipantStatus;
+  currentStatus?: EventParticipantStatus;
+  registeredAt?: string;
+};
+
+function normalizeParticipant(participant: RawParticipantRecord): EventParticipantResponse {
+  const approvedBy = typeof participant.approvedBy === "object"
+    ? participant.approvedBy as { fullName?: string; email?: string }
+    : undefined;
+
+  const rawStatus = participant.participantStatus ?? participant.status ?? participant.currentStatus ?? "PENDING";
+  const status = normalizeParticipantStatus(rawStatus);
+
+  return {
+    eventParticipantId: String(participant.eventParticipantId ?? participant.participantId ?? participant.id ?? ""),
+    eventId: String(participant.eventId ?? participant.event?.eventId ?? ""),
+    eventName: participant.eventName ?? participant.event?.eventName ?? "",
+    eventStatus: participant.eventStatus,
+    studentId: String(participant.studentId ?? participant.userId ?? participant.user?.userId ?? ""),
+    studentName: participant.studentName ?? participant.fullName ?? participant.user?.fullName ?? "",
+    studentEmail: participant.studentEmail ?? participant.email ?? participant.user?.email ?? "",
+    fptStudentCode: participant.fptStudentCode ?? participant.user?.fptStudentCode,
+    externalStudentCode: participant.externalStudentCode ?? participant.user?.externalStudentCode,
+    universityName: participant.universityName ?? participant.university ?? participant.user?.universityName,
+    avatarUrl: participant.avatarUrl,
+    categoryId: participant.categoryId,
+    categoryName: participant.categoryName,
+    participantStatus: status,
+    appliedAt: participant.appliedAt ?? participant.registeredAt,
+    approvedAt: participant.approvedAt,
+    approvedBy: typeof participant.approvedBy === "string" ? participant.approvedBy : undefined,
+    approvedByName: participant.approvedByName ?? approvedBy?.fullName ?? approvedBy?.email,
+    rejectedReason: participant.rejectedReason,
+    user: participant.user,
+    event: participant.event,
+  };
+}
+
+function normalizeParticipantStatus(status: unknown): EventParticipantStatus {
+  const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
+  if (value === "PENDING_APPROVAL") return "PENDING";
+  if (value === "ACTIVE" || value === "REJECTED" || value === "PENDING") return value;
+  return "PENDING";
+}
+
+function normalizeParticipants(participants: RawParticipantRecord[]) {
+  return participants.map(normalizeParticipant);
+}
+
+function paramsFromQuery(query: EventParticipantsQuery) {
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      if (key === "sortBy" || key === "sortDirection") return;
+      params.set(key, String(value));
+    }
+  });
+  if (query.sortBy) {
+    params.set("sort", `${query.sortBy},${query.sortDirection ?? "desc"}`);
+  }
+  return params.toString();
+}
+
+function unwrapPage(response: RawParticipantRecord[] | BackendEnvelope<EventParticipantsPage | RawParticipantRecord[]>): EventParticipantsPage {
+  if (Array.isArray(response)) {
+    const content = normalizeParticipants(response);
+    return {
+      content,
+      totalElements: content.length,
+      totalPages: 1,
+      number: 0,
+      size: content.length,
+    };
+  }
+
+  const data = response.data;
+  if (Array.isArray(data)) {
+    const content = normalizeParticipants(data);
+    return {
+      content,
+      totalElements: content.length,
+      totalPages: 1,
+      number: 0,
+      size: content.length,
+    };
+  }
+
+  if (data && !Array.isArray(data) && Array.isArray(data.content)) {
+    const content = normalizeParticipants(data.content);
+    return {
+      content,
+      totalElements: data.totalElements ?? content.length,
+      totalPages: data.totalPages ?? 1,
+      number: data.number ?? 0,
+      size: data.size ?? content.length,
+    };
+  }
+
+  if (Array.isArray(response.content)) {
+    const content = normalizeParticipants(response.content);
+    return {
+      content,
+      totalElements: response.totalElements ?? content.length,
+      totalPages: response.totalPages ?? 1,
+      number: response.number ?? response.page ?? 0,
+      size: response.size ?? content.length,
+    };
+  }
+
+  throw new Error(response.message ?? "Unexpected event participants response from server.");
+}
+
+function normalizeSingle(response: RawParticipantRecord | BackendEnvelope<RawParticipantRecord>) {
+  const participant = "data" in response && response.data && !Array.isArray(response.data)
+    ? response.data
+    : response as EventParticipantResponse;
+
+  return normalizeParticipant(participant);
+}
+
+export const eventParticipantService = {
+  getOrganizerParticipants: async (query: EventParticipantsQuery) => {
+    const qs = paramsFromQuery(query);
+    return unwrapPage(await api.get<EventParticipantResponse[] | BackendEnvelope<EventParticipantsPage | EventParticipantResponse[]>>(
+      `/api/v1/organizer/event-participants${qs ? `?${qs}` : ""}`,
+    ));
+  },
+
+  updateStatus: async (eventParticipantId: string, status: EventParticipantStatus, rejectedReason?: string) =>
+    normalizeSingle(await api.patch<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(`/api/v1/organizer/event-participants/${eventParticipantId}/status`, {
+      status,
+      rejectedReason: rejectedReason?.trim() || undefined,
+    })),
+
+  bulkUpdateStatus: (participantIds: string[], status: EventParticipantStatus, rejectedReason?: string) =>
+    api.patch<void>("/api/v1/organizer/event-participants/status", {
+      participantIds,
+      status,
+      rejectedReason: rejectedReason?.trim() || undefined,
+    }),
+
+  registerForEvent: async (eventId: string) =>
+    normalizeSingle(await request<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(
+      `/api/v1/events/${eventId}/participants/register`,
+      { method: "POST" },
+    )),
+
+  register: async (eventId: string) =>
+    eventParticipantService.registerForEvent(eventId),
+
+  getMyParticipation: async (eventId: string) => {
+    try {
+      return normalizeSingle(await api.get<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(
+        `/api/v1/events/${eventId}/participants/me`,
+      ));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
+
+  getMyParticipations: async () => {
+    const response = await api.get<RawParticipantRecord[] | BackendEnvelope<RawParticipantRecord[] | EventParticipantsPage>>(
+      "/api/v1/users/me/event-participations",
+    );
+    if (Array.isArray(response)) return normalizeParticipants(response);
+    if (Array.isArray(response.data)) return normalizeParticipants(response.data);
+    if (response.data && !Array.isArray(response.data) && Array.isArray(response.data.content)) {
+      return normalizeParticipants(response.data.content);
+    }
+    if (Array.isArray(response.content)) return normalizeParticipants(response.content);
+    return [];
+  },
+
+  isDuplicateRegistrationError: (error: unknown) =>
+    error instanceof ApiError
+    && error.status === 409,
+};

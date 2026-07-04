@@ -128,6 +128,8 @@ export function AdminSettingsView({ context }: AdminViewProps) {
     setNotificationError,
     settingsSaved,
     setSettingsSaved,
+    settingsSaveError,
+    settingsSaving,
     systemSettings,
     setSystemSettings,
     filteredUsers,
@@ -145,7 +147,8 @@ export function AdminSettingsView({ context }: AdminViewProps) {
     handleBroadcast,
     handleSendTargetedNotification,
     handleDataExport,
-    createEmptyAwardPattern
+    createEmptyAwardPattern,
+    handleSaveSettings,
   } = context;
 
   return (
@@ -166,7 +169,7 @@ export function AdminSettingsView({ context }: AdminViewProps) {
                 <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
                 <input
                   value={systemSettings[field.key as keyof typeof systemSettings] as string}
-                  onChange={e => setSystemSettings(p => ({ ...p, [field.key]: e.target.value }))}
+                  onChange={e => setSystemSettings((p: typeof systemSettings) => ({ ...p, [field.key]: e.target.value }))}
                   className="w-full px-3 py-2 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 />
@@ -187,7 +190,7 @@ export function AdminSettingsView({ context }: AdminViewProps) {
                 <div
                   className="rounded-full flex items-center cursor-pointer transition-all"
                   style={{ width: 40, height: 22, background: systemSettings[toggle.key as keyof typeof systemSettings] ? COLORS.primary : COLORS.border, padding: "2px" }}
-                  onClick={() => setSystemSettings(p => ({ ...p, [toggle.key]: !p[toggle.key as keyof typeof systemSettings] }))}
+                  onClick={() => setSystemSettings((p: typeof systemSettings) => ({ ...p, [toggle.key]: !p[toggle.key as keyof typeof systemSettings] }))}
                 >
                   <div className="rounded-full bg-white" style={{ width: 18, height: 18, transform: systemSettings[toggle.key as keyof typeof systemSettings] ? "translateX(18px)" : "translateX(0)", transition: "transform 0.2s" }} />
                 </div>
@@ -195,10 +198,25 @@ export function AdminSettingsView({ context }: AdminViewProps) {
             ))}
           </div>
           <div className="flex items-center gap-3 mt-6">
-            <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setSettingsSaved(true); setTimeout(() => setSettingsSaved(false), 2000); }}>
-              {t("common.saveSettings")}
+            <Button
+              variant="primary"
+              size="md"
+              icon={settingsSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              onClick={handleSaveSettings}
+              disabled={settingsSaving}
+            >
+              {settingsSaving ? "Saving..." : t("common.saveSettings")}
             </Button>
-            {settingsSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>{t("common.settingsSaved")}</span>}
+            {settingsSaved && (
+              <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>
+                {t("common.settingsSaved")}
+              </span>
+            )}
+            {settingsSaveError && (
+              <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>
+                {settingsSaveError}
+              </span>
+            )}
           </div>
         </Card>
       </div>

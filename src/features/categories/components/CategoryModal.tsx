@@ -28,7 +28,7 @@ export function CategoryModal({ eventId, category, onClose, onSaved }: Props) {
     try {
       const payload = {
         categoryName: form.categoryName,
-        description: form.description || undefined,
+        description: form.description || "",
         sortOrder: parseInt(form.sortOrder) || 0,
       };
       const result = isEdit

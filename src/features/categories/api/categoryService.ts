@@ -25,6 +25,8 @@ export interface CategoryMentorResponse {
   categoryMentorId: string;
   categoryId: string;
   mentorId: string;
+  mentorName?: string;
+  mentorEmail?: string;
   assignedAt: string;
 }
 
@@ -53,4 +55,6 @@ export const categoryService = {
     api.delete(`/api/v1/categories/category/${id}`),
   assignMentors: (categoryId: string, mentorIds: string[]) =>
     api.post<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`, { mentorIds }),
+  getMentors: (categoryId: string) =>
+    api.get<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`),
 };

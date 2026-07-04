@@ -1,4 +1,5 @@
 import { api } from "@/lib/api/apiClient";
+import type { ReliabilityMetricResponse } from "@/features/research/api/researchService";
 
 export interface JudgingDTO {
   id: string;
@@ -55,4 +56,12 @@ export const judgingService = {
     api.get<JudgingDTO[]>(`/api/v1/judging/judge/${judgeUserId}`),
   getAuditLogs: (eventId: string) =>
     api.get<EvaluationAuditLogDTO[]>(`/api/v1/judging/audit-logs/event/${eventId}`),
+  getCalibrationMetrics: (eventId?: string, roundId?: string, categoryId?: string) => {
+    const params = new URLSearchParams();
+    if (eventId) params.append("eventId", eventId);
+    if (roundId) params.append("roundId", roundId);
+    if (categoryId) params.append("categoryId", categoryId);
+    const query = params.toString();
+    return api.get<ReliabilityMetricResponse[]>(`/api/v1/judging/calibration-metrics${query ? `?${query}` : ""}`);
+  },
 };

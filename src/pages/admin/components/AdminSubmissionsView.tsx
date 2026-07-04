@@ -61,7 +61,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
         <StatCard title="Disqualified" value={disqualified} icon={<Shield size={20} />} color={COLORS.error} />
       </div>
 
-      <Card className="p-5">
+      <Card className="p-5 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end">
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>

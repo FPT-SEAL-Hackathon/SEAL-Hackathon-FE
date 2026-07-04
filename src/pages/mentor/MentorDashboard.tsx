@@ -1,303 +1,746 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  CheckCircle, Calendar, MessageSquare, Target, TrendingUp,
-  Users, Save, PlusCircle, Edit, Clock, Star, ChevronRight,
-  User, Mail, Award, Zap, BookOpen, Video, ExternalLink
+  CheckCircle, Circle, MessageSquare, Target,
+  Users, Save, Award, BookOpen, Loader, ChevronRight, AlertCircle, PlusCircle, Trash2
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
-  ProgressBar, Button, TimelineItem
+  Button,
 } from "@/components/shared/UIComponents";
+import { MentorConsultations } from "./MentorConsultations";
+import { useAuth } from "@/features/auth/store/authStore";
+import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
+import { teamService, type TeamResponse } from "@/features/teams/api/teamService";
+import { eventService } from "@/features/events/api/eventService";
+import { milestoneService, type MilestoneResponse } from "@/features/teams/api/milestoneService";
+import { meService } from "@/features/users/api/userService";
+import { saveUser } from "@/lib/api/apiClient";
 
-const tracks = [
-  {
-    id: 1, name: "AI Agents", event: "SEAL Fall 2025", teams: 3, totalTeams: 10,
-    description: "AI-powered autonomous agents for task automation and decision making",
-    technologies: ["Python", "LangChain", "OpenAI", "FastAPI"],
-  },
-  {
-    id: 2, name: "Web3 & Blockchain", event: "FPT Web3 Challenge", teams: 2, totalTeams: 8,
-    description: "Decentralized applications and smart contract development",
-    technologies: ["Solidity", "Ethereum", "React", "Hardhat"],
-  },
-];
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const assignedTeams = [
-  {
-    id: 1, name: "DevDynamo", track: "AI Agents", members: 5, rank: 12, score: 79.3, progress: 72,
-    lastMeeting: "Nov 25, 2025", nextMeeting: "Dec 2, 2025 at 10:00 AM", status: "active",
-    notes: "Great progress on the AI orchestration layer. Need to improve the demo quality before finals. Focus on business case presentation.",
-    milestones: [
-      { label: "Project Kickoff", done: true, date: "Nov 15" },
-      { label: "MVP Prototype", done: true, date: "Nov 20" },
-      { label: "Round 1 Submission", done: true, date: "Nov 22" },
-      { label: "Integration Testing", done: false, date: "Nov 28" },
-      { label: "Finals Submission", done: false, date: "Dec 1" },
-    ],
-  },
-  {
-    id: 2, name: "AlphaCoders", track: "AI Agents", members: 5, rank: 1, score: 92.1, progress: 95,
-    lastMeeting: "Nov 26, 2025", nextMeeting: "Nov 30, 2025 at 2:00 PM", status: "active",
-    notes: "Exceptional team — top of the leaderboard. Focus on polishing presentation and edge case handling.",
-    milestones: [
-      { label: "Project Kickoff", done: true, date: "Nov 15" },
-      { label: "MVP Prototype", done: true, date: "Nov 18" },
-      { label: "Round 1 Submission", done: true, date: "Nov 22" },
-      { label: "Integration Testing", done: true, date: "Nov 26" },
-      { label: "Finals Submission", done: false, date: "Dec 1" },
-    ],
-  },
-  {
-    id: 3, name: "ByteBuilders", track: "AI Agents", members: 5, rank: 3, score: 87.8, progress: 85,
-    lastMeeting: "Nov 24, 2025", nextMeeting: "Dec 1, 2025 at 3:30 PM", status: "active",
-    notes: "Strong technical implementation. Should work on the business impact section of the presentation.",
-    milestones: [
-      { label: "Project Kickoff", done: true, date: "Nov 15" },
-      { label: "MVP Prototype", done: true, date: "Nov 19" },
-      { label: "Round 1 Submission", done: true, date: "Nov 22" },
-      { label: "Integration Testing", done: true, date: "Nov 25" },
-      { label: "Finals Submission", done: false, date: "Dec 1" },
-    ],
-  },
-];
+interface MentorCategory {
+  categoryId: string;
+  categoryName: string;
+  description: string;
+  eventId: string;
+  eventName: string;
+  teamCount: number;
+  isActive: boolean;
+}
 
-const meetings = [
-  { id: 1, team: "AlphaCoders", type: "Video Call", date: "Nov 30, 2025", time: "2:00 PM", duration: "45 min", topic: "Finals prep — presentation polish", status: "scheduled" },
-  { id: 2, team: "DevDynamo", type: "Video Call", date: "Dec 2, 2025", time: "10:00 AM", duration: "60 min", topic: "Technical review + business case coaching", status: "scheduled" },
-  { id: 3, team: "ByteBuilders", type: "In-person", date: "Dec 1, 2025", time: "3:30 PM", duration: "45 min", topic: "Business impact section workshop", status: "scheduled" },
-  { id: 4, team: "DevDynamo", type: "Video Call", date: "Nov 25, 2025", time: "10:00 AM", duration: "60 min", topic: "Round 2 strategy + demo walkthrough", status: "completed" },
-  { id: 5, team: "AlphaCoders", type: "Video Call", date: "Nov 26, 2025", time: "2:00 PM", duration: "30 min", topic: "Quick check-in — round 1 feedback review", status: "completed" },
-];
+// ─── Main Component ───────────────────────────────────────────────────────────
 
-export function MentorDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
-  const [selectedTeam, setSelectedTeam] = useState(assignedTeams[0]);
-  const [noteText, setNoteText] = useState(assignedTeams[0].notes);
+export function MentorDashboard({
+  currentPage,
+  onNavigate,
+}: {
+  currentPage: string;
+  onNavigate: (p: string) => void;
+}) {
+  const { user, setAuth } = useAuth();
+
+  // ─ Data state ─────────────────────────────────────────────────────────────
+  const [categories, setCategories] = useState<MentorCategory[]>([]);
+  const [allTeams, setAllTeams] = useState<TeamResponse[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // ─ Teams page state ────────────────────────────────────────────────────────
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
-  const [profileForm, setProfileForm] = useState({
-    name: "Dr. Nguyen Van Minh", email: "nvminh@fpt.edu.vn", expertise: "AI/ML, Software Engineering, Entrepreneurship", institution: "FPT University",
-    bio: "Associate Professor with 10+ years of industry experience in AI and software engineering.",
-  });
 
+  // ─ Milestone state (API-backed) ──────────────────────────────────────────────
+  const [milestoneStore, setMilestoneStore] = useState<Record<string, MilestoneResponse[]>>({});
+  const [milestoneLoading, setMilestoneLoading] = useState<Record<string, boolean>>({});
+  const [newMilestoneText, setNewMilestoneText] = useState("");
+
+  // ─ Profile state ──────────────────────────────────────────────────────────
+  const [profileForm, setProfileForm] = useState({
+    name: user?.fullName ?? "Mentor",
+    email: user?.email ?? "",
+    expertise: "",
+    institution: user?.universityName ?? "",
+    bio: "",
+  });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+
+  // ─── Fetch assigned categories ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!user?.userId) return;
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    (async () => {
+      try {
+        // 1. Get all events
+        const events = await eventService.getAll().catch(() => [] as any[]);
+
+        // 2. For each event, get categories and check if this mentor is assigned
+        const eventMap = Object.fromEntries(events.map((e: any) => [e.eventId, e.eventName ?? e.eventId]));
+
+        // Fetch all categories across all events in parallel
+        const categoryLists = await Promise.all(
+          events.map((e: any) =>
+            categoryService.getByEvent(e.eventId).catch(() => [] as CategoryResponse[])
+          )
+        );
+        const allCategories = categoryLists.flat();
+
+        // 3. For each category, check if the current mentor is assigned
+        const assignmentChecks = await Promise.all(
+          allCategories.map(async (cat) => {
+            try {
+              const mentors = await categoryService.getMentors(cat.categoryId);
+              const isAssigned = Array.isArray(mentors) && mentors.some(
+                (m) => m.mentorId === user.userId
+              );
+              return isAssigned ? cat : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+
+        const assignedCategories = assignmentChecks.filter((c): c is CategoryResponse => c !== null);
+
+        if (cancelled) return;
+
+        // 4. Load teams for each assigned category's event (deduplicated)
+        const eventIds = [...new Set(assignedCategories.map((c) => c.eventId))];
+        const teamLists = await Promise.all(
+          eventIds.map((eid) =>
+            teamService.getByEvent(eid).catch(() => [] as TeamResponse[])
+          )
+        );
+        const teams = teamLists.flat();
+
+        if (cancelled) return;
+
+        // 5. Build mentor category view with team counts
+        const mentorCats: MentorCategory[] = assignedCategories.map((cat) => ({
+          categoryId: cat.categoryId,
+          categoryName: cat.categoryName,
+          description: cat.description,
+          eventId: cat.eventId,
+          eventName: eventMap[cat.eventId] ?? cat.eventId,
+          teamCount: teams.filter((t) => t.categoryId === cat.categoryId).length,
+          isActive: cat.isActive,
+        }));
+
+        setCategories(mentorCats);
+        setAllTeams(teams);
+
+        // Auto-select first category for teams page
+        if (mentorCats.length > 0 && !selectedCategoryId) {
+          setSelectedCategoryId(mentorCats[0].categoryId);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load data.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.userId]);
+
+  // ─── Derived data ──────────────────────────────────────────────────────────
+
+  const teamsInSelectedCategory = allTeams.filter(
+    (t) => t.categoryId === selectedCategoryId
+  );
+
+  const totalTeams = allTeams.filter((t) =>
+    categories.some((c) => c.categoryId === t.categoryId)
+  ).length;
+
+  const selectedTeam = teamsInSelectedCategory.find((t) => t.teamId === selectedTeamId) ?? null;
+
+  // ─── Save note ─────────────────────────────────────────────────────────────
   const saveNote = () => {
     setNoteSaved(true);
     setTimeout(() => setNoteSaved(false), 2000);
   };
 
-  const renderTracks = () => (
-    <>
-      <SectionHeader title="Assigned Tracks" subtitle="AI Agents Track — SEAL Fall 2025" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {tracks.map(track => (
-          <Card key={track.id} className="p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{track.name}</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{track.event}</div>
-              </div>
-              <StatusBadge status="active" />
-            </div>
-            <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>{track.description}</p>
-            <div className="flex flex-wrap gap-1 mb-4">
-              {track.technologies.map(t => (
-                <span key={t} className="px-2 py-0.5 rounded-full text-xs" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>{t}</span>
-              ))}
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <span style={{ fontSize: 13, color: COLORS.textSecondary }}>My teams: </span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>{track.teams}</span>
-                <span style={{ fontSize: 13, color: COLORS.textSecondary }}> / {track.totalTeams} total</span>
-              </div>
-              <Button variant="outline" size="sm" icon={<ChevronRight size={13} />} onClick={() => onNavigate("teams")}>
-                View Teams
-              </Button>
-            </div>
-          </Card>
-        ))}
+  // ─── Milestone helpers (API-backed) ──────────────────────────────────────────
+  const getMilestonesForTeam = (teamId: string): MilestoneResponse[] =>
+    milestoneStore[teamId] ?? [];
+
+  const loadMilestonesForTeam = async (teamId: string) => {
+    if (milestoneStore[teamId] !== undefined) return; // already loaded
+    setMilestoneLoading((p) => ({ ...p, [teamId]: true }));
+    try {
+      const data = await milestoneService.getByTeam(teamId);
+      setMilestoneStore((p) => ({ ...p, [teamId]: data }));
+    } catch {
+      // fallback: keep empty array so UI renders
+      setMilestoneStore((p) => ({ ...p, [teamId]: [] }));
+    } finally {
+      setMilestoneLoading((p) => ({ ...p, [teamId]: false }));
+    }
+  };
+
+  const toggleMilestone = async (teamId: string, milestoneId: string) => {
+    // Optimistic update
+    setMilestoneStore((prev) => ({
+      ...prev,
+      [teamId]: (prev[teamId] ?? []).map((m) =>
+        m.milestoneId === milestoneId ? { ...m, isDone: !m.isDone } : m
+      ),
+    }));
+    try {
+      const updated = await milestoneService.toggle(teamId, milestoneId);
+      setMilestoneStore((prev) => ({
+        ...prev,
+        [teamId]: (prev[teamId] ?? []).map((m) =>
+          m.milestoneId === updated.milestoneId ? updated : m
+        ),
+      }));
+    } catch {
+      // revert on failure — reload from server
+      const fresh = await milestoneService.getByTeam(teamId).catch(() => prev => prev[teamId] ?? []);
+      setMilestoneStore((prev) => ({ ...prev, [teamId]: Array.isArray(fresh) ? fresh : prev[teamId] }));
+    }
+  };
+
+  const addMilestone = async (teamId: string) => {
+    const label = newMilestoneText.trim();
+    if (!label) return;
+    try {
+      const created = await milestoneService.create(teamId, label);
+      setMilestoneStore((prev) => ({
+        ...prev,
+        [teamId]: [...(prev[teamId] ?? []), created],
+      }));
+      setNewMilestoneText("");
+    } catch (err) {
+      console.error("Failed to add milestone", err);
+    }
+  };
+
+  const removeMilestone = async (teamId: string, milestoneId: string) => {
+    // Optimistic remove
+    setMilestoneStore((prev) => ({
+      ...prev,
+      [teamId]: (prev[teamId] ?? []).filter((m) => m.milestoneId !== milestoneId),
+    }));
+    try {
+      await milestoneService.delete(teamId, milestoneId);
+    } catch {
+      // reload on failure
+      const fresh = await milestoneService.getByTeam(teamId).catch(() => []);
+      setMilestoneStore((prev) => ({ ...prev, [teamId]: fresh }));
+    }
+  };
+
+  // ─── Profile save ────────────────────────────────────────────────────────────
+  const saveProfile = async () => {
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const updatedData = await meService.updateMe({
+        fullName: profileForm.name.trim(),
+        phone: profileForm.institution ? undefined : undefined, // phone not in form yet
+        universityName: profileForm.institution.trim() || undefined,
+      });
+      if (user) {
+        const mergedUser = { ...user, ...updatedData };
+        setAuth(mergedUser);
+        saveUser(mergedUser);
+      }
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 2500);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Failed to save profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  // ─── Loading / Error states ────────────────────────────────────────────────
+  const renderLoading = () => (
+    <Card className="p-8">
+      <div className="flex items-center gap-3" style={{ color: COLORS.textSecondary }}>
+        <Loader size={18} className="animate-spin" />
+        <span style={{ fontSize: 14, fontWeight: 600 }}>Loading your assigned categories...</span>
       </div>
-      <Card className="p-5">
-        <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Mentor Overview</div>
-        <div className="grid grid-cols-4 gap-4">
-          {[
-            { label: "Teams Mentored", value: 3, color: COLORS.primary },
-            { label: "Meetings Held", value: 7, color: COLORS.secondary },
-            { label: "Avg Team Progress", value: "84%", color: COLORS.success },
-            { label: "Notes Written", value: 12, color: COLORS.accent },
-          ].map(s => (
-            <div key={s.label} className="text-center p-4 rounded-xl" style={{ background: `${s.color}10` }}>
-              <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </>
+    </Card>
   );
 
-  const renderTeams = () => (
-    <>
-      <SectionHeader title="Mentoring Notes" subtitle="Track team progress and leave consultation notes" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {assignedTeams.map(team => (
-          <button
-            key={team.id}
-            onClick={() => { setSelectedTeam(team); setNoteText(team.notes); }}
-            className="text-left rounded-2xl p-4 transition-all"
-            style={{
-              background: selectedTeam.id === team.id ? `${COLORS.success}10` : COLORS.card,
-              border: `1px solid ${selectedTeam.id === team.id ? COLORS.success : COLORS.border}`,
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{team.name}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.primary }}>#{team.rank}</span>
-            </div>
-            <ProgressBar value={team.progress} max={100} color={COLORS.success} />
-            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>Score: {team.score}/100 • {team.members} members</div>
-          </button>
-        ))}
+  const renderError = () => (
+    <Card className="p-6">
+      <div className="flex items-center gap-3" style={{ color: COLORS.error }}>
+        <AlertCircle size={18} />
+        <span style={{ fontSize: 14, fontWeight: 600 }}>{error}</span>
       </div>
+    </Card>
+  );
 
-      {selectedTeam && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Milestones */}
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{selectedTeam.name} — Milestones</div>
-            <div className="space-y-3">
-              {selectedTeam.milestones.map((m, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <CheckCircle size={18} style={{ color: m.done ? COLORS.success : COLORS.border, flexShrink: 0 }} />
-                  <div className="flex-1">
-                    <div style={{ fontSize: 14, fontWeight: m.done ? 500 : 600, color: m.done ? COLORS.textSecondary : COLORS.textPrimary, textDecoration: m.done ? "line-through" : "none" }}>
-                      {m.label}
+  // ─── Render: Categories ────────────────────────────────────────────────────
+  const renderCategories = () => {
+    if (loading) return renderLoading();
+    if (error) return renderError();
+
+    return (
+      <>
+        <SectionHeader
+          title="Assigned Categories"
+          subtitle={
+            categories.length === 0
+              ? "You have not been assigned to any category yet."
+              : `${categories.length} categor${categories.length === 1 ? "y" : "ies"} assigned`
+          }
+        />
+
+        {categories.length === 0 ? (
+          <Card className="p-8 text-center">
+            <BookOpen size={36} style={{ color: COLORS.border, margin: "0 auto 12px" }} />
+            <div style={{ fontSize: 15, color: COLORS.textSecondary }}>
+              No categories assigned yet. Contact the organizer.
+            </div>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {categories.map((cat) => (
+              <Card key={cat.categoryId} className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>
+                      {cat.categoryName}
                     </div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{cat.eventName}</div>
                   </div>
-                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.date}</span>
+                  <StatusBadge status={cat.isActive ? "active" : "inactive"} />
                 </div>
-              ))}
-            </div>
-          </Card>
+                {cat.description && (
+                  <p style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
+                    {cat.description}
+                  </p>
+                )}
+                <div className="flex items-center justify-between mt-2">
+                  <div>
+                    <span style={{ fontSize: 13, color: COLORS.textSecondary }}>Teams: </span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                      {cat.teamCount}
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<ChevronRight size={13} />}
+                    onClick={() => {
+                      setSelectedCategoryId(cat.categoryId);
+                      setSelectedTeamId(null);
+                      setNoteText("");
+                      onNavigate("teams");
+                    }}
+                  >
+                    View Teams
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
 
-          {/* Notes */}
+        {/* Overview summary */}
+        {categories.length > 0 && (
           <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 4 }}>Consultation Notes</div>
-            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 12 }}>Private notes for {selectedTeam.name}</div>
-            <textarea
-              value={noteText}
-              onChange={e => setNoteText(e.target.value)}
-              rows={8}
-              className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              placeholder="Add consultation notes, observations, and recommendations..."
-            />
-            <div className="flex items-center gap-3 mt-3">
-              <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={saveNote}>Save Notes</Button>
-              {noteSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Saved!</span>}
+            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>
+              Mentor Overview
             </div>
-          </Card>
-        </div>
-      )}
-    </>
-  );
-
-  const renderProgress = () => (
-    <>
-      <SectionHeader title="Team Progress" subtitle="Monitor progress across all mentored teams" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Assigned Teams" value={3} icon={<Users size={20} />} color={COLORS.primary} />
-        <StatCard title="Avg Progress" value="84%" icon={<TrendingUp size={20} />} color={COLORS.success} />
-        <StatCard title="Teams in Top 10" value={2} icon={<Award size={20} />} color={COLORS.warning} />
-        <StatCard title="Days to Finals" value={2} icon={<Clock size={20} />} color={COLORS.error} />
-      </div>
-      <div className="space-y-4">
-        {assignedTeams.map((team, i) => (
-          <Card key={team.id} className="p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{team.name}</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Rank #{team.rank} • Score: {team.score}/100 • {team.members} members</div>
-              </div>
-              <StatusBadge status={team.status} />
-            </div>
-            <div className="mb-4">
-              <ProgressBar value={team.progress} max={100} color={team.progress >= 90 ? COLORS.success : team.progress >= 70 ? COLORS.primary : COLORS.warning} label={`Overall Progress: ${team.progress}%`} />
-            </div>
-            <div className="grid grid-cols-5 gap-2">
-              {team.milestones.map((m, j) => (
-                <div key={j} className="text-center p-2 rounded-xl" style={{ background: m.done ? `${COLORS.success}10` : `${COLORS.border}40` }}>
-                  <CheckCircle size={16} style={{ color: m.done ? COLORS.success : COLORS.border, margin: "0 auto 4px" }} />
-                  <div style={{ fontSize: 11, color: m.done ? COLORS.success : COLORS.textSecondary, fontWeight: m.done ? 600 : 400 }}>{m.label}</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: "Categories", value: categories.length, color: COLORS.primary },
+                { label: "Total Teams", value: totalTeams, color: COLORS.secondary },
+                { label: "Active Categories", value: categories.filter((c) => c.isActive).length, color: COLORS.success },
+                { label: "Events", value: new Set(categories.map((c) => c.eventId)).size, color: COLORS.accent },
+              ].map((s) => (
+                <div key={s.label} className="text-center p-4 rounded-xl" style={{ background: `${s.color}10` }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary }}>{s.value}</div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{s.label}</div>
                 </div>
               ))}
             </div>
-            <div className="mt-3 flex gap-2">
-              <Button variant="ghost" size="sm" icon={<MessageSquare size={13} />} onClick={() => { setSelectedTeam(team); setNoteText(team.notes); onNavigate("teams"); }}>
-                Notes
-              </Button>
-              <Button variant="ghost" size="sm" icon={<Calendar size={13} />} onClick={() => onNavigate("schedule")}>
-                Schedule Meeting
-              </Button>
-            </div>
           </Card>
-        ))}
-      </div>
-    </>
-  );
+        )}
+      </>
+    );
+  };
 
-  const renderSchedule = () => (
-    <>
-      <SectionHeader
-        title="Meeting Schedule"
-        subtitle="Upcoming and past meetings with your teams"
-        action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />}>Schedule Meeting</Button>}
-      />
-      <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textSecondary, marginBottom: 8 }}>UPCOMING</div>
-      <div className="space-y-3 mb-6">
-        {meetings.filter(m => m.status === "scheduled").map(m => (
-          <Card key={m.id} className="p-4">
-            <div className="flex items-center gap-4">
-              <div
-                className="flex items-center justify-center rounded-xl flex-shrink-0"
-                style={{ width: 44, height: 44, background: `${COLORS.secondary}15` }}
-              >
-                {m.type === "Video Call" ? <Video size={18} style={{ color: COLORS.secondary }} /> : <Users size={18} style={{ color: COLORS.secondary }} />}
-              </div>
-              <div className="flex-1">
-                <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{m.team} — {m.topic}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.type} • {m.date} at {m.time} • {m.duration}</div>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" icon={<Video size={13} />}>Join</Button>
-                <Button variant="ghost" size="sm" icon={<Edit size={13} />}>Edit</Button>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-      <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textSecondary, marginBottom: 8 }}>PAST MEETINGS</div>
-      <div className="space-y-3">
-        {meetings.filter(m => m.status === "completed").map(m => (
-          <Card key={m.id} className="p-4" style={{ opacity: 0.75 }}>
-            <div className="flex items-center gap-4">
-              <div
-                className="flex items-center justify-center rounded-xl flex-shrink-0"
-                style={{ width: 44, height: 44, background: `${COLORS.border}` }}
-              >
-                <CheckCircle size={18} style={{ color: COLORS.success }} />
-              </div>
-              <div className="flex-1">
-                <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{m.team} — {m.topic}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.type} • {m.date} at {m.time} • {m.duration}</div>
-              </div>
-              <StatusBadge status="completed" />
-            </div>
-          </Card>
-        ))}
-      </div>
-    </>
-  );
+  // ─── Render: Teams ─────────────────────────────────────────────────────────
+  const renderTeams = () => {
+    if (loading) return renderLoading();
+    if (error) return renderError();
 
+    const activeCat = categories.find((c) => c.categoryId === selectedCategoryId);
+
+    return (
+      <>
+        <SectionHeader
+          title="Category Teams"
+          subtitle={activeCat ? `Teams in "${activeCat.categoryName}" — ${activeCat.eventName}` : "Select a category"}
+        />
+
+        {/* Category selector (if mentor has multiple categories) */}
+        {categories.length > 1 && (
+          <Card className="p-4">
+            <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 8 }}>
+              FILTER BY CATEGORY
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <button
+                  key={cat.categoryId}
+                  onClick={() => {
+                    setSelectedCategoryId(cat.categoryId);
+                    setSelectedTeamId(null);
+                    setNoteText("");
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-sm transition-all"
+                  style={{
+                    background: selectedCategoryId === cat.categoryId ? `${COLORS.success}15` : COLORS.bg,
+                    border: `1px solid ${selectedCategoryId === cat.categoryId ? COLORS.success : COLORS.border}`,
+                    color: selectedCategoryId === cat.categoryId ? COLORS.success : COLORS.textSecondary,
+                    fontWeight: selectedCategoryId === cat.categoryId ? 600 : 400,
+                  }}
+                >
+                  {cat.categoryName}
+                  <span
+                    className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs"
+                    style={{
+                      background: selectedCategoryId === cat.categoryId ? `${COLORS.success}20` : `${COLORS.border}40`,
+                    }}
+                  >
+                    {cat.teamCount}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {teamsInSelectedCategory.length === 0 ? (
+          <Card className="p-8 text-center">
+            <Users size={36} style={{ color: COLORS.border, margin: "0 auto 12px" }} />
+            <div style={{ fontSize: 15, color: COLORS.textSecondary }}>
+              {selectedCategoryId
+                ? "No teams in this category yet."
+                : "Select a category to view teams."}
+            </div>
+          </Card>
+        ) : (
+          <>
+            {/* Team list */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              {teamsInSelectedCategory.map((team) => (
+                <button
+                  key={team.teamId}
+                  onClick={() => {
+                    setSelectedTeamId(team.teamId);
+                    setNoteText("");
+                  }}
+                  className="text-left rounded-2xl p-4 transition-all"
+                  style={{
+                    background: selectedTeamId === team.teamId ? `${COLORS.success}10` : COLORS.card,
+                    border: `1px solid ${selectedTeamId === team.teamId ? COLORS.success : COLORS.border}`,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+                      {team.teamName}
+                    </span>
+                    <StatusBadge status="active" />
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
+                    {team.members.length} member{team.members.length !== 1 ? "s" : ""}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Consultation notes + Milestones panel */}
+            {selectedTeam && (() => {
+              // Load milestones from API when team is selected
+              void loadMilestonesForTeam(selectedTeam.teamId);
+              const teamMilestones = getMilestonesForTeam(selectedTeam.teamId);
+              const doneCount = teamMilestones.filter((m) => m.isDone).length;
+              const isLoadingMilestones = milestoneLoading[selectedTeam.teamId];
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* ── Milestones ── */}
+                  <Card className="p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>
+                        {selectedTeam.teamName} — Milestones
+                      </div>
+                      <span
+                        className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                        style={{
+                          background: doneCount === teamMilestones.length && teamMilestones.length > 0
+                            ? `${COLORS.success}20`
+                            : `${COLORS.primary}12`,
+                          color: doneCount === teamMilestones.length && teamMilestones.length > 0
+                            ? COLORS.success
+                            : COLORS.primary,
+                        }}
+                      >
+                        {doneCount}/{teamMilestones.length} done
+                      </span>
+                    </div>
+                    <div
+                      className="w-full rounded-full mb-4"
+                      style={{ height: 4, background: `${COLORS.border}60` }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: teamMilestones.length
+                            ? `${(doneCount / teamMilestones.length) * 100}%`
+                            : "0%",
+                          background: COLORS.success,
+                        }}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      {isLoadingMilestones ? (
+                        <div className="flex items-center gap-2" style={{ color: COLORS.textSecondary }}>
+                          <Loader size={14} className="animate-spin" />
+                          <span style={{ fontSize: 13 }}>Loading milestones...</span>
+                        </div>
+                      ) : teamMilestones.length === 0 ? (
+                        <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                          No milestones yet. Add one below.
+                        </div>
+                      ) : (
+                        teamMilestones.map((m) => (
+                          <div
+                            key={m.milestoneId}
+                            className="flex items-center gap-3 rounded-xl px-3 py-2 group transition-colors"
+                            style={{
+                              background: m.isDone ? `${COLORS.success}08` : COLORS.bg,
+                              border: `1px solid ${m.isDone ? COLORS.success + "40" : COLORS.border}`,
+                            }}
+                          >
+                            <button
+                              onClick={() => toggleMilestone(selectedTeam.teamId, m.milestoneId)}
+                              style={{ flexShrink: 0, lineHeight: 0 }}
+                              title={m.isDone ? "Mark as not done" : "Mark as done"}
+                            >
+                              {m.isDone ? (
+                                <CheckCircle size={18} style={{ color: COLORS.success }} />
+                              ) : (
+                                <Circle size={18} style={{ color: COLORS.border }} />
+                              )}
+                            </button>
+                            <span
+                              className="flex-1"
+                              style={{
+                                fontSize: 14,
+                                color: m.isDone ? COLORS.textSecondary : COLORS.textPrimary,
+                                textDecoration: m.isDone ? "line-through" : "none",
+                                fontWeight: m.isDone ? 400 : 500,
+                              }}
+                            >
+                              {m.label}
+                            </span>
+                            <button
+                              onClick={() => removeMilestone(selectedTeam.teamId, m.milestoneId)}
+                              className="opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{ color: COLORS.error, lineHeight: 0 }}
+                              title="Remove milestone"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Add milestone */}
+                    <div className="flex gap-2 mt-4">
+                      <input
+                        value={newMilestoneText}
+                        onChange={(e) => setNewMilestoneText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") addMilestone(selectedTeam.teamId);
+                        }}
+                        placeholder="Add milestone..."
+                        className="flex-1 px-3 py-2 rounded-xl outline-none"
+                        style={{
+                          fontSize: 13,
+                          border: `1px solid ${COLORS.border}`,
+                          background: COLORS.bg,
+                          color: COLORS.textPrimary,
+                        }}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<PlusCircle size={13} />}
+                        onClick={() => addMilestone(selectedTeam.teamId)}
+                        disabled={!newMilestoneText.trim()}
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </Card>
+
+                  {/* ── Consultation Notes ── */}
+                  <Card className="p-5">
+                    <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 4 }}>
+                      Consultation Notes
+                    </div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 12 }}>
+                      Private notes for {selectedTeam.teamName}
+                    </div>
+                    <textarea
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      rows={8}
+                      className="w-full px-3 py-2 rounded-xl outline-none resize-none"
+                      style={{
+                        fontSize: 14,
+                        border: `1px solid ${COLORS.border}`,
+                        background: COLORS.bg,
+                        color: COLORS.textPrimary,
+                      }}
+                      placeholder="Add consultation notes, observations, and recommendations..."
+                    />
+                    <div className="flex items-center gap-3 mt-3">
+                      <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={saveNote}>
+                        Save Notes
+                      </Button>
+                      {noteSaved && (
+                        <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Saved!</span>
+                      )}
+                    </div>
+                  </Card>
+
+                </div>
+              );
+            })()}
+          </>
+        )}
+      </>
+    );
+  };
+
+  // ─── Render: Dashboard (Progress) ──────────────────────────────────────────
+  const renderDashboard = () => {
+    if (loading) return renderLoading();
+    if (error) return renderError();
+
+    return (
+      <>
+        <SectionHeader
+          title="Mentor Dashboard"
+          subtitle="Overview of your assigned categories and teams"
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Assigned Categories"
+            value={categories.length}
+            icon={<BookOpen size={20} />}
+            color={COLORS.primary}
+          />
+          <StatCard
+            title="Total Teams"
+            value={totalTeams}
+            icon={<Users size={20} />}
+            color={COLORS.success}
+          />
+          <StatCard
+            title="Active Categories"
+            value={categories.filter((c) => c.isActive).length}
+            icon={<Target size={20} />}
+            color={COLORS.secondary}
+          />
+          <StatCard
+            title="Events"
+            value={new Set(categories.map((c) => c.eventId)).size}
+            icon={<Award size={20} />}
+            color={COLORS.warning}
+          />
+        </div>
+
+        {/* Per-category summary cards */}
+        {categories.length === 0 ? (
+          <Card className="p-8 text-center">
+            <BookOpen size={36} style={{ color: COLORS.border, margin: "0 auto 12px" }} />
+            <div style={{ fontSize: 15, color: COLORS.textSecondary }}>
+              No categories assigned yet. Contact the organizer.
+            </div>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {categories.map((cat) => {
+              const catTeams = allTeams.filter((t) => t.categoryId === cat.categoryId);
+              return (
+                <Card key={cat.categoryId} className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>
+                        {cat.categoryName}
+                      </div>
+                      <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                        {cat.eventName}
+                      </div>
+                    </div>
+                    <StatusBadge status={cat.isActive ? "active" : "inactive"} />
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    <span
+                      className="px-3 py-1 rounded-full text-xs font-semibold"
+                      style={{ background: `${COLORS.primary}12`, color: COLORS.primary }}
+                    >
+                      {catTeams.length} team{catTeams.length !== 1 ? "s" : ""}
+                    </span>
+                    {cat.description && (
+                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{cat.description}</span>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<MessageSquare size={13} />}
+                      onClick={() => {
+                        setSelectedCategoryId(cat.categoryId);
+                        setSelectedTeamId(null);
+                        setNoteText("");
+                        onNavigate("teams");
+                      }}
+                    >
+                      View Teams
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  // ─── Render: Profile ───────────────────────────────────────────────────────
   const renderProfile = () => (
     <>
       <SectionHeader title="Mentor Profile" subtitle="Manage your profile and mentoring settings" />
@@ -305,72 +748,149 @@ export function MentorDashboard({ currentPage, onNavigate }: { currentPage: stri
         <Card className="p-5 text-center col-span-1">
           <div
             className="mx-auto flex items-center justify-center rounded-full text-white mb-4"
-            style={{ width: 72, height: 72, background: `linear-gradient(135deg, ${COLORS.success}, ${COLORS.secondary})`, fontSize: 22, fontWeight: 700 }}
+            style={{
+              width: 72,
+              height: 72,
+              background: `linear-gradient(135deg, ${COLORS.success}, ${COLORS.secondary})`,
+              fontSize: 22,
+              fontWeight: 700,
+            }}
           >
-            NM
+            {profileForm.name
+              .split(" ")
+              .slice(0, 2)
+              .map((w) => w[0])
+              .join("")
+              .toUpperCase() || "M"}
           </div>
-          <div style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>{profileForm.name}</div>
-          <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Mentor • AI Agents Track</div>
+          <div style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>
+            {profileForm.name}
+          </div>
+          <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+            Mentor • {categories.length} categor{categories.length !== 1 ? "ies" : "y"}
+          </div>
           <div className="mt-4 space-y-2 text-left">
             {[
-              { label: "Teams", value: "3 assigned" },
-              { label: "Track", value: "AI Agents" },
-              { label: "Institution", value: profileForm.institution },
-              { label: "Email", value: profileForm.email },
-            ].map(item => (
+              { label: "Categories", value: categories.map((c) => c.categoryName).join(", ") || "None" },
+              { label: "Teams", value: `${totalTeams} assigned` },
+              { label: "Institution", value: profileForm.institution || "-" },
+              { label: "Email", value: profileForm.email || "-" },
+            ].map((item) => (
               <div key={item.label}>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, fontWeight: 600 }}>{item.label.toUpperCase()}</div>
+                <div style={{ fontSize: 11, color: COLORS.textSecondary, fontWeight: 600 }}>
+                  {item.label.toUpperCase()}
+                </div>
                 <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{item.value}</div>
               </div>
             ))}
           </div>
         </Card>
+
         <div className="col-span-2">
           <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Profile Settings</div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>
+              Profile Settings
+            </div>
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: "Full Name", key: "name" },
                 { label: "Email", key: "email" },
                 { label: "Expertise", key: "expertise" },
                 { label: "Institution", key: "institution" },
-              ].map(field => (
+              ].map((field) => (
                 <div key={field.key}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
+                  <label
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: COLORS.textSecondary,
+                      display: "block",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {field.label}
+                  </label>
                   <input
                     value={profileForm[field.key as keyof typeof profileForm]}
-                    onChange={e => setProfileForm(p => ({ ...p, [field.key]: e.target.value }))}
+                    onChange={(e) =>
+                      setProfileForm((p) => ({ ...p, [field.key]: e.target.value }))
+                    }
                     className="w-full px-3 py-2 rounded-xl outline-none"
-                    style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                    style={{
+                      fontSize: 14,
+                      border: `1px solid ${COLORS.border}`,
+                      background: COLORS.bg,
+                      color: COLORS.textPrimary,
+                    }}
                   />
                 </div>
               ))}
             </div>
             <div className="mt-4">
-              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Bio</label>
+              <label
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: COLORS.textSecondary,
+                  display: "block",
+                  marginBottom: 4,
+                }}
+              >
+                Bio
+              </label>
               <textarea
                 value={profileForm.bio}
-                onChange={e => setProfileForm(p => ({ ...p, bio: e.target.value }))}
+                onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value }))}
                 rows={3}
                 className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                style={{
+                  fontSize: 14,
+                  border: `1px solid ${COLORS.border}`,
+                  background: COLORS.bg,
+                  color: COLORS.textPrimary,
+                }}
               />
             </div>
-            <Button variant="primary" size="md" icon={<Save size={14} />} className="mt-4">Save Profile</Button>
+            <Button
+              variant="primary"
+              size="md"
+              icon={profileSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              className="mt-4"
+              onClick={saveProfile}
+              disabled={profileSaving}
+            >
+              {profileSaving ? "Saving..." : "Save Profile"}
+            </Button>
+            {profileSaved && (
+              <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600, marginTop: 8, display: "block" }}>✓ Profile saved!</span>
+            )}
+            {profileError && (
+              <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 500, marginTop: 8, display: "block" }}>{profileError}</span>
+            )}
           </Card>
         </div>
       </div>
     </>
   );
 
+  // ─── Page router ───────────────────────────────────────────────────────────
   const renderPage = () => {
     switch (currentPage) {
-      case "tracks": return renderTracks();
-      case "teams": return renderTeams();
-      case "progress": return renderProgress();
-      case "schedule": return renderSchedule();
-      case "profile": return renderProfile();
-      default: return renderTracks();
+      case "dashboard":
+        return renderDashboard();
+      case "categories":
+      case "tracks":
+        return renderCategories();
+      case "teams":
+        return renderTeams();
+      case "progress":
+        return renderDashboard();
+      case "profile":
+        return renderProfile();
+      case "consultations":
+        return <MentorConsultations onNavigate={onNavigate} />;
+      default:
+        return renderDashboard();
     }
   };
 

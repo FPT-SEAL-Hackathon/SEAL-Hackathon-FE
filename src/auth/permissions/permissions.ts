@@ -5,7 +5,9 @@ export type PageKey =
   | "team"
   | "events"
   | "event-detail"
+  | "event-participants"
   | "leaderboard"
+  | "certificates"
   | "notifications"
   | "profile"
   | "submissions"
@@ -17,13 +19,22 @@ export type PageKey =
   | "criteria"
   | "users"
   | "assignments"
+  | "assign-mentors"
   | "rankings"
   | "reports"
   | "direct-notification"
   | "audit"
   | "awards"
   | "award-patterns"
-  | "settings";
+  | "settings"
+  | "schedule"
+  // Mentor pages
+  | "tracks"
+  | "teams"
+  | "consultations"
+  | "progress"
+  // Leader/Member pages
+  | "mentor";
 
 export const DEFAULT_PAGE_BY_ROLE: Record<Role, PageKey> = {
   [ROLES.FPT_STUDENT]: "dashboard",
@@ -31,7 +42,14 @@ export const DEFAULT_PAGE_BY_ROLE: Record<Role, PageKey> = {
   [ROLES.ORGANIZER]: "dashboard",
   [ROLES.INTERNAL_JUDGE]: "rounds",
   [ROLES.GUEST_JUDGE]: "rounds",
+  [ROLES.MENTOR]: "dashboard",
+  [ROLES.LEADER]: "dashboard",
+  [ROLES.MEMBER]: "dashboard",
+  [ROLES.EXPERT]: "dashboard",
 };
+
+const MENTOR_ROLES = [ROLES.MENTOR, ROLES.EXPERT] as Role[];
+const LEADER_MEMBER_ROLES = [ROLES.LEADER, ROLES.MEMBER] as Role[];
 
 export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   dashboard: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
@@ -42,14 +60,24 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   notifications: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
   profile: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
   submissions: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
+  dashboard: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES, ROLES.INTERNAL_JUDGE, ...MENTOR_ROLES],
+  team: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
+  events: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
+  "event-participants": [...ORGANIZER_ROLES],
+  leaderboard: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
+  certificates: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
+  notifications: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
+  profile: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES, ...MENTOR_ROLES, ...LEADER_MEMBER_ROLES],
+  submissions: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
   rounds: [...JUDGE_ROLES, ...ORGANIZER_ROLES],
   scoring: [...JUDGE_ROLES],
   calibration: [...JUDGE_ROLES],
   history: [...JUDGE_ROLES],
-  categories: [...ORGANIZER_ROLES],
+  categories: [...ORGANIZER_ROLES, ...MENTOR_ROLES],
   criteria: [...ORGANIZER_ROLES],
   users: [...ORGANIZER_ROLES],
   assignments: [...ORGANIZER_ROLES],
+  "assign-mentors": [...ORGANIZER_ROLES],
   rankings: [...ORGANIZER_ROLES],
   reports: [...ORGANIZER_ROLES],
   "direct-notification": [...ORGANIZER_ROLES],
@@ -57,6 +85,14 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   awards: [...ORGANIZER_ROLES],
   "award-patterns": [...ORGANIZER_ROLES],
   settings: [...ORGANIZER_ROLES],
+  schedule: [],
+  // Mentor pages
+  tracks: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
+  teams: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
+  consultations: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
+  progress: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
+  // Leader/Member pages
+  mentor: [...LEADER_MEMBER_ROLES],
 };
 
 export function hasRole(userRole: Role | null | undefined, role: Role): boolean {

@@ -184,7 +184,7 @@ export function AdminAwardPatternsView({ context }: AdminViewProps) {
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
             >
               <option value="">Select category</option>
-              {apiCategories.map(category => (
+              {apiCategories.map((category: any) => (
                 <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
               ))}
             </select>
@@ -203,7 +203,7 @@ export function AdminAwardPatternsView({ context }: AdminViewProps) {
         )}
 
         <div className="space-y-3">
-          {awardPatterns.map((pattern, index) => (
+          {awardPatterns.map((pattern: any, index: number) => (
             <div key={index} className="grid grid-cols-1 xl:grid-cols-[80px_1.2fr_1.4fr_1fr_120px_44px] gap-3 items-end p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANK</label>
@@ -225,7 +225,7 @@ export function AdminAwardPatternsView({ context }: AdminViewProps) {
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
-                  {AWARD_TIER_OPTIONS.map(tier => (
+                  {AWARD_TIER_OPTIONS.map((tier: any) => (
                     <option key={tier.value} value={tier.value}>{tier.label}</option>
                   ))}
                 </select>

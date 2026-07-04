@@ -197,7 +197,7 @@ export function AdminDirectNotificationView({ context }: AdminViewProps) {
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
                   <option value="">Select team</option>
-                  {apiTeamEligibility.map(team => (
+                  {apiTeamEligibility.map((team: any) => (
                     <option key={team.teamId} value={team.teamId}>{team.teamName} ({team.activeMemberCount} members)</option>
                   ))}
                 </select>

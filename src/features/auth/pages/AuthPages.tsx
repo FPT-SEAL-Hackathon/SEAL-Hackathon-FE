@@ -1,11 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Eye, EyeOff, Mail, Lock, ArrowLeft, ArrowRight, X, CheckCircle, Loader,
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { login, register, REGISTER_USER_TYPES, userTypeToRole } from "@/features/auth/api/authService";
-import { ApiError } from "@/lib/api/apiClient";
+import { login, register, REGISTER_USER_TYPES, type UserResponse } from "@/features/auth/api/authService.ts";
+import { ApiError, api } from "@/lib/api/apiClient.ts";
+import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService.ts";
+
+// ─── Dev bypass credential ───────────────────────────────────────────────────
+const DEV_EMAIL = "dev@seal.dev";
+const DEV_PASSWORD = "dev";
 
 // ─── Demo roles (bypass API for dev/demo) ───────────────────────────────────
 const DEMO_ROLES = [
@@ -15,6 +20,32 @@ const DEMO_ROLES = [
   { role: "mentor",   label: "Mentor",   color: "#0EA5E9" },
   { role: "admin",    label: "Admin",    color: "#c0392b" },
 ];
+
+interface TeamCountResponse {
+  totalTeams: number;
+}
+
+function formatPrizeMoney(summary: TotalPrizeSummary): string {
+  const { totalPrize, currency } = summary;
+  if (!totalPrize || totalPrize === 0) return "N/A";
+  const cur = (currency || "VND").toUpperCase();
+  let display: string;
+  if (totalPrize >= 1_000_000_000) {
+    display = `${(totalPrize / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  } else if (totalPrize >= 1_000_000) {
+    display = `${(totalPrize / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  } else if (totalPrize >= 1_000) {
+    display = `${(totalPrize / 1_000).toFixed(1).replace(/\.0$/, "")}K`;
+  } else {
+    display = totalPrize.toLocaleString();
+  }
+  return `${display} ${cur}`;
+}
+
+async function getPublicTeamCount() {
+  const response = await api.get<TeamCountResponse>("/api/v1/public/teams/count", false);
+  return response.totalTeams;
+}
 
 // ─── OAuth Modal ─────────────────────────────────────────────────────────────
 type OAuthProvider = "github" | "google";
@@ -318,7 +349,9 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
 }
 
 // ─── Login Card ───────────────────────────────────────────────────────────────
-export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
+type LoginSuccessPayload = UserResponse | "__dev__" | string;
+
+export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (payload: LoginSuccessPayload) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
@@ -327,14 +360,24 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
   const [oauthProvider, setOauthProvider] = useState<OAuthProvider | null>(null);
 
   const handleLogin = async () => {
-    if (!email || !password) { setApiError("Please enter your email and password."); return; }
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !password) { setApiError("Please enter your email and password."); return; }
+
+    // ── Dev bypass ──────────────────────────────────────────────────────────
+    if (normalizedEmail === DEV_EMAIL && password === DEV_PASSWORD) {
+      localStorage.setItem("seal_dev_mode", "true");
+      onLogin("__dev__");
+      return;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     setLoading(true);
     setApiError("");
     try {
-      const res = await login({ email, password });
-      onLogin(userTypeToRole(res.user.userType));
+      const res = await login({ email: normalizedEmail, password });
+      onLogin(res.user);
     } catch (err) {
-      setApiError(err instanceof ApiError ? err.message : "Login failed. Please check your credentials.");
+      setApiError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
     } finally {
       setLoading(false);
     }
@@ -426,12 +469,37 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
 }
 
 // ─── Full-page Login (with left panel) ───────────────────────────────────────
-function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (role: string) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
-  const stats = [
-    { label: "Active Teams", value: "127", icon: "🚀" },
-    { label: "Submissions", value: "89",  icon: "📦" },
-    { label: "Judges",      value: "24",  icon: "⭐" },
-    { label: "Prize Pool",  value: "5B",  icon: "🏆" },
+function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: (payload: LoginSuccessPayload) => void; onSwitchToRegister: () => void; onBackToLanding: () => void }) {
+  const [panelStats, setPanelStats] = useState({
+    activeTeams: "N/A",
+    submissions: "N/A",
+    judges: "N/A",
+    prizePool: "N/A",
+  });
+
+  useEffect(() => {
+    getPublicTeamCount()
+      .then(teamCount => setPanelStats(prev => ({ ...prev, activeTeams: String(teamCount) })))
+      .catch(() => setPanelStats(prev => ({ ...prev, activeTeams: "N/A" })));
+
+    awardService.getTotalPrize()
+      .then(summary => setPanelStats(prev => ({ ...prev, prizePool: formatPrizeMoney(summary) })))
+      .catch(() => setPanelStats(prev => ({ ...prev, prizePool: "N/A" })));
+
+    api.get<{ count: number }>("/api/v1/public/submissions/count", false)
+      .then(res => setPanelStats(prev => ({ ...prev, submissions: String(res.count) })))
+      .catch(() => setPanelStats(prev => ({ ...prev, submissions: "N/A" })));
+
+    api.get<{ count: number }>("/api/v1/public/judges/count", false)
+      .then(res => setPanelStats(prev => ({ ...prev, judges: String(res.count) })))
+      .catch(() => setPanelStats(prev => ({ ...prev, judges: "N/A" })));
+  }, []);
+
+  const displayStats = [
+    { label: "Active Teams", value: panelStats.activeTeams, icon: "🚀" },
+    { label: "Submissions", value: panelStats.submissions, icon: "📦" },
+    { label: "Judges", value: panelStats.judges, icon: "⭐" },
+    { label: "Prize Pool", value: panelStats.prizePool, icon: "🏆" },
   ];
 
   return (
@@ -470,7 +538,7 @@ function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: 
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
           className="relative z-10 grid grid-cols-2 gap-3">
-          {stats.map(stat => (
+          {displayStats.map(stat => (
             <motion.div key={stat.label} whileHover={{ y: -2 }} className="rounded-2xl p-4"
               style={{ background: "var(--glass-bg)", backdropFilter: "blur(20px)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow)" }}>
               <span style={{ fontSize: 20 }}>{stat.icon}</span>
@@ -490,18 +558,28 @@ function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: 
 }
 
 // ─── AuthPages (entry point) ─────────────────────────────────────────────────
-export function AuthPages({ onLogin, onBackToLanding }: { onLogin: (role: string) => void; onBackToLanding: () => void }) {
-  const [page, setPage] = useState<"login" | "register">("login");
-
-  if (page === "register") {
+export function AuthPages({
+  mode,
+  onLogin,
+  onBackToLanding,
+  onSwitchToLogin,
+  onSwitchToRegister,
+}: {
+  mode: "login" | "register";
+  onLogin: (payload: LoginSuccessPayload) => void;
+  onBackToLanding: () => void;
+  onSwitchToLogin: () => void;
+  onSwitchToRegister: () => void;
+}) {
+  if (mode === "register") {
     return (
       <div className="min-h-screen flex items-center justify-center p-8" style={{ background: "var(--gradient-bg)", backgroundAttachment: "fixed" }}>
         <div className="w-full" style={{ maxWidth: 480 }}>
-          <RegisterCard onSwitchToLogin={() => setPage("login")} />
+          <RegisterCard onSwitchToLogin={onSwitchToLogin} />
         </div>
       </div>
     );
   }
 
-  return <LoginPage onLogin={onLogin} onSwitchToRegister={() => setPage("register")} onBackToLanding={onBackToLanding} />;
+  return <LoginPage onLogin={onLogin} onSwitchToRegister={onSwitchToRegister} onBackToLanding={onBackToLanding} />;
 }
