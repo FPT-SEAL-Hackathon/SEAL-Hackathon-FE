@@ -52,14 +52,7 @@ const MENTOR_ROLES = [ROLES.MENTOR, ROLES.EXPERT] as Role[];
 const LEADER_MEMBER_ROLES = [ROLES.LEADER, ROLES.MEMBER] as Role[];
 
 export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
-  dashboard: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
-  team: [...STUDENT_ROLES],
-  events: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
   "event-detail": [...ORGANIZER_ROLES],
-  leaderboard: [...STUDENT_ROLES],
-  notifications: [...STUDENT_ROLES, ...ORGANIZER_ROLES],
-  profile: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
-  submissions: [...STUDENT_ROLES, ...JUDGE_ROLES, ...ORGANIZER_ROLES],
   dashboard: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES, ROLES.INTERNAL_JUDGE, ...MENTOR_ROLES],
   team: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   events: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
@@ -88,7 +81,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   schedule: [],
   // Mentor pages
   tracks: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
-  teams: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
+  teams: [...ORGANIZER_ROLES, ...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
   consultations: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
   progress: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
   // Leader/Member pages

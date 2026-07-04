@@ -22,6 +22,7 @@ import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
+import { isTeamActive, teamService } from "@/features/teams/api/teamService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import {
   eventParticipantService,
@@ -42,6 +43,7 @@ type ActiveTeamContext = {
   categoryId?: string;
   teamName?: string;
   leaderUserId?: string;
+  teamStatusId?: string;
   userId?: string;
   memberUserIds?: string[];
 };
@@ -324,6 +326,23 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setActiveTeamContext(storedTeam);
     if (storedTeam?.teamId) {
       setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
+      teamService.getById(storedTeam.teamId)
+        .then(team => {
+          const refreshedTeam = {
+            ...storedTeam,
+            eventId: team.eventId,
+            categoryId: team.categoryId,
+            teamName: team.teamName,
+            leaderUserId: team.leaderUserId,
+            teamStatusId: team.teamStatusId,
+            memberUserIds: team.members.map(member => member.userId),
+          };
+          setActiveTeamContext(refreshedTeam);
+          localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(refreshedTeam));
+        })
+        .catch(() => {
+          // Submission API remains the source of truth if refreshing the team fails.
+        });
     } else {
       setSubmissionForm(prev => ({ ...prev, teamId: "" }));
     }
@@ -444,6 +463,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
     if (activeTeamContext?.leaderUserId !== user?.userId) {
       setSubmissionStatus("Only the team leader can submit or update team work.");
+      return;
+    }
+    if (activeTeamContext?.teamStatusId && !isTeamActive(activeTeamContext.teamStatusId)) {
+      setSubmissionStatus("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
     }
     if (!submissionForm.teamId || !submissionForm.roundId) {
@@ -1277,7 +1300,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
             </Button>
             {submissionStatus && (
-              <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: submissionStatus === "Submission saved." || submissionStatus.includes("downloaded.")
+                    ? COLORS.success
+                    : submissionStatus.startsWith("Current status:")
+                      ? COLORS.textSecondary
+                      : COLORS.error,
+                  fontWeight: 600,
+                }}
+              >
                 {submissionStatus}
               </span>
             )}

@@ -18,6 +18,7 @@ import { eventParticipantService } from "@/features/eventParticipants/api/eventP
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import {
   teamService,
+  getTeamStatusInfo,
   type JoinTeamRequestResponse,
   type TeamMemberDetailResponse,
   type TeamMemberResponse,
@@ -106,6 +107,7 @@ function saveActiveTeam(team: TeamResponse, currentUserId?: string) {
       categoryId: team.categoryId,
       teamName: team.teamName,
       leaderUserId: team.leaderUserId,
+      teamStatusId: team.teamStatusId,
       userId: currentUserId,
       memberUserIds: team.members.map(member => member.userId),
     }));
@@ -461,7 +463,7 @@ export function TeamApiPanel({
         setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
         setField("teamId", team.teamId);
       },
-      "Team created.",
+      "Team created and is waiting for organizer approval.",
     );
   };
 
@@ -848,6 +850,7 @@ export function TeamApiPanel({
   if (selectedTeam) {
     const leaderDetail = memberDetails[selectedTeam.leaderUserId];
     const leaderLabel = leaderDetail?.fullName || leaderDetail?.email || "Team leader";
+    const teamStatus = getTeamStatusInfo(selectedTeam.teamStatusId);
     const memberTableRows = selectedTeam.members.map(member => {
       const detail = memberDetails[member.userId];
       return {
@@ -985,7 +988,7 @@ export function TeamApiPanel({
               <div className="flex items-center gap-2">
                 <Users size={18} style={{ color: COLORS.primary }} />
                 <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.textPrimary }}>My Team</div>
-                <StatusBadge status="active" />
+                <StatusBadge status={teamStatus.badge} />
               </div>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1011,7 +1014,7 @@ export function TeamApiPanel({
               { label: "Category", value: selectedCategoryName },
               { label: "Leader", value: leaderLabel },
               { label: "Members", value: String(selectedTeam.members.length) },
-              { label: "Status", value: "Active" },
+              { label: "Status", value: teamStatus.label },
             ].map(item => (
               <div key={item.label} className="rounded-xl px-4 py-3" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 5 }}>{item.label.toUpperCase()}</div>
@@ -1029,7 +1032,7 @@ export function TeamApiPanel({
                 Leader: {leaderLabel}
               </div>
             </div>
-            <StatusBadge status="active" />
+            <StatusBadge status={teamStatus.badge} />
           </div>
           <DataTable
             columns={[
