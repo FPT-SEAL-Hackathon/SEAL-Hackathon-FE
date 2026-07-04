@@ -1,4 +1,4 @@
-import { api } from "@/lib/api/apiClient";
+import { api, ApiError } from "@/lib/api/apiClient";
 
 export interface CategoryResponse {
   categoryId: string;
@@ -49,19 +49,49 @@ function unwrapItem<T>(response: T | BackendEnvelope<T>): T {
   return response as T;
 }
 
+async function withLegacyFallback<T>(request: () => Promise<T>, legacyRequest: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    const isMissingRoute = error instanceof ApiError
+      && error.status === 404
+      && /no static resource/i.test(error.message);
+    if (!isMissingRoute) throw error;
+    return legacyRequest();
+  }
+}
+
 export const categoryService = {
   getByEvent: async (eventId: string) =>
-    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`)),
+    unwrapList(await withLegacyFallback(
+      () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/${eventId}`),
+      () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`),
+    )),
   getById: async (id: string) =>
-    unwrapItem(await api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`)),
-  create: (eventId: string, data: CreateCategoryRequest) =>
-    api.post<CategoryResponse>(`/api/v1/categories/category/${eventId}`, data),
-  update: (id: string, data: UpdateCategoryRequest) =>
-    api.put<CategoryResponse>(`/api/v1/categories/category/${id}`, data),
+    unwrapItem(await withLegacyFallback(
+      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`),
+      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`),
+    )),
+  create: async (eventId: string, data: CreateCategoryRequest) =>
+    unwrapItem(await withLegacyFallback(
+      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${eventId}`, data),
+      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${eventId}`, data),
+    )),
+  update: async (id: string, data: UpdateCategoryRequest) =>
+    unwrapItem(await withLegacyFallback(
+      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`, data),
+      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`, data),
+    )),
   delete: (id: string) =>
-    api.delete(`/api/v1/categories/category/${id}`),
+    withLegacyFallback(
+      () => api.delete(`/api/v1/category/${id}`),
+      () => api.delete(`/api/v1/categories/category/${id}`),
+    ),
   assignMentors: (categoryId: string, mentorIds: string[]) =>
     api.post<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`, { mentorIds }),
   getMentors: (categoryId: string) =>
-    api.get<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`),
+    withLegacyFallback(
+      () => api.get<CategoryMentorResponse[]>(`/api/v1/category/mentors/${categoryId}`),
+      () => api.get<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`),
+    ),
 };

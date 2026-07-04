@@ -250,7 +250,7 @@ export function TeamApiPanel({
         setApprovedEvents(approved);
         if (approved[0] && !form.eventId) setField("eventId", approved[0].eventId);
       },
-      "Approved event registrations loaded.",
+      "",
     );
     // Load once when the team panel opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -336,7 +336,7 @@ export function TeamApiPanel({
           setField("categoryId", data[0].categoryId);
         }
       },
-      "Categories loaded.",
+      "",
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.eventId, selectedTeam, teamDiscoveryDone]);
@@ -396,7 +396,7 @@ export function TeamApiPanel({
     try {
       const data = await caller();
       onSuccess?.(data);
-      setMessage({ tone: "success", text: successText });
+      if (successText) setMessage({ tone: "success", text: successText });
     } catch (error) {
       setMessage({ tone: "error", text: formatError(error) });
     } finally {
