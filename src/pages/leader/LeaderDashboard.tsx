@@ -34,6 +34,8 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
+import { roundService } from "@/features/events/service/roundService";
+import type { Round } from "@/features/events/types/round";
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
 
@@ -81,12 +83,14 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionForm, setSubmissionForm] = useState({
     teamId: "",
     roundId: "",
+    submissionName: "",
     repositoryUrl: "",
     demoUrl: "",
     reportUrl: "",
     slideUrl: "",
-    notes: "",
   });
+  const [submissionRounds, setSubmissionRounds] = useState<Round[]>([]);
+  const [submissionRoundsLoading, setSubmissionRoundsLoading] = useState(false);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
   const [activeSubmission, setActiveSubmission] = useState<SubmissionResponse | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -140,6 +144,35 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   }, []);
 
   useEffect(() => {
+    if (currentPage !== "submissions" || !activeTeam?.categoryId) {
+      setSubmissionRounds([]);
+      return;
+    }
+    let cancelled = false;
+    setSubmissionRoundsLoading(true);
+    roundService.getByCategory(activeTeam.categoryId)
+      .then(rounds => {
+        if (cancelled) return;
+        setSubmissionRounds(rounds);
+        setSubmissionForm(prev => ({
+          ...prev,
+          roundId: rounds.some(round => round.roundId === prev.roundId)
+            ? prev.roundId
+            : rounds[0]?.roundId ?? "",
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) setSubmissionRounds([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSubmissionRoundsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTeam?.categoryId, currentPage]);
+
+  useEffect(() => {
     if (currentPage !== "requests" || !teamId) return;
     loadRequests(teamId);
   }, [currentPage, teamId]);
@@ -168,7 +201,11 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const handleSubmit = async () => {
     if (!submissionForm.teamId || !submissionForm.roundId) {
-      setSubmitError("Team ID and Round ID are required.");
+      setSubmitError("Please select a round before submitting.");
+      return;
+    }
+    if (!submissionForm.submissionName.trim()) {
+      setSubmitError("Submission name is required.");
       return;
     }
 
@@ -183,7 +220,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         demoUrl: submissionForm.demoUrl,
         reportUrl: submissionForm.reportUrl,
         slideUrl: submissionForm.slideUrl,
-        notes: submissionForm.notes,
+        notes: submissionForm.submissionName.trim(),
       });
       setActiveSubmission(saved);
       setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
@@ -197,7 +234,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const loadSubmission = async () => {
     if (!submissionForm.teamId || !submissionForm.roundId) {
-      setSubmitError("Team ID and Round ID are required.");
+      setSubmitError("Please select a round before loading the submission.");
       return;
     }
 
@@ -206,6 +243,14 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     setSubmitMessage("");
     try {
       const submission = await submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId);
+      setSubmissionForm(prev => ({
+        ...prev,
+        submissionName: submission.notes ?? "",
+        repositoryUrl: submission.repositoryUrl ?? "",
+        demoUrl: submission.demoUrl ?? "",
+        reportUrl: submission.reportUrl ?? "",
+        slideUrl: submission.slideUrl ?? "",
+      }));
       setActiveSubmission(submission);
       setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
       setSubmitMessage("Submission loaded.");
@@ -299,23 +344,27 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       <SectionHeader title="Submission Center" subtitle="Submit and load your team's work from backend API" />
       <Card className="p-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <TextField label="Team ID" value={submissionForm.teamId} onChange={value => setSubmissionForm(prev => ({ ...prev, teamId: value }))} />
-          <TextField label="Round ID" value={submissionForm.roundId} onChange={value => setSubmissionForm(prev => ({ ...prev, roundId: value }))} />
+          <label className="block">
+            <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Round</span>
+            <select
+              value={submissionForm.roundId}
+              onChange={event => setSubmissionForm(prev => ({ ...prev, roundId: event.target.value }))}
+              className="w-full px-3 py-2 rounded-xl outline-none mt-1"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              {submissionRoundsLoading && <option value="">Loading rounds...</option>}
+              {!submissionRoundsLoading && submissionRounds.length === 0 && <option value="">No rounds available</option>}
+              {submissionRounds.map(round => (
+                <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
+              ))}
+            </select>
+          </label>
+          <TextField label="Submission Name" value={submissionForm.submissionName} onChange={value => setSubmissionForm(prev => ({ ...prev, submissionName: value }))} icon={<FileText size={14} />} />
           <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }))} icon={<Github size={14} />} />
           <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, demoUrl: value }))} icon={<Globe size={14} />} />
           <TextField label="Report URL" value={submissionForm.reportUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, reportUrl: value }))} icon={<FileText size={14} />} />
           <TextField label="Slide URL" value={submissionForm.slideUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, slideUrl: value }))} icon={<FileText size={14} />} />
         </div>
-        <label className="block mt-4">
-          <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Notes</span>
-          <textarea
-            value={submissionForm.notes}
-            onChange={event => setSubmissionForm(prev => ({ ...prev, notes: event.target.value }))}
-            rows={3}
-            className="w-full px-3 py-2 rounded-xl outline-none resize-none mt-1"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-          />
-        </label>
         <div className="flex flex-wrap items-center gap-3 mt-5">
           <Button
             variant="primary"
@@ -639,7 +688,9 @@ function SubmissionCard({ submission, onLoadFeedback }: { submission: Submission
     <div className="p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
         <div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>Round ID: {submission.roundId}</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+            {submission.notes || "Team submission"}
+          </div>
           <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Submitted: {formatDate(submission.submittedAt)}</div>
           <div className="mt-2"><StatusBadge status={(submission.submissionStatusName || "submitted").toLowerCase()} /></div>
         </div>
@@ -653,7 +704,6 @@ function SubmissionCard({ submission, onLoadFeedback }: { submission: Submission
         <InfoPill label="Report" value={submission.reportUrl} />
         <InfoPill label="Slide" value={submission.slideUrl} />
       </div>
-      {submission.notes && <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>{submission.notes}</p>}
     </div>
   );
 }

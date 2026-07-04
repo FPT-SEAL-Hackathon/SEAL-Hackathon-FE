@@ -453,10 +453,27 @@ export function TeamApiPanel({
   };
 
   const decideRequest = (requestId: string, action: "APPROVED" | "REJECTED") => {
+    const teamId = selectedTeam?.teamId ?? form.teamId.trim();
     run(
       action === "APPROVED" ? "approve" : "reject",
-      () => teamService.handleJoinRequest(requestId, action, form.responseNote.trim() || undefined),
-      updated => setRequests(prev => prev.filter(request => request.requestId !== updated.requestId)),
+      async () => {
+        const updatedRequest = await teamService.handleJoinRequest(
+          requestId,
+          action,
+          form.responseNote.trim() || undefined,
+        );
+        const updatedTeam = action === "APPROVED" && teamId
+          ? await teamService.getById(teamId)
+          : null;
+        return { updatedRequest, updatedTeam };
+      },
+      ({ updatedRequest, updatedTeam }) => {
+        setRequests(prev => prev.filter(request => request.requestId !== updatedRequest.requestId));
+        if (updatedTeam) {
+          setSelectedTeam(updatedTeam);
+          saveActiveTeam(updatedTeam, user?.userId);
+        }
+      },
       action === "APPROVED" ? "Request approved." : "Request rejected.",
     );
   };
