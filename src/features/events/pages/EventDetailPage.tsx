@@ -98,6 +98,20 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
         });
   }, [roundsByCategory]);
 
+  const [totalPrize, setTotalPrize] = useState<{ amount: number; currency: string } | null>(null);
+
+  useEffect(() => {
+    import("../../awards/api/awardService").then(({ awardService }) => {
+      awardService.getEventPrizeTotal(event.eventId)
+        .then(res => {
+          if (res.totalPrizes && res.totalPrizes.length > 0) {
+            setTotalPrize({ amount: res.totalPrizes[0].totalPrize, currency: res.totalPrizes[0].prizeCurrency });
+          }
+        })
+        .catch(console.error);
+    });
+  }, [event.eventId]);
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -112,11 +126,11 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
-            <h1 style={{ fontWeight: 800, fontSize: 22, color: COLORS.textPrimary }}>{event.name}</h1>
-            <StatusBadge status={event.status} />
+            <h1 style={{ fontWeight: 800, fontSize: 22, color: COLORS.textPrimary }}>{event.eventName}</h1>
+            <StatusBadge status={event.eventStatusName as string} />
           </div>
           <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-            {event.category} • {event.teams} teams • Deadline: {event.deadline} • Prize: {event.prize}
+            {categories.length} categories • Deadline: {event.eventEndDate || "Not set"} • Prize: {totalPrize ? `${totalPrize.amount} ${totalPrize.currency}` : "N/A"}
           </div>
         </div>
       </div>

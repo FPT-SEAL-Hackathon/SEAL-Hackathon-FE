@@ -25,7 +25,7 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
     try {
       const res = await consultationService.getMyMentor();
       if (!res || res.length === 0) {
-        setError("No mentors have been assigned to your category yet.");
+        setError("No experts have been assigned to your category yet.");
       } else {
         setMentors(res);
       }
@@ -60,7 +60,7 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
     return (
       <Card className="p-8 flex flex-col items-center justify-center text-center">
         <User size={48} className="text-gray-300 mb-4" />
-        <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.textPrimary }}>No Mentor Assigned</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: COLORS.textPrimary }}>No Expert Assigned</div>
         <div style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 4 }}>{error}</div>
       </Card>
     );
@@ -101,7 +101,7 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
 
   return (
     <>
-      <SectionHeader title="My Mentors" subtitle="Your assigned mentors for consultation and guidance" />
+      <SectionHeader title="My Experts" subtitle="Your assigned experts for consultation and guidance" />
       <div className="space-y-6">
         {mentors.map(mentor => (
           <div key={mentor.mentorId} className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -110,7 +110,7 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
                 {mentor.fullName.split(' ').map(n => n[0]).join('').substring(0,2)}
               </div>
               <div style={{ fontWeight: 700, fontSize: 18, color: COLORS.textPrimary }}>{mentor.fullName}</div>
-              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Mentor • {mentor.categoryName}</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Expert • {mentor.categoryName}</div>
               
               <div className="mt-6 flex flex-col gap-3">
                 {isLeader ? (
@@ -127,7 +127,7 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
             </Card>
 
             <Card className="col-span-2 p-6 space-y-6">
-              <div style={{ fontWeight: 700, fontSize: 16 }}>Mentor Information</div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>Expert Information</div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-3">

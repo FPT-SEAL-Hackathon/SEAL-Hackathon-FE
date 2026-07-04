@@ -39,6 +39,8 @@ export interface EventResponse {
   createdAt: string;
   updatedAt: string;
   participantStatus?: UserParticipationStatus | string | null;
+  teamCount?: number;
+  roundCount?: number;
 }
 
 export interface CreateEventRequest {
@@ -161,6 +163,8 @@ export function normalizeEventResponse(raw: EventResponse | RawEventRecord): Eve
     createdAt: stringValue(record.createdAt) ?? "",
     updatedAt: stringValue(record.updatedAt) ?? "",
     participantStatus: userParticipationStatus,
+    teamCount: numberValue(record.teamCount) ?? 0,
+    roundCount: numberValue(record.roundCount) ?? 0,
   };
 }
 

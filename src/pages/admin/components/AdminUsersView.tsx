@@ -18,6 +18,7 @@ const ROLE_OPTIONS = [
   { label: "Organizer", value: "ORGANIZER" },
   { label: "Internal Judge", value: "INTERNAL_JUDGE" },
   { label: "Guest Judge", value: "GUEST_JUDGE" },
+  { label: "Expert", value: "EXPERT" },
 ];
 
 const STATUS_OPTIONS = [
