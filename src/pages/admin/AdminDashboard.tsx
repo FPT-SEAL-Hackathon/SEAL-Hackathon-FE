@@ -19,7 +19,6 @@ import { AssignJudgeModal } from "@/features/judging/components/AssignJudgeModal
 import { AdminDashboardView } from "./components/AdminDashboardView";
 import { AdminEventsView } from "./components/AdminEventsView";
 import { AdminEventParticipantsView } from "./components/AdminEventParticipantsView";
-import { AdminTeamsView } from "./components/AdminTeamsView";
 import { AdminCategoriesView } from "./components/AdminCategoriesView";
 import { AdminRoundsView } from "./components/AdminRoundsView";
 import { AdminCriteriaView } from "./components/AdminCriteriaView";
@@ -940,7 +939,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
             />
           );
       case "event-participants": return <AdminEventParticipantsView />;
-      case "teams": return <AdminTeamsView context={viewContext} />;
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
       case "criteria": return <AdminCriteriaView context={viewContext} />;
