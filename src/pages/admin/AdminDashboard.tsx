@@ -3,6 +3,7 @@ import { useLanguage } from "@/app/store/languageStore";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type CriterionTemplateResponse, type RoundResponse } from "@/features/judging/api/roundService";
+import { criteriaService } from "@/features/judging/api/roundService";
 import { teamService, type TeamEligibilityReviewResponse } from "@/features/teams/api/teamService";
 import { rankingService, type EventRankingDTO } from "@/features/rankings/api/rankingService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
@@ -33,6 +34,7 @@ import { AdminSettingsView } from "./components/AdminSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
 import { COLORS } from "@/components/shared/UIComponents";
+import { EventDetailPage } from "@/features/events/pages/EventDetailPage";
 
 // ===== DATA =====
 
@@ -129,6 +131,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<typeof events>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventResponse | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
   const [apiTeamEligibility, setApiTeamEligibility] = useState<TeamEligibilityReviewResponse[]>([]);
@@ -272,7 +275,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   useEffect(() => {
     if (currentPage !== "criteria") return;
-    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
+    criteriaService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
   }, [currentPage]);
 
   useEffect(() => {
@@ -726,7 +729,32 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <AdminDashboardView context={viewContext} />;
-      case "events": return <AdminEventsView context={viewContext} />;
+      case "events": return <AdminEventsView context={viewContext} 
+          onViewEvent={(event) => {
+            setSelectedEvent(event);
+            viewContext.onNavigate("event-detail");
+          }}
+      />;
+      case "event-detail": 
+          if (!selectedEvent) {
+            return (
+              <AdminEventsView 
+                  context={viewContext}
+                  onViewEvent={(event) => {
+                    setSelectedEvent(event);
+                  }}
+              />
+            );
+          }
+          return (
+            <EventDetailPage 
+                event={selectedEvent}
+                onBack={() => {
+                  setSelectedEvent(null);
+                  viewContext.onNavigate("events");
+                }}
+            />
+          );
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
       case "criteria": return <AdminCriteriaView context={viewContext} />;
