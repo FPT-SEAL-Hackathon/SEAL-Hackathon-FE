@@ -108,11 +108,22 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     setSubmissionForm(prev => ({ ...prev, teamId: stored.teamId ?? "" }));
     teamService.getById(stored.teamId)
       .then((team: any) => {
+        const isActiveMember = !!user?.userId
+          && team.members.some((member: { userId: string; active: boolean }) =>
+            member.userId === user.userId && member.active
+          );
+        if (!isActiveMember) {
+          localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+          setTeamId("");
+          setActiveTeam(null);
+          setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+          return;
+        }
         setActiveTeam(team);
         setSubmissionForm(prev => ({ ...prev, teamId: team.teamId }));
       })
       .catch(() => {});
-  }, []);
+  }, [user?.userId]);
 
   useEffect(() => {
     notificationService.getMyNotifications()
@@ -271,7 +282,15 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderTeam = () => (
     <>
       <SectionHeader title="Team Management" subtitle="Team data and member actions from backend API" />
-      <TeamApiPanel initialTeamId={teamId} mode="leader" />
+      <TeamApiPanel
+        initialTeamId={teamId}
+        mode="leader"
+        onTeamLeft={() => {
+          setActiveTeam(null);
+          setTeamId("");
+          setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+        }}
+      />
     </>
   );
 
