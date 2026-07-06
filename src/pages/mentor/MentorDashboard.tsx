@@ -209,7 +209,7 @@ export function MentorDashboard({
       }));
     } catch {
       // revert on failure — reload from server
-      const fresh = await milestoneService.getByTeam(teamId).catch(() => prev => prev[teamId] ?? []);
+      const fresh = await milestoneService.getByTeam(teamId).catch(() => (prev: { [x: string]: any; }) => prev[teamId] ?? []);
       setMilestoneStore((prev) => ({ ...prev, [teamId]: Array.isArray(fresh) ? fresh : prev[teamId] }));
     }
   };
@@ -358,7 +358,7 @@ export function MentorDashboard({
         {categories.length > 0 && (
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>
-              Mentor Overview
+              Expert Overview
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
@@ -648,7 +648,7 @@ export function MentorDashboard({
     return (
       <>
         <SectionHeader
-          title="Mentor Dashboard"
+          title="Expert Dashboard"
           subtitle="Overview of your assigned categories and teams"
         />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -743,7 +743,7 @@ export function MentorDashboard({
   // ─── Render: Profile ───────────────────────────────────────────────────────
   const renderProfile = () => (
     <>
-      <SectionHeader title="Mentor Profile" subtitle="Manage your profile and mentoring settings" />
+      <SectionHeader title="Expert Profile" subtitle="Manage your profile and expert settings" />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="p-5 text-center col-span-1">
           <div
@@ -767,7 +767,7 @@ export function MentorDashboard({
             {profileForm.name}
           </div>
           <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-            Mentor • {categories.length} categor{categories.length !== 1 ? "ies" : "y"}
+            Expert • {categories.length} categor{categories.length !== 1 ? "ies" : "y"}
           </div>
           <div className="mt-4 space-y-2 text-left">
             {[

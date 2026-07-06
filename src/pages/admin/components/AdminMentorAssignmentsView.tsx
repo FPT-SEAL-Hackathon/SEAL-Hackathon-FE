@@ -21,8 +21,13 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (apiCategories.length > 0 && !selectedCategoryId) {
-      setSelectedCategoryId(apiCategories[0].categoryId);
+    if (apiCategories.length > 0) {
+      const isValid = apiCategories.some((c: any) => c.categoryId === selectedCategoryId);
+      if (!isValid) {
+        setSelectedCategoryId(apiCategories[0].categoryId);
+      }
+    } else {
+      setSelectedCategoryId("");
     }
   }, [apiCategories, selectedCategoryId]);
 
@@ -42,24 +47,37 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
   return (
     <>
       <SectionHeader 
-        title="Mentor Assignments" 
-        subtitle="Manage mentors assigned to categories" 
+        title="Expert Assignments" 
+        subtitle="Manage experts assigned to categories" 
         action={
-          <Button 
-            variant="primary" 
-            size="sm" 
-            icon={<PlusCircle size={14} />} 
-            onClick={() => setAssignMentorModal({ open: true, categoryId: selectedCategoryId })}
-            disabled={!selectedCategoryId}
-          >
-            Assign Mentor
-          </Button>
+          <div className="flex items-center gap-3">
+            <select
+              className="px-3 py-2 rounded-xl outline-none text-sm font-medium cursor-pointer"
+              style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              value={selectedEventId || ""}
+              onChange={(e) => context.setSelectedEventId(e.target.value)}
+            >
+              <option value="" disabled>Select an Event</option>
+              {context.apiEvents?.map((evt: any) => (
+                <option key={evt.eventId} value={evt.eventId}>{evt.eventName}</option>
+              ))}
+            </select>
+            <Button 
+              variant="primary" 
+              size="sm" 
+              icon={<PlusCircle size={14} />} 
+              onClick={() => setAssignMentorModal({ open: true, categoryId: selectedCategoryId })}
+              disabled={!selectedCategoryId}
+            >
+              Assign Expert
+            </Button>
+          </div>
         }
       />
       
       {!selectedEventId ? (
         <Card className="p-8 text-center" style={{ color: COLORS.textSecondary }}>
-          Select an event to view categories and mentors.
+          Select an event to view categories and experts.
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -84,60 +102,44 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
               </div>
             ))}
             {apiCategories.length === 0 && (
-              <div className="p-4 text-center text-sm" style={{ color: COLORS.textSecondary, border: `1px dashed ${COLORS.border}`, borderRadius: 12 }}>
-                No categories found for this event.
-              </div>
+              <div className="text-center p-4 text-sm" style={{ color: COLORS.textSecondary }}>No categories found</div>
             )}
           </div>
           
-          <div className="lg:col-span-2">
-            <Card className="p-5">
-              <div className="flex items-center justify-between mb-4">
-                <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Assigned Mentors</div>
-                {loading && <Loader size={16} className="animate-spin text-primary" />}
-              </div>
-              
-              {error && (
-                <div className="mb-4 p-3 rounded-xl text-sm bg-red-50 text-red-600 border border-red-100">
-                  {error}
-                </div>
-              )}
-              
-              {!selectedCategoryId ? (
-                <div className="text-center py-8" style={{ color: COLORS.textSecondary }}>
-                  Select a category to view its assigned mentors.
-                </div>
-              ) : mentors.length === 0 && !loading ? (
-                <div className="text-center py-8" style={{ color: COLORS.textSecondary }}>
-                  No mentors assigned to this category yet.
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {mentors.map(mentor => (
-                    <div key={mentor.categoryMentorId} className="flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg }}>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.success}20`, color: COLORS.success }}>
-                          <User size={18} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
-                            {mentor.mentorName || "Unknown Mentor"}
-                          </div>
-                          <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                            <Mail size={12} /> {mentor.mentorEmail || mentor.mentorId}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
-                          Assigned: {new Date(mentor.assignedAt).toLocaleDateString()}
-                        </span>
-                      </div>
+          <div className="lg:col-span-2 space-y-3">
+            <div className="flex items-center justify-between">
+              <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>Assigned Experts</div>
+              {loading && <Loader size={14} className="animate-spin" style={{ color: COLORS.textSecondary }} />}
+            </div>
+            
+            {error && (
+              <Card className="p-4 bg-red-500/10 text-red-500 text-sm border-red-500/20">{error}</Card>
+            )}
+            
+            {!loading && mentors.length === 0 && (
+              <Card className="p-8 text-center flex flex-col items-center justify-center gap-2" style={{ borderStyle: "dashed" }}>
+                <User size={24} style={{ color: COLORS.textSecondary, opacity: 0.5 }} />
+                <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No experts assigned to this category yet</div>
+              </Card>
+            )}
+
+            {!loading && mentors.map((m: any) => (
+              <Card key={m.categoryExpertId || m.categoryMentorId} className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
+                    {(m.expertName || m.mentorName || "E")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{m.expertName || m.mentorName}</div>
+                    <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                      <Mail size={12} />
+                      {m.expertEmail || m.mentorEmail}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              )}
-            </Card>
+                <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Remove</Button>
+              </Card>
+            ))}
           </div>
         </div>
       )}

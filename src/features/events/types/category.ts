@@ -15,8 +15,10 @@ export interface CategoryRequest {
 
 export interface CategoryMentor {
     categoryMentorId: string;
+    categoryExpertId?: string;
     categoryId: string;
     mentorId: string;
+    expertId?: string;
     fullName: string;
     email: string;
     assignedAt: string;
@@ -30,5 +32,6 @@ export interface Mentor {
 }
 
 export interface AssignMentorsRequest {
-    mentorIds: string[];
+    mentorIds?: string[];
+    expertIds?: string[];
 }

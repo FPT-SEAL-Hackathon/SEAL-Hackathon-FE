@@ -23,10 +23,14 @@ export interface UpdateCategoryRequest {
 
 export interface CategoryMentorResponse {
   categoryMentorId: string;
+  categoryExpertId?: string;
   categoryId: string;
   mentorId: string;
+  expertId?: string;
   mentorName?: string;
+  expertName?: string;
   mentorEmail?: string;
+  expertEmail?: string;
   assignedAt: string;
 }
 
@@ -36,10 +40,35 @@ interface BackendEnvelope<T> {
   message?: string;
 }
 
+type BackendCategoryExpertResponse = Partial<CategoryMentorResponse> & {
+  categoryExpertId?: string;
+  expertId?: string;
+  expertName?: string;
+  expertEmail?: string;
+};
+
 function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response.data)) return response.data;
   throw new Error(response.message ?? "Unexpected categories response from server.");
+}
+
+function normalizeCategoryMentor(item: BackendCategoryExpertResponse): CategoryMentorResponse {
+  const categoryMentorId = item.categoryMentorId ?? item.categoryExpertId ?? "";
+  const mentorId = item.mentorId ?? item.expertId ?? "";
+  return {
+    ...item,
+    categoryMentorId,
+    categoryExpertId: item.categoryExpertId ?? categoryMentorId,
+    categoryId: item.categoryId ?? "",
+    mentorId,
+    expertId: item.expertId ?? mentorId,
+    mentorName: item.mentorName ?? item.expertName,
+    expertName: item.expertName ?? item.mentorName,
+    mentorEmail: item.mentorEmail ?? item.expertEmail,
+    expertEmail: item.expertEmail ?? item.mentorEmail,
+    assignedAt: item.assignedAt ?? "",
+  };
 }
 
 export const categoryService = {
@@ -53,8 +82,13 @@ export const categoryService = {
     api.put<CategoryResponse>(`/api/v1/categories/category/${id}`, data),
   delete: (id: string) =>
     api.delete(`/api/v1/categories/category/${id}`),
-  assignMentors: (categoryId: string, mentorIds: string[]) =>
-    api.post<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`, { mentorIds }),
-  getMentors: (categoryId: string) =>
-    api.get<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`),
+  assignMentors: async (categoryId: string, mentorIds: string[]) =>
+    unwrapList(await api.post<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
+      `/api/v1/category/expert/${categoryId}`,
+      { expertIds: mentorIds },
+    )).map(normalizeCategoryMentor),
+  getMentors: async (categoryId: string) =>
+    unwrapList(await api.get<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
+      `/api/v1/category/experts/${categoryId}`,
+    )).map(normalizeCategoryMentor),
 };
