@@ -167,6 +167,7 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
           event={event}
           eventCriteria={eventCriteria}
           categories={categories}
+          totalPrize={totalPrize}
           onOpenTeamManagement={() => setActiveTab("teams")}
         />
       )}
