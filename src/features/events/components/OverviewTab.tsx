@@ -10,9 +10,10 @@ interface Props {
   event: EventResponse;
   eventCriteria: EventCriteria[];
   categories: Category[];
+  totalPrize?: { amount: number; currency: string } | null;
 }
 
-export function OverviewTab({ event, eventCriteria, categories }: Props) {
+export function OverviewTab({ event, eventCriteria, categories, totalPrize }: Props) {
   //const totalRounds = categories.reduce((s, c) => s + c.rounds.length, 0);
   //const uniqueMentorCount = new Set(categories.flatMap(c => c.mentors.map(m => m.id))).size;
 
@@ -22,12 +23,12 @@ export function OverviewTab({ event, eventCriteria, categories }: Props) {
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Event Information</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Event Name"><Input value={event.name} disabled /></Field>
-            <Field label="Category"><Input value={event.category} disabled /></Field>
-            <Field label="Prize"><Input value={event.prize} disabled /></Field>
-            <Field label="Status"><Input value={event.status} disabled /></Field>
-            <Field label="Deadline"><Input value={event.deadline} disabled /></Field>
-            <Field label="Teams Registered"><Input value={String(event.teams)} disabled /></Field>
+            <Field label="Event Name"><Input value={event.eventName} disabled /></Field>
+            <Field label="Category"><Input value={categories.map(c => c.categoryName).join(', ') || 'N/A'} disabled /></Field>
+            <Field label="Prize"><Input value={totalPrize ? `${totalPrize.amount} ${totalPrize.currency}` : 'N/A'} disabled /></Field>
+            <Field label="Status"><Input value={String(event.eventStatusName)} disabled /></Field>
+            <Field label="Deadline"><Input value={event.eventEndDate || event.registrationEnd} disabled /></Field>
+            <Field label="Teams Registered"><Input value={String(event.teamCount ?? 0)} disabled /></Field>
           </div>
         </Card>
       </div>

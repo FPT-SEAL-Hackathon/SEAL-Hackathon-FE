@@ -73,15 +73,15 @@ function normalizeCategoryMentor(item: BackendCategoryExpertResponse): CategoryM
 
 export const categoryService = {
   getByEvent: async (eventId: string) =>
-    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`)),
+    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/${eventId}`)),
   getById: (id: string) =>
-    api.get<CategoryResponse>(`/api/v1/categories/category/${id}`),
+    api.get<CategoryResponse>(`/api/v1/category/${id}`),
   create: (eventId: string, data: CreateCategoryRequest) =>
-    api.post<CategoryResponse>(`/api/v1/categories/category/${eventId}`, data),
+    api.post<CategoryResponse>(`/api/v1/category/${eventId}`, data),
   update: (id: string, data: UpdateCategoryRequest) =>
-    api.put<CategoryResponse>(`/api/v1/categories/category/${id}`, data),
+    api.put<CategoryResponse>(`/api/v1/category/${id}`, data),
   delete: (id: string) =>
-    api.delete(`/api/v1/categories/category/${id}`),
+    api.delete(`/api/v1/category/${id}`),
   assignMentors: async (categoryId: string, mentorIds: string[]) =>
     unwrapList(await api.post<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
       `/api/v1/category/expert/${categoryId}`,

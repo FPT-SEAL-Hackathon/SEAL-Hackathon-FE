@@ -161,7 +161,7 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
 
       {/* Tab content */}
       {activeTab === "overview" && (
-        <OverviewTab event={event} eventCriteria={eventCriteria} categories={categories} />
+        <OverviewTab event={event} eventCriteria={eventCriteria} categories={categories} totalPrize={totalPrize} />
       )}
       {activeTab === "criteria" && (
         <CriteriaTab
