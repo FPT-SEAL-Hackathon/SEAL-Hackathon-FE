@@ -1,4 +1,4 @@
-import { api } from "@/lib/api/apiClient";
+import { api, ApiError } from "@/lib/api/apiClient";
 
 export interface CategoryResponse {
   categoryId: string;
@@ -53,6 +53,25 @@ function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
   throw new Error(response.message ?? "Unexpected categories response from server.");
 }
 
+function unwrapItem<T>(response: T | BackendEnvelope<T>): T {
+  if (typeof response === "object" && response !== null && "data" in response && response.data !== undefined) {
+    return response.data;
+  }
+  return response as T;
+}
+
+async function withLegacyFallback<T>(request: () => Promise<T>, legacyRequest: () => Promise<T>): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    const isMissingRoute = error instanceof ApiError
+      && error.status === 404
+      && /no static resource/i.test(error.message);
+    if (!isMissingRoute) throw error;
+    return legacyRequest();
+  }
+}
+
 function normalizeCategoryMentor(item: BackendCategoryExpertResponse): CategoryMentorResponse {
   const categoryMentorId = item.categoryMentorId ?? item.categoryExpertId ?? "";
   const mentorId = item.mentorId ?? item.expertId ?? "";
@@ -73,15 +92,30 @@ function normalizeCategoryMentor(item: BackendCategoryExpertResponse): CategoryM
 
 export const categoryService = {
   getByEvent: async (eventId: string) =>
-    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/${eventId}`)),
-  getById: (id: string) =>
-    api.get<CategoryResponse>(`/api/v1/category/${id}`),
-  create: (eventId: string, data: CreateCategoryRequest) =>
-    api.post<CategoryResponse>(`/api/v1/category/${eventId}`, data),
-  update: (id: string, data: UpdateCategoryRequest) =>
-    api.put<CategoryResponse>(`/api/v1/category/${id}`, data),
+    unwrapList(await withLegacyFallback(
+      () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/${eventId}`),
+      () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`),
+    )),
+  getById: async (id: string) =>
+    unwrapItem(await withLegacyFallback(
+      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`),
+      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`),
+    )),
+  create: async (eventId: string, data: CreateCategoryRequest) =>
+    unwrapItem(await withLegacyFallback(
+      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${eventId}`, data),
+      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${eventId}`, data),
+    )),
+  update: async (id: string, data: UpdateCategoryRequest) =>
+    unwrapItem(await withLegacyFallback(
+      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`, data),
+      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`, data),
+    )),
   delete: (id: string) =>
-    api.delete(`/api/v1/category/${id}`),
+    withLegacyFallback(
+      () => api.delete(`/api/v1/category/${id}`),
+      () => api.delete(`/api/v1/categories/category/${id}`),
+    ),
   assignMentors: async (categoryId: string, mentorIds: string[]) =>
     unwrapList(await api.post<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
       `/api/v1/category/expert/${categoryId}`,
