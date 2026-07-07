@@ -311,6 +311,21 @@ export function AdminAwardsView({ context }: AdminViewProps) {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
+              <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
+              <select
+                value={selectedEventId ?? ""}
+                onChange={e => setSelectedEventId(e.target.value || null)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none cursor-pointer"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="" disabled>Select an Event</option>
+                {apiEvents.length === 0 && <option value="">No events found</option>}
+                {apiEvents.map((event: any) => (
+                  <option key={event.id} value={event.id}>{event.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
               <select
                 value={manualAwardForm.categoryId}

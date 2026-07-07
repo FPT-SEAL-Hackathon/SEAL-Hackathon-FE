@@ -18,6 +18,7 @@ const roleColors: Record<string, string> = {
   ROLE_LEADER: COLORS.secondary,
   ROLE_JUDGE: COLORS.warning,
   ROLE_MENTOR: COLORS.success,
+  ROLE_EXPERT: COLORS.success,
   ROLE_ORGANIZER: COLORS.error,
 };
 
@@ -193,6 +194,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     ROLE_LEADER: "profile",
     ROLE_JUDGE: "profile",
     ROLE_MENTOR: "profile",
+    ROLE_EXPERT: "profile",
     ROLE_FPT_STUDENT: "profile",
     ROLE_EXTERNAL_STUDENT: "profile",
     ROLE_INTERNAL_JUDGE: "profile",

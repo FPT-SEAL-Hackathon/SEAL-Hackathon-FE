@@ -21,30 +21,23 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
 
   useEffect(() => {
     setLoading(true);
-    // Fetch both MENTOR and EXPERT roles
-    Promise.all([
-      userService.getUsers({ role: ROLES.MENTOR }),
-      userService.getUsers({ role: ROLES.EXPERT })
-    ])
-      .then(([mentorsRes, expertsRes]) => {
-        const mentorUsers = mentorsRes.content || [];
+    // Fetch EXPERT roles (unified role for mentors/judges)
+    userService.getUsers({ role: "EXPERT" })
+      .then((expertsRes) => {
         const expertUsers = expertsRes.content || [];
-        // Deduplicate in case backend returns same user or just combine
-        const combined = [...mentorUsers, ...expertUsers];
-        const unique = combined.filter((v, i, a) => a.findIndex(t => t.userId === v.userId) === i);
-        setMentors(unique);
+        setMentors(expertUsers);
       })
       .catch(() => setError("Failed to load mentors/experts"))
       .finally(() => setLoading(false));
   }, []);
 
-  const filteredMentors = mentors.filter(m => 
-    (m.email || "").toLowerCase().includes(search.toLowerCase()) || 
+  const filteredMentors = mentors.filter(m =>
+    (m.email || "").toLowerCase().includes(search.toLowerCase()) ||
     (m.fullName || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const toggleMentor = (id: string) => {
-    setSelectedMentorIds(prev => 
+    setSelectedMentorIds(prev =>
       prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
     );
   };
@@ -69,7 +62,7 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col" style={{ maxHeight: "80vh" }}>
         <div className="p-4 border-b flex justify-between items-center" style={{ borderColor: COLORS.border }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>Assign Mentors to Category</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>Assign Experts to Category</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <X size={20} color={COLORS.textSecondary} />
           </button>
@@ -84,12 +77,13 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
 
           <div className="relative mb-4">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search mentors by name or email..." 
+            <input
+              type="text"
+              placeholder="Search experts by name or email..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{ borderColor: COLORS.border }}
+              className="w-full pl-9 pr-3 py-2 rounded-xl outline-none border focus:border-primary/50 transition-colors"
+              style={{ borderColor: COLORS.border, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 14 }}
             />
           </div>
 
@@ -97,14 +91,14 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
             {loading ? (
               <div className="flex justify-center p-8"><Loader size={24} className="animate-spin text-primary" /></div>
             ) : filteredMentors.length === 0 ? (
-              <div className="text-center p-8 text-sm text-gray-500">No mentors found</div>
+              <div className="text-center p-8 text-sm text-gray-500">No experts found</div>
             ) : (
               filteredMentors.map(mentor => (
-                <div 
+                <div
                   key={mentor.userId}
                   onClick={() => toggleMentor(mentor.userId)}
                   className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all hover:border-primary/30"
-                  style={{ 
+                  style={{
                     borderColor: selectedMentorIds.includes(mentor.userId) ? COLORS.primary : COLORS.border,
                     background: selectedMentorIds.includes(mentor.userId) ? `${COLORS.primary}05` : "transparent"
                   }}
@@ -126,9 +120,9 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
 
         <div className="p-4 border-t flex justify-end gap-3" style={{ borderColor: COLORS.border, background: COLORS.bg }}>
           <Button variant="ghost" onClick={onClose} disabled={assigning}>Cancel</Button>
-          <Button 
-            variant="primary" 
-            onClick={handleAssign} 
+          <Button
+            variant="primary"
+            onClick={handleAssign}
             disabled={assigning || selectedMentorIds.length === 0}
             icon={assigning ? <Loader size={16} className="animate-spin" /> : <UserCheck size={16} />}
           >

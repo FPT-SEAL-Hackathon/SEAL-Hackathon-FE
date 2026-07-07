@@ -97,6 +97,7 @@ type BackendErrorBody = {
   code?: string;
   message?: string;
   errors?: Record<string, string>;
+  details?: Record<string, unknown>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -113,12 +114,18 @@ function toStringRecord(value: unknown): Record<string, string> | undefined {
 export class ApiError extends Error {
   public code?: string;
   public fieldErrors?: Record<string, string>;
+  public details?: Record<string, unknown>;
 
-  constructor(public status: number, message: string, options: { code?: string; fieldErrors?: Record<string, string> } = {}) {
+  constructor(
+    public status: number,
+    message: string,
+    options: { code?: string; fieldErrors?: Record<string, string>; details?: Record<string, unknown> } = {},
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = options.code;
     this.fieldErrors = options.fieldErrors;
+    this.details = options.details;
   }
 }
 
@@ -280,13 +287,15 @@ export async function request<T>(
     let message = `Request failed (${res.status})`;
     let code: string | undefined;
     let fieldErrors: Record<string, string> | undefined;
+    let details: Record<string, unknown> | undefined;
     try {
       const err = await res.json() as BackendErrorBody;
       code = err.error ?? err.code;
       fieldErrors = toStringRecord(err.errors);
+      details = err.details;
       message = apiErrorMessageForStatus(res.status, code, err.message ?? err.error ?? message);
     } catch { /* ignore */ }
-    throw new ApiError(res.status, message, { code, fieldErrors });
+    throw new ApiError(res.status, message, { code, fieldErrors, details });
   }
 
   // Handle empty responses (204, DELETE, etc.)
@@ -341,13 +350,15 @@ export async function requestBlob(
     let message = `Request failed (${res.status})`;
     let code: string | undefined;
     let fieldErrors: Record<string, string> | undefined;
+    let details: Record<string, unknown> | undefined;
     try {
       const err = await res.json() as BackendErrorBody;
       code = err.error ?? err.code;
       fieldErrors = toStringRecord(err.errors);
+      details = err.details;
       message = apiErrorMessageForStatus(res.status, code, err.message ?? err.error ?? message);
     } catch { /* ignore */ }
-    throw new ApiError(res.status, message, { code, fieldErrors });
+    throw new ApiError(res.status, message, { code, fieldErrors, details });
   }
 
   return res.blob();
