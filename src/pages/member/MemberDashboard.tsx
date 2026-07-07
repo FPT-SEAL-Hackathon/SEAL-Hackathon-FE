@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
   Calendar, Trophy, Users, Clock, Bell, CheckCircle,
@@ -20,8 +20,9 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
-import { submissionService } from "@/features/submissions/api/submissionService";
+import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
+import { isTeamActive, teamService } from "@/features/teams/api/teamService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import {
   eventParticipantService,
@@ -42,6 +43,7 @@ type ActiveTeamContext = {
   categoryId?: string;
   teamName?: string;
   leaderUserId?: string;
+  teamStatusId?: string;
   userId?: string;
   memberUserIds?: string[];
 };
@@ -181,8 +183,19 @@ function isApprovedParticipationStatus(status?: string | null) {
   return status === "ACTIVE";
 }
 
+function formatSubmissionDate(value?: string | null) {
+  return value ? new Date(value).toLocaleString("en-US") : "Not submitted";
+}
+
+function isBeforeSubmissionDeadline(round?: Round) {
+  if (!round?.submissionDeadline) return true;
+  const deadline = new Date(round.submissionDeadline).getTime();
+  return Number.isNaN(deadline) || Date.now() <= deadline;
+}
+
 export function MemberDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { user } = useAuth();
+  const submissionFormRef = useRef<HTMLDivElement | null>(null);
   const displayName = user?.fullName || user?.email || "Member";
   const userInitials = getInitials(displayName);
   const studentCode = user?.fptStudentCode ?? user?.externalStudentCode ?? "";
@@ -311,6 +324,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
+  const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
   const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
   const [certificateCategoryId, setCertificateCategoryId] = useState("all");
@@ -324,6 +339,23 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setActiveTeamContext(storedTeam);
     if (storedTeam?.teamId) {
       setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
+      teamService.getById(storedTeam.teamId)
+        .then(team => {
+          const refreshedTeam = {
+            ...storedTeam,
+            eventId: team.eventId,
+            categoryId: team.categoryId,
+            teamName: team.teamName,
+            leaderUserId: team.leaderUserId,
+            teamStatusId: team.teamStatusId,
+            memberUserIds: team.members.map(member => member.userId),
+          };
+          setActiveTeamContext(refreshedTeam);
+          localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(refreshedTeam));
+        })
+        .catch(() => {
+          // Submission API remains the source of truth if refreshing the team fails.
+        });
     } else {
       setSubmissionForm(prev => ({ ...prev, teamId: "" }));
     }
@@ -397,6 +429,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   useEffect(() => {
     if (currentPage !== "submissions" || !activeTeamContext?.categoryId) {
       setSubmissionRounds([]);
+      setSubmissionHistory([]);
       return;
     }
     let cancelled = false;
@@ -423,6 +456,39 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     };
   }, [activeTeamContext?.categoryId, currentPage]);
 
+  const loadSubmissionHistory = useCallback(async () => {
+    if (currentPage !== "submissions" || !submissionForm.teamId || submissionRounds.length === 0) {
+      setSubmissionHistory([]);
+      return;
+    }
+
+    setSubmissionHistoryLoading(true);
+    try {
+      const results = await Promise.all(
+        submissionRounds.map(round =>
+          submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId)
+            .then(submission => submission)
+            .catch(() => null),
+        ),
+      );
+      setSubmissionHistory(
+        results
+          .filter((submission): submission is SubmissionResponse => Boolean(submission?.submissionId))
+          .sort((a, b) => {
+            const aTime = new Date(a.submittedAt || a.lastUpdatedAt || 0).getTime();
+            const bTime = new Date(b.submittedAt || b.lastUpdatedAt || 0).getTime();
+            return bTime - aTime;
+          }),
+      );
+    } finally {
+      setSubmissionHistoryLoading(false);
+    }
+  }, [currentPage, submissionForm.teamId, submissionRounds]);
+
+  useEffect(() => {
+    void loadSubmissionHistory();
+  }, [loadSubmissionHistory]);
+
   const unread = notifs.filter(n => !n.read).length;
   const markRead = async (id: string) => {
     setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -446,8 +512,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus("Only the team leader can submit or update team work.");
       return;
     }
+    if (activeTeamContext?.teamStatusId && !isTeamActive(activeTeamContext.teamStatusId)) {
+      setSubmissionStatus("Only active teams can submit work. Your team is waiting for organizer approval.");
+      return;
+    }
     if (!submissionForm.teamId || !submissionForm.roundId) {
       setSubmissionStatus("Please select a round before submitting.");
+      return;
+    }
+    const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
+    if (!isBeforeSubmissionDeadline(selectedRound)) {
+      setSubmissionStatus("This round's submission deadline has passed.");
       return;
     }
     if (!submissionForm.submissionName.trim()) {
@@ -467,6 +542,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         notes: submissionForm.submissionName.trim(),
       });
       setSubmissionStatus("Submission saved.");
+      void loadSubmissionHistory();
     } catch (error) {
       setSubmissionStatus(error instanceof Error ? error.message : "Submission failed.");
     } finally {
@@ -520,6 +596,129 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     } finally {
       setProblemDownloadLoading(null);
     }
+  };
+
+  const handlePrepareSubmissionUpdate = (submission: SubmissionResponse) => {
+    const round = submissionRounds.find(item => item.roundId === submission.roundId);
+    if (!isBeforeSubmissionDeadline(round)) {
+      setSubmissionStatus("This round's submission deadline has passed.");
+      return;
+    }
+
+    setSubmissionForm(prev => ({
+      ...prev,
+      roundId: submission.roundId,
+      submissionName: submission.notes ?? "",
+      repositoryUrl: submission.repositoryUrl ?? "",
+      demoUrl: submission.demoUrl ?? "",
+      reportUrl: submission.reportUrl ?? "",
+      slideUrl: submission.slideUrl ?? "",
+    }));
+    setSubmissionStatus("Loaded submitted work. Update the fields and submit again before the deadline.");
+    submissionFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const renderSubmissionHistory = () => {
+    const roundById = new Map(submissionRounds.map(round => [round.roundId, round]));
+    const isSubmissionLeader = activeTeamContext?.leaderUserId === user?.userId;
+
+    return (
+      <Card className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary }}>Submission History</div>
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+              Work submitted by {activeTeamContext?.teamName ?? "this team"}
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<ExternalLink size={13} />}
+            onClick={loadSubmissionHistory}
+            disabled={submissionHistoryLoading}
+          >
+            {submissionHistoryLoading ? "Loading..." : "Refresh"}
+          </Button>
+        </div>
+
+        {submissionHistoryLoading ? (
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Loading submission history...</div>
+        ) : submissionHistory.length === 0 ? (
+          <div className="rounded-lg px-4 py-5" style={{ border: `1px dashed ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14 }}>
+            No submissions have been recorded for this team yet.
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {submissionHistory.map(submission => {
+              const round = roundById.get(submission.roundId);
+              const canUpdateSubmission = isSubmissionLeader && isBeforeSubmissionDeadline(round);
+              const links = [
+                { label: "Repo", url: submission.repositoryUrl, icon: <Github size={13} /> },
+                { label: "Demo", url: submission.demoUrl, icon: <Globe size={13} /> },
+                { label: "Report", url: submission.reportUrl, icon: <FileText size={13} /> },
+                { label: "Slides", url: submission.slideUrl, icon: <FileText size={13} /> },
+              ].filter(link => Boolean(link.url));
+
+              return (
+                <div
+                  key={submission.submissionId}
+                  className="rounded-lg p-4"
+                  style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
+                >
+                  <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                    <div className="min-w-0">
+                      <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.textPrimary }}>
+                        {submission.notes || `Submission ${submission.submissionId.slice(0, 8)}`}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                        <span className="inline-flex items-center gap-1">
+                          <Clock size={13} /> {round?.roundName ?? "Unknown round"}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar size={13} /> Submitted: {formatSubmissionDate(submission.submittedAt || submission.lastUpdatedAt)}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar size={13} /> Deadline: {formatSubmissionDate(round?.submissionDeadline)}
+                        </span>
+                        {submission.submissionStatusName && <StatusBadge status={submission.submissionStatusName.toLowerCase()} />}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <Button
+                        variant={canUpdateSubmission ? "outline" : "ghost"}
+                        size="sm"
+                        icon={<Edit size={13} />}
+                        onClick={() => handlePrepareSubmissionUpdate(submission)}
+                        disabled={!canUpdateSubmission}
+                      >
+                        {canUpdateSubmission ? "Update" : "Update closed"}
+                      </Button>
+                      {links.length > 0 ? links.map(link => (
+                        <a
+                          key={link.label}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-lg px-3 py-2"
+                          style={{ border: `1px solid ${COLORS.border}`, color: COLORS.primary, fontSize: 12, fontWeight: 700 }}
+                        >
+                          {link.icon}
+                          {link.label}
+                        </a>
+                      )) : (
+                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>No URLs attached</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+    );
   };
 
   const handleCertificateFile = async (award: AwardResponse, mode: "view" | "download") => {
@@ -1224,6 +1423,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               </Button>
             </div>
           </Card>
+          {renderSubmissionHistory()}
         </>
       );
     }
@@ -1231,8 +1431,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return (
       <>
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
-        <Card className="p-5">
-          <div className="grid md:grid-cols-2 gap-4">
+        <div ref={submissionFormRef}>
+          <Card className="p-5">
+            <div className="grid md:grid-cols-2 gap-4">
             <label className="block">
               <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>
                 <Clock size={14} /> Round
@@ -1284,12 +1485,24 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
             </Button>
             {submissionStatus && (
-              <span style={{ fontSize: 13, color: submissionStatus === "Submission saved." ? COLORS.success : COLORS.warning }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: submissionStatus === "Submission saved." || submissionStatus.includes("downloaded.")
+                    ? COLORS.success
+                    : submissionStatus.startsWith("Current status:")
+                      ? COLORS.textSecondary
+                      : COLORS.error,
+                  fontWeight: 600,
+                }}
+              >
                 {submissionStatus}
               </span>
             )}
-          </div>
-        </Card>
+            </div>
+          </Card>
+        </div>
+        {renderSubmissionHistory()}
       </>
     );
   };

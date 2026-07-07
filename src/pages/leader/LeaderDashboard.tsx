@@ -28,7 +28,7 @@ import {
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
-import { teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
+import { isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
@@ -206,6 +206,10 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
     if (!submissionForm.submissionName.trim()) {
       setSubmitError("Submission name is required.");
+      return;
+    }
+    if (activeTeam && !isTeamActive(activeTeam.teamStatusId)) {
+      setSubmitError("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
     }
 

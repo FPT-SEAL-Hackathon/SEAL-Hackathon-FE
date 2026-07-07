@@ -939,7 +939,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                 }}
             />
           );
-      case "events": return <AdminEventsView context={viewContext} />;
       case "event-participants": return <AdminEventParticipantsView />;
       case "team-approval": return <AdminTeamApprovalView context={viewContext} />;
       case "categories": return <AdminCategoriesView context={viewContext} />;

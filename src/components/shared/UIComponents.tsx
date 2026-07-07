@@ -44,6 +44,7 @@ export function StatusBadge({ status }: { status: string }) {
     completed:     { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Completed",    border: "rgba(0,148,68,0.22)" },
     draft:         { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Draft",        border: "rgba(100,70,30,0.14)" },
     disqualified:  { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Disqualified", border: "rgba(229,62,46,0.2)" },
+    withdrawn:     { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Withdrawn",    border: "rgba(100,70,30,0.14)" },
     finalist:      { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Finalist",     border: "rgba(245,158,11,0.22)" },
     winner:        { bg: "rgba(244,121,32,0.12)", color: "#c06010", label: "Winner",      border: "rgba(244,121,32,0.3)" },
     open:          { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Open",         border: "rgba(0,148,68,0.22)" },
