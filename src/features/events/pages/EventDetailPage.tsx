@@ -12,7 +12,7 @@
 // import { data } from "react-router";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch } from "lucide-react";
+import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users } from "lucide-react";
 import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
@@ -22,14 +22,16 @@ import { useEventCriteria } from "../hooks/useEventCriteria";
 import { EventResponse } from "../api/eventService";
 import { useCategories } from "../hooks/useCategories";
 import { useRounds } from "../hooks/useRounds";
+import { EventTeamsSection } from "../components/EventTeamsSection";
 
-type TabKey = "overview" | "criteria" | "categories" | "rounds";
+type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "overview",    label: "Overview",    icon: <Calendar size={14} /> },
   { key: "criteria",    label: "Criteria",    icon: <Star size={14} /> },
   { key: "categories",  label: "Categories",  icon: <BookOpen size={14} /> },
   { key: "rounds",      label: "Rounds",      icon: <GitBranch size={14} /> },
+  { key: "teams",       label: "Team Management", icon: <Users size={14} /> },
 ];
 
 export function EventDetailPage({ event, onBack }: { event: EventResponse; onBack: () => void }) {
@@ -161,7 +163,12 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
 
       {/* Tab content */}
       {activeTab === "overview" && (
-        <OverviewTab event={event} eventCriteria={eventCriteria} categories={categories} />
+        <OverviewTab
+          event={event}
+          eventCriteria={eventCriteria}
+          categories={categories}
+          onOpenTeamManagement={() => setActiveTab("teams")}
+        />
       )}
       {activeTab === "criteria" && (
         <CriteriaTab
@@ -207,6 +214,9 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
           onAssignJudge={assignJudges}
           onRemoveJudge={removeJudge}
         />
+      )}
+      {activeTab === "teams" && (
+        <EventTeamsSection eventId={event.eventId} categories={categories} />
       )}
     </div>
   );
