@@ -4,6 +4,11 @@ import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, ty
 import { useAuth } from "@/features/auth/store/authStore";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
 import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
+import { OAuthSuccessPage } from "@/features/auth/pages/OAuthSuccessPage";
+import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage";
+import { LinkAccountPage } from "@/features/auth/pages/LinkAccountPage";
+import { ForgotPasswordPage } from "@/features/auth/pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "@/features/auth/pages/ResetPasswordPage";
 import { LandingPage } from "@/pages/landing/LandingPage";
 import { Layout } from "@/components/layouts/Layout";
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
@@ -15,7 +20,7 @@ import { ForbiddenPage } from "@/pages/ForbiddenPage";
 import { DevHub } from "@/pages/dev/DevHub";
 
 function RequireAuth() {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, user } = useAuth();
   const location = useLocation();
   const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
 
@@ -25,6 +30,27 @@ function RequireAuth() {
   }
 
   if (!isAuthenticated || !role) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // User OAuth TEMPORARY phải hoàn thiện hồ sơ trước khi vào dashboard.
+  if (user?.accountStatus?.toUpperCase() === "TEMPORARY" && location.pathname !== "/complete-profile") {
+    return <Navigate to="/complete-profile" replace />;
+  }
+
+  return <Outlet />;
+}
+
+function RequireAuthOnly() {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
+
+  if (isDevMode && !isAuthenticated) {
+    return <Outlet />;
+  }
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -227,8 +253,19 @@ export const router = createBrowserRouter([
   { path: "/login", element: <AuthRoute mode="login" /> },
   { path: "/register", element: <AuthRoute mode="register" /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
+  { path: "/oauth2/success", element: <OAuthSuccessPage /> },
+  { path: "/forgot-password", element: <ForgotPasswordPage /> },
+  { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/403", element: <ForbiddenPage /> },
   { path: "/dev", element: <DevRoute /> },
+  {
+    path: "/",
+    element: <RequireAuthOnly />,
+    children: [
+      { path: "complete-profile", element: <CompleteProfilePage /> },
+      { path: "link-account", element: <LinkAccountPage /> },
+    ],
+  },
   {
     path: "/",
     element: <RequireAuth />,
