@@ -146,6 +146,12 @@ export const teamService = {
   removeMember: (teamId: string, userId: string) =>
     api.delete(`/api/v1/teams/${teamId}/members/${userId}`),
 
+  // Team-first event registration: leader đăng ký cả team, organizer duyệt theo team.
+  registerEvent: (teamId: string) =>
+    api.post<unknown[]>(`/api/v1/teams/${teamId}/register-event`, {}),
+  withdrawEvent: (teamId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/v1/teams/${teamId}/register-event`),
+
   // Admin
   reviewEligibility: (eventId: string) =>
     api.get<TeamEligibilityReviewResponse[]>(`/api/v1/admin/events/${eventId}/teams/eligibility-review`),

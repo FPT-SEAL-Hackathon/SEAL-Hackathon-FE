@@ -37,7 +37,9 @@ type ActionKey =
   | "remove"
   | "events"
   | "categories"
-  | "discover";
+  | "discover"
+  | "registerEvent"
+  | "withdrawEvent";
 
 type RoleMode = "auto" | "member" | "leader";
 type TeamFlow = "create" | "join" | null;
@@ -238,18 +240,12 @@ export function TeamApiPanel({
     run(
       "events",
       async () => {
-        const [allEvents, participations] = await Promise.all([
-          eventService.getAll(true),
-          eventParticipantService.getMyParticipations(),
-        ]);
-        const approvedEventIds = new Set(
-          participations
-            .filter(participation => participation.participantStatus === "ACTIVE")
-            .map(participation => participation.eventId),
-        );
+        // Team-first: tạo team KHÔNG cần là participant đã duyệt —
+        // leader sẽ đăng ký cả team vào event sau khi lập đội.
+        const allEvents = await eventService.getAll(true);
         return {
           allEvents,
-          approved: allEvents.filter(event => approvedEventIds.has(event.eventId)),
+          approved: allEvents,
         };
       },
       ({ allEvents, approved }) => {
@@ -469,6 +465,30 @@ export function TeamApiPanel({
         setField("teamId", team.teamId);
       },
       "Team created and is waiting for organizer approval.",
+    );
+  };
+
+  // Team-first: leader đăng ký cả team vào event; tất cả thành viên thành participant PENDING.
+  const registerTeamEvent = () => {
+    const teamId = selectedTeam?.teamId ?? form.teamId.trim();
+    if (!teamId) return;
+    run(
+      "registerEvent",
+      () => teamService.registerEvent(teamId),
+      undefined,
+      "Team registered for the event. Waiting for organizer approval.",
+    );
+  };
+
+  // Leader rút đăng ký khi organizer chưa duyệt để chỉnh đội hình rồi đăng ký lại.
+  const withdrawTeamEvent = () => {
+    const teamId = selectedTeam?.teamId ?? form.teamId.trim();
+    if (!teamId) return;
+    run(
+      "withdrawEvent",
+      () => teamService.withdrawEvent(teamId),
+      undefined,
+      "Team registration withdrawn. You can adjust the roster and register again.",
     );
   };
 
@@ -703,9 +723,9 @@ export function TeamApiPanel({
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
-                  {loading.events && <option value="">Loading approved events...</option>}
+                  {loading.events && <option value="">Loading events...</option>}
                   {!loading.events && approvedEvents.length === 0 && (
-                    <option value="">No approved event registrations</option>
+                    <option value="">No open events available</option>
                   )}
                   {approvedEvents.map(event => (
                     <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
@@ -765,9 +785,9 @@ export function TeamApiPanel({
                   className="w-full px-3 py-2.5 rounded-xl outline-none"
                   style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 >
-                  {loading.events && <option value="">Loading approved events...</option>}
+                  {loading.events && <option value="">Loading events...</option>}
                   {!loading.events && approvedEvents.length === 0 && (
-                    <option value="">No approved event registrations</option>
+                    <option value="">No open events available</option>
                   )}
                   {approvedEvents.map(event => (
                     <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
@@ -1113,6 +1133,24 @@ export function TeamApiPanel({
                   </Button>
                 </>
               )}
+              <Button
+                variant="primary"
+                size="sm"
+                icon={loading.registerEvent ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                disabled={loading.registerEvent || !canEditRoster}
+                onClick={registerTeamEvent}
+              >
+                {loading.registerEvent ? "Registering..." : "Register Team for Event"}
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={loading.withdrawEvent ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                disabled={loading.withdrawEvent || !canEditRoster}
+                onClick={withdrawTeamEvent}
+              >
+                {loading.withdrawEvent ? "Withdrawing..." : "Withdraw Registration"}
+              </Button>
             </div>
             {renderLeaderActionPanel()}
           </Card>
@@ -1208,9 +1246,9 @@ export function TeamApiPanel({
                 className="w-full px-3 py-2.5 rounded-xl outline-none"
                 style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
               >
-                {loading.events && <option value="">Loading approved events...</option>}
+                {loading.events && <option value="">Loading events...</option>}
                 {!loading.events && approvedEvents.length === 0 && (
-                  <option value="">No approved event registrations</option>
+                  <option value="">No open events available</option>
                 )}
                 {approvedEvents.map(event => (
                   <option key={event.eventId} value={event.eventId}>{event.eventName}</option>

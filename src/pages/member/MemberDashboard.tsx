@@ -1024,14 +1024,21 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 ) : unavailableReason ? (
                   <Button variant="ghost" size="sm" disabled>{unavailableReason}</Button>
                 ) : (
+                  // Team-first: đăng ký sự kiện theo team — tạo/join team trước,
+                  // leader đăng ký cả team ở tab My Team.
                   <Button
                     variant="primary"
                     size="sm"
-                    icon={eventActionLoading[ev.eventId] ? <Clock size={13} /> : <PlusCircle size={13} />}
-                    disabled={eventActionLoading[ev.eventId]}
-                    onClick={() => handleRegisterEvent(ev.eventId)}
+                    icon={<PlusCircle size={13} />}
+                    onClick={() => {
+                      setEventActionMessage(prev => ({
+                        ...prev,
+                        [ev.eventId]: "Event registration is per team: create or join a team, then the team leader registers the team in the My Team tab.",
+                      }));
+                      onNavigate("team");
+                    }}
                   >
-                    {eventActionLoading[ev.eventId] ? "Registering..." : "Register for Event"}
+                    Create/Join Team to Register
                   </Button>
                 )}
                 <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(isSelected ? null : ev.eventId)}>Details</Button>
