@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { X, Save, Loader, Plus, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Search, UserCheck, Loader, Save } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { roundService } from "@/features/judging/api/roundService";
+import { userService } from "@/features/users/api/userService";
 import { ApiError } from "@/lib/api/apiClient";
 import { COLORS } from "@/components/shared/UIComponents";
 
@@ -13,25 +14,55 @@ interface Props {
 }
 
 export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props) {
-  const [judgeIds, setJudgeIds] = useState<string[]>([""]);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
 
-  const addRow = () => setJudgeIds(p => [...p, ""]);
-  const removeRow = (i: number) => setJudgeIds(p => p.filter((_, idx) => idx !== i));
-  const setRow = (i: number, v: string) => setJudgeIds(p => p.map((id, idx) => idx === i ? v : id));
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      userService.getUsers({ role: "JUDGE" }),
+      userService.getUsers({ role: "EXPERT" })
+    ])
+      .then(([judgesRes, expertsRes]) => {
+        const judges = judgesRes.content || [];
+        const experts = expertsRes.content || [];
+        // Combine and remove duplicates just in case
+        const combined = [...judges, ...experts];
+        const unique = Array.from(new Map(combined.map(u => [u.userId, u])).values());
+        setCandidates(unique);
+      })
+      .catch(() => setError("Failed to load judges and mentors"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filteredCandidates = candidates.filter(u =>
+    (u.email || "").toLowerCase().includes(search.toLowerCase()) ||
+    (u.fullName || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(uid => uid !== id) : [...prev, id]
+    );
+  };
 
   const handleSave = async () => {
-    const valid = judgeIds.filter(id => id.trim().length > 0);
-    if (valid.length === 0) { setError("Enter at least one Judge User ID."); return; }
-    setLoading(true); setError("");
+    if (selectedIds.length === 0) {
+      setError("Please select at least one judge/mentor");
+      return;
+    }
+    setAssigning(true);
+    setError("");
     try {
-      await roundService.assignJudges(roundId, valid);
+      await roundService.assignJudges(roundId, selectedIds);
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to assign judges.");
-    } finally {
-      setLoading(false);
+      setError(err instanceof ApiError ? err.message : "Failed to assign judges");
+      setAssigning(false);
     }
   };
 
@@ -39,12 +70,12 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
-        style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
+        style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
         onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="w-full rounded-2xl overflow-hidden"
-          style={{ maxWidth: 480, background: COLORS.bg, boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
-          <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+          className="w-full rounded-2xl overflow-hidden flex flex-col"
+          style={{ maxWidth: 500, maxHeight: "80vh", background: COLORS.bg, boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
+          <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
             <div>
               <h3 style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>Assign Judges</h3>
               <p style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{roundName}</p>
@@ -52,45 +83,76 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} style={{ color: COLORS.textSecondary }} /></button>
           </div>
 
-          <div className="p-6 space-y-4">
-            {error && <div className="px-4 py-3 rounded-xl text-sm" style={{ background: `${COLORS.error}10`, color: COLORS.error }}>{error}</div>}
+          <div className="p-5 flex-1 overflow-y-auto">
+            {error && (
+              <div className="mb-4 px-4 py-3 rounded-xl text-sm" style={{ background: `${COLORS.error}10`, color: COLORS.error, border: `1px solid ${COLORS.error}20` }}>
+                {error}
+              </div>
+            )}
 
-            <p style={{ fontSize: 13, color: COLORS.textSecondary }}>
-              Enter the User IDs of judges to assign to this round. Each ID is a UUID from the user database.
-            </p>
-
-            <div className="space-y-2">
-              {judgeIds.map((id, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input value={id} onChange={e => setRow(i, e.target.value)}
-                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                    className="flex-1 px-3 py-2.5 rounded-xl outline-none font-mono"
-                    style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }} />
-                  {judgeIds.length > 1 && (
-                    <button onClick={() => removeRow(i)} className="p-2 rounded-lg hover:bg-red-50">
-                      <Trash2 size={14} style={{ color: COLORS.error }} />
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div className="relative mb-4">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 rounded-xl outline-none border focus:border-primary/50 transition-colors"
+                style={{ borderColor: COLORS.border, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 14 }}
+              />
             </div>
 
-            <button onClick={addRow} className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-xl hover:bg-gray-50"
-              style={{ color: COLORS.primary, border: `1px dashed ${COLORS.primary}40` }}>
-              <Plus size={14} /> Add another judge
-            </button>
+            <div className="space-y-2">
+              {loading ? (
+                <div className="flex justify-center p-8"><Loader size={24} className="animate-spin text-primary" /></div>
+              ) : filteredCandidates.length === 0 ? (
+                <div className="text-center p-8 text-sm text-gray-500">No judges or mentors found</div>
+              ) : (
+                filteredCandidates.map(user => {
+                  const isMentor = user.role?.toUpperCase() === "EXPERT" || user.role?.toUpperCase() === "MENTOR";
+                  return (
+                    <div
+                      key={user.userId}
+                      onClick={() => toggleSelection(user.userId)}
+                      className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all hover:border-primary/30"
+                      style={{
+                        borderColor: selectedIds.includes(user.userId) ? COLORS.primary : COLORS.border,
+                        background: selectedIds.includes(user.userId) ? `${COLORS.primary}05` : "transparent"
+                      }}
+                    >
+                      <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.includes(user.userId) ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                        {selectedIds.includes(user.userId) && <UserCheck size={14} color="white" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
+                            {user.fullName}
+                          </span>
+                          {isMentor && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider" style={{ background: `${COLORS.success}20`, color: COLORS.success }}>
+                              MENTOR
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{user.email}</div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 px-6 py-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
-            <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium"
+          <div className="flex items-center justify-end gap-3 px-5 py-4" style={{ borderTop: `1px solid ${COLORS.border}`, background: COLORS.bg }}>
+            <button onClick={onClose} disabled={assigning} className="px-4 py-2 rounded-xl text-sm font-medium"
               style={{ color: COLORS.textSecondary, border: `1px solid ${COLORS.border}`, background: COLORS.bg }}>
               Cancel
             </button>
-            <button onClick={handleSave} disabled={loading}
+            <button onClick={handleSave} disabled={assigning || selectedIds.length === 0}
               className="px-5 py-2 rounded-xl text-sm font-semibold text-white flex items-center gap-2"
-              style={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, opacity: loading ? 0.7 : 1 }}>
-              {loading ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-              {loading ? "Assigning..." : "Assign Judges"}
+              style={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})`, opacity: (assigning || selectedIds.length === 0) ? 0.7 : 1 }}>
+              {assigning ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              Assign Selected ({selectedIds.length})
             </button>
           </div>
         </motion.div>
