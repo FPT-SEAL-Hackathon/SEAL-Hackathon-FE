@@ -178,7 +178,7 @@ export function MentorDashboard({
     milestoneStore[teamId] ?? [];
 
   const loadMilestonesForTeam = async (teamId: string) => {
-    if (milestoneStore[teamId] !== undefined) return; // already loaded
+    if (milestoneStore[teamId] !== undefined || milestoneLoading[teamId]) return; // already loaded or loading
     setMilestoneLoading((p) => ({ ...p, [teamId]: true }));
     try {
       const data = await milestoneService.getByTeam(teamId);
@@ -190,6 +190,12 @@ export function MentorDashboard({
       setMilestoneLoading((p) => ({ ...p, [teamId]: false }));
     }
   };
+
+  useEffect(() => {
+    if (selectedTeamId) {
+      loadMilestonesForTeam(selectedTeamId);
+    }
+  }, [selectedTeamId]);
 
   const toggleMilestone = async (teamId: string, milestoneId: string) => {
     // Optimistic update
@@ -473,8 +479,6 @@ export function MentorDashboard({
 
             {/* Consultation notes + Milestones panel */}
             {selectedTeam && (() => {
-              // Load milestones from API when team is selected
-              void loadMilestonesForTeam(selectedTeam.teamId);
               const teamMilestones = getMilestonesForTeam(selectedTeam.teamId);
               const doneCount = teamMilestones.filter((m) => m.isDone).length;
               const isLoadingMilestones = milestoneLoading[selectedTeam.teamId];
