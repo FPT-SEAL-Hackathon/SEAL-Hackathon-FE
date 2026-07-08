@@ -44,17 +44,17 @@ function unwrapList<T>(response: T[] | BackendEnvelope<T[]>): T[] {
 
 export const categoryService = {
   getByEvent: async (eventId: string) =>
-    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`)),
+    unwrapList(await api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/${eventId}`)),
   getById: (id: string) =>
-    api.get<CategoryResponse>(`/api/v1/categories/category/${id}`),
+    api.get<CategoryResponse>(`/api/v1/category/${id}`),
   create: (eventId: string, data: CreateCategoryRequest) =>
-    api.post<CategoryResponse>(`/api/v1/categories/category/${eventId}`, data),
+    api.post<CategoryResponse>(`/api/v1/category/${eventId}`, data),
   update: (id: string, data: UpdateCategoryRequest) =>
-    api.put<CategoryResponse>(`/api/v1/categories/category/${id}`, data),
+    api.put<CategoryResponse>(`/api/v1/category/${id}`, data),
   delete: (id: string) =>
-    api.delete(`/api/v1/categories/category/${id}`),
+    api.delete(`/api/v1/category/${id}`),
   assignMentors: (categoryId: string, mentorIds: string[]) =>
     api.post<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`, { mentorIds }),
   getMentors: (categoryId: string) =>
-    api.get<CategoryMentorResponse[]>(`/api/v1/category/mentor/${categoryId}`),
+    api.get<CategoryMentorResponse[]>(`/api/v1/category/mentors/${categoryId}`),
 };

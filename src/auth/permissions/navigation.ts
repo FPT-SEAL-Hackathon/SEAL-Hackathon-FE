@@ -28,7 +28,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   ],
   [ROLES.INTERNAL_JUDGE]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
-    { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
+    { icon: "ClipboardList", label: "Event", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
     { icon: "Clock", label: "History", key: "history" },
     { icon: "BookOpen", label: "Assigned Tracks", key: "tracks" },
@@ -37,7 +37,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "User", label: "Profile", key: "profile" },
   ],
   [ROLES.GUEST_JUDGE]: [
-    { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
+    { icon: "ClipboardList", label: "Event", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
     { icon: "Clock", label: "History", key: "history" },
   ],
@@ -84,7 +84,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   ],
   [ROLES.EXPERT]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
-    { icon: "ClipboardList", label: "Assigned Round", key: "rounds" },
+    { icon: "ClipboardList", label: "Event", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
     { icon: "BookOpen", label: "Assigned Categories", key: "categories" },
     { icon: "Users", label: "Category Teams", key: "teams" },
