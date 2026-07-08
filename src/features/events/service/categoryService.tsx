@@ -1,6 +1,29 @@
 import { api } from "@/lib/api/apiClient";
 import { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../types/category";
 
+type BackendCategoryExpert = Partial<CategoryMentor> & {
+    categoryExpertId?: string;
+    expertId?: string;
+    expertName?: string;
+    expertEmail?: string;
+};
+
+function normalizeCategoryMentor(item: BackendCategoryExpert): CategoryMentor {
+    const categoryMentorId = item.categoryMentorId ?? item.categoryExpertId ?? "";
+    const mentorId = item.mentorId ?? item.expertId ?? "";
+    return {
+        ...item,
+        categoryMentorId,
+        categoryExpertId: item.categoryExpertId ?? categoryMentorId,
+        categoryId: item.categoryId ?? "",
+        mentorId,
+        expertId: item.expertId ?? mentorId,
+        fullName: item.fullName ?? item.expertName ?? "",
+        email: item.email ?? item.expertEmail ?? "",
+        assignedAt: item.assignedAt ?? "",
+    };
+}
+
 export const categoryService = {
     create: (
         eventId: string,
@@ -26,13 +49,14 @@ export const categoryService = {
     assignMentor: (
         categoryId: string,
         body: AssignMentorsRequest
-    ) => api.post<CategoryMentor>(
-        `/api/v1/category/mentor/${categoryId}`,
-        body
-    ),
+    ) => api.post<BackendCategoryExpert>(
+        `/api/v1/category/expert/${categoryId}`,
+        { expertIds: body.expertIds ?? body.mentorIds ?? [] }
+    ).then(normalizeCategoryMentor),
 
-    getMentors: (categoryId: string) => api.get<CategoryMentor[]>(`/api/v1/category/mentors/${categoryId}`),
+    getMentors: (categoryId: string) => api.get<BackendCategoryExpert[]>(`/api/v1/category/experts/${categoryId}`)
+        .then(items => items.map(normalizeCategoryMentor)),
 
-    getAllMentors: () => api.get<Mentor[]>("/api/v1/users/mentors"),
+    getAllMentors: () => api.get<Mentor[]>("/api/v1/users/experts"),
    
 }

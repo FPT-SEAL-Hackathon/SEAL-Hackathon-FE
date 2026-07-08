@@ -5,35 +5,38 @@ import { Field, Input } from "../shared/ui/shared";
 import type { EventResponse } from "../api/eventService";
 import type { EventCriteria } from "../types/eventCriteria";
 import type { Category } from "../types/category";
+import { EventTeamsSummaryCard } from "./EventTeamsSection";
 
 interface Props {
   event: EventResponse;
   eventCriteria: EventCriteria[];
   categories: Category[];
+  onOpenTeamManagement: () => void;
 }
 
-export function OverviewTab({ event, eventCriteria, categories }: Props) {
+export function OverviewTab({ event, eventCriteria, categories, onOpenTeamManagement }: Props) {
   //const totalRounds = categories.reduce((s, c) => s + c.rounds.length, 0);
   //const uniqueMentorCount = new Set(categories.flatMap(c => c.mentors.map(m => m.id))).size;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 space-y-4">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-4">
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Event Information</div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Event Name"><Input value={event.name} disabled /></Field>
-            <Field label="Category"><Input value={event.category} disabled /></Field>
-            <Field label="Prize"><Input value={event.prize} disabled /></Field>
-            <Field label="Status"><Input value={event.status} disabled /></Field>
-            <Field label="Deadline"><Input value={event.deadline} disabled /></Field>
-            <Field label="Teams Registered"><Input value={String(event.teams)} disabled /></Field>
+            <Field label="Event Name"><Input value={event.eventName} disabled /></Field>
+            <Field label="Category"><Input value={categories.map(c => c.categoryName).join(', ') || 'N/A'} disabled /></Field>
+            <Field label="Prize"><Input value={totalPrize ? `${totalPrize.amount} ${totalPrize.currency}` : 'N/A'} disabled /></Field>
+            <Field label="Status"><Input value={String(event.eventStatusName)} disabled /></Field>
+            <Field label="Deadline"><Input value={event.eventEndDate || event.registrationEnd} disabled /></Field>
+            <Field label="Teams Registered"><Input value={String(event.teamCount ?? 0)} disabled /></Field>
           </div>
         </Card>
-      </div>
+        </div>
 
-      <div className="space-y-4">
-        <Card className="p-5">
+        <div className="space-y-4">
+          <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Summary</div>
           {[
             { label: "Categories", value: categories.length, icon: <BookOpen size={14} />, color: COLORS.secondary },
@@ -49,7 +52,9 @@ export function OverviewTab({ event, eventCriteria, categories }: Props) {
               <span style={{ fontWeight: 700, fontSize: 15, color: s.color }}>{s.value}</span>
             </div>
           ))}
-        </Card>
+          </Card>
+          <EventTeamsSummaryCard eventId={event.eventId} onOpen={onOpenTeamManagement} />
+        </div>
       </div>
     </div>
   );

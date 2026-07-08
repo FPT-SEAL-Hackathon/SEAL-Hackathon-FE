@@ -166,7 +166,7 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
                   <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{ev.name}</span>
                   <StatusBadge status={ev.status} />
                 </div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {ev.teams ?? 0} teams • {ev.rounds ?? 0} rounds • Deadline: {ev.deadline}</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {ev.teamCount ?? 0} teams • {ev.roundCount ?? 0} rounds • Deadline: {ev.eventEndDate}</div>
               </div>
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>

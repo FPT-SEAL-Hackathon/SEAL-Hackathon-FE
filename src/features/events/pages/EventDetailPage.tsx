@@ -12,7 +12,7 @@
 // import { data } from "react-router";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch } from "lucide-react";
+import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users } from "lucide-react";
 import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
@@ -22,14 +22,16 @@ import { useEventCriteria } from "../hooks/useEventCriteria";
 import { EventResponse } from "../api/eventService";
 import { useCategories } from "../hooks/useCategories";
 import { useRounds } from "../hooks/useRounds";
+import { EventTeamsSection } from "../components/EventTeamsSection";
 
-type TabKey = "overview" | "criteria" | "categories" | "rounds";
+type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "overview",    label: "Overview",    icon: <Calendar size={14} /> },
   { key: "criteria",    label: "Criteria",    icon: <Star size={14} /> },
   { key: "categories",  label: "Categories",  icon: <BookOpen size={14} /> },
   { key: "rounds",      label: "Rounds",      icon: <GitBranch size={14} /> },
+  { key: "teams",       label: "Team Management", icon: <Users size={14} /> },
 ];
 
 export function EventDetailPage({ event, onBack }: { event: EventResponse; onBack: () => void }) {
@@ -98,6 +100,20 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
         });
   }, [roundsByCategory]);
 
+  const [totalPrize, setTotalPrize] = useState<{ amount: number; currency: string } | null>(null);
+
+  useEffect(() => {
+    import("../../awards/api/awardService").then(({ awardService }) => {
+      awardService.getEventPrizeTotal(event.eventId)
+        .then(res => {
+          if (res.totalPrizes && res.totalPrizes.length > 0) {
+            setTotalPrize({ amount: res.totalPrizes[0].totalPrize, currency: res.totalPrizes[0].prizeCurrency });
+          }
+        })
+        .catch(console.error);
+    });
+  }, [event.eventId]);
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -112,11 +128,11 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1">
-            <h1 style={{ fontWeight: 800, fontSize: 22, color: COLORS.textPrimary }}>{event.name}</h1>
-            <StatusBadge status={event.status} />
+            <h1 style={{ fontWeight: 800, fontSize: 22, color: COLORS.textPrimary }}>{event.eventName}</h1>
+            <StatusBadge status={event.eventStatusName as string} />
           </div>
           <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-            {event.category} • {event.teams} teams • Deadline: {event.deadline} • Prize: {event.prize}
+            {categories.length} categories • Deadline: {event.eventEndDate || "Not set"} • Prize: {totalPrize ? `${totalPrize.amount} ${totalPrize.currency}` : "N/A"}
           </div>
         </div>
       </div>
@@ -147,7 +163,12 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
 
       {/* Tab content */}
       {activeTab === "overview" && (
-        <OverviewTab event={event} eventCriteria={eventCriteria} categories={categories} />
+        <OverviewTab
+          event={event}
+          eventCriteria={eventCriteria}
+          categories={categories}
+          onOpenTeamManagement={() => setActiveTab("teams")}
+        />
       )}
       {activeTab === "criteria" && (
         <CriteriaTab
@@ -193,6 +214,9 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
           onAssignJudge={assignJudges}
           onRemoveJudge={removeJudge}
         />
+      )}
+      {activeTab === "teams" && (
+        <EventTeamsSection eventId={event.eventId} categories={categories} />
       )}
     </div>
   );
