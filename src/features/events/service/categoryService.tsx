@@ -57,6 +57,6 @@ export const categoryService = {
     getMentors: (categoryId: string) => api.get<BackendCategoryExpert[]>(`/api/v1/category/experts/${categoryId}`)
         .then(items => items.map(normalizeCategoryMentor)),
 
-    getAllMentors: () => api.get<Mentor[]>("/api/v1/users/experts"),
+    getAllMentors: () => api.get<Mentor[]>("/api/v1/users/mentors"),
    
 }
