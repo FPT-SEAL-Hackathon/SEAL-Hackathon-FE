@@ -11,10 +11,11 @@ interface Props {
   event: EventResponse;
   eventCriteria: EventCriteria[];
   categories: Category[];
+  totalPrize: { amount: number; currency: string } | null;
   onOpenTeamManagement: () => void;
 }
 
-export function OverviewTab({ event, eventCriteria, categories, onOpenTeamManagement }: Props) {
+export function OverviewTab({ event, eventCriteria, categories, totalPrize, onOpenTeamManagement }: Props) {
   //const totalRounds = categories.reduce((s, c) => s + c.rounds.length, 0);
   //const uniqueMentorCount = new Set(categories.flatMap(c => c.mentors.map(m => m.id))).size;
 
