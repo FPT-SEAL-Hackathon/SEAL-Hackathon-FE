@@ -46,7 +46,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "Event Management", key: "events" },
     { icon: "BookOpen", label: "Categories", key: "categories" },
     { icon: "UserCheck", label: "Event Participants", key: "event-participants" },
-    // { icon: "Users", label: "Team Approval", key: "team-approval" },
+    { icon: "Users", label: "Team Approval", key: "team-approval" },
     { icon: "GitBranch", label: "Rounds", key: "rounds" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "Users", label: "Users", key: "users" },
