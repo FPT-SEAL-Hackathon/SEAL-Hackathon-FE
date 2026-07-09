@@ -20,6 +20,29 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
   const [judges, setJudges] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemove = async (judgeId: string, roundJudgeId: string, force = false) => {
+    if (!selectedRoundId || !roundJudgeId) return;
+    setRemovingId(judgeId);
+    setError("");
+    try {
+      await roundService.removeJudge(roundJudgeId, force);
+      // Reload the judges list
+      const updatedJudges = await roundService.getJudges(selectedRoundId);
+      setJudges(updatedJudges);
+    } catch (err: any) {
+      if (err.message && err.message.includes("JUDGE_HAS_SCORES")) {
+        if (window.confirm("Giám khảo này đã có bảng điểm (chấm thi). Việc xoá sẽ làm mất các điểm số đó. Bạn có chắc chắn muốn xoá không?")) {
+          return handleRemove(judgeId, roundJudgeId, true);
+        }
+      } else {
+        setError(err.message || "Failed to remove judge");
+      }
+    } finally {
+      if (!force) setRemovingId(null);
+    }
+  };
 
   useEffect(() => {
     if (apiDashboardRounds && apiDashboardRounds.length > 0) {
@@ -127,23 +150,43 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
               </Card>
             )}
 
-            {!loading && judges.map((j: any) => (
-              <Card key={j.judgeId || j.roundJudgeId || Math.random()} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
-                    {(j.fullName || j.judgeName || "J")[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{j.fullName || j.judgeName}</div>
-                    <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                      <Mail size={12} />
-                      {j.email || j.judgeEmail}
+            {!loading && judges.map((j: any) => {
+              const jId = j.judgeId || j.userId || Math.random().toString();
+              const rjId = j.roundJudgeId; // From backend's RoundJudgeResponse
+              const isRemoving = removingId === jId;
+              
+              return (
+                <Card key={jId} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
+                      {(j.fullName || j.judgeName || "J")[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{j.fullName || j.judgeName}</div>
+                      <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                        <Mail size={12} />
+                        {j.email || j.judgeEmail}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Remove</Button>
-              </Card>
-            ))}
+                  <Button 
+                    variant="danger" 
+                    size="sm" 
+                    icon={isRemoving ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    disabled={isRemoving}
+                    onClick={() => {
+                      if (!rjId) {
+                        setError("Missing roundJudgeId. Please restart your Java Backend so the API changes take effect!");
+                        return;
+                      }
+                      handleRemove(jId, rjId);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import { api } from "@/lib/api/apiClient";
+import { ApiError, api } from "@/lib/api/apiClient";
 import type { ReliabilityMetricResponse } from "@/features/research/api/researchService";
 
 export interface JudgingDTO {
@@ -45,6 +45,35 @@ export interface EvaluationAuditLogDTO {
   createdAt: string;
 }
 
+function isMissingStaticResource(error: unknown) {
+  return error instanceof ApiError
+    && (error.status === 404
+      || error.status === 500
+      || error.details?.exceptionClass === "org.springframework.web.servlet.resource.NoResourceFoundException");
+}
+
+async function getWithFallbacks<T>(paths: string[]) {
+  let lastError: unknown;
+  for (const path of paths) {
+    try {
+      return await api.get<T>(path);
+    } catch (error) {
+      lastError = error;
+      if (!isMissingStaticResource(error)) throw error;
+    }
+  }
+  throw lastError;
+}
+
+async function getOptionalWithFallbacks<T>(paths: string[], emptyValue: T) {
+  try {
+    return await getWithFallbacks<T>(paths);
+  } catch (error) {
+    if (isMissingStaticResource(error)) return emptyValue;
+    throw error;
+  }
+}
+
 export const judgingService = {
   recordScores: (scores: ScoreSubmissionDTO[]) =>
     api.post<void>("/api/v1/judging", scores),
@@ -62,6 +91,10 @@ export const judgingService = {
     if (roundId) params.append("roundId", roundId);
     if (categoryId) params.append("categoryId", categoryId);
     const query = params.toString();
-    return api.get<ReliabilityMetricResponse[]>(`/api/v1/judging/calibration-metrics${query ? `?${query}` : ""}`);
+    const suffix = query ? `?${query}` : "";
+    return getOptionalWithFallbacks<ReliabilityMetricResponse[]>([
+      `/api/v1/research/calibration-metrics${suffix}`,
+      `/api/v1/research/reliability-metrics${suffix}`,
+    ], []);
   },
 };

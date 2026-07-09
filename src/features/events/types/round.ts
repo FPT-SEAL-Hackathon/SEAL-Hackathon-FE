@@ -33,9 +33,12 @@ export interface RoundCriteria {
 
 export interface Judge {
     judgeId: string;
+    userId?: string;
     fullName: string;
     email: string;
     phone: string;
+    role?: string;
+    roleName?: string;
 }
 
 export interface RoundJudge {
