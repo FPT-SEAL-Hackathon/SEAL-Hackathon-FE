@@ -1,11 +1,10 @@
 import { Field, Input, Textarea } from "../../shared/ui/shared";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
-import { Save } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Save, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
 import { useState } from "react";
 import { CategoryRequest } from "../../types/category";
 
 // ── Category form ──────────────────────────────────────────────────────────
-
 interface Props {
     initial: CategoryRequest;
     onSave: (data: CategoryRequest) => void;

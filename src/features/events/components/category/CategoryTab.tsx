@@ -4,7 +4,6 @@ import { Card, Button, COLORS } from "../../../../components/shared/UIComponents
 import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
-import { useCategoryContext } from "../../context/CategoryContext";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
@@ -39,10 +38,6 @@ export function CategoriesTab({
 }: Props) {
 
   const [showForm, setShowForm] = useState(false);
-  const {
-        categories,
-        createCategory,
-  } = useCategoryContext();
 
   return (
     <div className="space-y-4">
@@ -64,8 +59,8 @@ export function CategoriesTab({
             categoryName: "",
             description: "",
             sortOrder: categories.length + 1 }}
-          onSave={async (data) => { 
-            await createCategory(data); 
+          onSave={async data => { 
+            await onAdd(data); 
             setShowForm(false); 
           }}
           onCancel={() => setShowForm(false)}
@@ -102,7 +97,7 @@ export function CategoriesTab({
                 onAssignMentor={onAssignMentors}
                 onRemoveMentor={onRemoveMentor}
                 onUpdate={onUpdate} 
-                onDelete={onDelete}
+                onDelete={onDelete} 
             />
           ))
       )}

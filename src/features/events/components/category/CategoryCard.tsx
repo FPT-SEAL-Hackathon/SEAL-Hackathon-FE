@@ -1,13 +1,11 @@
 import { useState } from "react";
-import { Edit, Trash2, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
+import { PlusCircle, Edit, Trash2, Save, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
 import { AssignModal } from "../../shared/ui/shared";
-import { Category } from "../../types/category";
+import { AssignMentorsRequest, Category, CategoryMentor, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
-import { useCategoryContext } from "../../context/CategoryContext";
-
+import { CategoryRequest } from "../../types/category";
 // ── Category card ──────────────────────────────────────────────────────────
-
 interface Props {
     category: Category;
     availableMentors: Mentor[];
@@ -23,13 +21,17 @@ interface Props {
 }
 export function CategoryCard({
   category,
+  availableMentors,
+  mentors,
+  loadCategoryMentors,
+  onUpdate, 
+  onDelete,
+  onAssignMentor,
+  onRemoveMentor,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showMentorModal, setShowMentorModal] = useState(false);
-  const {
-    updateCategory,
-    deleteCategory,
 
   const handleAssignMentor = async (mentor: Mentor) => {
     console.log(mentor);
@@ -51,7 +53,7 @@ export function CategoryCard({
             sortOrder: category.sortOrder
         }}
         onSave={ async data => { 
-            await updateCategory(
+            await onUpdate(
                 category.categoryId,
                 data
             ); 
@@ -70,16 +72,8 @@ export function CategoryCard({
           title="Assign Mentors"
           allPeople={availableMentors}
           assignedIds={mentors.map(m => m.mentorId)}
-          onAssign={(mentor) => {
-            console.log(mentor.id);
-            assignMentors(
-              category.categoryId, {
-              mentorIds:[ mentor.id]
-            })
-          }
-            
-          }
-          onRemove={removeMentor}
+          onAssign={handleAssignMentor}
+          onRemove={handleRemoveMentor}
           onClose={() => setShowMentorModal(false)}
         />
       )}
@@ -104,7 +98,7 @@ export function CategoryCard({
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="ghost" size="sm" icon={<Users size={12} />} onClick={() => setShowMentorModal(true)}>Mentors</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => deleteCategory(category.categoryId)}>Delete</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => onDelete(category.categoryId)}>Delete</Button>
           </div>
           {expanded
             ? <ChevronDown size={15} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />

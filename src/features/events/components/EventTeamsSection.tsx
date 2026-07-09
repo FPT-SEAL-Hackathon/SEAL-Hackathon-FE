@@ -19,11 +19,10 @@ import {
   type TeamEligibilityMemberResponse,
 } from "@/features/teams/api/teamService";
 import type { Category } from "@/features/events/types/category";
-import { useCategoryContext } from "../context/CategoryContext";
 
 interface EventTeamsSectionProps {
   eventId: string;
-  //categories: Category[];
+  categories: Category[];
 }
 
 export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; onOpen: () => void }) {
@@ -86,7 +85,7 @@ export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; on
   );
 }
 
-export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
+export function EventTeamsSection({ eventId, categories }: EventTeamsSectionProps) {
   const [teams, setTeams] = useState<TeamEligibilityReviewResponse[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamEligibilityReviewResponse | null>(null);
   const [disqualifyTarget, setDisqualifyTarget] = useState<TeamEligibilityReviewResponse | null>(null);
@@ -96,7 +95,6 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
   const [actionTeamId, setActionTeamId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const { categories } = useCategoryContext();
 
   const loadTeams = useCallback(async () => {
     setLoading(true);
