@@ -1,42 +1,24 @@
 import { useState } from "react";
 import { PlusCircle, BookOpen } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
-//import { allMentors, emptyCategory } from "./types";
-import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
+import { useCategoryContext } from "../../context/CategoryContext";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
-interface Props {
-  categories: Category[];
-  availableMentors: Mentor[];
-  categoryMentors: Record<string, CategoryMentor[]>; 
-  loadCategoryMentors: (categoryId: string) => Promise<void>;
-  onAdd: (data: CategoryRequest) => Promise<void>;
-  onUpdate: (
-    id: string,
-    data: CategoryRequest
-  ) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  onAssignMentors: (
-    categoryId: string,
-    mentorsIds: AssignMentorsRequest
-  ) => Promise<void>;
-  onRemoveMentor: (categoryId: string, mentorId: string) => Promise<void>;
-}
-
-export function CategoriesTab({ 
-    categories, 
+export function CategoriesTab() {
+  const {
+    categories,
     availableMentors,
     categoryMentors,
     loadCategoryMentors,
-    onAdd, 
-    onUpdate, 
-    onDelete ,
-    onAssignMentors,
-    onRemoveMentor
-}: Props) {
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    assignMentors,
+    removeMentor,
+  } = useCategoryContext();
 
   const [showForm, setShowForm] = useState(false);
 
@@ -59,10 +41,11 @@ export function CategoriesTab({
           initial={{
             categoryName: "",
             description: "",
-            sortOrder: categories.length + 1 }}
-          onSave={async (data) => { 
-            await onAdd(data); 
-            setShowForm(false); 
+            sortOrder: categories.length + 1,
+          }}
+          onSave={async (data) => {
+            await createCategory(data);
+            setShowForm(false);
           }}
           onCancel={() => setShowForm(false)}
         />
@@ -89,18 +72,16 @@ export function CategoriesTab({
           .slice()
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map(category => (
-            <CategoryCard 
-                key={category.categoryId} 
-                category={category} 
-                availableMentors={availableMentors} 
-                mentors={
-                    categoryMentors[category.categoryId] ?? []
-                }
-                loadCategoryMentors={loadCategoryMentors}
-                onAssignMentor={onAssignMentors}
-                onRemoveMentor={onRemoveMentor}
-                onUpdate={onUpdate} 
-                onDelete={onDelete}
+            <CategoryCard
+              key={category.categoryId}
+              category={category}
+              availableMentors={availableMentors}
+              mentors={categoryMentors[category.categoryId] ?? []}
+              loadCategoryMentors={loadCategoryMentors}
+              onAssignMentor={assignMentors}
+              onRemoveMentor={removeMentor}
+              onUpdate={updateCategory}
+              onDelete={deleteCategory}
             />
           ))
       )}

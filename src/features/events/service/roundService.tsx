@@ -50,6 +50,6 @@ export const roundService = {
         body
     ),
     getJudgesByRound: (roundId: string) => api.get<RoundJudge[]>(`/api/v1/round/judges/${roundId}`),
-    removeJudge: (roundJudgeId: string) => api.delete<void>(`/api/v1/round/judge/${roundJudgeId}`),
+    removeJudge: (roundJudgeId: string, force?: boolean) => api.delete<void>(`/api/v1/round/judge/${roundJudgeId}${force ? "?force=true" : ""}`),
     getAllJudges: () => api.get<Judge[]>("/api/v1/users/judges"),
 }

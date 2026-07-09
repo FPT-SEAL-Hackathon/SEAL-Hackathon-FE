@@ -46,7 +46,7 @@ export function useCategories(eventId: string) {
         categoryId: string,
         body: AssignMentorsRequest
     ) => {
-        await categoryService.assignMentor(categoryId, mentorsIds);
+        await categoryService.assignMentor(categoryId, body);
         await loadCategoryMentors(categoryId);
     };
 
