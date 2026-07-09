@@ -23,7 +23,7 @@ interface Props {
     categoryId: string,
     mentorsIds: AssignMentorsRequest
   ) => Promise<void>;
-  onRemoveMentor: () => Promise<void>;
+  onRemoveMentor: (categoryId: string, mentorId: string) => Promise<void>;
 }
 
 export function CategoriesTab({ 

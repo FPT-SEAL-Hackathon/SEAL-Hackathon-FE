@@ -125,4 +125,6 @@ export const categoryService = {
     unwrapList(await api.get<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
       `/api/v1/category/experts/${categoryId}`,
     )).map(normalizeCategoryMentor),
+  removeMentor: (categoryId: string, mentorId: string) =>
+    api.delete(`/api/v1/category/expert/${categoryId}/${mentorId}`),
 };

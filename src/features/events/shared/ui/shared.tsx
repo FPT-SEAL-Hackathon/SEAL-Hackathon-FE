@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Upload, X } from "lucide-react";
+import { Upload, X, Search } from "lucide-react";
 //import { Card, Button, COLORS } from "/../../shared/UIComponents";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents"
 import type { EventCriteria } from "../../types/eventCriteria";
@@ -102,29 +102,64 @@ export function AssignModal<T extends { id: string; fullName: string; email: str
   onRemove: (id: string) => void;
   onClose: () => void;
 }) {
+  const [search, setSearch] = useState("");
   const assignedIdsSet = new Set(assignedIds);
+
+  const filtered = allPeople.filter(p => {
+    const q = search.toLowerCase();
+    return (
+      (p.fullName ?? "").toLowerCase().includes(q) ||
+      (p.email ?? "").toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)", zIndex: 100 }}>
-      <Card className="p-6 w-full max-w-md" style={{ maxHeight: "80vh", overflowY: "auto" }}>
+      <Card className="p-6 w-full max-w-md" style={{ maxHeight: "82vh", overflowY: "auto" }}>
         <div className="flex items-center justify-between mb-4">
           <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{title}</span>
           <button onClick={onClose}><X size={16} style={{ color: COLORS.textSecondary }} /></button>
         </div>
+
+        {/* Search bar */}
+        <div className="relative mb-3">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: COLORS.textSecondary }} />
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 rounded-xl outline-none"
+            style={{
+              fontSize: 13,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.bg,
+              color: COLORS.textPrimary,
+            }}
+          />
+        </div>
+
         <div className="space-y-2">
-          {allPeople.map(p => {
-            const isAssigned = assignedIdsSet.has(p.id);
-            return (
-              <div key={p.id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--surface-bg)" }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</div>
-                  <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{p.email}</div>
+          {filtered.length === 0 ? (
+            <div className="py-6 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+              No experts found
+            </div>
+          ) : (
+            filtered.map(p => {
+              const isAssigned = assignedIdsSet.has(p.id);
+              return (
+                <div key={p.id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--surface-bg)" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</div>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{p.email}</div>
+                  </div>
+                  {isAssigned
+                    ? <Button variant="danger" size="sm" onClick={() => onRemove(p.id)}>Remove</Button>
+                    : <Button variant="primary" size="sm" onClick={() => onAssign(p)}>Assign</Button>}
                 </div>
-                {isAssigned
-                  ? <Button variant="danger" size="sm" onClick={() => onRemove(p.id)}>Remove</Button>
-                  : <Button variant="primary" size="sm" onClick={() => onAssign(p)}>Assign</Button>}
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
         <div className="mt-4">
           <Button variant="outline" size="sm" onClick={onClose}>Done</Button>

@@ -46,17 +46,33 @@ export const categoryService = {
 
     delete: (id: string) => api.delete<void>(`/api/v1/category/${id}`),
 
+    // Sends { expertIds: [...] } – the backend expects this field name
     assignMentor: (
         categoryId: string,
         body: AssignMentorsRequest
-    ) => api.post<BackendCategoryExpert>(
+    ) => api.post<BackendCategoryExpert | BackendCategoryExpert[]>(
         `/api/v1/category/expert/${categoryId}`,
         { expertIds: body.expertIds ?? body.mentorIds ?? [] }
-    ).then(normalizeCategoryMentor),
+    ).then(res => {
+        const items = Array.isArray(res) ? res : [res];
+        return items.map(normalizeCategoryMentor);
+    }),
 
     getMentors: (categoryId: string) => api.get<BackendCategoryExpert[]>(`/api/v1/category/experts/${categoryId}`)
-        .then(items => items.map(normalizeCategoryMentor)),
+        .then(items => (Array.isArray(items) ? items : []).map(normalizeCategoryMentor)),
 
-    getAllMentors: () => api.get<Mentor[]>("/api/v1/users/experts"),
-   
-}
+    removeMentor: (categoryId: string, mentorId: string) =>
+        api.delete(`/api/v1/category/expert/${categoryId}/${mentorId}`),
+
+    // Normalises the response so `id` is always populated from `userId`
+    getAllMentors: async (): Promise<Mentor[]> => {
+        const raw = await api.get<any[]>("/api/v1/users/mentors");
+        const list = Array.isArray(raw) ? raw : [];
+        return list.map(u => ({
+            id: String(u.userId ?? u.id ?? ""),
+            fullName: u.fullName ?? u.name ?? u.email ?? "Unknown",
+            email: u.email ?? "",
+            phone: u.phone ?? "",
+        }));
+    },
+};

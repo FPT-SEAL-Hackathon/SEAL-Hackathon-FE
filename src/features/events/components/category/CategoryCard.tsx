@@ -17,7 +17,7 @@ interface Props {
         categoryId: string,
         mentorIds: AssignMentorsRequest
     ) => Promise<void>;
-    onRemoveMentor: () => Promise<void>;
+    onRemoveMentor: (categoryId: string, mentorId: string) => Promise<void>;
 }
 export function CategoryCard({
   category,
@@ -38,9 +38,11 @@ export function CategoryCard({
     await onAssignMentor(category.categoryId, {
         mentorIds: [mentor.id]
     });
-  }
+  };
 
-  const handleRemoveMentor = async () => {};
+  const handleRemoveMentor = async (mentorId: string) => {
+    await onRemoveMentor(category.categoryId, mentorId);
+  };
 
   if (editing) {
     return (
@@ -132,7 +134,7 @@ export function CategoryCard({
                       style={{ background: `${COLORS.secondary}10`, border: `1px solid ${COLORS.secondary}25` }}
                     >
                       <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.secondary }}>{m.fullName}</span>
-                      <button onClick={() => handleRemoveMentor()} style={{ color: COLORS.secondary }}>
+                      <button onClick={() => handleRemoveMentor(m.mentorId)} style={{ color: COLORS.secondary }}>
                         <X size={11} />
                       </button>
                     </div>
