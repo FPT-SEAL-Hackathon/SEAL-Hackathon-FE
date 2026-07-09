@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { PlusCircle, Edit, Trash2, Save, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
+import { PlusCircle, BookOpen } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
-//import { allMentors, emptyCategory } from "./types";
 import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
@@ -33,7 +32,7 @@ export function CategoriesTab({
     loadCategoryMentors,
     onAdd, 
     onUpdate, 
-    onDelete ,
+    onDelete,
     onAssignMentors,
     onRemoveMentor
 }: Props) {
@@ -93,9 +92,7 @@ export function CategoriesTab({
                 key={category.categoryId} 
                 category={category} 
                 availableMentors={availableMentors} 
-                mentors={
-                    categoryMentors[category.categoryId] ?? []
-                }
+                mentors={categoryMentors[category.categoryId] ?? []}
                 loadCategoryMentors={loadCategoryMentors}
                 onAssignMentor={onAssignMentors}
                 onRemoveMentor={onRemoveMentor}
