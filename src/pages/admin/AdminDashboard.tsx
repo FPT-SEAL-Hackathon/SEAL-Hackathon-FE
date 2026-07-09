@@ -40,6 +40,7 @@ import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
 import { COLORS } from "@/components/shared/UIComponents";
 import { EventDetailPage } from "@/features/events/pages/EventDetailPage";
+import { CriteriaTemplateProvider } from "@/features/criteriaTemplates/context/CriteriaTemplateContext";
 
 // ===== DATA =====
 
@@ -943,7 +944,11 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "team-approval": return <AdminTeamApprovalView context={viewContext} />;
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
-      case "criteria": return <AdminCriteriaView context={viewContext} />;
+      case "criteria": return (
+        <CriteriaTemplateProvider>
+          <AdminCriteriaView context={viewContext}/>
+        </CriteriaTemplateProvider>
+      );
       case "users": return <AdminUsersView />;
       case "assignments": return <AdminAssignmentsView context={viewContext} />;
       case "assign-mentors": return <AdminMentorAssignmentsView context={viewContext} />;
