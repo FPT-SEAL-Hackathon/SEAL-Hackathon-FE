@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Upload, X } from "lucide-react";
-//import { Card, Button, COLORS } from "/../../shared/UIComponents";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents"
 import type { EventCriteria } from "../../types/eventCriteria";
 import { ImportEventCriteriaRequest, RoundCriteria, UpdateRoundCriterionRequest } from "../../types/round";

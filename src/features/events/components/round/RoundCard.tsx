@@ -1,76 +1,53 @@
 import { useState } from "react";
-import {
-  PlusCircle, Edit, Trash2, Save, X,
-  ChevronDown, ChevronRight, GitBranch, UserCheck, CheckCircle,
-} from "lucide-react";
+import { Edit, Trash2, X, ChevronDown, ChevronRight, GitBranch, UserCheck } from "lucide-react";
 import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared/UIComponents";
-import { Field, Input, Textarea, Select, AssignModal, CriteriaImportPanel } from "../../shared/ui/shared";
-//import { allJudges, emptyRound, roundStatuses } from "./types";
-//import type { Category, Round, EventCriteria, Judge, RoundCriteria } from "./types";
-import type { Category } from "../../types/category";
+import { CriteriaImportPanel } from "../../shared/ui/shared";
 import { RoundForm } from "./RoundForm";
-import { AssignJudgesRequest, ImportEventCriteriaRequest, Judge, Round, RoundCriteria, RoundJudge, RoundRequest, UpdateRoundCriterionRequest } from "../../types/round";
-import { EventCriteria } from "../../types/eventCriteria";
+import { Round } from "../../types/round";
 import { getRoundStatus } from "../../utils/roundUtils";
+import { useRoundContext } from "../../context/RoundContext";
+import { AssignJudgesModal } from "./AssignJudgesModal";
 
 interface Props {
     round: Round;
-    eventCriteria: EventCriteria[];
-    roundCriteria: RoundCriteria[];
-    judges: RoundJudge[];
-    availableJudges: Judge[];
-
-    onUpdate: (
-        //id: string,
-        data: RoundRequest
-    ) => Promise<void>;
-    onDelete: (
-        //id: string
-    ) => Promise<void>;
-    //Round criteria
-    onImportEventCriteria: (
-      //roundId: string,
-      eventCriteriaIds: ImportEventCriteriaRequest
-    ) => Promise<void>;
-    onUpdateRoundCriterion: (
-      //roundId: string,
-      roundCriterionId: string,
-      body: UpdateRoundCriterionRequest
-    ) => Promise<void>;
-    onRemoveRoundCriterion: (
-      //roundId: string,
-      roundCriterionId: string
-    ) => Promise<void>;
-
-    onAssignJudge: (
-        //roundId: string,
-        judgeIds: AssignJudgesRequest
-    ) => Promise<void>;
-    onRemoveJudge: (
-      //roundId: string,
-      roundJudgeId: string
-    ) => Promise<void>;
 }
 export function RoundCard({
-    round, 
-    eventCriteria, 
-    roundCriteria,
-    judges,
-    availableJudges,
-    onUpdate, 
-    onDelete,
-    
-    onImportEventCriteria,
-    onUpdateRoundCriterion,
-    onRemoveRoundCriterion,
-
-    onAssignJudge,
-    onRemoveJudge
+  round,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showJudgeModal, setShowJudgeModal] = useState(false);
   const roundStatus = getRoundStatus(round.roundStatusId);
+
+  const {
+    eventCriteria,
+
+    roundCriteria, 
+
+    roundJudges,
+
+    availableJudges,
+
+    updateRound,
+
+    deleteRound,
+
+    assignJudges,
+
+    removeJudge,
+
+    importEventCriteria,
+
+    updateRoundCriterion,
+
+    removeRoundCriterion,
+
+    loadRoundCriteria,
+    loadRoundJudges
+  } = useRoundContext();
+
+  const judges = roundJudges[round.roundId] ?? [];
+  const importedCriteria = roundCriteria[round.roundId] ?? [];
 
   if (editing) {
     return (
@@ -91,8 +68,9 @@ export function RoundCard({
           isCalibrationRound: round.isCalibrationRound,
         }}
         onSave={async data => {
-            await onUpdate(
-                //round.roundId,
+            await updateRound(
+                round.categoryId,
+                round.roundId,
                 data
             );
             setEditing(false);
@@ -103,46 +81,24 @@ export function RoundCard({
     );
   }
 
-  // Adapt round criteria to EventCriteria shape for CriteriaImportPanel
-  // const roundCriteriaAsEC: EventCriteria[] = round.criteria.map(rc => ({
-  //   id: rc.id,
-  //   templateFieldId: rc.eventCriteriaId,
-  //   name: rc.name,
-  //   weight: rc.weight,
-  //   maxScore: rc.maxScore,
-  // }));
-
-  // const availableForRound = eventCriteria.map(ec => ({
-  //   id: ec.id,
-  //   name: ec.name,
-  //   defaultWeight: ec.weight,
-  //   defaultMaxScore: ec.maxScore,
-  // }));
-
-  // const availableEventCriteria = eventCriteria.filter(
-  //   ec => !roundCriteria.some(
-  //     rc => rc.eventCriterionId === ec.eventCriterionId
-  //   )
-  // );
-
   return (
     <>
       {showJudgeModal && (
-        <AssignModal
+        <AssignJudgesModal
           title="Assign Judges"
           allPeople={availableJudges}
           assignedIds={judges.map(j => j.judgeId)}
           onAssign={judge => 
-            onAssignJudge(
-              //round.roundId,
+            assignJudges(
+              round.roundId,
               {
-                judgeIds: [judge.id]
+                judgeIds: [judge.judgeId]
               }
             )
           }
           onRemove={roundJudgeId => 
-            onRemoveJudge(
-              //round.roundId,
+            removeJudge(
+              round.roundId,
               roundJudgeId
             )
           }
@@ -175,13 +131,13 @@ export function RoundCard({
               )}
             </div>
             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
-              Order #{round.roundOrder} • {roundCriteria.length} criteria • {judges.length} judges
+              Order #{round.roundOrder} • {importedCriteria.length} criteria • {judges.length} judges
             </div>
           </div>
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="ghost" size="sm" icon={<UserCheck size={12} />} onClick={() => setShowJudgeModal(true)}>Judges</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => onDelete(/*round.roundId*/)}>Delete</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => deleteRound(round.categoryId, round.roundId)}>Delete</Button>
           </div>
           {expanded
             ? <ChevronDown size={15} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />
@@ -224,25 +180,25 @@ export function RoundCard({
                 title="Round Criteria"
                 sourceLabel="Event Criteria"
                 availableCriteria={eventCriteria}
-                roundCriteria={roundCriteria}
+                roundCriteria={importedCriteria}
                 onImport={(body) => 
-                  onImportEventCriteria(
-                    //round.roundId,
+                  importEventCriteria(
+                    round.roundId,
                     body
                   )
                 }
                 onUpdateRoundCriteria={
                   (roundCriterionId, body) => 
-                    onUpdateRoundCriterion(
-                      //round.roundId,
+                    updateRoundCriterion(
+                      round.roundId,
                       roundCriterionId,
                       body
                     )
                 }
                 onRemoveRoundCriteria={
                   (roundCriterionId) => 
-                    onRemoveRoundCriterion(
-                      //round.roundId,
+                    removeRoundCriterion(
+                      round.roundId,
                       roundCriterionId
                     )
                 }
@@ -273,7 +229,7 @@ export function RoundCard({
                       style={{ background: `${COLORS.warning}10`, border: `1px solid ${COLORS.warning}25` }}
                     >
                       <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309" }}>{j.fullName}</span>
-                      <button onClick={() => onRemoveJudge(/*round.roundId,*/ j.roundJudgeId)} style={{ color: COLORS.warning }}>
+                      <button onClick={() => removeJudge(round.roundId, j.roundJudgeId)} style={{ color: COLORS.warning }}>
                         <X size={11} />
                       </button>
                     </div>
