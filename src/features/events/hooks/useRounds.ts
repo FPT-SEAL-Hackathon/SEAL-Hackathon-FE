@@ -2,15 +2,25 @@ import { useEffect, useState } from "react";
 import { ImportEventCriteriaRequest, Round, RoundCriteria, RoundRequest, UpdateRoundCriterionRequest, RoundJudge, AssignJudgesRequest, Judge } from "../types/round";
 import { roundService } from "../service/roundService";
 import { formatDateTime } from "../utils/date";
+import { eventCriteriaService } from "../service/eventCriteriaService";
+import { EventCriteria } from "../types/eventCriteria";
+import { Category } from "../types/category";
+import { categoryService } from "../service/categoryService";
 
 
 export function useRounds(eventId: string) {
     //const [rounds, setRounds] = useState<Round[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [roundsByCategory, setRoundsByCategory] = useState<Record<string, Round[]>>({});
+    const [eventCriteria, setEventCriteria] = useState<EventCriteria[]>([]);
     const [roundCriteria, setRoundCriteria] = useState<Record<string, RoundCriteria[]>>({});
     const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
     const [roundJudges, setRoundJudges] = useState<Record<string, RoundJudge[]>>({});
 
+    const loadCategories = async () => {
+        const data = await categoryService.getByEvent(eventId);
+        setCategories(data);
+    }
 
     const loadRounds = async (categoryId: string) => {
         const data = await roundService.getByCategory(categoryId);
@@ -69,6 +79,11 @@ export function useRounds(eventId: string) {
             ...prev,
             [roundId]: data,
         }));
+    }
+
+    const loadEventCriteria = async () => {
+        const data = await eventCriteriaService.getCriteriaByEvent(eventId);
+        setEventCriteria(data);
     }
 
     const importEventCriteria = async (
@@ -138,15 +153,12 @@ export function useRounds(eventId: string) {
         roundId: string,
         body: AssignJudgesRequest
     ) => {
-        const data = await roundService.assignJudges(
+        await roundService.assignJudges(
             roundId,
             body
         );
 
-        setRoundJudges(prev => ({
-            ...prev,
-            [roundId]: data
-        }));
+        await loadRoundJudges(roundId);
     };
 
     const removeJudge = async (
@@ -162,13 +174,36 @@ export function useRounds(eventId: string) {
         }));
     };
 
+    useEffect(() => {
+        loadCategories();
+        loadEventCriteria();
+        loadAvailableJudges();
+    }, [eventId]);
+
+    useEffect(() => {
+        categories.forEach(category => {
+            loadRounds(category.categoryId);
+        });
+    }, [categories]);
+
+    useEffect(() => {
+        Object.values(roundsByCategory)
+            .flat()
+            .forEach(round => {
+                loadRoundCriteria(round.roundId);
+                loadRoundJudges(round.roundId);
+            });
+    }, [roundsByCategory]);
+
     return {
         roundsByCategory,
+        eventCriteria,
         roundCriteria,
         availableJudges,
         roundJudges,
 
         loadRounds,
+        loadEventCriteria,
         loadRoundCriteria,
         loadAvailableJudges,
         loadRoundJudges,
