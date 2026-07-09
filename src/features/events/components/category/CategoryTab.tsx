@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { PlusCircle, Edit, Trash2, Save, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
+import { PlusCircle, BookOpen } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
 //import { allMentors, emptyCategory } from "./types";
 import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
-import { useCategoryContext } from "../../context/CategoryContext";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
@@ -40,10 +39,6 @@ export function CategoriesTab({
 }: Props) {
 
   const [showForm, setShowForm] = useState(false);
-  const {
-        categories,
-        createCategory,
-  } = useCategoryContext();
 
   return (
     <div className="space-y-4">
@@ -66,7 +61,7 @@ export function CategoriesTab({
             description: "",
             sortOrder: categories.length + 1 }}
           onSave={async (data) => { 
-            await createCategory(data); 
+            await onAdd(data); 
             setShowForm(false); 
           }}
           onCancel={() => setShowForm(false)}
