@@ -1,89 +1,41 @@
 import { useState } from "react";
-import {
-  PlusCircle, Edit, Trash2, Save, X,
-  ChevronDown, ChevronRight, GitBranch, UserCheck, CheckCircle,
-} from "lucide-react";
-import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared/UIComponents";
-import { Field, Input, Textarea, Select, AssignModal, CriteriaImportPanel } from "../../shared/ui/shared";
-//import { allJudges, emptyRound, roundStatuses } from "./types";
-//import type { Category, Round, EventCriteria, Judge, RoundCriteria } from "./types";
-import type { Category } from "../../types/category";
-import { EventCriteria } from "../../types/eventCriteria";
-import { AssignJudgesRequest, ImportEventCriteriaRequest, Judge, Round, RoundCriteria, RoundJudge, RoundRequest, UpdateRoundCriterionRequest } from "../../types/round";
+import { PlusCircle, GitBranch } from "lucide-react";
+import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
 import { RoundForm } from "./RoundForm";
 import { RoundCard } from "./RoundCard";
 import { ROUND_STATUSES } from "../../constants/roundStatus";
+import { useCategoryContext } from "../../context/CategoryContext";
+import { useRoundContext } from "../../context/RoundContext";
 
-interface Props {
-  categories: Category[];
-  eventCriteria: EventCriteria[];
-  roundsByCategory: Record<string, Round[]>;
 
-  roundCriteria: Record<string, RoundCriteria[]>;
-
-  roundJudges: Record<string, RoundJudge[]>;
-  availableJudges: Judge[];
-
-  onCreateRound: (
-    categoryId: string,
-    body: RoundRequest
-  ) => Promise<void>;
-
-  onUpdateRound: (
-    categoryId: string,
-    roundId: string,
-    body: RoundRequest
-  ) => Promise<void>;
-  onDeleteRound: (
-    categoryId: string,
-    roundId: string
-  ) => Promise<void>;
-
-  onAssignJudge: (
-    roundId: string,
-    body: AssignJudgesRequest
-  ) => Promise<void>;
-  onRemoveJudge: (
-    roundId: string,
-    roundJudgeId: string
-  ) => Promise<void>;
-
-  onImportEventCriteria: (
-    roundId: string,
-    body: ImportEventCriteriaRequest
-  ) => Promise<void>;
-  onUpdateRoundCriterion: (
-    roundId: string,
-    roundCriterionId: string,
-    body: UpdateRoundCriterionRequest
-  ) => Promise<void>;
-  onRemoveRoundCriterion: (
-    roundId: string,
-    roundCriterionId: string
-  ) => Promise<void>;
-}
-
-export function RoundsTab({ 
-  categories, 
-  eventCriteria, 
-  roundsByCategory,
-  roundCriteria,
-  roundJudges, 
-  availableJudges,
-
-  onCreateRound,
-  onUpdateRound,
-  onDeleteRound,
-
-  onImportEventCriteria,
-  onUpdateRoundCriterion,
-  onRemoveRoundCriterion,
-
-  onAssignJudge,
-  onRemoveJudge,
-}: Props) {
+export function RoundsTab() {
 
   const [showAddRound, setShowAddRound] = useState<string | null>(null); // categoryId
+  const { categories } = useCategoryContext();
+  const {
+    roundsByCategory,
+    createRound,
+    updateRound,
+    deleteRound,
+
+    eventCriteria,
+
+    roundCriteria,
+
+    roundJudges,
+
+    availableJudges,
+
+    importEventCriteria,
+
+    updateRoundCriterion,
+
+    removeRoundCriterion,
+
+    assignJudges,
+
+    removeJudge,
+  } = useRoundContext();
 
   if (categories.length === 0) {
     return (
@@ -156,7 +108,7 @@ export function RoundsTab({
                     isCalibrationRound: false,
                 }}
                 onSave={async data => {
-                    await onCreateRound(
+                    await createRound(
                         cat.categoryId,
                         data
                     );
@@ -180,58 +132,7 @@ export function RoundsTab({
                 .map(round => (
                   <RoundCard
                     key={round.roundId}
-                    round={round}
-                    eventCriteria={eventCriteria}
-                    roundCriteria={roundCriteria[round.roundId] ?? []}
-                    judges={roundJudges[round.roundId] ?? []}
-                    availableJudges={availableJudges}
-                    //onUpdate={(data) => onUpdateRound(cat.categoryId ,round.roundId, data)}
-                    onUpdate={async (data) => 
-                      await onUpdateRound(
-                        cat.categoryId,
-                        round.roundId,
-                        data
-                      )
-                    }
-                    onDelete={async () => 
-                      await onDeleteRound(
-                        cat.categoryId,
-                        round.roundId
-                      )
-                    }
-
-                    onImportEventCriteria={async (body) => 
-                      await onImportEventCriteria(
-                        round.roundId,
-                        body
-                      )
-                    }
-                    onUpdateRoundCriterion={(roundCriterionId, body) => 
-                      onUpdateRoundCriterion(
-                        round.roundId,
-                        roundCriterionId,
-                        body
-                      )
-                    }
-                    onRemoveRoundCriterion={(roundCriterionId) => 
-                      onRemoveRoundCriterion(
-                        round.roundId,
-                        roundCriterionId
-                      )
-                    }
-
-                    onAssignJudge={(body) => 
-                      onAssignJudge(
-                        round.roundId,
-                        body
-                      )
-                    }
-                    onRemoveJudge={(roundJudgeId) =>
-                      onRemoveJudge(
-                        round.roundId,
-                        roundJudgeId
-                      )
-                    }
+                    round={round}                  
                   />
                 ))
             )}

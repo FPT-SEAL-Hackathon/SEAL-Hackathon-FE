@@ -751,7 +751,7 @@ export function TeamApiPanel({
             <div className="mt-5">
               {!loading.events && approvedEvents.length === 0 && (
                 <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 12 }}>
-                  Register for an event and wait for organizer approval before creating a team.
+                  No events are currently open for registration.
                 </div>
               )}
               <Button
@@ -823,7 +823,7 @@ export function TeamApiPanel({
             </div>
             {!loading.events && approvedEvents.length === 0 && (
               <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>
-                Register for an event and wait for organizer approval before joining a team.
+                No events are currently open for registration.
               </div>
             )}
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end mt-4">
@@ -1097,9 +1097,31 @@ export function TeamApiPanel({
           />
         </Card>
 
-        {isLeader && (
+        {isLeader && (() => {
+          const teamEvent = events.find(event => event.eventId === selectedTeam.eventId);
+          const activeMemberCount = selectedTeam.members.filter(member => member.active).length;
+          const minTeamSize = teamEvent?.minTeamSize;
+          const maxTeamSize = teamEvent?.maxTeamSize;
+          const sizeOk = (!minTeamSize || activeMemberCount >= minTeamSize)
+            && (!maxTeamSize || activeMemberCount <= maxTeamSize);
+          const sizeLabel = `${activeMemberCount} / ${minTeamSize ?? "?"}–${maxTeamSize ?? "?"}`;
+
+          return (
           <Card className="p-5">
-            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 12 }}>Leader Actions</div>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+              <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>Leader Actions</div>
+              <span
+                className="px-2 py-1 rounded-lg"
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  background: sizeOk ? `${COLORS.success}12` : `${COLORS.error}12`,
+                  color: sizeOk ? COLORS.success : COLORS.error,
+                }}
+              >
+                Members: {sizeLabel}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-3">
               <Button
                 variant="outline"
@@ -1137,7 +1159,7 @@ export function TeamApiPanel({
                 variant="primary"
                 size="sm"
                 icon={loading.registerEvent ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={loading.registerEvent || !canEditRoster}
+                disabled={loading.registerEvent || !canEditRoster || !sizeOk}
                 onClick={registerTeamEvent}
               >
                 {loading.registerEvent ? "Registering..." : "Register Team for Event"}
@@ -1152,9 +1174,15 @@ export function TeamApiPanel({
                 {loading.withdrawEvent ? "Withdrawing..." : "Withdraw Registration"}
               </Button>
             </div>
+            {canEditRoster && !sizeOk && (
+              <div className="mt-3 rounded-xl px-3 py-2" style={{ background: `${COLORS.error}08`, color: COLORS.error, fontSize: 12.5 }}>
+                Team must have {minTeamSize ?? "?"}–{maxTeamSize ?? "?"} members to register for this event.
+              </div>
+            )}
             {renderLeaderActionPanel()}
           </Card>
-        )}
+          );
+        })()}
       </div>
     );
   }
@@ -1285,7 +1313,7 @@ export function TeamApiPanel({
           </div>
           {!loading.events && approvedEvents.length === 0 && (
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 12 }}>
-              Register for an event and wait for organizer approval before creating a team.
+              No events are currently open for registration.
             </div>
           )}
         </Card>
