@@ -1,7 +1,7 @@
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
 import { X } from "lucide-react";
 
-export function AssignJudgesModal<T extends { judgeId: string; fullName: string; email: string; phone: string }>({
+export function AssignJudgesModal<T extends { judgeId: string; fullName: string; email: string; phone: string; roleName?: string }>({
   title, allPeople, assignedIds, onAssign, onClose,
 }: {
   title: string;
@@ -46,7 +46,9 @@ export function AssignJudgesModal<T extends { judgeId: string; fullName: string;
                 >
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</div>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{p.email}</div>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                      {p.email}{p.roleName ? ` · ${p.roleName}` : ""}
+                    </div>
                   </div>
                   {isAssigned
                     ? (

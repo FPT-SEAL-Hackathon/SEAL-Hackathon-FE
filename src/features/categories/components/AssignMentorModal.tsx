@@ -10,6 +10,16 @@ interface AssignMentorModalProps {
   onAssigned: () => void;
 }
 
+const ASSIGNABLE_ROLES = new Set(["MENTOR", "EXPERT", "INTERNAL_JUDGE", "GUEST_JUDGE"]);
+
+function normalizeRole(role?: string | null) {
+  return String(role ?? "").toUpperCase().replace(/^ROLE_/, "").replace(/[\s-]+/g, "_");
+}
+
+function isAssignableRole(user: { role?: string | null; roleName?: string | null }) {
+  return ASSIGNABLE_ROLES.has(normalizeRole(user.role)) || ASSIGNABLE_ROLES.has(normalizeRole(user.roleName));
+}
+
 export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMentorModalProps) {
   // --- State ---
   const [allMentors, setAllMentors] = useState<any[]>([]);
@@ -39,8 +49,11 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
   useEffect(() => {
     setLoadingAll(true);
     userService
-      .getUsers({ role: "Expert", size: 200 })
-      .then((res) => setAllMentors(res.content ?? []))
+      .getMentors()
+      .then((res) => {
+        const mentors = (res.content ?? []).filter(isAssignableRole);
+        setAllMentors(mentors);
+      })
       .catch(() => setError("Failed to load mentors"))
       .finally(() => setLoadingAll(false));
   }, []);
@@ -155,6 +168,7 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
               filteredAll.map((mentor) => {
                 const alreadyAssigned = assignedMentorIds.has(mentor.userId);
                 const selected = selectedIds.includes(mentor.userId);
+                const roleLabel = mentor.roleName ?? normalizeRole(mentor.role).replace(/_/g, " ");
                 return (
                   <div
                     key={mentor.userId}
@@ -185,8 +199,18 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
                       {selected && !alreadyAssigned && <UserCheck size={14} color="white" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
-                        {mentor.fullName}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
+                          {mentor.fullName}
+                        </span>
+                        {roleLabel && (
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider"
+                            style={{ background: `${COLORS.success}20`, color: COLORS.success }}
+                          >
+                            {roleLabel}
+                          </span>
+                        )}
                       </div>
                       <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{mentor.email}</div>
                     </div>

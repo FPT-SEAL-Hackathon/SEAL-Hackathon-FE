@@ -14,6 +14,16 @@ interface Props {
   onSaved: () => void;
 }
 
+const ASSIGNABLE_ROLES = new Set(["MENTOR", "EXPERT", "INTERNAL_JUDGE", "GUEST_JUDGE"]);
+
+function normalizeRole(role?: string | null) {
+  return String(role ?? "").toUpperCase().replace(/^ROLE_/, "").replace(/[\s-]+/g, "_");
+}
+
+function isAssignableRole(user: { role?: string | null; roleName?: string | null }) {
+  return ASSIGNABLE_ROLES.has(normalizeRole(user.role)) || ASSIGNABLE_ROLES.has(normalizeRole(user.roleName));
+}
+
 export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props) {
   const [candidates, setCandidates] = useState<any[]>([]);
   const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
@@ -57,17 +67,15 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
     roundService.getById(roundId)
       .then(round => {
         return Promise.all([
-          userService.getUsers({ role: "JUDGE" }),
-          userService.getUsers({ role: "EXPERT" }),
+          userService.getJudges(),
           roundService.getJudges(roundId),
           categoryService.getMentors(round.categoryId),
         ]);
       })
-      .then(([judgesRes, expertsRes, assignedJudges, assignedMentors]) => {
-        const judges = judgesRes.content || [];
-        const experts = expertsRes.content || [];
-        const combined = [...judges, ...experts];
-        const unique = Array.from(new Map(combined.map(u => [u.userId, u])).values());
+      .then(([judgesRes, assignedJudges, assignedMentors]) => {
+        const combined = judgesRes.content || [];
+        const unique = Array.from(new Map(combined.map(u => [u.userId, u])).values())
+          .filter(isAssignableRole);
         setCandidates(unique);
         
         const map = new Map<string, string>();
@@ -117,9 +125,11 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
     setError("");
     try {
       await roundService.assignJudges(roundId, selectedIds);
+      setSelectedIds([]);
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to assign judges");
+    } finally {
       setAssigning(false);
     }
   };
@@ -167,7 +177,7 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
                 <div className="text-center p-8 text-sm text-gray-500">No judges or mentors found</div>
               ) : (
                 filteredCandidates.map(user => {
-                  const isMentor = user.role?.toUpperCase() === "EXPERT" || user.role?.toUpperCase() === "MENTOR";
+                  const roleLabel = user.roleName ?? normalizeRole(user.role).replace(/_/g, " ");
                   const alreadyAssigned = assignedIds.has(user.userId);
                   const isCategoryMentor = categoryMentorIds.has(user.userId);
                   const selected = selectedIds.includes(user.userId);
@@ -193,9 +203,9 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
                           <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
                             {user.fullName}
                           </span>
-                          {isMentor && (
+                          {roleLabel && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider" style={{ background: `${COLORS.success}20`, color: COLORS.success }}>
-                              MENTOR
+                              {roleLabel}
                             </span>
                           )}
                         </div>

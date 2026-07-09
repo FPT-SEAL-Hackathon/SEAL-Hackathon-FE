@@ -8,6 +8,15 @@ type BackendCategoryExpert = Partial<CategoryMentor> & {
     expertEmail?: string;
 };
 
+type BackendMentor = Partial<Mentor> & {
+    id?: string;
+    userId?: string;
+    judgeId?: string;
+    name?: string;
+    role?: string;
+    roleName?: string;
+};
+
 function normalizeCategoryMentor(item: BackendCategoryExpert): CategoryMentor {
     const categoryMentorId = item.categoryMentorId ?? item.categoryExpertId ?? "";
     const mentorId = item.mentorId ?? item.expertId ?? "";
@@ -52,7 +61,11 @@ export const categoryService = {
         body: AssignMentorsRequest
     ) => api.post<BackendCategoryExpert | BackendCategoryExpert[]>(
         `/api/v1/category/expert/${categoryId}`,
-        { expertIds: body.expertIds ?? body.mentorIds ?? [] }
+        {
+            expertIds: body.expertIds ?? body.mentorIds ?? [],
+            mentorIds: body.mentorIds ?? body.expertIds ?? [],
+            userIds: body.expertIds ?? body.mentorIds ?? [],
+        }
     ).then(res => {
         const items = Array.isArray(res) ? res : [res];
         return items.map(normalizeCategoryMentor);
@@ -64,15 +77,17 @@ export const categoryService = {
     removeMentor: (categoryId: string, mentorId: string) =>
         api.delete(`/api/v1/category/expert/${categoryId}/${mentorId}`),
 
-    // Normalises the response so `id` is always populated from `userId`
+    // Normalises the response so `id` is always populated from userId/judgeId/id.
     getAllMentors: async (): Promise<Mentor[]> => {
-        const raw = await api.get<any[]>("/api/v1/users/mentors");
+        const raw = await api.get<BackendMentor[]>("/api/v1/users/mentors");
         const list = Array.isArray(raw) ? raw : [];
         return list.map(u => ({
-            id: String(u.userId ?? u.id ?? ""),
+            id: String(u.userId ?? u.judgeId ?? u.id ?? ""),
             fullName: u.fullName ?? u.name ?? u.email ?? "Unknown",
             email: u.email ?? "",
             phone: u.phone ?? "",
+            role: u.role,
+            roleName: u.roleName,
         }));
     },
 };

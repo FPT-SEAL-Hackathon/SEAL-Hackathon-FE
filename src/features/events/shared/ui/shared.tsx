@@ -92,7 +92,7 @@ export function Select({
 
 // ── Assign People Modal ────────────────────────────────────────────────────
 
-export function AssignModal<T extends { id: string; fullName: string; email: string; phone: string }>({
+export function AssignModal<T extends { id: string; fullName: string; email: string; phone: string; role?: string; roleName?: string }>({
   title, allPeople, assignedIds, onAssign, onRemove, onClose,
 }: {
   title: string;
@@ -154,6 +154,7 @@ export function AssignModal<T extends { id: string; fullName: string; email: str
           ) : (
             filtered.map(p => {
               const isAssigned = assignedIdsSet.has(p.id);
+              const roleLabel = p.roleName ?? p.role?.replace(/^ROLE_/, "").replace(/_/g, " ");
               return (
                 <div
                   key={p.id}
@@ -165,7 +166,17 @@ export function AssignModal<T extends { id: string; fullName: string; email: str
                   }}
                 >
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</span>
+                      {roleLabel && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider"
+                          style={{ background: `${COLORS.success}20`, color: COLORS.success }}
+                        >
+                          {roleLabel}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{p.email}</div>
                   </div>
                   {isAssigned
