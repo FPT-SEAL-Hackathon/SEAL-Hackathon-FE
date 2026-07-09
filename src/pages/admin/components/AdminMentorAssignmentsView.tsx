@@ -47,8 +47,8 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
   return (
     <>
       <SectionHeader 
-        title="Expert Assignments" 
-        subtitle="Manage experts assigned to categories" 
+        title="Mentor Assignments" 
+        subtitle="Manage mentors assigned to categories" 
         action={
           <div className="flex items-center gap-3">
             <select
@@ -69,7 +69,7 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
               onClick={() => setAssignMentorModal({ open: true, categoryId: selectedCategoryId })}
               disabled={!selectedCategoryId}
             >
-              Assign Expert
+              Assign Mentor
             </Button>
           </div>
         }
@@ -77,7 +77,7 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
       
       {!selectedEventId ? (
         <Card className="p-8 text-center" style={{ color: COLORS.textSecondary }}>
-          Select an event to view categories and experts.
+          Select an event to view categories and mentors.
         </Card>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -108,7 +108,7 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
           
           <div className="lg:col-span-2 space-y-3">
             <div className="flex items-center justify-between">
-              <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>Assigned Experts</div>
+              <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>Assigned Mentors</div>
               {loading && <Loader size={14} className="animate-spin" style={{ color: COLORS.textSecondary }} />}
             </div>
             
@@ -119,7 +119,7 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
             {!loading && mentors.length === 0 && (
               <Card className="p-8 text-center flex flex-col items-center justify-center gap-2" style={{ borderStyle: "dashed" }}>
                 <User size={24} style={{ color: COLORS.textSecondary, opacity: 0.5 }} />
-                <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No experts assigned to this category yet</div>
+                <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No mentors assigned to this category yet</div>
               </Card>
             )}
 
@@ -127,7 +127,7 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
               <Card key={m.categoryExpertId || m.categoryMentorId} className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
-                    {(m.expertName || m.mentorName || "E")[0].toUpperCase()}
+                    {(m.expertName || m.mentorName || "M")[0].toUpperCase()}
                   </div>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{m.expertName || m.mentorName}</div>

@@ -31,9 +31,6 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "ClipboardList", label: "Event", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
     { icon: "Clock", label: "History", key: "history" },
-    { icon: "BookOpen", label: "Assigned Tracks", key: "tracks" },
-    { icon: "Users", label: "Category Teams", key: "teams" },
-    { icon: "MessageSquare", label: "Consultation Requests", key: "consultations" },
     { icon: "User", label: "Profile", key: "profile" },
   ],
   [ROLES.GUEST_JUDGE]: [
@@ -46,7 +43,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "Event Management", key: "events" },
     { icon: "BookOpen", label: "Categories", key: "categories" },
     { icon: "UserCheck", label: "Event Participants", key: "event-participants" },
-    // { icon: "Users", label: "Team Approval", key: "team-approval" },
+    { icon: "Users", label: "Team Approval", key: "team-approval" },
     { icon: "GitBranch", label: "Rounds", key: "rounds" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "Users", label: "Users", key: "users" },

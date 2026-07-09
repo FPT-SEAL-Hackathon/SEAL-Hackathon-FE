@@ -82,10 +82,10 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   settings: [...ORGANIZER_ROLES],
   schedule: [],
   // Mentor pages
-  tracks: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
-  teams: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
-  consultations: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
-  progress: [...MENTOR_ROLES, ROLES.INTERNAL_JUDGE],
+  tracks: [...MENTOR_ROLES],
+  teams: [...MENTOR_ROLES],
+  consultations: [...MENTOR_ROLES],
+  progress: [...MENTOR_ROLES],
   // Leader/Member pages
   mentor: [...LEADER_MEMBER_ROLES],
 };

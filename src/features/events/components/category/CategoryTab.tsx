@@ -1,44 +1,19 @@
 import { useState } from "react";
-import { PlusCircle, Edit, Trash2, Save, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
+import { PlusCircle, BookOpen } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
-//import { allMentors, emptyCategory } from "./types";
-import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
+import { useCategoryContext } from "../../context/CategoryContext";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
-interface Props {
-  categories: Category[];
-  availableMentors: Mentor[];
-  categoryMentors: Record<string, CategoryMentor[]>; 
-  loadCategoryMentors: (categoryId: string) => Promise<void>;
-  onAdd: (data: CategoryRequest) => Promise<void>;
-  onUpdate: (
-    id: string,
-    data: CategoryRequest
-  ) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-  onAssignMentors: (
-    categoryId: string,
-    mentorsIds: AssignMentorsRequest
-  ) => Promise<void>;
-  onRemoveMentor: () => Promise<void>;
-}
-
-export function CategoriesTab({ 
-    categories, 
-    availableMentors,
-    categoryMentors,
-    loadCategoryMentors,
-    onAdd, 
-    onUpdate, 
-    onDelete ,
-    onAssignMentors,
-    onRemoveMentor
-}: Props) {
+export function CategoriesTab() {
 
   const [showForm, setShowForm] = useState(false);
+  const {
+        categories,
+        createCategory,
+  } = useCategoryContext();
 
   return (
     <div className="space-y-4">
@@ -60,8 +35,8 @@ export function CategoriesTab({
             categoryName: "",
             description: "",
             sortOrder: categories.length + 1 }}
-          onSave={async data => { 
-            await onAdd(data); 
+          onSave={async (data) => { 
+            await createCategory(data); 
             setShowForm(false); 
           }}
           onCancel={() => setShowForm(false)}
@@ -92,15 +67,6 @@ export function CategoriesTab({
             <CategoryCard 
                 key={category.categoryId} 
                 category={category} 
-                availableMentors={availableMentors} 
-                mentors={
-                    categoryMentors[category.categoryId] ?? []
-                }
-                loadCategoryMentors={loadCategoryMentors}
-                onAssignMentor={onAssignMentors}
-                onRemoveMentor={onRemoveMentor}
-                onUpdate={onUpdate} 
-                onDelete={onDelete} 
             />
           ))
       )}

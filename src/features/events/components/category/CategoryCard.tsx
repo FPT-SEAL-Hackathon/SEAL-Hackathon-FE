@@ -1,46 +1,35 @@
 import { useState } from "react";
-import { PlusCircle, Edit, Trash2, Save, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
+import { Edit, Trash2, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
 import { AssignModal } from "../../shared/ui/shared";
-import { AssignMentorsRequest, Category, CategoryMentor, Mentor } from "../../types/category";
+import { Category } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
-import { CategoryRequest } from "../../types/category";
+import { useCategoryContext } from "../../context/CategoryContext";
+
 // ── Category card ──────────────────────────────────────────────────────────
+
 interface Props {
     category: Category;
-    availableMentors: Mentor[];
-    mentors: CategoryMentor[];
-    loadCategoryMentors: (categoryId: string) => Promise<void>;
-    onUpdate: (id: string, data: CategoryRequest) => Promise<void>;
-    onDelete: (id: string) => void; 
-    onAssignMentor: (
-        categoryId: string,
-        mentorIds: AssignMentorsRequest
-    ) => Promise<void>;
-    onRemoveMentor: () => Promise<void>;
 }
 export function CategoryCard({
   category,
-  availableMentors,
-  mentors,
-  loadCategoryMentors,
-  onUpdate, 
-  onDelete,
-  onAssignMentor,
-  onRemoveMentor,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showMentorModal, setShowMentorModal] = useState(false);
+  const {
+    updateCategory,
+    deleteCategory,
 
-  const handleAssignMentor = async (mentor: Mentor) => {
-    console.log(mentor);
-    await onAssignMentor(category.categoryId, {
-        mentorIds: [mentor.id]
-    });
-  }
+    availableMentors,
 
-  const handleRemoveMentor = async () => {};
+    categoryMentors,
+
+    assignMentors,
+    removeMentor,
+  } = useCategoryContext();
+
+const mentors = categoryMentors[category.categoryId] ?? [];
 
   if (editing) {
     return (
@@ -51,7 +40,7 @@ export function CategoryCard({
             sortOrder: category.sortOrder
         }}
         onSave={ async data => { 
-            await onUpdate(
+            await updateCategory(
                 category.categoryId,
                 data
             ); 
@@ -70,8 +59,16 @@ export function CategoryCard({
           title="Assign Mentors"
           allPeople={availableMentors}
           assignedIds={mentors.map(m => m.mentorId)}
-          onAssign={handleAssignMentor}
-          onRemove={handleRemoveMentor}
+          onAssign={(mentor) => {
+            console.log(mentor.id);
+            assignMentors(
+              category.categoryId, {
+              mentorIds:[ mentor.id]
+            })
+          }
+            
+          }
+          onRemove={removeMentor}
           onClose={() => setShowMentorModal(false)}
         />
       )}
@@ -96,7 +93,7 @@ export function CategoryCard({
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="ghost" size="sm" icon={<Users size={12} />} onClick={() => setShowMentorModal(true)}>Mentors</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => onDelete(category.categoryId)}>Delete</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => deleteCategory(category.categoryId)}>Delete</Button>
           </div>
           {expanded
             ? <ChevronDown size={15} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />
@@ -132,7 +129,7 @@ export function CategoryCard({
                       style={{ background: `${COLORS.secondary}10`, border: `1px solid ${COLORS.secondary}25` }}
                     >
                       <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.secondary }}>{m.fullName}</span>
-                      <button onClick={() => handleRemoveMentor()} style={{ color: COLORS.secondary }}>
+                      <button onClick={() => removeMentor} style={{ color: COLORS.secondary }}>
                         <X size={11} />
                       </button>
                     </div>
