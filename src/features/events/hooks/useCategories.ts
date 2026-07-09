@@ -43,9 +43,9 @@ export function useCategories(eventId: string) {
 
     const assignMentors = async (
         categoryId: string,
-        mentorsIds: AssignMentorsRequest
+        body: AssignMentorsRequest
     ) => {
-        await categoryService.assignMentor(categoryId, mentorsIds);
+        await categoryService.assignMentor(categoryId, body);
         await loadCategoryMentors(categoryId);
     };
 
