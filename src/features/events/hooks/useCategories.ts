@@ -33,6 +33,7 @@ export function useCategories(eventId: string) {
         setCategories(prev => prev.filter(category => category.categoryId !== id));
     };
 
+    //Category Mentor
     const loadCategoryMentors = async (categoryId: string) => {
         const data = await categoryService.getMentors(categoryId);
         setCategoryMentors(prev => ({
@@ -43,7 +44,7 @@ export function useCategories(eventId: string) {
 
     const assignMentors = async (
         categoryId: string,
-        mentorsIds: AssignMentorsRequest
+        body: AssignMentorsRequest
     ) => {
         await categoryService.assignMentor(categoryId, mentorsIds);
         await loadCategoryMentors(categoryId);
@@ -64,6 +65,12 @@ export function useCategories(eventId: string) {
         loadAvailableMentors();
     }, [eventId]);
 
+    useEffect(() => {
+        categories.forEach(category => {
+            loadCategoryMentors(category.categoryId);
+        });
+    }, [categories]);
+
     return {
         categories,
 
@@ -74,6 +81,7 @@ export function useCategories(eventId: string) {
         availableMentors,
         categoryMentors,
 
+        loadAvailableMentors,
         assignMentors,
         removeMentor,
         loadCategoryMentors,
