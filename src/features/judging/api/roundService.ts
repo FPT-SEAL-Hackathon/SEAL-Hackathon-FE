@@ -7,6 +7,7 @@ export interface RoundResponse {
   description: string;
   roundOrder: number;
   roundStatusId: string;
+  roundStatusName?: string;
   submissionDeadline: string;
   judgingDeadline: string;
   startDate: string;

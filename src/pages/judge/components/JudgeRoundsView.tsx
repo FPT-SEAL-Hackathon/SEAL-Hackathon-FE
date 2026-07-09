@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Loader2, CheckCircle2 } from "lucide-react";
+import { ChevronRight, Loader2, CheckCircle2, Target } from "lucide-react";
 import { Card, SectionHeader, COLORS, StatusBadge, ProgressBar, Button } from "@/components/shared/UIComponents";
 import { type RoundResponse } from "@/features/judging/api/roundService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
@@ -313,7 +313,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
 
             return (
               <div key={r.roundId} className="relative group">
-                <Card className="px-6 py-5 flex flex-row items-center justify-between bg-white border-2 hover:border-primary/30 transition-all z-10" style={{ opacity: isCompleted ? 0.8 : 1, borderColor: isCompleted ? COLORS.success + '40' : 'transparent', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+                <Card className={`px-6 py-5 flex flex-row items-center justify-between border-2 hover:border-primary/30 transition-all z-10 ${r.isCalibrationRound ? 'bg-amber-50/50 border-amber-200' : 'bg-white'}`} style={{ opacity: isCompleted ? 0.8 : 1, borderColor: isCompleted ? COLORS.success + '40' : (r.isCalibrationRound ? '#fcd34d' : 'transparent'), boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
                   
                   <div className="flex items-center gap-4 flex-1">
                     <div className="w-10 h-10 rounded-full text-white flex items-center justify-center text-sm font-bold shadow-sm" style={{ background: isCompleted ? COLORS.success : COLORS.textPrimary }}>
@@ -322,6 +322,14 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
                     <div>
                       <div className="flex items-center gap-2">
                         <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{r.roundName}</div>
+                        <div className="flex items-center px-3 py-1 rounded-full bg-[#f5f0e6] text-[#7a6f5d] text-[11px] font-bold border border-[#e8dfcf]">
+                          {r.roundStatusName || "Submission Open"}
+                        </div>
+                        {r.isCalibrationRound && (
+                          <div className="flex items-center px-3 py-1 rounded-full bg-[#fff8eb] text-[#f59e0b] text-[11px] font-bold border border-[#fef3c7]">
+                            Calibration
+                          </div>
+                        )}
                         {isCompleted && <CheckCircle2 size={16} className="text-green-500" />}
                       </div>
                       <div style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: 500, marginTop: 4 }}>

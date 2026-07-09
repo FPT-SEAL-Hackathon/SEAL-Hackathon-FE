@@ -62,6 +62,7 @@ export const judgingService = {
     if (roundId) params.append("roundId", roundId);
     if (categoryId) params.append("categoryId", categoryId);
     const query = params.toString();
-    return api.get<ReliabilityMetricResponse[]>(`/api/v1/judging/calibration-metrics${query ? `?${query}` : ""}`);
+    const pathEventId = eventId || "all";
+    return api.get<ReliabilityMetricResponse[]>(`/api/v1/judging/events/${pathEventId}/calibration-metrics${query ? `?${query}` : ""}`);
   },
 };
