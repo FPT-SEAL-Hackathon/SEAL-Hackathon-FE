@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useBlocker } from "react-router";
-import { Github, Globe, Loader, Save, FileText, Presentation, Code, GitMerge, Star } from "lucide-react";
+import { Github, Globe, Loader, Save, FileText, Presentation, Code, GitMerge, Star, ArrowLeft } from "lucide-react";
 import { Card, SectionHeader, COLORS, ProgressBar, Button, ScoreSlider } from "@/components/shared/UIComponents";
 import { judgingService, type ScoreSubmissionDTO, type UpdateScoreSubmissionDTO } from "@/features/judging/api/judgingService";
 import { type RoundCriterionResponse, type RoundResponse } from "@/features/judging/api/roundService";
+import { updateGlobalScoreCache } from "./JudgeSubmissionsStep";
 
 interface JudgeScoringViewProps {
   apiCriteria: RoundCriterionResponse[];
@@ -23,7 +24,8 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
   const [updateReason, setUpdateReason] = useState("");
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [viewMode, setViewMode] = useState<"edit" | "view">("edit");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [viewMode, setViewMode] = useState<"edit" | "view">(selectedSubmission?.status === "completed" ? "view" : "edit");
 
   // Reset scoring form and fetch existing scores when changing submissions
   useEffect(() => {
@@ -33,6 +35,13 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
     setUpdateReason("");
     setScoreSaved(false);
     setScoreError("");
+    
+    // Optimistically set view mode to avoid UI flashing while fetching
+    if (selectedSubmission?.status === "completed") {
+      setViewMode("view");
+    } else {
+      setViewMode("edit");
+    }
 
     if (selectedSubmission?.id) {
       judgingService.getBySubmission(selectedSubmission.id)
@@ -51,7 +60,9 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
             setExistingJudgingIds(newJudgingIds);
             setViewMode("view");
           } else {
-            setViewMode("edit");
+            if (selectedSubmission?.status !== "completed") {
+              setViewMode("edit");
+            }
           }
         })
         .catch(err => {
@@ -60,7 +71,7 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
     }
   }, [selectedSubmission]);
 
-  const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
+  const totalScore = apiCriteria.reduce((sum, c) => sum + ((scores[c.roundCriterionId] || 0) * (c.weight || 1)), 0);
   const hasUnsavedChanges = viewMode === "edit" && !scoreSaved && (totalScore > 0 || Object.values(comments).some(c => c.trim() !== ""));
 
   const blocker = useBlocker(
@@ -112,6 +123,7 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
       const isUpdate = Object.keys(existingJudgingIds).length > 0;
       const isCalibrationRound = apiRounds.find(r => r.roundId === selectedRoundId)?.isCalibrationRound || false;
       
+      let apiResponse;
       if (isUpdate) {
         const updatePayload: UpdateScoreSubmissionDTO[] = apiCriteria.map(c => ({
           judgingId: existingJudgingIds[c.roundCriterionId],
@@ -121,7 +133,7 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
           reason: updateReason
         })).filter(c => c.judgingId);
         
-        await judgingService.updateScores(updatePayload);
+        apiResponse = await judgingService.updateScores(updatePayload);
       } else {
         const scorePayload: ScoreSubmissionDTO[] = apiCriteria.map((c) => ({
           submissionId: selectedSubmission.id?.toString() ?? "",
@@ -130,11 +142,22 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
           comment: comments[c.roundCriterionId] || "",
           isCalibration: isCalibrationRound,
         }));
-        await judgingService.recordScores(scorePayload);
+        apiResponse = await judgingService.recordScores(scorePayload);
       }
       
+      setSuccessMessage(apiResponse?.message || "Your scores have been recorded.");
       setSubmitStatus("success");
       setScoreSaved(true);
+      updateGlobalScoreCache(selectedSubmission.id?.toString() ?? "", {
+        judgingId: "dummy",
+        judgeId: "dummy",
+        submissionId: selectedSubmission.id?.toString() ?? "",
+        roundCriterionId: "dummy",
+        scoreValue: 0,
+        comment: "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
     } catch (err: any) {
       setSubmitStatus("error");
       setScoreError(err?.message ?? "Failed to save scores");
@@ -151,6 +174,13 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
 
   return (
     <>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+        <div>
+          <Button variant="outline" size="sm" onClick={() => onNavigate("submissions")}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Submissions
+          </Button>
+        </div>
+      </div>
       <SectionHeader title="Score Submission" subtitle="Evaluate and submit scores" />
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
@@ -216,28 +246,6 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
                 </a>
               )}
             </div>
-
-            {selectedSubmission.raw?.repoStarCount !== undefined && (
-              <div className="mt-6 pt-4 space-y-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 8 }}>REPOSITORY STATS</div>
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <Star size={14} color={COLORS.warning} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{selectedSubmission.raw.repoStarCount}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <GitMerge size={14} color={COLORS.primary} />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{selectedSubmission.raw.repoForkCount}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Code size={14} color={COLORS.textSecondary} />
-                    <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                      {selectedSubmission.raw.repoLastCommitAt ? new Date(selectedSubmission.raw.repoLastCommitAt).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
           </Card>
         </div>
 
@@ -246,30 +254,65 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
           
           {/* Criteria Scoring */}
           <div className="space-y-4">
-              {apiCriteria.map(c => (
-                <Card key={c.roundCriterionId} className="p-5">
-                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>{c.description}</div>
-                  <ScoreSlider
-                    label={c.criterionName}
-                    value={scores[c.roundCriterionId] || 0}
-                    max={c.maxScore}
-                    onChange={v => setScores(p => ({ ...p, [c.roundCriterionId]: v }))}
-                    disabled={viewMode === "view"}
-                  />
-                  <div className="mt-4">
-                    <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Comment for {c.criterionName}</label>
-                    <textarea
-                      value={comments[c.roundCriterionId] || ""}
-                      onChange={e => setComments(p => ({ ...p, [c.roundCriterionId]: e.target.value }))}
-                      rows={2}
-                      placeholder={viewMode === "view" ? "No comment provided." : "Provide feedback specifically for this criterion..."}
-                      className="w-full px-3 py-2 rounded-xl outline-none resize-none disabled:opacity-70"
-                      style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: viewMode === "view" ? "#f9fafb" : COLORS.bg, color: COLORS.textPrimary }}
-                      disabled={viewMode === "view"}
-                    />
-                  </div>
-                </Card>
-              ))}
+              {apiCriteria.map(c => {
+                const score = scores[c.roundCriterionId] || 0;
+                const weight = c.weight || 1;
+                const comment = comments[c.roundCriterionId] || "";
+
+                return (
+                  <Card key={c.roundCriterionId} className="p-5">
+                    {viewMode === "view" ? (
+                      <div>
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 15, color: COLORS.textPrimary }}>{c.criterionName}</div>
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{c.description}</div>
+                          </div>
+                          <div className="text-right">
+                            <div style={{ fontWeight: 700, fontSize: 20, color: COLORS.primary }}>
+                              {score * weight} <span style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: 500 }}>pts</span>
+                            </div>
+                            <div style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                              Raw: {score}/{c.maxScore} &bull; Weight: {weight}x
+                            </div>
+                          </div>
+                        </div>
+                        {comment ? (
+                          <div className="mt-4 p-3 rounded-xl" style={{ background: `${COLORS.bg}`, border: `1px solid ${COLORS.border}` }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>Judge's Feedback</div>
+                            <div style={{ fontSize: 13, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>{comment}</div>
+                          </div>
+                        ) : (
+                          <div className="mt-4 p-3 rounded-xl" style={{ background: `#f9fafb`, border: `1px dashed ${COLORS.border}` }}>
+                            <div style={{ fontSize: 13, color: COLORS.textSecondary, fontStyle: "italic" }}>No feedback provided.</div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 }}>{c.description}</div>
+                        <ScoreSlider
+                          label={`${c.criterionName} (Weight: ${weight}x)`}
+                          value={score}
+                          max={c.maxScore}
+                          onChange={v => setScores(p => ({ ...p, [c.roundCriterionId]: v }))}
+                        />
+                        <div className="mt-4">
+                          <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Comment for {c.criterionName}</label>
+                          <textarea
+                            value={comment}
+                            onChange={e => setComments(p => ({ ...p, [c.roundCriterionId]: e.target.value }))}
+                            rows={2}
+                            placeholder="Provide feedback specifically for this criterion..."
+                            className="w-full px-3 py-2 rounded-xl outline-none resize-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                            style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </Card>
+                );
+              })}
             </div>
 
             {/* Score Summary */}
@@ -277,14 +320,18 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
               <Card className="p-5">
                 <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Score Summary</div>
                 {apiCriteria.map(c => (
-                  <div key={c.roundCriterionId} className="flex justify-between mb-3">
-                    <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{c.criterionName}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>{scores[c.roundCriterionId] || 0}/{c.maxScore}</span>
+                  <div key={c.roundCriterionId} className="flex justify-between mb-3 items-center">
+                    <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{c.criterionName} <span style={{fontSize: 11, color: COLORS.primary}}>(x{c.weight || 1})</span></span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                      {scores[c.roundCriterionId] || 0}/{c.maxScore}
+                      <span style={{ color: COLORS.textSecondary, marginLeft: 6, marginRight: 6 }}>→</span>
+                      <span style={{ color: COLORS.primary }}>{(scores[c.roundCriterionId] || 0) * (c.weight || 1)} pts</span>
+                    </span>
                   </div>
                 ))}
                 <div style={{ borderTop: `1px solid ${COLORS.border}`, marginTop: 8, paddingTop: 12 }}>
                   {(() => {
-                    const maxTotal = apiCriteria.reduce((sum, c) => sum + c.maxScore, 0) || 100;
+                    const maxTotal = apiCriteria.reduce((sum, c) => sum + (c.maxScore * (c.weight || 1)), 0) || 100;
                     const scoreRatio = maxTotal > 0 ? totalScore / maxTotal : 0;
                     const scoreColor = scoreRatio >= 0.9 ? COLORS.success : scoreRatio >= 0.75 ? COLORS.primary : scoreRatio >= 0.5 ? COLORS.warning : COLORS.error;
                     return (
@@ -379,8 +426,8 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
               <h2 className="text-xl font-bold" style={{ color: COLORS.textPrimary }}>
                 {submitStatus === "success" ? "Score Submitted Successfully" : "Confirm Your Evaluation"}
               </h2>
-              <p className="mt-1 text-sm" style={{ color: COLORS.textSecondary }}>
-                {submitStatus === "success" ? "Your scores have been recorded." : "Please review your scores and feedback before submitting."}
+              <p className="mt-1 text-sm" style={{ color: submitStatus === "success" ? COLORS.success : COLORS.textSecondary }}>
+                {submitStatus === "success" ? successMessage : "Please review your scores and feedback before submitting."}
               </p>
             </div>
             
@@ -395,7 +442,7 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
                 <div className="flex justify-between items-center mb-3">
                   <span className="font-semibold" style={{ color: COLORS.textPrimary }}>Total Score</span>
                   <span className="text-2xl font-bold" style={{ color: totalScore >= 80 ? COLORS.success : totalScore >= 50 ? COLORS.warning : COLORS.error }}>
-                    {totalScore}/{apiCriteria.reduce((sum, c) => sum + c.maxScore, 0)}
+                    {totalScore}/{apiCriteria.reduce((sum, c) => sum + (c.maxScore * (c.weight || 1)), 0)}
                   </span>
                 </div>
                 <div className="space-y-3">
@@ -407,8 +454,9 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
                           <div className="text-xs italic mt-1" style={{ color: COLORS.textSecondary }}>"{comments[c.roundCriterionId]}"</div>
                         )}
                       </div>
-                      <div className="font-bold text-sm whitespace-nowrap" style={{ color: COLORS.textPrimary }}>
-                        {scores[c.roundCriterionId] || 0} / {c.maxScore}
+                      <div className="font-bold text-sm whitespace-nowrap text-right" style={{ color: COLORS.textPrimary }}>
+                        <div>{(scores[c.roundCriterionId] || 0) * (c.weight || 1)} pts</div>
+                        <div className="text-xs font-normal" style={{ color: COLORS.textSecondary }}>Raw: {scores[c.roundCriterionId] || 0}/{c.maxScore}</div>
                       </div>
                     </div>
                   ))}

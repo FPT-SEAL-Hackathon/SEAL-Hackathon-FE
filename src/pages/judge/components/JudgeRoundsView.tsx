@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { ChevronRight, Loader2, CheckCircle2 } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { ChevronRight, Loader2, CheckCircle2, Target, Search } from "lucide-react";
 import { Card, SectionHeader, COLORS, StatusBadge, ProgressBar, Button } from "@/components/shared/UIComponents";
 import { type RoundResponse } from "@/features/judging/api/roundService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
@@ -19,6 +19,12 @@ interface JudgeRoundsViewProps {
 export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadingRounds = false }: JudgeRoundsViewProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInputValue, setSearchInputValue] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   
   // Data State
   const [scores, setScores] = useState<JudgingDTO[]>([]);
@@ -70,38 +76,18 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
           }
         });
         
-        // 3. Fetch submissions and scores
-        const subPromises = apiRounds.map(r => 
-          submissionService.getByRound(r.roundId)
-            .then(subs => ({ id: r.roundId, data: subs }))
-            .catch(() => ({ id: r.roundId, data: [] }))
-        );
-        const scorePromise = judgingService.getByJudge(user.userId).catch(() => []);
-        
-        const [subs, scoresRes] = await Promise.all([
-          Promise.all(subPromises),
-          scorePromise
-        ]);
-        
-        const subsMap: Record<string, SubmissionResponse[]> = {};
-        subs.forEach((s: any) => subsMap[s.id] = s.data);
-        
         setCategories(catsMap);
         setEvents(eventsMap);
-        setRoundSubmissions(subsMap);
-        setScores(scoresRes || []);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-
   }, [user?.userId, apiRounds]);
 
   // Aggregate stats
   const { roundStats, globalStats } = useMemo(() => {
-    // Group scores by submission
     const scoreMap = new Map<string, number>();
     const submissionTotalScoreMap = new Map<string, number>();
 
@@ -125,7 +111,6 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
       let completedInRound = 0;
 
       subs.forEach(sub => {
-        // A submission is considered scored if the judge has provided scores for it
         if (scoreMap.has(sub.submissionId) && scoreMap.get(sub.submissionId)! > 0) {
           completedInRound++;
           gCompleted++;
@@ -154,11 +139,8 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
     };
   }, [scores, roundSubmissions, apiRounds]);
 
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-
-  // Grouping logic
-  const { eventGroups, categoryGroups, roundGroups } = useMemo(() => {
+  // Grouping logic & Search Filter
+  const { eventGroups, categoryGroups, roundGroups, visibleEventIds } = useMemo(() => {
     const eGroups: Record<string, { event: EventResponse | null, totalRounds: number, completedRounds: number }> = {};
     const cGroups: Record<string, Record<string, { category: CategoryResponse | null, totalRounds: number, completedRounds: number }>> = {};
     const rGroups: Record<string, Record<string, RoundResponse[]>> = {};
@@ -170,14 +152,12 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
       const eventId = categories[catId]?.eventId || 'unassigned_event';
       const isCompleted = roundStats[r.roundId]?.isDone ? 1 : 0;
 
-      // Event level
       if (!eGroups[eventId]) {
         eGroups[eventId] = { event: events[eventId] || null, totalRounds: 0, completedRounds: 0 };
       }
       eGroups[eventId].totalRounds++;
       eGroups[eventId].completedRounds += isCompleted;
 
-      // Category level
       if (!cGroups[eventId]) cGroups[eventId] = {};
       if (!cGroups[eventId][catId]) {
         cGroups[eventId][catId] = { category: categories[catId] || null, totalRounds: 0, completedRounds: 0 };
@@ -185,16 +165,99 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
       cGroups[eventId][catId].totalRounds++;
       cGroups[eventId][catId].completedRounds += isCompleted;
 
-      // Round level
       if (!rGroups[eventId]) rGroups[eventId] = {};
       if (!rGroups[eventId][catId]) rGroups[eventId][catId] = [];
       rGroups[eventId][catId].push(r);
     });
-    return { eventGroups: eGroups, categoryGroups: cGroups, roundGroups: rGroups };
-  }, [apiRounds, categories, events, roundStats]);
+
+    const sortedEventEntries = Object.entries(eGroups).sort(([, a], [, b]) => {
+      return new Date(b.event?.startDate || 0).getTime() - new Date(a.event?.startDate || 0).getTime();
+    });
+
+    let visibleEventEntries = [];
+    if (searchQuery.trim() === '') {
+      visibleEventEntries = sortedEventEntries.slice(0, 2);
+    } else {
+      const q = searchQuery.toLowerCase();
+      visibleEventEntries = sortedEventEntries.filter(([, data]) => 
+        data.event?.eventName.toLowerCase().includes(q)
+      );
+    }
+
+    const filteredEGroups = Object.fromEntries(visibleEventEntries);
+    const vEventIds = visibleEventEntries.map(([id]) => id);
+
+    return { eventGroups: filteredEGroups, categoryGroups: cGroups, roundGroups: rGroups, visibleEventIds: vEventIds };
+  }, [apiRounds, categories, events, roundStats, searchQuery]);
+
+  const [statsLoading, setStatsLoading] = useState(false);
+  const fetchedRoundsRef = useRef<Set<string>>(new Set());
+
+  // Lazy load submissions and scores based on visible events or selected category
+  useEffect(() => {
+    if (!user?.userId || !apiRounds) return;
+    
+    // Prevent fetching before categories/events are loaded
+    const dataReady = apiRounds.length === 0 || Object.keys(categories).length > 0;
+    if (!dataReady || loading) return;
+
+    const roundsToFetch = apiRounds.filter(r => {
+      const catId = r.categoryId || 'unassigned_category';
+      const eventId = categories[catId]?.eventId || 'unassigned_event';
+      const isVisibleEvent = visibleEventIds?.includes(eventId);
+      const isSelectedCategory = catId === selectedCategoryId;
+      return (isVisibleEvent || isSelectedCategory) && !fetchedRoundsRef.current.has(r.roundId);
+    });
+
+    if (roundsToFetch.length === 0) return;
+
+    roundsToFetch.forEach(r => fetchedRoundsRef.current.add(r.roundId));
+
+    const fetchVisibleStats = async () => {
+      setStatsLoading(true);
+      try {
+        const subPromises = roundsToFetch.map(r => 
+          submissionService.getByRound(r.roundId)
+            .then(subs => ({ id: r.roundId, data: subs }))
+            .catch(() => ({ id: r.roundId, data: [] }))
+        );
+        const scorePromise = judgingService.getByJudge(user.userId).catch(() => []);
+        
+        const [subs, scoresRes] = await Promise.all([
+          Promise.all(subPromises),
+          scorePromise
+        ]);
+        
+        setRoundSubmissions(prev => {
+          const subsMap = { ...prev };
+          subs.forEach((s: any) => subsMap[s.id] = s.data);
+          return subsMap;
+        });
+        
+        setScores(prev => {
+           if (prev.length === 0 && scoresRes) return scoresRes;
+           return prev;
+        });
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    fetchVisibleStats();
+  }, [selectedCategoryId, apiRounds, categories, user?.userId, visibleEventIds, loading]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const renderContent = () => {
-    if (Object.keys(eventGroups).length === 0) {
+    if (Object.keys(eventGroups).length === 0 && Object.keys(events).length === 0) {
       return (
         <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
           <p style={{ color: COLORS.textSecondary, fontSize: 15 }}>No evaluation rounds assigned to you yet.</p>
@@ -202,12 +265,66 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
       );
     }
 
-    // STEP 1: EVENT SELECTION
     if (!selectedEventId) {
+      // Calculate suggestions for dropdown
+      const dropdownSuggestions = Object.values(events).filter(e => 
+        e.eventName.toLowerCase().includes(searchInputValue.toLowerCase())
+      );
+
       return (
         <div className="space-y-6">
-          <h2 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>Select an Event</h2>
-          <div className="flex flex-col gap-4">
+          <div className="flex justify-between items-center" ref={searchRef}>
+            <h2 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>Select an Event</h2>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input 
+                type="text" 
+                placeholder="Search events..." 
+                className="pl-9 pr-4 py-2 bg-white rounded-lg border text-sm w-64 shadow-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+                value={searchInputValue}
+                onChange={(e) => {
+                  setSearchInputValue(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                onFocus={() => setIsDropdownOpen(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    setSearchQuery(searchInputValue);
+                    setIsDropdownOpen(false);
+                  }
+                }}
+              />
+              {isDropdownOpen && searchInputValue && (
+                <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border max-h-60 overflow-y-auto" style={{ borderColor: COLORS.border }}>
+                  {dropdownSuggestions.length > 0 ? (
+                    dropdownSuggestions.map(ev => (
+                      <div 
+                        key={ev.eventId}
+                        className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b last:border-0"
+                        style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+                        onClick={() => {
+                          setSearchInputValue(ev.eventName);
+                          setSearchQuery(ev.eventName);
+                          setIsDropdownOpen(false);
+                        }}
+                      >
+                        {ev.eventName}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-center" style={{ color: COLORS.textSecondary }}>No suggestions</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          {Object.keys(eventGroups).length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
+              <p style={{ color: COLORS.textSecondary, fontSize: 15 }}>No events found matching "{searchQuery}".</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
             {Object.entries(eventGroups).map(([eventId, data]) => {
               const ev = data.event;
               const isDone = data.totalRounds > 0 && data.completedRounds === data.totalRounds;
@@ -238,6 +355,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
               );
             })}
           </div>
+          )}
         </div>
       );
     }
@@ -313,7 +431,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
 
             return (
               <div key={r.roundId} className="relative group">
-                <Card className="px-6 py-5 flex flex-row items-center justify-between bg-white border-2 hover:border-primary/30 transition-all z-10" style={{ opacity: isCompleted ? 0.8 : 1, borderColor: isCompleted ? COLORS.success + '40' : 'transparent', boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+                <Card className={`px-6 py-5 flex flex-row items-center justify-between border-2 hover:border-primary/30 transition-all z-10 ${r.isCalibrationRound ? 'bg-amber-50/50 border-amber-200' : 'bg-white'}`} style={{ opacity: isCompleted ? 0.8 : 1, borderColor: isCompleted ? COLORS.success + '40' : (r.isCalibrationRound ? '#fcd34d' : 'transparent'), boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
                   
                   <div className="flex items-center gap-4 flex-1">
                     <div className="w-10 h-10 rounded-full text-white flex items-center justify-center text-sm font-bold shadow-sm" style={{ background: isCompleted ? COLORS.success : COLORS.textPrimary }}>
@@ -322,6 +440,14 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
                     <div>
                       <div className="flex items-center gap-2">
                         <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{r.roundName}</div>
+                        <div className="flex items-center px-3 py-1 rounded-full bg-[#f5f0e6] text-[#7a6f5d] text-[11px] font-bold border border-[#e8dfcf]">
+                          {r.roundStatusName || "Submission Open"}
+                        </div>
+                        {r.isCalibrationRound && (
+                          <div className="flex items-center px-3 py-1 rounded-full bg-[#fff8eb] text-[#f59e0b] text-[11px] font-bold border border-[#fef3c7]">
+                            Calibration
+                          </div>
+                        )}
                         {isCompleted && <CheckCircle2 size={16} className="text-green-500" />}
                       </div>
                       <div style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: 500, marginTop: 4 }}>
@@ -371,8 +497,8 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
 
   return (
     <>
-      <SectionHeader title="Assigned Rounds" subtitle="SEAL Fall 2025 — Your evaluation assignments" />
       
+
       {(loading || isLoadingRounds) ? (
         <div className="flex justify-center items-center py-12">
           <Loader2 className="animate-spin text-gray-400" size={32} />
