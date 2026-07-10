@@ -6,7 +6,15 @@ export interface CriteriaTemplate {
     description: string;
     defaultWeight: number;
     maxScore: number;
-    isActivce: boolean;
+    isActive: boolean;
     createdBy: UserResponse;
     createdAt: string;
 }
+
+export interface TemplateRequest {
+    criterionName: string;
+    description: string;
+    defaultWeight: number;
+    maxScore: number;
+}
+
