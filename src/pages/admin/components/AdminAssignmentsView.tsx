@@ -27,7 +27,7 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
     setRemovingId(judgeId);
     setError("");
     try {
-      await roundService.removeJudge(roundJudgeId, force);
+      await roundService.disableJudge(roundJudgeId, force);
       // Reload the judges list
       const updatedJudges = await roundService.getJudges(selectedRoundId);
       setJudges(updatedJudges);
