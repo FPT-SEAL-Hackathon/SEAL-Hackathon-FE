@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle,
   Eye,
@@ -43,6 +43,7 @@ type ActionKey =
 
 type RoleMode = "auto" | "member" | "leader";
 type TeamFlow = "create" | "join" | null;
+type TeamPanelMode = "current" | "other" | null;
 type LeaderActionPanel = "memberDetail" | "removeMember" | "joinRequests" | null;
 
 function Field({
@@ -169,11 +170,13 @@ export function TeamApiPanel({
   initialTeamId = "",
   mode = "auto",
   onTeamLeft,
+  onNavigate,
 }: {
   initialEventId?: string;
   initialTeamId?: string;
   mode?: RoleMode;
   onTeamLeft?: () => void;
+  onNavigate?: (page: string) => void;
 }) {
   const { user } = useAuth();
   const [form, setForm] = useState({
@@ -186,9 +189,11 @@ export function TeamApiPanel({
     memberUserId: user?.userId ?? "",
   });
   const [teams, setTeams] = useState<TeamResponse[]>([]);
+  const [userTeams, setUserTeams] = useState<TeamResponse[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(null);
   const [teamFlow, setTeamFlow] = useState<TeamFlow>(null);
-  const [teamDiscoveryDone, setTeamDiscoveryDone] = useState(false);
+  const [teamPanelMode, setTeamPanelMode] = useState<TeamPanelMode>(initialEventId ? "other" : null);
+  const [teamDiscoveryDone, setTeamDiscoveryDone] = useState(true);
   const [teamSearchEventId, setTeamSearchEventId] = useState("");
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [approvedEvents, setApprovedEvents] = useState<EventResponse[]>([]);
@@ -203,9 +208,37 @@ export function TeamApiPanel({
   const [joinTeamName, setJoinTeamName] = useState("");
   const [joinCategoryId, setJoinCategoryId] = useState("");
   const [joinRequestsLoaded, setJoinRequestsLoaded] = useState(false);
+  const loadedMemberDetailsTeamIdRef = useRef<string | null>(null);
+  const loadedCategoryIdRef = useRef<string | null>(null);
+  const teamDiscoveryAttemptedRef = useRef(false);
 
   const setField = (key: keyof typeof form, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const activateTeam = (team: TeamResponse, shouldPersist = true, nextPanelMode: TeamPanelMode = "current") => {
+    setSelectedTeam(team);
+    setUserTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
+    if (shouldPersist && userBelongsToTeam(team, user?.userId)) {
+      saveActiveTeam(team, user?.userId);
+    }
+    setField("teamId", team.teamId);
+    setField("eventId", team.eventId);
+    setField("categoryId", team.categoryId);
+    setTeamFlow(null);
+    setTeamPanelMode(nextPanelMode);
+  };
+
+  const startTeamFlow = (flow: Exclude<TeamFlow, null>, eventId = form.eventId) => {
+    setSelectedTeam(null);
+    setTeamPanelMode("other");
+    setTeamFlow(flow);
+    if (eventId) setField("eventId", eventId);
+    setTeams([]);
+    setTeamSearchEventId("");
+    setJoinCategoryId("");
+    setJoinTeamName("");
+    setMessage(null);
   };
 
   const isLeader = useMemo(() => {
@@ -237,6 +270,20 @@ export function TeamApiPanel({
     ?? "None";
 
   useEffect(() => {
+    if (!initialEventId) return;
+    setTeamPanelMode("other");
+    setField("eventId", initialEventId);
+    const teamForEvent = userTeams.find(team => team.eventId === initialEventId);
+    if (teamForEvent) {
+      activateTeam(teamForEvent);
+    } else if (teamDiscoveryDone) {
+      setSelectedTeam(null);
+      setTeamFlow(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialEventId]);
+
+  useEffect(() => {
     run(
       "events",
       async () => {
@@ -258,72 +305,6 @@ export function TeamApiPanel({
     // Load once when the team panel opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!user?.userId || selectedTeam || teamDiscoveryDone) return;
-    const storedTeam = getStoredActiveTeam(user.userId);
-    if (storedTeam?.teamId) {
-      let cancelled = false;
-      setLoading(prev => ({ ...prev, discover: true }));
-      teamService.getById(storedTeam.teamId)
-        .then((team: any) => {
-          if (cancelled) return;
-          if (!userBelongsToTeam(team, user.userId)) {
-            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-            setField("teamId", "");
-            return;
-          }
-          setSelectedTeam(team);
-          saveActiveTeam(team, user.userId);
-          setField("teamId", team.teamId);
-          setField("eventId", team.eventId);
-          setField("categoryId", team.categoryId);
-        })
-        .catch(() => {
-          try {
-            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-          } catch {
-            // Ignore storage failures.
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setTeamDiscoveryDone(true);
-            setLoading(prev => ({ ...prev, discover: false }));
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (events.length === 0) return;
-
-    let cancelled = false;
-    setLoading(prev => ({ ...prev, discover: true }));
-    Promise.all(events.map(event => teamService.getByEvent(event.eventId).catch(() => [] as TeamResponse[])))
-      .then(results => {
-        if (cancelled) return;
-        const team = results.flat().find(item => userBelongsToTeam(item, user.userId));
-        if (team) {
-          setSelectedTeam(team);
-          saveActiveTeam(team, user.userId);
-          setField("teamId", team.teamId);
-          setField("eventId", team.eventId);
-          setField("categoryId", team.categoryId);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setTeamDiscoveryDone(true);
-          setLoading(prev => ({ ...prev, discover: false }));
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events, selectedTeam, teamDiscoveryDone, user?.userId]);
 
   useEffect(() => {
     if (!teamDiscoveryDone || selectedTeam || !form.eventId) {
@@ -348,14 +329,19 @@ export function TeamApiPanel({
     const categoryId = selectedTeam?.categoryId;
     if (!categoryId) {
       setSelectedCategory(null);
+      loadedCategoryIdRef.current = null;
       return;
     }
+    if (loadedCategoryIdRef.current === categoryId && selectedCategory?.categoryId === categoryId) return;
 
     let cancelled = false;
     setSelectedCategory(current => current?.categoryId === categoryId ? current : null);
     categoryService.getById(categoryId)
       .then(category => {
-        if (!cancelled) setSelectedCategory(category);
+        if (!cancelled) {
+          setSelectedCategory(category);
+          loadedCategoryIdRef.current = categoryId;
+        }
       })
       .catch(() => {
         if (!cancelled) setSelectedCategory(null);
@@ -364,34 +350,48 @@ export function TeamApiPanel({
     return () => {
       cancelled = true;
     };
-  }, [selectedTeam?.categoryId]);
+  }, [selectedCategory?.categoryId, selectedTeam?.categoryId]);
 
   useEffect(() => {
     if (!selectedTeam) {
-      setMemberDetails({});
+      loadedMemberDetailsTeamIdRef.current = null;
       return;
     }
+    const hasAllMemberDetails = selectedTeam.members.every(member => !!memberDetails[member.userId]);
+    if (loadedMemberDetailsTeamIdRef.current === selectedTeam.teamId && hasAllMemberDetails) return;
 
     let cancelled = false;
     Promise.all(
-      selectedTeam.members.map(member =>
-        teamService.getMemberDetail(selectedTeam.teamId, member.userId)
+      selectedTeam.members.map(member => {
+        const cachedDetail = memberDetails[member.userId];
+        if (cachedDetail) return Promise.resolve([member.userId, cachedDetail] as const);
+        return teamService.getMemberDetail(selectedTeam.teamId, member.userId)
           .then(detail => [member.userId, detail] as const)
-          .catch(() => null)
-      )
+          .catch(() => null);
+      })
     ).then(results => {
       if (cancelled) return;
-      const nextDetails: Record<string, TeamMemberDetailResponse> = {};
+      const nextDetails: Record<string, TeamMemberDetailResponse> = { ...memberDetails };
       results.forEach(result => {
         if (result) nextDetails[result[0]] = result[1];
       });
       setMemberDetails(nextDetails);
+      loadedMemberDetailsTeamIdRef.current = selectedTeam.teamId;
     });
 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeam]);
+
+  useEffect(() => {
+    setLeaderActionPanel(null);
+    setRequests([]);
+    setJoinRequestsLoaded(false);
+    setRemoveMemberName("");
+    setField("responseNote", "");
+  }, [selectedTeam?.teamId]);
 
   async function run<T>(key: ActionKey, caller: () => Promise<T>, onSuccess?: (data: T) => void, successText = "Done.") {
     setLoading(prev => ({ ...prev, [key]: true }));
@@ -409,14 +409,17 @@ export function TeamApiPanel({
 
   const loadTeam = (teamId = form.teamId.trim()) => {
     if (!teamId) return;
+    const cachedTeam = userTeams.find(team => team.teamId === teamId);
+    if (cachedTeam) {
+      activateTeam(cachedTeam);
+      setMessage({ tone: "success", text: "Team loaded." });
+      return;
+    }
     run(
       "getById",
       () => teamService.getById(teamId),
       (team: any) => {
-        setSelectedTeam(team);
-        if (userBelongsToTeam(team, user?.userId)) {
-          saveActiveTeam(team, user?.userId);
-        }
+        activateTeam(team);
         setField("teamId", team.teamId);
         setField("eventId", team.eventId);
         setField("categoryId", team.categoryId);
@@ -424,6 +427,47 @@ export function TeamApiPanel({
       "Team loaded.",
     );
   };
+
+  const discoverUserTeams = () => {
+    if (!user?.userId || loading.discover || userTeams.length > 0 || teamDiscoveryAttemptedRef.current) return;
+    if (events.length === 0) {
+      setMessage({ tone: "info", text: "Events are still loading. Please try again in a moment." });
+      return;
+    }
+
+    teamDiscoveryAttemptedRef.current = true;
+    setTeamDiscoveryDone(false);
+    run(
+      "discover",
+      () => Promise.all(events.map(event => teamService.getByEvent(event.eventId).catch(() => [] as TeamResponse[]))),
+      results => {
+        const discoveredTeams = results
+          .flat()
+          .filter(item => userBelongsToTeam(item, user.userId));
+        setUserTeams(discoveredTeams);
+
+        const storedTeam = getStoredActiveTeam(user.userId);
+        if (storedTeam?.teamId && !discoveredTeams.some(team => team.teamId === storedTeam.teamId)) {
+          try {
+            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+          } catch {
+            // Ignore storage failures.
+          }
+        }
+      },
+      "",
+    ).finally(() => {
+      setTeamDiscoveryDone(true);
+    });
+  };
+
+  useEffect(() => {
+    if (teamPanelMode !== "current" || events.length === 0 || userTeams.length > 0 || loading.discover || teamDiscoveryAttemptedRef.current) {
+      return;
+    }
+    discoverUserTeams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events.length, loading.discover, teamPanelMode, userTeams.length]);
 
   const loadTeamsByEvent = () => {
     run(
@@ -459,8 +503,8 @@ export function TeamApiPanel({
         teamName: form.teamName.trim(),
       }),
       (team: any) => {
-        setSelectedTeam(team);
-        saveActiveTeam(team, user?.userId);
+        teamDiscoveryAttemptedRef.current = true;
+        activateTeam(team);
         setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
         setField("teamId", team.teamId);
       },
@@ -542,8 +586,7 @@ export function TeamApiPanel({
       ({ updatedRequest, updatedTeam }) => {
         setRequests(prev => prev.filter(request => request.requestId !== updatedRequest.requestId));
         if (updatedTeam) {
-          setSelectedTeam(updatedTeam);
-          saveActiveTeam(updatedTeam, user?.userId);
+          activateTeam(updatedTeam);
         }
       },
       action === "APPROVED" ? "Request approved." : "Request rejected.",
@@ -571,6 +614,7 @@ export function TeamApiPanel({
             // Ignore storage failures.
           }
           setSelectedTeam(null);
+          setUserTeams(prev => prev.filter(team => team.teamId !== form.teamId.trim()));
           setTeamDiscoveryDone(true);
           setTeams([]);
           setMemberDetails({});
@@ -625,93 +669,276 @@ export function TeamApiPanel({
     setRemoveMemberName("");
   };
 
-  if (!selectedTeam && mode !== "leader" && (!teamDiscoveryDone || loading.discover || loading.events)) {
-    return (
-      <Card className="p-8">
-        <div className="flex items-center gap-3" style={{ color: COLORS.textSecondary }}>
-          <Loader size={18} className="animate-spin" />
-          <span style={{ fontSize: 14, fontWeight: 600 }}>Checking your team...</span>
-        </div>
-      </Card>
-    );
-  }
+  const renderTeamEntryChoices = () => {
+    if (mode === "leader") return null;
 
-  if (!selectedTeam && mode !== "leader") {
     return (
-      <div className="space-y-5">
-        <Card className="p-6">
+      <div
+        className="inline-flex flex-wrap items-center gap-2 rounded-xl p-1"
+        style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
+      >
+          <button
+            type="button"
+            onClick={() => {
+              setTeamPanelMode("current");
+              setTeamFlow(null);
+              setMessage(null);
+              discoverUserTeams();
+            }}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 transition-all"
+            style={{
+              border: `1px solid ${teamPanelMode === "current" ? COLORS.primary : "transparent"}`,
+              background: teamPanelMode === "current" ? `${COLORS.primary}10` : "transparent",
+              color: teamPanelMode === "current" ? COLORS.primary : COLORS.textSecondary,
+            }}
+          >
+            <Users size={15} />
+            <span style={{ fontWeight: 800, fontSize: 13 }}>Current Team</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setTeamPanelMode("other");
+              setSelectedTeam(null);
+              setTeamFlow(null);
+              setMessage(null);
+              const nextEventId = initialEventId || form.eventId || approvedEvents[0]?.eventId || "";
+              if (nextEventId) setField("eventId", nextEventId);
+            }}
+            className="flex items-center gap-2 rounded-lg px-3 py-2 transition-all"
+            style={{
+              border: `1px solid ${teamPanelMode === "other" ? COLORS.primary : "transparent"}`,
+              background: teamPanelMode === "other" ? `${COLORS.primary}10` : "transparent",
+              color: teamPanelMode === "other" ? COLORS.primary : COLORS.textSecondary,
+            }}
+          >
+            <UserPlus size={15} />
+            <span style={{ fontWeight: 800, fontSize: 13 }}>Join Another Event</span>
+          </button>
+      </div>
+    );
+  };
+
+  const renderCurrentTeamPicker = () => {
+    if (mode === "leader") return null;
+    const isCompact = !!selectedTeam;
+    const selectedPickerTeamId = form.teamId || selectedTeam?.teamId || userTeams[0]?.teamId || "";
+
+    return (
+      <Card className={isCompact ? "p-3" : "p-5"}>
+        {!isCompact && (
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-            <div className="max-w-2xl">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex items-center justify-center rounded-xl"
-                  style={{ width: 44, height: 44, background: `${COLORS.primary}12`, color: COLORS.primary }}
-                >
-                  <Users size={22} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.textPrimary }}>You are not on a team yet</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                    Create a new team or send a request to join an existing team before submitting work.
-                  </div>
-                </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>Your Teams</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
+                Select a team from the filter below to load and review its details.
               </div>
             </div>
             {message && <InlineMessage tone={message.tone} message={message.text} />}
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-            <button
-              type="button"
-              onClick={() => {
-                const openingCreateFlow = teamFlow !== "create";
-                setTeamFlow(openingCreateFlow ? "create" : null);
-                if (openingCreateFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
-                  setField("eventId", approvedEvents[0]?.eventId ?? "");
-                }
-              }}
-              className="text-left rounded-2xl p-5 transition-all"
-              style={{
-                border: `1px solid ${teamFlow === "create" ? COLORS.primary : COLORS.border}`,
-                background: teamFlow === "create" ? `${COLORS.primary}10` : COLORS.bg,
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <PlusCircle size={22} style={{ color: COLORS.primary }} />
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.textPrimary }}>Create Team</div>
-                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>Start a team as the leader.</div>
-                </div>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const openingJoinFlow = teamFlow !== "join";
-                setTeamFlow(openingJoinFlow ? "join" : null);
-                if (openingJoinFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
-                  setField("eventId", approvedEvents[0]?.eventId ?? "");
-                }
-              }}
-              className="text-left rounded-2xl p-5 transition-all"
-              style={{
-                border: `1px solid ${teamFlow === "join" ? COLORS.primary : COLORS.border}`,
-                background: teamFlow === "join" ? `${COLORS.primary}10` : COLORS.bg,
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <UserPlus size={22} style={{ color: COLORS.primary }} />
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.textPrimary }}>Join Team</div>
-                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>Request to join an existing team.</div>
-                </div>
-              </div>
-            </button>
+        {loading.discover || (teamPanelMode === "current" && events.length > 0 && !teamDiscoveryAttemptedRef.current && userTeams.length === 0) ? (
+          <div className="flex items-center gap-3" style={{ color: COLORS.textSecondary, marginTop: isCompact ? 0 : 20 }}>
+            <Loader size={18} className="animate-spin" />
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Loading your teams...</span>
           </div>
-        </Card>
+        ) : events.length === 0 && !teamDiscoveryAttemptedRef.current ? (
+          <div
+            className="rounded-xl px-4 py-5 text-center mt-5"
+            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}
+          >
+            Events are loading...
+          </div>
+        ) : userTeams.length === 0 ? (
+          <div
+            className="rounded-xl px-4 py-5 text-center mt-5"
+            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}
+          >
+            No teams yet
+          </div>
+        ) : (
+          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end ${isCompact ? "" : "mt-5"}`}>
+            <label className="block">
+              <select
+                value={selectedPickerTeamId}
+                onChange={event => setField("teamId", event.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                {userTeams.map(team => {
+                  const eventName = events.find(event => event.eventId === team.eventId)?.eventName ?? team.eventId;
+                  return (
+                    <option key={team.teamId} value={team.teamId}>
+                      {team.teamName} - {eventName}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <Button
+              variant="primary"
+              size="md"
+              icon={loading.getById ? <Loader size={14} className="animate-spin" /> : <Eye size={14} />}
+              disabled={!selectedPickerTeamId || loading.getById}
+              onClick={() => loadTeam(selectedPickerTeamId)}
+            >
+              {loading.getById ? "Loading..." : isCompact ? "Switch Team" : "Load Team"}
+            </Button>
+          </div>
+        )}
+      </Card>
+    );
+  };
 
-        {teamFlow === "create" && (
+  const renderTeamEmptyState = () => (
+    <div
+      className="min-h-[52vh] flex items-center justify-center px-4"
+      style={{ marginTop: 24 }}
+    >
+      <Card className="w-full max-w-2xl p-8 text-center">
+        <div
+          className="mx-auto flex items-center justify-center rounded-2xl"
+          style={{
+            width: 72,
+            height: 72,
+            background: `${COLORS.primary}12`,
+            color: COLORS.primary,
+            border: `1px solid ${COLORS.primary}20`,
+          }}
+        >
+          <Users size={32} />
+        </div>
+        <div style={{ fontWeight: 900, fontSize: 22, color: COLORS.textPrimary, marginTop: 18 }}>
+          My Team
+        </div>
+        <div className="mx-auto" style={{ maxWidth: 480, fontSize: 14, color: COLORS.textSecondary, marginTop: 8, lineHeight: 1.6 }}>
+          Select one of your existing teams, create a new team for an event, or browse open events to find a team to join.
+        </div>
+        <div className="flex flex-col sm:flex-row justify-center gap-3 mt-6">
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Users size={14} />}
+            onClick={() => {
+              setTeamPanelMode("current");
+              setTeamFlow(null);
+              setMessage(null);
+              discoverUserTeams();
+            }}
+          >
+            View My Teams
+          </Button>
+          <Button
+            variant="outline"
+            size="md"
+            icon={<PlusCircle size={14} />}
+            onClick={() => {
+              setTeamPanelMode("other");
+              setSelectedTeam(null);
+              setTeamFlow("create");
+              const nextEventId = initialEventId || form.eventId || approvedEvents[0]?.eventId || "";
+              if (nextEventId) setField("eventId", nextEventId);
+            }}
+          >
+            Create Team
+          </Button>
+          {onNavigate && (
+            <Button
+              variant="ghost"
+              size="md"
+              icon={<Search size={14} />}
+              onClick={() => onNavigate("events")}
+            >
+              Find Events
+            </Button>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+
+  const renderPanelHeading = () => (
+    <div style={{ fontWeight: 800, fontSize: 24, color: COLORS.textPrimary, marginBottom: 18 }}>
+      My Team
+    </div>
+  );
+
+  if (!selectedTeam && mode !== "leader") {
+    return (
+      <div className="space-y-3">
+        {!teamPanelMode && renderTeamEmptyState()}
+        {teamPanelMode && (
+          <>
+            {renderPanelHeading()}
+            {renderTeamEntryChoices()}
+          </>
+        )}
+        {teamPanelMode === "current" && renderCurrentTeamPicker()}
+        {teamPanelMode === "other" && (
+          <Card className="p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => {
+                  const openingCreateFlow = teamFlow !== "create";
+                  if (openingCreateFlow) {
+                    startTeamFlow("create", form.eventId);
+                  } else {
+                    setTeamFlow(null);
+                  }
+                  if (openingCreateFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
+                    setField("eventId", approvedEvents[0]?.eventId ?? "");
+                  }
+                }}
+                className="text-left rounded-2xl p-5 transition-all"
+                style={{
+                  border: `1px solid ${teamFlow === "create" ? COLORS.primary : COLORS.border}`,
+                  background: teamFlow === "create" ? `${COLORS.primary}10` : COLORS.bg,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <PlusCircle size={22} style={{ color: COLORS.primary }} />
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.textPrimary }}>Create Team</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>Start a team as the leader.</div>
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const openingJoinFlow = teamFlow !== "join";
+                  if (openingJoinFlow) {
+                    startTeamFlow("join", form.eventId);
+                  } else {
+                    setTeamFlow(null);
+                  }
+                  if (openingJoinFlow && !approvedEvents.some(event => event.eventId === form.eventId)) {
+                    setField("eventId", approvedEvents[0]?.eventId ?? "");
+                  }
+                }}
+                className="text-left rounded-2xl p-5 transition-all"
+                style={{
+                  border: `1px solid ${teamFlow === "join" ? COLORS.primary : COLORS.border}`,
+                  background: teamFlow === "join" ? `${COLORS.primary}10` : COLORS.bg,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <UserPlus size={22} style={{ color: COLORS.primary }} />
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: COLORS.textPrimary }}>Join Team</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>Request to join an existing team.</div>
+                  </div>
+                </div>
+              </button>
+            </div>
+          </Card>
+        )}
+
+        {teamPanelMode === "other" && teamFlow === "create" && (
           <Card className="p-5">
             <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 16 }}>Create Team</div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -767,7 +994,7 @@ export function TeamApiPanel({
           </Card>
         )}
 
-        {teamFlow === "join" && (
+        {teamPanelMode === "other" && teamFlow === "join" && (
           <Card className="p-5">
             <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 16 }}>Join Team</div>
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-4 items-end">
@@ -841,7 +1068,7 @@ export function TeamApiPanel({
           </Card>
         )}
 
-        {teamFlow === "join" && !!teamSearchEventId && teamSearchEventId === form.eventId && (
+        {teamPanelMode === "other" && teamFlow === "join" && !!teamSearchEventId && teamSearchEventId === form.eventId && (
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Teams In Event</div>
             {joinTeams.length === 0 ? (
@@ -1024,8 +1251,20 @@ export function TeamApiPanel({
       return null;
     };
 
+    if (mode !== "leader" && teamPanelMode !== "current") {
+      return (
+        <div className="space-y-3">
+          {renderPanelHeading()}
+          {renderTeamEntryChoices()}
+        </div>
+      );
+    }
+
     return (
-      <div className="space-y-5">
+      <div className="space-y-3">
+        {mode !== "leader" && renderPanelHeading()}
+        {renderTeamEntryChoices()}
+        {mode !== "leader" && renderCurrentTeamPicker()}
         <Card className="p-5">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
             <div>
@@ -1155,26 +1394,8 @@ export function TeamApiPanel({
                   </Button>
                 </>
               )}
-              <Button
-                variant="primary"
-                size="sm"
-                icon={loading.registerEvent ? <Loader size={14} className="animate-spin" /> : <UserPlus size={14} />}
-                disabled={loading.registerEvent || !canEditRoster || !sizeOk}
-                onClick={registerTeamEvent}
-              >
-                {loading.registerEvent ? "Registering..." : "Register Team for Event"}
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                icon={loading.withdrawEvent ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                disabled={loading.withdrawEvent || !canEditRoster}
-                onClick={withdrawTeamEvent}
-              >
-                {loading.withdrawEvent ? "Withdrawing..." : "Withdraw Registration"}
-              </Button>
             </div>
-            {canEditRoster && !sizeOk && (
+            {false && (
               <div className="mt-3 rounded-xl px-3 py-2" style={{ background: `${COLORS.error}08`, color: COLORS.error, fontSize: 12.5 }}>
                 Team must have {minTeamSize ?? "?"}–{maxTeamSize ?? "?"} members to register for this event.
               </div>

@@ -36,6 +36,7 @@ import {
 
 const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
+const EVENTS_RELOAD_MIN_INTERVAL_MS = 15_000;
 
 type ActiveTeamContext = {
   teamId: string;
@@ -47,6 +48,19 @@ type ActiveTeamContext = {
   userId?: string;
   memberUserIds?: string[];
 };
+
+function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById>>, userId?: string): ActiveTeamContext {
+  return {
+    teamId: team.teamId,
+    eventId: team.eventId,
+    categoryId: team.categoryId,
+    teamName: team.teamName,
+    leaderUserId: team.leaderUserId,
+    teamStatusId: team.teamStatusId,
+    userId,
+    memberUserIds: team.members.map(member => member.userId),
+  };
+}
 
 function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
   try {
@@ -207,8 +221,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [eventActionLoading, setEventActionLoading] = useState<Record<string, boolean>>({});
   const [eventActionMessage, setEventActionMessage] = useState<Record<string, string>>({});
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
+  const [teamInitialEventId, setTeamInitialEventId] = useState("");
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [teamMembers] = useState<MemberTeamMember[]>([]);
+  const eventsRequestInFlightRef = useRef(false);
+  const lastEventsLoadAtRef = useRef(0);
   // Load leaderboard when on that page — needs eventId + categoryId from user's team
   useEffect(() => {
     if (currentPage !== "leaderboard") return;
@@ -226,7 +243,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   }, [currentPage]);
 
   const loadEvents = useCallback(() => {
+    const now = Date.now();
+    if (
+      eventsRequestInFlightRef.current
+      || (lastEventsLoadAtRef.current > 0 && now - lastEventsLoadAtRef.current < EVENTS_RELOAD_MIN_INTERVAL_MS)
+    ) {
+      return () => { };
+    }
+
     let cancelled = false;
+    eventsRequestInFlightRef.current = true;
+    lastEventsLoadAtRef.current = now;
     const hasToken = !!getAccessToken();
     const eventsRequest = hasToken ? eventService.getAll(true) : eventService.getPublic();
     const participationsRequest = hasToken
@@ -258,6 +285,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         setApiEvents([]);
         setParticipations({});
         setEventsError(parseApiError(error).message || "Could not load events.");
+      })
+      .finally(() => {
+        eventsRequestInFlightRef.current = false;
       });
     return () => {
       cancelled = true;
@@ -308,6 +338,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   });
   const [profileSaved, setProfileSaved] = useState(false);
   const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.userId));
+  const [submissionTeams, setSubmissionTeams] = useState<ActiveTeamContext[]>([]);
+  const [submissionTeamsLoading, setSubmissionTeamsLoading] = useState(false);
   const [submissionParticipation, setSubmissionParticipation] = useState<EventParticipantResponse | null>(null);
   const [submissionParticipationLoading, setSubmissionParticipationLoading] = useState(false);
   const [submissionForm, setSubmissionForm] = useState({
@@ -335,31 +367,89 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   useEffect(() => {
     if (currentPage !== "submissions") return;
+    if (!user?.userId || apiEvents.length === 0) {
+      setSubmissionTeams([]);
+      return;
+    }
+
+    let cancelled = false;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
     if (storedTeam?.teamId) {
       setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
+    } else {
+      setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+    }
+
+    setSubmissionTeamsLoading(true);
+    Promise.all(apiEvents.map(event => teamService.getByEvent(event.eventId).catch(() => [])))
+      .then(results => {
+        if (cancelled) return;
+        const userTeams = results
+          .flat()
+          .filter(team => team.members.some(member => member.userId === user.userId && member.active))
+          .map(team => teamToActiveContext(team, user.userId));
+
+        setSubmissionTeams(userTeams);
+
+        const selectedTeam = (storedTeam?.teamId
+          ? userTeams.find(team => team.teamId === storedTeam.teamId)
+          : null) ?? userTeams[0] ?? null;
+
+        setActiveTeamContext(selectedTeam);
+        setSubmissionForm(prev => ({ ...prev, teamId: selectedTeam?.teamId ?? "", roundId: "" }));
+        setSubmissionStatus("");
+        setSubmissionHistory([]);
+
+        if (selectedTeam) {
+          localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(selectedTeam));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSubmissionTeams([]);
+          if (storedTeam?.teamId) {
+            teamService.getById(storedTeam.teamId)
+              .then(team => {
+                if (cancelled) return;
+                const refreshedTeam = teamToActiveContext(team, user.userId);
+                setSubmissionTeams([refreshedTeam]);
+                setActiveTeamContext(refreshedTeam);
+                setSubmissionForm(prev => ({ ...prev, teamId: refreshedTeam.teamId }));
+                localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(refreshedTeam));
+              })
+              .catch(() => {
+                // Submission API remains the source of truth if refreshing the team fails.
+              });
+          }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setSubmissionTeamsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiEvents, currentPage, user?.userId]);
+
+  useEffect(() => {
+    if (currentPage !== "submissions") return;
+    const storedTeam = getStoredActiveTeam(user?.userId);
+    if (storedTeam?.teamId && submissionTeams.length === 0) {
       teamService.getById(storedTeam.teamId)
         .then(team => {
-          const refreshedTeam = {
-            ...storedTeam,
-            eventId: team.eventId,
-            categoryId: team.categoryId,
-            teamName: team.teamName,
-            leaderUserId: team.leaderUserId,
-            teamStatusId: team.teamStatusId,
-            memberUserIds: team.members.map(member => member.userId),
-          };
+          const refreshedTeam = teamToActiveContext(team, user?.userId);
           setActiveTeamContext(refreshedTeam);
+          setSubmissionTeams([refreshedTeam]);
+          setSubmissionForm(prev => ({ ...prev, teamId: refreshedTeam.teamId }));
           localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(refreshedTeam));
         })
         .catch(() => {
           // Submission API remains the source of truth if refreshing the team fails.
         });
-    } else {
-      setSubmissionForm(prev => ({ ...prev, teamId: "" }));
     }
-  }, [currentPage, user?.userId]);
+  }, [currentPage, submissionTeams.length, user?.userId]);
 
   useEffect(() => {
     if (currentPage !== "certificates") return;
@@ -617,6 +707,57 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setSubmissionStatus("Loaded submitted work. Update the fields and submit again before the deadline.");
     submissionFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  const selectSubmissionTeam = (teamId: string) => {
+    const nextTeam = submissionTeams.find(team => team.teamId === teamId) ?? null;
+    setActiveTeamContext(nextTeam);
+    setSubmissionForm(prev => ({
+      ...prev,
+      teamId,
+      roundId: "",
+      submissionName: "",
+      repositoryUrl: "",
+      demoUrl: "",
+      reportUrl: "",
+      slideUrl: "",
+    }));
+    setSubmissionStatus("");
+    setSubmissionHistory([]);
+    setSubmissionParticipation(null);
+    if (nextTeam) {
+      localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
+    }
+  };
+
+  const renderSubmissionTeamSelector = () => (
+    <Card className="p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
+        <label className="block">
+          <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+            <Users size={14} /> Team
+          </span>
+          <select
+            value={submissionForm.teamId}
+            onChange={event => selectSubmissionTeam(event.target.value)}
+            className="w-full px-3 py-2 rounded-lg outline-none"
+            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            disabled={submissionTeamsLoading || submissionTeams.length === 0}
+          >
+            {submissionTeamsLoading && <option value="">Loading your teams...</option>}
+            {!submissionTeamsLoading && submissionTeams.length === 0 && <option value="">No teams available</option>}
+            {submissionTeams.map(team => (
+              <option key={team.teamId} value={team.teamId}>
+                {team.teamName ?? team.teamId}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button variant="outline" size="md" icon={<Users size={14} />} onClick={() => onNavigate("team")}>
+          Manage Teams
+        </Button>
+      </div>
+    </Card>
+  );
 
   const renderSubmissionHistory = () => {
     const roundById = new Map(submissionRounds.map(round => [round.roundId, round]));
@@ -924,10 +1065,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   );
 
   const renderTeam = () => (
-    <>
-      <SectionHeader title="My Team" />
-      <TeamApiPanel />
-    </>
+    <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} />
   );
 
   const renderEvents = () => (
@@ -1035,6 +1173,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                         ...prev,
                         [ev.eventId]: "Event registration is per team: create or join a team, then the team leader registers the team in the My Team tab.",
                       }));
+                      setTeamInitialEventId(ev.eventId);
                       onNavigate("team");
                     }}
                   >
@@ -1327,6 +1466,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       return (
         <>
           <SectionHeader title="Submission Center" subtitle="Create or join a team before submitting work" />
+          {renderSubmissionTeamSelector()}
           <Card className="p-8">
             <div className="max-w-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -1361,6 +1501,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       return (
         <>
           <SectionHeader title="Submission Center" subtitle="Checking event approval status" />
+          {renderSubmissionTeamSelector()}
           <Card className="p-8">
             <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Checking your event participation...</div>
           </Card>
@@ -1372,6 +1513,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       return (
         <>
           <SectionHeader title="Submission Center" subtitle="Organizer approval required" />
+          {renderSubmissionTeamSelector()}
           <Card className="p-8">
             <div className="max-w-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -1402,6 +1544,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       return (
         <>
           <SectionHeader title="Submission Center" subtitle="Only team leaders can submit or update team work" />
+          {renderSubmissionTeamSelector()}
           <Card className="p-8">
             <div className="max-w-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -1431,6 +1574,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return (
       <>
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
+        {renderSubmissionTeamSelector()}
         <div ref={submissionFormRef}>
           <Card className="p-5">
             <div className="grid md:grid-cols-2 gap-4">
