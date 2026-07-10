@@ -1,14 +1,7 @@
-import {
-  Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
-  GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
-  Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
-  TrendingUp, Clock, Activity, Download, Send, Search, Filter,
-  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader, Database
-} from "lucide-react";
-import {
-  StatCard, Card, SectionHeader, COLORS, StatusBadge,
-  ProgressBar, Button, DataTable, TimelineItem
-} from "@/components/shared/UIComponents";
+import { useEffect, useState } from "react";
+import { PlusCircle, Loader, User, Mail, Trash2 } from "lucide-react";
+import { SectionHeader, Card, Button, COLORS } from "@/components/shared/UIComponents";
+import { roundService } from "@/features/judging/api/roundService";
 
 interface AdminViewProps {
   context: any;
@@ -17,177 +10,186 @@ interface AdminViewProps {
 export function AdminAssignmentsView({ context }: AdminViewProps) {
   const {
     t,
-    onNavigate,
-    events,
-    categories,
-    rounds,
-    criteria,
-    users,
-    rankings,
-    auditLogs,
-    broadcastHistory,
-    roleColors,
-    AWARD_TIER_OPTIONS,
-    apiEvents,
-    setApiEvents,
     selectedEventId,
-    setSelectedEventId,
-    apiCategories,
-    setApiCategories,
-    apiRounds,
-    setApiRounds,
-    apiTeamEligibility,
-    setApiTeamEligibility,
-    apiRankings,
-    setApiRankings,
-    apiAwards,
-    setApiAwards,
-    apiCriteriaTemplates,
-    setApiCriteriaTemplates,
-    eventLoadError,
-    setEventLoadError,
-    categoryLoadError,
-    setCategoryLoadError,
-    dataExportLoading,
-    setDataExportLoading,
-    dataExportDone,
-    setDataExportDone,
-    dataExportError,
-    setDataExportError,
-    eventModal,
-    setEventModal,
-    categoryModal,
-    setCategoryModal,
-    roundModal,
-    setRoundModal,
-    assignJudgeModal,
+    apiDashboardRounds,
     setAssignJudgeModal,
-    userSearch,
-    setUserSearch,
-    approvedUsers,
-    setApprovedUsers,
-    showGuestJudgeForm,
-    setShowGuestJudgeForm,
-    guestJudgeForm,
-    setGuestJudgeForm,
-    guestJudgeSuccess,
-    setGuestJudgeSuccess,
-    rankingsComputed,
-    setRankingsComputed,
-    rankingsPublished,
-    setRankingsPublished,
-    disqualifiedTeams,
-    setDisqualifiedTeams,
-    disqualifyTarget,
-    setDisqualifyTarget,
-    disqualifyReason,
-    setDisqualifyReason,
-    awardPatternCategoryId,
-    setAwardPatternCategoryId,
-    awardPatterns,
-    setAwardPatterns,
-    awardPatternLoading,
-    setAwardPatternLoading,
-    awardPatternMessage,
-    setAwardPatternMessage,
-    awardPatternError,
-    setAwardPatternError,
-    autoGrantLimit,
-    setAutoGrantLimit,
-    autoGrantLoading,
-    setAutoGrantLoading,
-    autoGrantMessage,
-    setAutoGrantMessage,
-    autoGrantError,
-    setAutoGrantError,
-    autoGrantPreview,
-    setAutoGrantPreview,
-    broadcastTitle,
-    setBroadcastTitle,
-    broadcastMessage,
-    setBroadcastMessage,
-    broadcastAudience,
-    setBroadcastAudience,
-    broadcastSent,
-    setBroadcastSent,
-    notificationTargetMode,
-    setNotificationTargetMode,
-    notificationTeamId,
-    setNotificationTeamId,
-    notificationEmail,
-    setNotificationEmail,
-    notificationTitle,
-    setNotificationTitle,
-    notificationMessage,
-    setNotificationMessage,
-    notificationSending,
-    setNotificationSending,
-    notificationStatus,
-    setNotificationStatus,
-    notificationError,
-    setNotificationError,
-    settingsSaved,
-    setSettingsSaved,
-    systemSettings,
-    setSystemSettings,
-    filteredUsers,
-    updateAwardPattern,
-    addAwardPattern,
-    removeAwardPattern,
-    handleSaveAwardPatterns,
-    handleApproveUser,
-    handleGuestJudgeSubmit,
-    handleDisqualify,
-    handleDisqualifyConfirm,
-    handleComputeRankings,
-    handlePublishRankings,
-    handleAutoGrantAwards,
-    handleBroadcast,
-    handleSendTargetedNotification,
-    handleDataExport,
-    createEmptyAwardPattern
+    assignJudgeModal,
   } = context;
+
+  const [selectedRoundId, setSelectedRoundId] = useState<string>("");
+  const [judges, setJudges] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemove = async (judgeId: string, roundJudgeId: string, force = false) => {
+    if (!selectedRoundId || !roundJudgeId) return;
+    setRemovingId(judgeId);
+    setError("");
+    try {
+      await roundService.disableJudge(roundJudgeId, force);
+      // Reload the judges list
+      const updatedJudges = await roundService.getJudges(selectedRoundId);
+      setJudges(updatedJudges);
+    } catch (err: any) {
+      if (err.message && err.message.includes("JUDGE_HAS_SCORES")) {
+        if (window.confirm("Giám khảo này đã có bảng điểm (chấm thi). Việc xoá sẽ làm mất các điểm số đó. Bạn có chắc chắn muốn xoá không?")) {
+          return handleRemove(judgeId, roundJudgeId, true);
+        }
+      } else {
+        setError(err.message || "Failed to remove judge");
+      }
+    } finally {
+      if (!force) setRemovingId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (apiDashboardRounds && apiDashboardRounds.length > 0) {
+      const isValid = apiDashboardRounds.some((r: any) => r.roundId === selectedRoundId);
+      if (!isValid) {
+        setSelectedRoundId(apiDashboardRounds[0].roundId);
+      }
+    } else {
+      setSelectedRoundId("");
+    }
+  }, [apiDashboardRounds, selectedRoundId]);
+
+  useEffect(() => {
+    if (!selectedRoundId) {
+      setJudges([]);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    roundService.getJudges(selectedRoundId)
+      .then(setJudges)
+      .catch(err => setError(err instanceof Error ? err.message : "Failed to load judges"))
+      .finally(() => setLoading(false));
+  }, [selectedRoundId, assignJudgeModal?.open]);
 
   return (
     <>
-      <SectionHeader title={t("admin.judgeAssignments")} subtitle={t("admin.judgeAssignmentsSubtitle")} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.judgeAssignmentsLabel")}</div>
-          {[
-            { judge: "Dr. Pham Thi Lan", track: "AI Agents", teams: 10, completed: 7 },
-            { judge: "Prof. Le Thi Bich", track: "AI Agents", teams: 10, completed: 8 },
-            { judge: "Dr. Nguyen Huu Phuoc", track: "Web3", teams: 8, completed: 8 },
-            { judge: "Assoc. Prof. Tran Van C", track: "AI Agents", teams: 10, completed: 5 },
-          ].map(j => (
-            <div key={j.judge} className="mb-4">
-              <div className="flex items-center justify-between mb-1">
-                <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{j.judge}</span>
-                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{j.track}</span>
-              </div>
-              <ProgressBar value={j.completed} max={j.teams} color={COLORS.warning} label={`${j.completed}/${j.teams} scored`} />
-            </div>
-          ))}
-          <Button variant="outline" size="sm" icon={<PlusCircle size={13} />} className="mt-2">{t("common.assignJudge")}</Button>
+      <SectionHeader 
+        title={t("admin.judgeAssignments")} 
+        subtitle={t("admin.judgeAssignmentsSubtitle") || "Manage judges assigned to rounds"} 
+        action={
+          <div className="flex items-center gap-3">
+            <select
+              className="px-3 py-2 rounded-xl outline-none text-sm font-medium cursor-pointer"
+              style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              value={selectedEventId || ""}
+              onChange={(e) => context.setSelectedEventId(e.target.value)}
+            >
+              <option value="" disabled>Select an Event</option>
+              {context.apiEvents?.map((evt: any) => (
+                <option key={evt.eventId} value={evt.eventId}>{evt.eventName}</option>
+              ))}
+            </select>
+            <Button 
+              variant="primary" 
+              size="sm" 
+              icon={<PlusCircle size={14} />} 
+              onClick={() => {
+                const round = apiDashboardRounds.find((r: any) => r.roundId === selectedRoundId);
+                setAssignJudgeModal({ open: true, roundId: selectedRoundId, roundName: round?.roundName });
+              }}
+              disabled={!selectedRoundId}
+            >
+              {t("common.assignJudge")}
+            </Button>
+          </div>
+        }
+      />
+      
+      {!selectedEventId ? (
+        <Card className="p-8 text-center" style={{ color: COLORS.textSecondary }}>
+          Select an event to view rounds and judges.
         </Card>
-        <Card className="p-5">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.mentorAssignments")}</div>
-          {[
-            { mentor: "Dr. Nguyen Van Minh", track: "AI Agents", teams: 3 },
-            { mentor: "Dr. Hoang Thi Huong", track: "AI Agents", teams: 2 },
-            { mentor: "Prof. Bui Van Nam", track: "Web3", teams: 3 },
-          ].map(m => (
-            <div key={m.mentor} className="mb-3 flex items-center justify-between p-3 rounded-xl" style={{ background: COLORS.bg }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{m.mentor}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{m.track} • {m.teams} teams</div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-3">
+            <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>Rounds</div>
+            {apiDashboardRounds?.map((round: any) => (
+              <div 
+                key={round.roundId} 
+                onClick={() => setSelectedRoundId(round.roundId)}
+                className="p-3 rounded-xl cursor-pointer transition-colors"
+                style={{ 
+                  background: selectedRoundId === round.roundId ? `${COLORS.primary}15` : COLORS.bg,
+                  border: `1px solid ${selectedRoundId === round.roundId ? COLORS.primary : COLORS.border}`,
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 14, color: selectedRoundId === round.roundId ? COLORS.primary : COLORS.textPrimary }}>
+                  {round.roundName}
+                </div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="mt-1 line-clamp-1">
+                  Round Order: {round.roundOrder}
+                </div>
               </div>
-              <Button variant="ghost" size="sm" icon={<Edit size={13} />}>{t("common.edit")}</Button>
+            ))}
+            {(!apiDashboardRounds || apiDashboardRounds.length === 0) && (
+              <div className="text-center p-4 text-sm" style={{ color: COLORS.textSecondary }}>No rounds found</div>
+            )}
+          </div>
+          
+          <div className="lg:col-span-2 space-y-3">
+            <div className="flex items-center justify-between">
+              <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>Assigned Judges</div>
+              {loading && <Loader size={14} className="animate-spin" style={{ color: COLORS.textSecondary }} />}
             </div>
-          ))}
-          <Button variant="outline" size="sm" icon={<PlusCircle size={13} />} className="mt-2">{t("common.assignMentor")}</Button>
-        </Card>
-      </div>
+            
+            {error && (
+              <Card className="p-4 bg-red-500/10 text-red-500 text-sm border-red-500/20">{error}</Card>
+            )}
+            
+            {!loading && judges.length === 0 && (
+              <Card className="p-8 text-center flex flex-col items-center justify-center gap-2" style={{ borderStyle: "dashed" }}>
+                <User size={24} style={{ color: COLORS.textSecondary, opacity: 0.5 }} />
+                <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No judges assigned to this round yet</div>
+              </Card>
+            )}
+
+            {!loading && judges.map((j: any) => {
+              const jId = j.judgeId || j.userId || Math.random().toString();
+              const rjId = j.roundJudgeId; // From backend's RoundJudgeResponse
+              const isRemoving = removingId === jId;
+              
+              return (
+                <Card key={jId} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
+                      {(j.fullName || j.judgeName || "J")[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{j.fullName || j.judgeName}</div>
+                      <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                        <Mail size={12} />
+                        {j.email || j.judgeEmail}
+                      </div>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="danger" 
+                    size="sm" 
+                    icon={isRemoving ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    disabled={isRemoving}
+                    onClick={() => {
+                      if (!rjId) {
+                        setError("Missing roundJudgeId. Please restart your Java Backend so the API changes take effect!");
+                        return;
+                      }
+                      handleRemove(jId, rjId);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </>
   );
 }

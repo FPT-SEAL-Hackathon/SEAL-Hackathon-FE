@@ -44,7 +44,7 @@ export function RoundModal({ categoryId, round, onClose, onSaved }: Props) {
     try {
       const payload = {
         roundName: form.roundName,
-        description: form.description || undefined,
+        description: form.description || "",
         roundOrder: parseInt(form.roundOrder) || 1,
         roundStatusId: form.roundStatusId || undefined,
         submissionDeadline: form.submissionDeadline ? new Date(form.submissionDeadline).toISOString() : undefined,

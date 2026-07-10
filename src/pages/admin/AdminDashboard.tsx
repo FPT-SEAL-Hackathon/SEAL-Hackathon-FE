@@ -8,7 +8,9 @@ import { rankingService, type EventRankingDTO } from "@/features/rankings/api/ra
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { researchService } from "@/features/research/api/researchService";
+import { settingsService } from "@/features/settings/api/settingsService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { userService, type UserManagementUser } from "@/features/users/api/userService";
 import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
 import { CategoryModal } from "@/features/categories/components/CategoryModal";
@@ -17,11 +19,14 @@ import { AssignJudgeModal } from "@/features/judging/components/AssignJudgeModal
 import { AdminDashboardView } from "./components/AdminDashboardView";
 import { AdminEventsView } from "./components/AdminEventsView";
 import { AdminEventParticipantsView } from "./components/AdminEventParticipantsView";
+import { AdminTeamApprovalView } from "./components/AdminTeamApprovalView";
 import { AdminCategoriesView } from "./components/AdminCategoriesView";
 import { AdminRoundsView } from "./components/AdminRoundsView";
 import { AdminCriteriaView } from "./components/AdminCriteriaView";
 import { AdminUsersView } from "./components/AdminUsersView";
 import { AdminAssignmentsView } from "./components/AdminAssignmentsView";
+import { AdminMentorAssignmentsView } from "./components/AdminMentorAssignmentsView";
+import { AssignMentorModal } from "@/features/categories/components/AssignMentorModal";
 import { AdminSubmissionsView } from "./components/AdminSubmissionsView";
 import { AdminRankingsView } from "./components/AdminRankingsView";
 import { AdminReportsView } from "./components/AdminReportsView";
@@ -34,6 +39,8 @@ import { AdminSettingsView } from "./components/AdminSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
 import { COLORS } from "@/components/shared/UIComponents";
+import { EventDetailPage } from "@/features/events/pages/EventDetailPage";
+import { CriteriaTemplateProvider } from "@/features/criteriaTemplates/context/CriteriaTemplateContext";
 
 // ===== DATA =====
 
@@ -124,18 +131,31 @@ const createEmptyAwardPattern = (rankPosition: number) => ({
   prizeCurrency: "VND",
 });
 
+const createEmptyManualAwardForm = () => ({
+  categoryId: "",
+  teamId: "",
+  awardTierId: AWARD_TIER_OPTIONS[6].value,
+  awardTitle: "Special Award",
+  description: "",
+  prizeValue: "",
+  prizeCurrency: "VND",
+});
+
 export function AdminDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { t } = useLanguage();
 
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<typeof events>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<EventResponse | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
   const [apiRounds, setApiRounds] = useState<RoundResponse[]>([]);
+  const [apiDashboardRounds, setApiDashboardRounds] = useState<RoundResponse[]>([]);
   const [apiTeamEligibility, setApiTeamEligibility] = useState<TeamEligibilityReviewResponse[]>([]);
   const [apiRankings, setApiRankings] = useState<EventRankingDTO[]>([]);
   const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
+  const [apiUsers, setApiUsers] = useState<UserManagementUser[]>([]);
   const [eventLoadError, setEventLoadError] = useState("");
   const [categoryLoadError, setCategoryLoadError] = useState("");
   const [selectedSubmissionCategoryId, setSelectedSubmissionCategoryId] = useState("");
@@ -158,6 +178,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [categoryModal, setCategoryModal] = useState<{ open: boolean; edit?: CategoryResponse }>({ open: false });
   const [roundModal, setRoundModal] = useState<{ open: boolean; edit?: RoundResponse; categoryId?: string }>({ open: false });
   const [assignJudgeModal, setAssignJudgeModal] = useState<{ open: boolean; roundId?: string; roundName?: string }>({ open: false });
+  const [assignMentorModal, setAssignMentorModal] = useState<{ open: boolean; categoryId?: string }>({ open: false });
+  const [mentorAssignmentReloadKey, setMentorAssignmentReloadKey] = useState(0);
 
   const [userSearch, setUserSearch] = useState("");
   const [approvedUsers, setApprovedUsers] = useState<number[]>([]);
@@ -183,6 +205,10 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [autoGrantMessage, setAutoGrantMessage] = useState("");
   const [autoGrantError, setAutoGrantError] = useState("");
   const [autoGrantPreview, setAutoGrantPreview] = useState<Array<{ teamId: string; teamName: string; rankPosition: number; totalScore: number }>>([]);
+  const [manualAwardForm, setManualAwardForm] = useState(createEmptyManualAwardForm);
+  const [manualAwardLoading, setManualAwardLoading] = useState(false);
+  const [manualAwardMessage, setManualAwardMessage] = useState("");
+  const [manualAwardError, setManualAwardError] = useState("");
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
@@ -196,6 +222,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [notificationStatus, setNotificationStatus] = useState("");
   const [notificationError, setNotificationError] = useState("");
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaveError, setSettingsSaveError] = useState("");
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [systemSettings, setSystemSettings] = useState({
     platformName: "SEAL FPT Hackathon Platform",
     maxTeamSize: "5",
@@ -207,6 +235,24 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     contactEmail: "seal@fpt.edu.vn",
   });
 
+  // Load system settings from API on mount
+  useEffect(() => {
+    settingsService.getSettings()
+      .then(data => {
+        setSystemSettings({
+          platformName: data.platformName ?? "SEAL FPT Hackathon Platform",
+          maxTeamSize: String(data.maxTeamSize ?? 5),
+          minTeamSize: String(data.minTeamSize ?? 2),
+          submissionGracePeriod: String(data.submissionGracePeriod ?? 30),
+          contactEmail: data.contactEmail ?? "seal@fpt.edu.vn",
+          allowLateSubmissions: data.allowLateSubmissions ?? true,
+          enablePublicLeaderboard: data.enablePublicLeaderboard ?? true,
+          requireEmailVerification: data.requireEmailVerification ?? true,
+        });
+      })
+      .catch(() => { /* use default values on error */ });
+  }, []);
+
   useEffect(() => {
     eventService.getAll()
       .then(data => {
@@ -217,14 +263,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           id: e.eventId, 
           name: e.eventName,
           description: e.description ?? "—", 
-          status: e.eventStatus?.eventStatusName,
+          status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
           teams: 0,
           rounds: 0, 
           deadline: e.eventEndDate ?? "—", 
           prize: "—",
         }));
         setApiEvents(mapped as any);
-        if (data[0]) setSelectedEventId(data[0].eventId);
       })
       .catch(error => {
         setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
@@ -232,19 +277,30 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
+    userService.getUsers({ page: 0, size: 500 })
+      .then(data => setApiUsers(data.content))
+      .catch(() => setApiUsers([]));
+  }, []);
+
+  useEffect(() => {
     if (!selectedEventId) return;
     setCategoryLoadError("");
     setApiCategories([]);
+    setApiDashboardRounds([]);
     setAwardPatternCategoryId("");
+    setManualAwardForm(createEmptyManualAwardForm());
     setSelectedSubmissionCategoryId("");
     setSelectedSubmissionRoundId("");
     categoryService.getByEvent(selectedEventId).then(data => {
       setCategoryLoadError("");
       setApiCategories(data);
+      Promise.all(data.map(category => roundService.getByCategory(category.categoryId).catch(() => [])))
+        .then(roundGroups => setApiDashboardRounds(roundGroups.flat()));
       // Load rounds for first category
       if (data[0]) {
         roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
         setAwardPatternCategoryId(data[0].categoryId);
+        setManualAwardForm(prev => ({ ...prev, categoryId: data[0].categoryId }));
         setSelectedSubmissionCategoryId(data[0].categoryId);
       }
     }).catch(error => {
@@ -296,14 +352,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, [apiRounds, selectedSubmissionRoundId]);
 
   useEffect(() => {
-    if (currentPage !== "submissions") return;
+    if (currentPage !== "dashboard" && currentPage !== "submissions") return;
 
     const loadSubmissions = async () => {
       setSubmissionsLoading(true);
-      setSubmissionsError("");
+      if (currentPage === "submissions") setSubmissionsError("");
       setSubmissionActionMessage("");
       try {
-        const data = submissionScope === "event"
+        const data = currentPage === "dashboard" || submissionScope === "event"
           ? await submissionService.getByEvent(selectedEventId ?? "")
           : submissionScope === "unreview"
             ? await submissionService.getUnreviewByRound(selectedSubmissionRoundId)
@@ -311,7 +367,9 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         setAdminSubmissions(data);
       } catch (error) {
         setAdminSubmissions([]);
-        setSubmissionsError(error instanceof Error ? error.message : "Failed to load submissions.");
+        if (currentPage === "submissions") {
+          setSubmissionsError(error instanceof Error ? error.message : "Failed to load submissions.");
+        }
       } finally {
         setSubmissionsLoading(false);
       }
@@ -384,14 +442,32 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setNotificationStatus("");
     setNotificationSending(true);
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 800));
+      if (notificationTargetMode === "user") {
+        // Send by email directly
+        await notificationService.sendToEmail({
+          recipientEmail: notificationEmail,
+          title: notificationTitle,
+          body: notificationMessage,
+          eventId: selectedEventId ?? undefined,
+        });
+      } else {
+        // Team mode: find all member userIds for the selected team and broadcast
+        const team = apiTeamEligibility.find((t: any) => t.teamId === notificationTeamId);
+        const memberIds: string[] = (team as any)?.memberUserIds ?? (team?.leaderUserId ? [team.leaderUserId] : []);
+        if (memberIds.length === 0) throw new Error("No members found for the selected team.");
+        await notificationService.broadcast({
+          recipientUserIds: memberIds,
+          title: notificationTitle,
+          body: notificationMessage,
+          eventId: selectedEventId ?? undefined,
+        });
+      }
       setNotificationStatus("Notification sent successfully!");
       setNotificationTitle("");
       setNotificationMessage("");
       setTimeout(() => setNotificationStatus(""), 3000);
     } catch (err) {
-      setNotificationError("Failed to send notification.");
+      setNotificationError(err instanceof Error ? err.message : "Failed to send notification.");
     } finally {
       setNotificationSending(false);
     }
@@ -546,7 +622,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
     try {
       const topCandidates = await awardService.getTopCandidates(awardPatternCategoryId, undefined, limit);
-      setAutoGrantPreview(topCandidates.map(candidate => ({
+      setAutoGrantPreview(topCandidates.map((candidate: any) => ({
         teamId: candidate.teamId,
         teamName: candidate.teamName,
         rankPosition: candidate.rankPosition,
@@ -555,8 +631,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
       const granted = await awardService.autoGrant(awardPatternCategoryId, undefined, limit);
       setApiAwards(prev => {
-        const existingIds = new Set(prev.map(award => award.id));
-        return [...granted.filter(award => !existingIds.has(award.id)), ...prev];
+        const existingIds = new Set(prev.map((award: any) => award.id));
+        return [...granted.filter((award: any) => !existingIds.has(award.id)), ...prev];
       });
       setAutoGrantMessage(`Granted ${granted.length} award(s) for top ${limit} ranking team(s).`);
       if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
@@ -564,6 +640,96 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       setAutoGrantError(error instanceof Error ? error.message : "Failed to grant awards for top ranking teams.");
     } finally {
       setAutoGrantLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsSaveError("");
+    setSettingsSaved(false);
+    try {
+      const saved = await settingsService.updateSettings({
+        platformName: systemSettings.platformName,
+        maxTeamSize: Number(systemSettings.maxTeamSize),
+        minTeamSize: Number(systemSettings.minTeamSize),
+        submissionGracePeriod: Number(systemSettings.submissionGracePeriod),
+        contactEmail: systemSettings.contactEmail,
+        allowLateSubmissions: systemSettings.allowLateSubmissions,
+        enablePublicLeaderboard: systemSettings.enablePublicLeaderboard,
+        requireEmailVerification: systemSettings.requireEmailVerification,
+      });
+      // Sync back with server response
+      setSystemSettings({
+        platformName: saved.platformName ?? systemSettings.platformName,
+        maxTeamSize: String(saved.maxTeamSize ?? systemSettings.maxTeamSize),
+        minTeamSize: String(saved.minTeamSize ?? systemSettings.minTeamSize),
+        submissionGracePeriod: String(saved.submissionGracePeriod ?? systemSettings.submissionGracePeriod),
+        contactEmail: saved.contactEmail ?? systemSettings.contactEmail,
+        allowLateSubmissions: saved.allowLateSubmissions ?? systemSettings.allowLateSubmissions,
+        enablePublicLeaderboard: saved.enablePublicLeaderboard ?? systemSettings.enablePublicLeaderboard,
+        requireEmailVerification: saved.requireEmailVerification ?? systemSettings.requireEmailVerification,
+      });
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+    } catch (error) {
+      setSettingsSaveError(error instanceof Error ? error.message : "Failed to save settings.");
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  const handleManualGrantAward = async () => {
+    if (!selectedEventId) {
+      setManualAwardError("Select an event before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.teamId) {
+      setManualAwardError("Select a team before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.awardTierId || !manualAwardForm.awardTitle.trim()) {
+      setManualAwardError("Choose an award tier and enter an award title.");
+      return;
+    }
+
+    const prizeValue = manualAwardForm.prizeValue.trim()
+      ? Number(manualAwardForm.prizeValue)
+      : undefined;
+    if (prizeValue !== undefined && (!Number.isFinite(prizeValue) || prizeValue < 0)) {
+      setManualAwardError("Prize value must be zero or a positive number.");
+      return;
+    }
+
+    setManualAwardLoading(true);
+    setManualAwardError("");
+    setManualAwardMessage("");
+
+    try {
+      const granted = await awardService.grant({
+        eventId: selectedEventId,
+        categoryId: manualAwardForm.categoryId || undefined,
+        teamId: manualAwardForm.teamId,
+        awardTierId: manualAwardForm.awardTierId,
+        awardTitle: manualAwardForm.awardTitle.trim(),
+        description: manualAwardForm.description.trim() || undefined,
+        prizeValue,
+        prizeCurrency: manualAwardForm.prizeCurrency.trim() || "VND",
+      });
+      setApiAwards(prev => [granted, ...prev.filter((award: any) => award.id !== granted.id)]);
+      setManualAwardMessage(`Granted "${granted.awardTitle}" to ${granted.teamName}.`);
+      setManualAwardForm(prev => ({
+        ...prev,
+        teamId: "",
+        awardTierId: AWARD_TIER_OPTIONS[6].value,
+        awardTitle: "Special Award",
+        description: "",
+        prizeValue: "",
+      }));
+      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+    } catch (error) {
+      setManualAwardError(error instanceof Error ? error.message : "Failed to grant manual award.");
+    } finally {
+      setManualAwardLoading(false);
     }
   };
 
@@ -589,6 +755,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setApiCategories,
     apiRounds,
     setApiRounds,
+    apiDashboardRounds,
+    setApiDashboardRounds,
     apiTeamEligibility,
     setApiTeamEligibility,
     apiRankings,
@@ -597,6 +765,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setApiAwards,
     apiCriteriaTemplates,
     setApiCriteriaTemplates,
+    apiUsers,
+    setApiUsers,
     eventLoadError,
     setEventLoadError,
     categoryLoadError,
@@ -637,6 +807,9 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setRoundModal,
     assignJudgeModal,
     setAssignJudgeModal,
+    assignMentorModal,
+    setAssignMentorModal,
+    mentorAssignmentReloadKey,
     userSearch,
     setUserSearch,
     approvedUsers,
@@ -677,6 +850,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setAutoGrantError,
     autoGrantPreview,
     setAutoGrantPreview,
+    manualAwardForm,
+    setManualAwardForm,
+    manualAwardLoading,
+    setManualAwardLoading,
+    manualAwardMessage,
+    setManualAwardMessage,
+    manualAwardError,
+    setManualAwardError,
     broadcastTitle,
     setBroadcastTitle,
     broadcastMessage,
@@ -703,8 +884,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setNotificationError,
     settingsSaved,
     setSettingsSaved,
+    settingsSaveError,
+    setSettingsSaveError,
+    settingsSaving,
+    setSettingsSaving,
     systemSettings,
     setSystemSettings,
+    handleSaveSettings,
     filteredUsers,
     updateAwardPattern,
     addAwardPattern,
@@ -718,6 +904,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     handleComputeRankings,
     handlePublishRankings,
     handleAutoGrantAwards,
+    handleManualGrantAward,
     handleBroadcast,
     handleSendTargetedNotification,
     handleDataExport,
@@ -727,13 +914,44 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <AdminDashboardView context={viewContext} />;
-      case "events": return <AdminEventsView context={viewContext} />;
+      case "events": return <AdminEventsView context={viewContext} 
+          onViewEvent={(event) => {
+            setSelectedEvent(event);
+            viewContext.onNavigate("event-detail");
+          }}
+      />;
+      case "event-detail": 
+          if (!selectedEvent) {
+            return (
+              <AdminEventsView 
+                  context={viewContext}
+                  onViewEvent={(event) => {
+                    setSelectedEvent(event);
+                  }}
+              />
+            );
+          }
+          return (
+            <EventDetailPage 
+                event={selectedEvent}
+                onBack={() => {
+                  setSelectedEvent(null);
+                  viewContext.onNavigate("events");
+                }}
+            />
+          );
       case "event-participants": return <AdminEventParticipantsView />;
+      case "team-approval": return <AdminTeamApprovalView context={viewContext} />;
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
-      case "criteria": return <AdminCriteriaView context={viewContext} />;
-      case "users": return <AdminUsersView context={viewContext} />;
+      case "criteria": return (
+        <CriteriaTemplateProvider>
+          <AdminCriteriaView context={viewContext}/>
+        </CriteriaTemplateProvider>
+      );
+      case "users": return <AdminUsersView />;
       case "assignments": return <AdminAssignmentsView context={viewContext} />;
+      case "assign-mentors": return <AdminMentorAssignmentsView context={viewContext} />;
       case "submissions": return <AdminSubmissionsView context={viewContext} />;
       case "rankings": return <AdminRankingsView context={viewContext} />;
       case "reports": return <AdminReportsView context={viewContext} />;
@@ -750,9 +968,13 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
   };
 
+  const lockPageScroll = currentPage === "users" || currentPage === "event-participants";
+
   return (
-    <div className="p-6 space-y-6">
-      {renderPage()}
+    <div className={`h-full min-h-0 p-6 ${lockPageScroll ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
+      <div className={lockPageScroll ? "flex-1 min-h-0 overflow-hidden" : ""}>
+        {renderPage()}
+      </div>
 
       {/* ── Modals ─────────────────────────────────────────────────── */}
       {eventModal.open && (
@@ -762,8 +984,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           onSaved={saved => {
             setApiEvents(prev => eventModal.edit
               ? prev.map((e: any) => e.eventId === saved.eventId ? { ...e, ...saved,
-                 name: saved.eventName, description: saved.description ?? "-", status: saved.eventStatus?.eventStatusName ?? "Unknow", deadline: saved.eventEndDate } : e)
-              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: saved.eventStatus?.eventStatusName, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
+                 name: saved.eventName, description: saved.description ?? "-", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, deadline: saved.eventEndDate } : e)
+              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
             );
             setEventModal({ open: false });
           }}
@@ -806,6 +1028,17 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           roundName={assignJudgeModal.roundName ?? ""}
           onClose={() => setAssignJudgeModal({ open: false })}
           onSaved={() => setAssignJudgeModal({ open: false })}
+        />
+      )}
+
+      {assignMentorModal.open && assignMentorModal.categoryId && (
+        <AssignMentorModal
+          categoryId={assignMentorModal.categoryId}
+          onClose={() => setAssignMentorModal({ open: false })}
+          onAssigned={() => {
+            setAssignMentorModal({ open: false });
+            setMentorAssignmentReloadKey(prev => prev + 1);
+          }}
         />
       )}
 

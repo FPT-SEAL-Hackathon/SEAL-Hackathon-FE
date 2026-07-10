@@ -19,6 +19,32 @@ export interface TeamResponse {
   members: TeamMemberResponse[];
 }
 
+export const TEAM_STATUS_IDS = {
+  FORMING: "60000000-0000-0000-0000-000000000001",
+  ACTIVE: "60000000-0000-0000-0000-000000000002",
+  DISQUALIFIED: "60000000-0000-0000-0000-000000000003",
+  WITHDRAWN: "60000000-0000-0000-0000-000000000004",
+} as const;
+
+export function getTeamStatusInfo(teamStatusId?: string | null) {
+  switch (teamStatusId?.toLowerCase()) {
+    case TEAM_STATUS_IDS.FORMING:
+      return { label: "Pending Approval", badge: "pending_approval" };
+    case TEAM_STATUS_IDS.ACTIVE:
+      return { label: "Active", badge: "active" };
+    case TEAM_STATUS_IDS.DISQUALIFIED:
+      return { label: "Disqualified", badge: "disqualified" };
+    case TEAM_STATUS_IDS.WITHDRAWN:
+      return { label: "Withdrawn", badge: "withdrawn" };
+    default:
+      return { label: "Unknown", badge: "unverified" };
+  }
+}
+
+export function isTeamActive(teamStatusId?: string | null) {
+  return teamStatusId?.toLowerCase() === TEAM_STATUS_IDS.ACTIVE;
+}
+
 export interface TeamMemberDetailResponse {
   teamMemberId: string;
   teamId: string;
@@ -119,6 +145,12 @@ export const teamService = {
     api.get<TeamMemberDetailResponse>(`/api/v1/teams/${teamId}/members/${userId}`),
   removeMember: (teamId: string, userId: string) =>
     api.delete(`/api/v1/teams/${teamId}/members/${userId}`),
+
+  // Team-first event registration: leader đăng ký cả team, organizer duyệt theo team.
+  registerEvent: (teamId: string) =>
+    api.post<unknown[]>(`/api/v1/teams/${teamId}/register-event`, {}),
+  withdrawEvent: (teamId: string) =>
+    api.delete<{ success: boolean; message: string }>(`/api/v1/teams/${teamId}/register-event`),
 
   // Admin
   reviewEligibility: (eventId: string) =>

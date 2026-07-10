@@ -161,7 +161,7 @@ export function AdminReportsView({ context }: AdminViewProps) {
         <StatCard title={t("reports.avgScore")} value="81.2" trend={2} icon={<Star size={20} />} color={COLORS.warning} />
         <StatCard title={t("reports.completionRate")} value="94%" trend={3} icon={<CheckCircle size={20} />} color={COLORS.accent} />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.trackDistribution")}</div>
           {[

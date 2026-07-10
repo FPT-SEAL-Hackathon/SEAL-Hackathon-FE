@@ -36,6 +36,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
     setApiCategories,
     apiRounds,
     setApiRounds,
+    apiDashboardRounds,
     apiTeamEligibility,
     setApiTeamEligibility,
     apiRankings,
@@ -44,6 +45,8 @@ export function AdminDashboardView({ context }: AdminViewProps) {
     setApiAwards,
     apiCriteriaTemplates,
     setApiCriteriaTemplates,
+    apiUsers,
+    adminSubmissions,
     eventLoadError,
     setEventLoadError,
     categoryLoadError,
@@ -148,42 +151,93 @@ export function AdminDashboardView({ context }: AdminViewProps) {
     createEmptyAwardPattern
   } = context;
 
+  const selectedEvent = apiEvents.find((event: any) => event.eventId === selectedEventId || event.id === selectedEventId);
+  const totalTeams = apiTeamEligibility.length;
+  const totalSubmissions = adminSubmissions.length;
+  const activeJudges = apiUsers.filter((user: any) => {
+    const role = String(user.roleName ?? user.role ?? "").toUpperCase();
+    const status = String(user.accountStatusName ?? user.accountStatus ?? "").toUpperCase();
+    return role.includes("JUDGE") && status.includes("ACTIVE");
+  }).length;
+  const pendingApprovals = apiUsers.filter((user: any) => {
+    const status = String(user.accountStatusName ?? user.accountStatus ?? "").toUpperCase();
+    return status.includes("PENDING");
+  }).length;
+  const visibleEvents = apiEvents.filter((event: any) => {
+    const status = String(event.status ?? event.eventStatusName ?? "").toUpperCase();
+    return status !== "COMPLETED" && status !== "CANCELLED";
+  });
+  const overviewEvents = visibleEvents.length > 0 ? visibleEvents : apiEvents;
+  const dashboardRounds = apiDashboardRounds ?? apiRounds;
+  const recentActivity = [
+    ...adminSubmissions.slice(0, 2).map((submission: any) => ({
+      id: `submission-${submission.submissionId}`,
+      action: "Submission received",
+      actor: submission.submittedByUserId || submission.teamId || "Participant",
+      date: submission.submittedAt || submission.lastUpdatedAt,
+    })),
+    ...apiTeamEligibility.slice(0, 2).map((team: any) => ({
+      id: `team-${team.teamId}`,
+      action: team.eligibleForCompetition ? "Team eligible" : "Team needs review",
+      actor: team.teamName,
+      date: "",
+    })),
+  ];
+
   return (
     <>
-      <SectionHeader title="Admin Dashboard" subtitle="SEAL Hackathon Platform — System Overview" />
+      <SectionHeader title="Admin Dashboard" subtitle={`${selectedEvent?.name ?? selectedEvent?.eventName ?? "SEAL Hackathon Platform"} - System Overview`} />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Teams" value={127} trend={12} icon={<Users size={20} />} color={COLORS.primary} />
-        <StatCard title="Submissions" value={89} trend={8} icon={<Upload size={20} />} color={COLORS.success} />
-        <StatCard title="Active Judges" value={24} icon={<Shield size={20} />} color={COLORS.warning} />
-        <StatCard title="Pending Approvals" value={8} icon={<AlertTriangle size={20} />} color={COLORS.error} />
+        <StatCard title="Total Teams" value={totalTeams} icon={<Users size={20} />} color={COLORS.primary} />
+        <StatCard title="Submissions" value={totalSubmissions} icon={<Upload size={20} />} color={COLORS.success} />
+        <StatCard title="Active Judges" value={activeJudges} icon={<Shield size={20} />} color={COLORS.warning} />
+        <StatCard title="Pending Approvals" value={pendingApprovals} icon={<AlertTriangle size={20} />} color={COLORS.error} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <div className="col-span-2 space-y-4">
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Active Events Overview</div>
-            {apiEvents.filter((e: any) => e.status === "active" || e.status === "scoring" || e.status !== "completed").map((ev: any) => (
+            {overviewEvents.length === 0 && (
+              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No events loaded from API.</div>
+            )}
+            {overviewEvents.map((ev: any) => (
               <div key={ev.id} className="mb-4 last:mb-0">
                 <div className="flex items-center justify-between mb-2">
                   <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{ev.name}</span>
                   <StatusBadge status={ev.status} />
                 </div>
-                <ProgressBar value={ev.teams} max={150} color={COLORS.primary} label={`${ev.teams} teams registered`} />
+                <ProgressBar
+                  value={ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)}
+                  max={Math.max(ev.maxTeamSize ?? totalTeams, totalTeams, 1)}
+                  color={COLORS.primary}
+                  label={`${ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)} teams registered`}
+                />
               </div>
             ))}
           </Card>
 
           <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Scoring Progress — SEAL Fall 2025</div>
-            {rounds.filter(r => r.event === "SEAL Fall 2025").map(r => (
-              <div key={r.id} className="mb-4">
+            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Scoring Progress - {selectedEvent?.name ?? selectedEvent?.eventName ?? "Selected Event"}</div>
+            {dashboardRounds.length === 0 && (
+              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No rounds loaded from API.</div>
+            )}
+            {dashboardRounds.map((r: any) => {
+              const roundSubmissions = adminSubmissions.filter((submission: any) => submission.roundId === r.roundId);
+              const scored = roundSubmissions.filter((submission: any) => {
+                const status = String(submission.submissionStatusName ?? "").toUpperCase();
+                return status.includes("SCORED") || status.includes("REVIEWED");
+              }).length;
+              const status = r.roundStatusName ?? r.status ?? "OPEN";
+              return (
+              <div key={r.roundId} className="mb-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.name}</span>
-                  <StatusBadge status={r.status} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
+                  <StatusBadge status={status} />
                 </div>
-                <ProgressBar value={r.scored} max={r.teams} color={r.status === "completed" ? COLORS.success : COLORS.warning} label={`Scored: ${r.scored}/${r.teams}`} />
+                <ProgressBar value={scored} max={Math.max(roundSubmissions.length, 1)} color={String(status).toUpperCase().includes("COMPLETED") ? COLORS.success : COLORS.warning} label={`Scored: ${scored}/${roundSubmissions.length}`} />
               </div>
-            ))}
+            )})}
           </Card>
         </div>
 
@@ -214,10 +268,13 @@ export function AdminDashboardView({ context }: AdminViewProps) {
 
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Recent Activity</div>
-            {auditLogs.slice(0, 4).map((log, i) => (
-              <div key={log.id} className="mb-3 last:mb-0">
-                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{log.action}</div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{log.actor} • {log.timestamp.split(" ")[0]}</div>
+            {recentActivity.length === 0 && (
+              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No recent API activity loaded.</div>
+            )}
+            {recentActivity.map((activity: any) => (
+              <div key={activity.id} className="mb-3 last:mb-0">
+                <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{activity.action}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{activity.actor}{activity.date ? ` - ${String(activity.date).split("T")[0]}` : ""}</div>
               </div>
             ))}
           </Card>

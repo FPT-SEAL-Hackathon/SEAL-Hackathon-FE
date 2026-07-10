@@ -61,7 +61,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
         <StatCard title="Disqualified" value={disqualified} icon={<Shield size={20} />} color={COLORS.error} />
       </div>
 
-      <Card className="p-5">
+      <Card className="p-5 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end">
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
@@ -148,7 +148,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
         </div>
       )}
 
-      <Card>
+      <Card className="mt-6">
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
@@ -225,7 +225,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
       </Card>
 
       {submissionDisqualifyTarget && (
-        <Card className="p-5" style={{ border: `1px solid ${COLORS.error}55` }}>
+        <Card className="p-5 mt-6" style={{ border: `1px solid ${COLORS.error}55` }}>
           <div className="flex items-start justify-between gap-4">
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Disqualify submission</div>
