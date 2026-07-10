@@ -75,7 +75,7 @@ export const roundService = {
         }
     ),
     getJudgesByRound: (roundId: string) => api.get<RoundJudge[]>(`/api/v1/round/judges/${roundId}`),
-    disableJudge: (roundJudgeId: string, force?: boolean) => api.delete<void>(`/api/v1/round/judge/${roundJudgeId}${force ? "?force=true" : ""}`),
+    disableJudge: (roundJudgeId: string, force?: boolean) => api.patch<void>(`/api/v1/round/judge/${roundJudgeId}${force ? "?force=true" : ""}`),
     getAllJudges: async (): Promise<Judge[]> => {
         const raw = await api.get<BackendJudge[]>("/api/v1/users/judges");
         const list = Array.isArray(raw) ? raw : [];
