@@ -47,9 +47,9 @@ export interface EvaluationAuditLogDTO {
 
 export const judgingService = {
   recordScores: (scores: ScoreSubmissionDTO[]) =>
-    api.post<void>("/api/v1/judging", scores),
+    api.post<{ message: string }>("/api/v1/judging", scores),
   updateScores: (updates: UpdateScoreSubmissionDTO[]) =>
-    api.patch<void>("/api/v1/judging", updates),
+    api.patch<{ message: string }>("/api/v1/judging", updates),
   getBySubmission: (submissionId: string) =>
     api.get<JudgingDTO[]>(`/api/v1/judging/submission/${submissionId}`),
   getByJudge: (judgeUserId: string) =>

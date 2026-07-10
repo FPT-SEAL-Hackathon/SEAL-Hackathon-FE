@@ -4,13 +4,13 @@ import { roundService, type RoundResponse, type RoundCriterionResponse } from "@
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 
 import { JudgeRoundsView } from "./components/JudgeRoundsView";
-import { JudgeSubmissionsView } from "./components/JudgeSubmissionsView";
 import { JudgeScoringView } from "./components/JudgeScoringView";
 import { JudgeCalibrationView } from "./components/JudgeCalibrationView";
 import { JudgeHistoryView } from "./components/JudgeHistoryView";
 import { JudgeProfileView } from "./components/JudgeProfileView";
+import { JudgeSubmissionsStep } from "./components/JudgeSubmissionsStep";
 
-export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
+export function JudgeDashboard({ currentPage, onNavigate, navKey = 0 }: { currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number }) {
   const { user } = useAuth();
 
   // ── Assigned rounds from API ───────────────────────────────────────────────
@@ -20,6 +20,13 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
   const [selectedSubmission, setSelectedSubmission] = useState<any>(null);
   const [isFetchingRounds, setIsFetchingRounds] = useState(true);
+  const [sourcePage, setSourcePage] = useState<"rounds" | "history">("rounds");
+
+  useEffect(() => {
+    if (currentPage === "rounds" || currentPage === "history") {
+      setSourcePage(currentPage);
+    }
+  }, [currentPage]);
 
   const loadRoundData = (roundId: string) => {
     setSelectedRoundId(roundId);
@@ -44,32 +51,57 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
       .finally(() => setIsFetchingRounds(false));
   }, [user?.userId]);
 
-  const handleNavigate = (page: string) => {
-    onNavigate(page);
+  const handleNavigate = (page: string, options?: { state?: any }) => {
+    onNavigate(page, options);
   };
 
   const renderPage = () => {
-    switch (currentPage) {
-      case "rounds":
-        return (
-          <JudgeRoundsView
-            apiRounds={apiRounds}
-            onSelectRound={loadRoundData}
-            onNavigate={handleNavigate}
-            isLoadingRounds={isFetchingRounds}
-          />
-        );
-      case "submissions":
-        return (
-          <JudgeSubmissionsView
+    return (
+      <>
+        {/* Mount JudgeRoundsView if we are on 'rounds', or if we went to 'scoring' from 'rounds' */}
+        {(currentPage === "rounds" || currentPage === "submissions" || (currentPage === "scoring" && sourcePage === "rounds") || (!["rounds", "submissions", "scoring", "calibration", "history", "profile"].includes(currentPage))) && (
+          <div style={{ display: currentPage === "rounds" || !["rounds", "submissions", "scoring", "calibration", "history", "profile"].includes(currentPage) ? "block" : "none" }}>
+            <JudgeRoundsView
+              apiRounds={apiRounds}
+              apiSubmissions={apiSubmissions}
+              apiCriteria={apiCriteria}
+              onSelectRound={loadRoundData}
+              onSelectSubmission={setSelectedSubmission}
+              onNavigate={handleNavigate}
+              isLoadingRounds={isFetchingRounds}
+              selectedRoundId={selectedRoundId}
+              resetKey={navKey}
+            />
+          </div>
+        )}
+
+        {/* Mount JudgeHistoryView if we are on 'history', or if we went to 'scoring' from 'history' */}
+        {(currentPage === "history" || (currentPage === "scoring" && sourcePage === "history")) && (
+          <div style={{ display: currentPage === "history" ? "block" : "none" }}>
+            <JudgeHistoryView 
+              apiRounds={apiRounds}
+              selectedRoundId={selectedRoundId}
+              onSelectRound={loadRoundData}
+              apiSubmissions={apiSubmissions}
+              apiCriteria={apiCriteria}
+              onSelectSubmission={setSelectedSubmission}
+              onNavigate={handleNavigate}
+            />
+          </div>
+        )}
+
+        {currentPage === "submissions" && (
+          <JudgeSubmissionsStep 
             apiSubmissions={apiSubmissions}
             apiRounds={apiRounds}
+            apiCriteria={apiCriteria}
             onSelectSubmission={setSelectedSubmission}
             onNavigate={handleNavigate}
+            onBack={() => handleNavigate("rounds")}
           />
-        );
-      case "scoring":
-        return (
+        )}
+
+        {currentPage === "scoring" && (
           <JudgeScoringView
             apiCriteria={apiCriteria}
             apiRounds={apiRounds}
@@ -77,38 +109,19 @@ export function JudgeDashboard({ currentPage, onNavigate }: { currentPage: strin
             selectedSubmission={selectedSubmission}
             onNavigate={handleNavigate}
           />
-        );
-      case "calibration":
-        return (
+        )}
+
+        {currentPage === "calibration" && (
           <JudgeCalibrationView 
             apiRounds={apiRounds}
             selectedRoundId={selectedRoundId || apiRounds[0]?.roundId} 
             onSelectRound={loadRoundData}
           />
-        );
-      case "history":
-        return (
-          <JudgeHistoryView 
-            apiRounds={apiRounds}
-            selectedRoundId={selectedRoundId}
-            onSelectRound={loadRoundData}
-            apiSubmissions={apiSubmissions}
-            apiCriteria={apiCriteria}
-            onSelectSubmission={setSelectedSubmission}
-            onNavigate={onNavigate}
-          />
-        );
-      case "profile":
-        return <JudgeProfileView />;
-      default:
-        return (
-          <JudgeRoundsView
-            apiRounds={apiRounds}
-            onSelectRound={loadRoundData}
-            onNavigate={handleNavigate}
-          />
-        );
-    }
+        )}
+
+        {currentPage === "profile" && <JudgeProfileView />}
+      </>
+    );
   };
 
   return <div className="p-6 space-y-6">{renderPage()}</div>;

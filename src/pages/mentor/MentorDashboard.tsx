@@ -698,8 +698,13 @@ export function MentorDashboard({
                 <Card key={cat.categoryId} className="p-5">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>
-                        {cat.categoryName}
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>
+                          {cat.categoryName}
+                        </div>
+                        <span className="px-2 py-0.5 bg-amber-50 text-amber-600 rounded-md text-[10px] font-bold border border-amber-200 uppercase tracking-wider">
+                          Role: Mentor
+                        </span>
                       </div>
                       <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
                         {cat.eventName}
