@@ -4,14 +4,21 @@ export const ROLES = {
   ORGANIZER: "ROLE_ORGANIZER",
   INTERNAL_JUDGE: "ROLE_INTERNAL_JUDGE",
   GUEST_JUDGE: "ROLE_GUEST_JUDGE",
+  MENTOR: "ROLE_MENTOR",
+  LEADER: "ROLE_LEADER",
+  MEMBER: "ROLE_MEMBER",
+  EXPERT: "ROLE_EXPERT",
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
 
 export const ALL_ROLES: Role[] = Object.values(ROLES);
 export const STUDENT_ROLES: Role[] = [ROLES.FPT_STUDENT, ROLES.EXTERNAL_STUDENT];
-export const JUDGE_ROLES: Role[] = [ROLES.INTERNAL_JUDGE, ROLES.GUEST_JUDGE];
+export const JUDGE_ROLES: Role[] = [ROLES.INTERNAL_JUDGE, ROLES.GUEST_JUDGE, ROLES.EXPERT];
 export const ORGANIZER_ROLES: Role[] = [ROLES.ORGANIZER];
+export const MENTOR_ROLES: Role[] = [ROLES.MENTOR, ROLES.EXPERT];
+export const LEADER_ROLES: Role[] = [ROLES.LEADER];
+export const MEMBER_ROLES: Role[] = [ROLES.MEMBER];
 
 const ROLE_ALIASES: Record<string, Role> = {
   FPT_STUDENT: ROLES.FPT_STUDENT,
@@ -25,6 +32,10 @@ const ROLE_ALIASES: Record<string, Role> = {
   INTERNALJUDGE: ROLES.INTERNAL_JUDGE,
   GUEST_JUDGE: ROLES.GUEST_JUDGE,
   GUESTJUDGE: ROLES.GUEST_JUDGE,
+  MENTOR: ROLES.MENTOR,
+  LEADER: ROLES.LEADER,
+  MEMBER: ROLES.MEMBER,
+  EXPERT: ROLES.EXPERT,
 };
 
 export function normalizeRole(value?: string | null): Role | null {
@@ -48,9 +59,12 @@ export function isOrganizer(role?: Role | null): boolean {
   return role === ROLES.ORGANIZER;
 }
 
-export function getRoleRouteSegment(role: Role): "student" | "judge" | "organizer" {
+export function getRoleRouteSegment(role: Role): "student" | "judge" | "organizer" | "mentor" | "leader" | "member" {
   if (isStudent(role)) return "student";
   if (isJudge(role)) return "judge";
+  if (role === ROLES.MENTOR || role === ROLES.EXPERT) return "mentor";
+  if (role === ROLES.LEADER) return "leader";
+  if (role === ROLES.MEMBER) return "member";
   return "organizer";
 }
 
@@ -66,5 +80,13 @@ export function getRoleLabel(role: Role): string {
       return "Internal Judge";
     case ROLES.GUEST_JUDGE:
       return "Guest Judge";
+    case ROLES.MENTOR:
+      return "Mentor";
+    case ROLES.LEADER:
+      return "Team Leader";
+    case ROLES.MEMBER:
+      return "Team Member";
+    case ROLES.EXPERT:
+      return "Expert";
   }
 }

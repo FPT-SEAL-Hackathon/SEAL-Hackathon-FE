@@ -1,1 +1,1 @@
-export { useLanguage } from "../store/languageStore";
+export { useLanguage } from '../app/store/languageStore';

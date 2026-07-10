@@ -7,6 +7,7 @@ export interface RoundResponse {
   description: string;
   roundOrder: number;
   roundStatusId: string;
+  roundStatusName?: string;
   submissionDeadline: string;
   judgingDeadline: string;
   startDate: string;
@@ -102,9 +103,9 @@ export const roundService = {
   getJudges: (roundId: string) =>
     api.get<JudgeResponse[]>(`/api/v1/round/judges/${roundId}`),
   assignJudges: (roundId: string, userIds: string[]) =>
-    api.post<RoundJudgeResponse[]>(`/api/v1/round/judges/${roundId}`, { userIds }),
-  removeJudge: (roundJudgeId: string) =>
-    api.delete(`/api/v1/round/judge/${roundJudgeId}`),
+    api.post<RoundJudgeResponse[]>(`/api/v1/round/judges/${roundId}`, { userIds, judgeIds: userIds }),
+  disableJudge: (roundJudgeId: string, force?: boolean) =>
+    api.patch(`/api/v1/round/judge/${roundJudgeId}${force ? "?force=true" : ""}`),
   getRoundsByJudge: (judgeId: string) =>
     api.get<RoundResponse[]>(`/api/v1/judge/rounds/${judgeId}`),
 

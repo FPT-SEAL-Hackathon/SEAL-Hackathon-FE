@@ -156,7 +156,7 @@ export function AdminRoundsView({ context }: AdminViewProps) {
         action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setRoundModal({ open: true, categoryId: apiCategories[0]?.categoryId })}>New Round</Button>}
       />
       <div className="space-y-3">
-        {rounds.map(r => (
+        {rounds.map((r: any) => (
           <Card key={r.id} className="p-5">
             <div className="flex items-center gap-4">
               <div className="flex-1">

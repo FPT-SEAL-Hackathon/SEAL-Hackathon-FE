@@ -71,6 +71,10 @@ export interface TotalPrizeSummary {
   currency: string;
 }
 
+export interface SystemPrizeResponse {
+  totalPrizes: Array<{ prizeCurrency: string; totalPrize: number }>;
+}
+
 export const awardService = {
   getById: (id: string) =>
     api.get<AwardResponse>(`/api/v1/awards/${id}`),
@@ -106,7 +110,18 @@ export const awardService = {
   downloadCertificate: (awardId: string) =>
     api.blob(`/api/v1/certificates/download/${awardId}`),
 
-  // Public prize summary (no auth required)
-  getTotalPrize: () =>
-    api.get<TotalPrizeSummary>(`/api/v1/events/total-prize`, false),
+  getEventPrizeTotal: (eventId: string) =>
+    api.get<SystemPrizeResponse>(`/api/v1/awards/events/${eventId}/total-prize`, false),
+
+  // Public prize summary — whitelisted in SecurityConfig, no auth needed
+  getTotalPrize: async (): Promise<TotalPrizeSummary> => {
+    const raw = await api.get<SystemPrizeResponse>(`/api/v1/awards/events/total-prize`, false);
+    if (!raw || !raw.totalPrizes || raw.totalPrizes.length === 0) {
+      return { totalPrize: 0, currency: "VND" };
+    }
+    // Ưu tiên VND, fallback về currency đầu tiên
+    const vnd = raw.totalPrizes.find(p => p.prizeCurrency?.toUpperCase() === "VND");
+    const picked = vnd ?? raw.totalPrizes[0];
+    return { totalPrize: Number(picked.totalPrize), currency: picked.prizeCurrency };
+  },
 };

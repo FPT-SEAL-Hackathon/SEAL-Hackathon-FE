@@ -54,7 +54,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     description: event?.description ?? "",
     location: event?.location ?? "",
     bannerImageUrl: event?.bannerImageUrl ?? "",
-    eventStatusId: event?.eventStatus?.eventStatusId ?? STATUS_OPTIONS[0].value,
+    eventStatusId: typeof event?.eventStatus === 'object' ? event?.eventStatus?.eventStatusId : (event?.eventStatus ?? STATUS_OPTIONS[0].value),
     registrationStart: event?.registrationStart?.slice(0, 16) ?? "",
     registrationEnd: event?.registrationEnd?.slice(0, 16) ?? "",
     eventStartDate: event?.eventStartDate ?? "",
@@ -73,7 +73,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       bannerImageUrl: event.bannerImageUrl ?? "",
 
       eventStatusId:
-        event.eventStatus?.eventStatusId ??
+        (typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus) ??
         STATUS_OPTIONS[0].value,
 
       registrationStart:
@@ -108,16 +108,16 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     try {
       const payload: CreateEventRequest = {
         eventName: form.eventName,
-        description: form.description || undefined,
-        location: form.location || undefined,
-        bannerImageUrl: form.bannerImageUrl || undefined,
+        description: form.description || "",
+        location: form.location || "",
+        bannerImageUrl: form.bannerImageUrl || "",
         eventStatusId: form.eventStatusId,
-        registrationStart: formatDateTime(form.registrationStart),
-        registrationEnd: formatDateTime(form.registrationEnd),
-        eventStartDate: form.eventStartDate || undefined,
-        eventEndDate: form.eventEndDate || undefined,
-        maxTeamSize: parseInt(form.maxTeamSize) || undefined,
-        minTeamSize: parseInt(form.minTeamSize) || undefined,
+        registrationStart: formatDateTime(form.registrationStart) ?? "",
+        registrationEnd: formatDateTime(form.registrationEnd) ?? "",
+        eventStartDate: form.eventStartDate || "",
+        eventEndDate: form.eventEndDate || "",
+        maxTeamSize: parseInt(form.maxTeamSize) || 5,
+        minTeamSize: parseInt(form.minTeamSize) || 2,
       };
       const result = isEdit
         ? await eventService.update(event!.eventId, { ...payload, eventName: payload.eventName, eventStatusId: payload.eventStatusId! })

@@ -162,7 +162,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
               </tr>
             </thead>
             <tbody>
-              {auditLogs.map((log, i) => (
+              {auditLogs.map((log: any, i: number) => (
                 <tr key={log.id} style={{ borderBottom: i < auditLogs.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
                   <td className="px-4 py-3"><span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{log.action}</span></td>
                   <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{log.actor}</span></td>

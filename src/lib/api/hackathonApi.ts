@@ -201,7 +201,7 @@ export const eventsApi = {
     request<EventDTO[]>("/events"),
 
   create: (body: EventRequest) =>
-    request<EventDTO>("/events", { method: "POST", body: JSON.stringify(body) }),
+    request<EventDTO>("/event", { method: "POST", body: JSON.stringify(body) }),
 
   update: (id: number, body: EventRequest) =>
     request<EventDTO>(`/events/${id}`, { method: "PUT", body: JSON.stringify(body) }),

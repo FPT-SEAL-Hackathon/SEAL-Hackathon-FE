@@ -5,6 +5,7 @@ export type ProblemDownloadType = "csv" | "zip";
 export interface SubmissionResponse {
   submissionId: string;
   teamId: string;
+  teamName: string;
   roundId: string;
   submissionStatusId: string;
   submissionStatusName: string;
