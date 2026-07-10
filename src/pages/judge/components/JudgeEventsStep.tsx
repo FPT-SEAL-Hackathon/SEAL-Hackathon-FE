@@ -24,14 +24,11 @@ export function JudgeEventsStep({ eventGroups, onSelectEvent, searchQuery, onSea
         <h2 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>Select an Event</h2>
         
         {/* SEARCH BAR */}
-        <div className="relative w-full md:w-72">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search size={16} className="text-gray-400" />
-          </div>
+        <div className="relative w-full md:w-72 bg-white border border-gray-200 rounded-xl shadow-sm flex items-center px-3 transition-all focus-within:ring-2 focus-within:ring-primary focus-within:border-primary" style={{ borderColor: COLORS.border }}>
+          <Search size={16} className="text-gray-400 flex-shrink-0" />
           <input
             type="text"
-            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-xl leading-5 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm transition-all"
-            style={{ backgroundColor: "#ffffff" }}
+            className="block w-full pl-2 py-2 bg-transparent leading-5 placeholder-gray-500 focus:outline-none sm:text-sm border-none focus:ring-0"
             placeholder="Search events..."
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}

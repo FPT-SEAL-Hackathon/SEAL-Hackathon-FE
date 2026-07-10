@@ -106,17 +106,17 @@ export function JudgeSubmissionsStep({ apiSubmissions, apiRounds, apiCriteria, o
   return (
     <div className="space-y-6">
       {/* ── HEADER ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex items-center gap-4 mb-4">
+        <Button variant="outline" size="sm" onClick={onBack}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rounds
+        </Button>
         <div>
-          <Button variant="outline" size="sm" onClick={onBack}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Rounds
-          </Button>
+          <h2 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
+            Submission Queue
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">{displaySubmissions.filter((s: any) => s.status === "pending").length} submissions pending evaluation by you</p>
         </div>
       </div>
-      <SectionHeader
-        title="Submission Queue"
-        subtitle={`${displaySubmissions.filter((s: any) => s.status === "pending").length} submissions pending evaluation by you`}
-      />
       {apiSubmissions.length === 0 && (
         <div className="px-4 py-2 rounded-xl text-sm mb-3" style={{ background: `${COLORS.bg}`, color: COLORS.textSecondary, border: `1px solid ${COLORS.border}` }}>
           No submissions found for the selected round.
@@ -125,16 +125,16 @@ export function JudgeSubmissionsStep({ apiSubmissions, apiRounds, apiCriteria, o
       
         <div className="space-y-3">
           {displaySubmissions.map((sub: any) => (
-            <Card key={sub.id} className="p-4">
-              <div className="flex items-center gap-4">
+            <Card key={sub.id} className="px-6 py-5 flex flex-row items-center justify-between border-2 hover:border-primary/30 transition-all bg-white" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.04)', borderColor: 'transparent' }}>
+              <div className="flex items-center gap-4 flex-1">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{sub.title}</span>
+                    <span style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{sub.title}</span>
                     <StatusBadge status={sub.status} />
                   </div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{sub.team} • {sub.round}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, fontWeight: 500 }}>{sub.team} • <span className="text-gray-700">{sub.round}</span></div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3 justify-end">
                   {sub.score !== undefined && (
                     <span className="px-3 py-1 rounded-xl font-bold" style={{ background: `${COLORS.primary}10`, color: COLORS.primary, fontSize: 14 }}>
                       {sub.score}/{sub.maxScore}

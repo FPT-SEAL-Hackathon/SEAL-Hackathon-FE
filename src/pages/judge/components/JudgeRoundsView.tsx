@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { ChevronRight, Loader2, CheckCircle2, Target } from "lucide-react";
+import { ChevronRight, Loader2, CheckCircle2, Target, Search } from "lucide-react";
 import { Card, SectionHeader, COLORS, StatusBadge, ProgressBar, Button } from "@/components/shared/UIComponents";
 import { type RoundResponse } from "@/features/judging/api/roundService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
@@ -276,10 +276,12 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
           <div className="flex justify-between items-center" ref={searchRef}>
             <h2 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>Select an Event</h2>
             <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               <input 
                 type="text" 
                 placeholder="Search events..." 
-                className="px-4 py-2 rounded-lg border text-sm w-64"
+                className="pl-9 pr-4 py-2 bg-white rounded-lg border text-sm w-64 shadow-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
                 value={searchInputValue}
                 onChange={(e) => {
                   setSearchInputValue(e.target.value);
