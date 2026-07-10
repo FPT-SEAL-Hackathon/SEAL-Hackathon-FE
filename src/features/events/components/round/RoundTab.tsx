@@ -34,7 +34,7 @@ export function RoundsTab() {
 
     assignJudges,
 
-    removeJudge,
+    disableJudge,
   } = useRoundContext();
 
   if (categories.length === 0) {

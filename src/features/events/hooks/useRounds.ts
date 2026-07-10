@@ -161,11 +161,11 @@ export function useRounds(eventId: string) {
         await loadRoundJudges(roundId);
     };
 
-    const removeJudge = async (
+    const disableJudge = async (
         roundId: string,
         roundJudgeId: string
     ) => {
-        await roundService.removeJudge(roundJudgeId);
+        await roundService.disableJudge(roundJudgeId);
         setRoundJudges(prev => ({
             ...prev,
             [roundId]: prev[roundId].filter(judge => 
@@ -217,6 +217,6 @@ export function useRounds(eventId: string) {
         removeRoundCriterion,
 
         assignJudges,
-        removeJudge
+        disableJudge
     };
 }

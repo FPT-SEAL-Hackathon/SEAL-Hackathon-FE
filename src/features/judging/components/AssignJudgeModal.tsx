@@ -43,7 +43,7 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
     setRemovingId(userId);
     setError("");
     try {
-      await roundService.removeJudge(roundJudgeId);
+      await roundService.disableJudge(roundJudgeId);
       // Refresh list to update UI
       const res = await roundService.getJudges(roundId);
       const newMap = new Map<string, string>();
