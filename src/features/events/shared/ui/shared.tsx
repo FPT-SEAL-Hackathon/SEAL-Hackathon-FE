@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Upload, X } from "lucide-react";
+import { Upload, X, Search } from "lucide-react";
+//import { Card, Button, COLORS } from "/../../shared/UIComponents";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents"
 import type { EventCriteria } from "../../types/eventCriteria";
 import { ImportEventCriteriaRequest, RoundCriteria, UpdateRoundCriterionRequest } from "../../types/round";
@@ -91,7 +92,7 @@ export function Select({
 
 // ── Assign People Modal ────────────────────────────────────────────────────
 
-export function AssignModal<T extends { id: string; fullName: string; email: string; phone: string }>({
+export function AssignModal<T extends { id: string; fullName: string; email: string; phone: string; role?: string; roleName?: string }>({
   title, allPeople, assignedIds, onAssign, onRemove, onClose,
 }: {
   title: string;
@@ -101,29 +102,99 @@ export function AssignModal<T extends { id: string; fullName: string; email: str
   onRemove: (id: string) => void;
   onClose: () => void;
 }) {
+  const [search, setSearch] = useState("");
   const assignedIdsSet = new Set(assignedIds);
+
+  const filtered = allPeople
+    .filter(p => {
+      const q = search.toLowerCase();
+      return (
+        (p.fullName ?? "").toLowerCase().includes(q) ||
+        (p.email ?? "").toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      const aAssigned = assignedIdsSet.has(a.id);
+      const bAssigned = assignedIdsSet.has(b.id);
+      if (aAssigned === bAssigned) return 0;
+      return aAssigned ? 1 : -1;
+    });
+
   return (
     <div className="fixed inset-0 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.4)", zIndex: 100 }}>
-      <Card className="p-6 w-full max-w-md" style={{ maxHeight: "80vh", overflowY: "auto" }}>
+      <Card className="p-6 w-full max-w-md" style={{ maxHeight: "82vh", overflowY: "auto" }}>
         <div className="flex items-center justify-between mb-4">
           <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{title}</span>
           <button onClick={onClose}><X size={16} style={{ color: COLORS.textSecondary }} /></button>
         </div>
+
+        {/* Search bar */}
+        <div className="relative mb-3">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: COLORS.textSecondary }} />
+          <input
+            type="text"
+            placeholder="Search by name or email..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-8 pr-3 py-2 rounded-xl outline-none"
+            style={{
+              fontSize: 13,
+              border: `1px solid ${COLORS.border}`,
+              background: COLORS.bg,
+              color: COLORS.textPrimary,
+            }}
+          />
+        </div>
+
         <div className="space-y-2">
-          {allPeople.map(p => {
-            const isAssigned = assignedIdsSet.has(p.id);
-            return (
-              <div key={p.id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: "var(--surface-bg)" }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</div>
-                  <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{p.email}</div>
+          {filtered.length === 0 ? (
+            <div className="py-6 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+              No experts found
+            </div>
+          ) : (
+            filtered.map(p => {
+              const isAssigned = assignedIdsSet.has(p.id);
+              const roleLabel = p.roleName ?? p.role?.replace(/^ROLE_/, "").replace(/_/g, " ");
+              return (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between p-3 rounded-xl"
+                  style={{
+                    background: isAssigned ? `${COLORS.success}08` : "var(--surface-bg)",
+                    border: isAssigned ? `1px solid ${COLORS.success}30` : "1px solid transparent",
+                    opacity: isAssigned ? 0.75 : 1,
+                  }}
+                >
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{p.fullName}</span>
+                      {roleLabel && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider"
+                          style={{ background: `${COLORS.success}20`, color: COLORS.success }}
+                        >
+                          {roleLabel}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{p.email}</div>
+                  </div>
+                  {isAssigned
+                    ? (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, color: COLORS.success,
+                        padding: "3px 10px", borderRadius: 999,
+                        background: `${COLORS.success}15`, border: `1px solid ${COLORS.success}30`,
+                      }}>
+                        Assigned
+                      </span>
+                    )
+                    : <Button variant="primary" size="sm" onClick={() => onAssign(p)}>Assign</Button>
+                  }
                 </div>
-                {isAssigned
-                  ? <Button variant="danger" size="sm" onClick={() => onRemove(p.id)}>Remove</Button>
-                  : <Button variant="primary" size="sm" onClick={() => onAssign(p)}>Assign</Button>}
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
         <div className="mt-4">
           <Button variant="outline" size="sm" onClick={onClose}>Done</Button>
@@ -136,12 +207,12 @@ export function AssignModal<T extends { id: string; fullName: string; email: str
 // ── Criteria import panel (used inside RoundsTab for per-round criteria) ───
 
 export function CriteriaImportPanel({
-  title, 
-  sourceLabel, 
-  availableCriteria, 
+  title,
+  sourceLabel,
+  availableCriteria,
   roundCriteria,
-  onImport, 
-  onUpdateRoundCriteria, 
+  onImport,
+  onUpdateRoundCriteria,
   onRemoveRoundCriteria,
 }: {
   title: string;
@@ -181,7 +252,7 @@ export function CriteriaImportPanel({
                 </div>
                 {importedIds.has(field.eventCriterionId)
                   ? <span style={{ fontSize: 11, color: COLORS.success, fontWeight: 600 }}>Imported</span>
-                  : <Button variant="primary" size="sm" onClick={() => { onImport({eventCriterionIds: [field.eventCriterionId]}); setShowImport(false); }}>Import</Button>}
+                  : <Button variant="primary" size="sm" onClick={() => { onImport({ eventCriterionIds: [field.eventCriterionId] }); setShowImport(false); }}>Import</Button>}
               </div>
             ))}
           </div>
@@ -204,9 +275,9 @@ export function CriteriaImportPanel({
                   <input
                     type="number"
                     value={c.weight}
-                    onChange={e => 
+                    onChange={e =>
                       onUpdateRoundCriteria(
-                        c.eventCriterionId, 
+                        c.eventCriterionId,
                         {
                           weight: Number(e),
                           maxScore: c.maxScore
@@ -221,7 +292,7 @@ export function CriteriaImportPanel({
                   <input
                     type="number"
                     value={c.maxScore}
-                    onChange={e => 
+                    onChange={e =>
                       onUpdateRoundCriteria(
                         c.roundCriterionId,
                         {

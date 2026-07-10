@@ -29,6 +29,8 @@ export interface Mentor {
     fullName: string;
     email: string;
     phone: string;
+    role?: string;
+    roleName?: string;
 }
 
 export interface AssignMentorsRequest {

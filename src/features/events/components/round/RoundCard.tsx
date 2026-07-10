@@ -34,7 +34,7 @@ export function RoundCard({
 
     assignJudges,
 
-    removeJudge,
+    disableJudge,
 
     importEventCriteria,
 
@@ -97,7 +97,7 @@ export function RoundCard({
             )
           }
           onRemove={roundJudgeId => 
-            removeJudge(
+            disableJudge(
               round.roundId,
               roundJudgeId
             )
@@ -229,7 +229,7 @@ export function RoundCard({
                       style={{ background: `${COLORS.warning}10`, border: `1px solid ${COLORS.warning}25` }}
                     >
                       <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309" }}>{j.fullName}</span>
-                      <button onClick={() => removeJudge(round.roundId, j.roundJudgeId)} style={{ color: COLORS.warning }}>
+                      <button onClick={() => disableJudge(round.roundId, j.roundJudgeId)} style={{ color: COLORS.warning }}>
                         <X size={11} />
                       </button>
                     </div>

@@ -19,6 +19,23 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
   const [mentors, setMentors] = useState<CategoryMentorResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const handleRemove = async (mentorId: string) => {
+    if (!selectedCategoryId) return;
+    setRemovingId(mentorId);
+    setError("");
+    try {
+      await categoryService.removeMentor(selectedCategoryId, mentorId);
+      // Reload the mentors list
+      const updatedMentors = await categoryService.getMentors(selectedCategoryId);
+      setMentors(updatedMentors);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove mentor");
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   useEffect(() => {
     if (apiCategories.length > 0) {
@@ -123,23 +140,35 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
               </Card>
             )}
 
-            {!loading && mentors.map((m: any) => (
-              <Card key={m.categoryExpertId || m.categoryMentorId} className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
-                    {(m.expertName || m.mentorName || "M")[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{m.expertName || m.mentorName}</div>
-                    <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                      <Mail size={12} />
-                      {m.expertEmail || m.mentorEmail}
+            {!loading && mentors.map((m: any) => {
+              const mentorId = m.expertId || m.mentorId;
+              const isRemoving = removingId === mentorId;
+              return (
+                <Card key={m.categoryExpertId || m.categoryMentorId} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: `${COLORS.primary}20`, color: COLORS.primary, fontWeight: 700 }}>
+                      {(m.expertName || m.mentorName || "M")[0].toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{m.expertName || m.mentorName}</div>
+                      <div className="flex items-center gap-1 mt-0.5" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                        <Mail size={12} />
+                        {m.expertEmail || m.mentorEmail}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Remove</Button>
-              </Card>
-            ))}
+                  <Button 
+                    variant="danger" 
+                    size="sm" 
+                    icon={isRemoving ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    disabled={isRemoving}
+                    onClick={() => handleRemove(mentorId)}
+                  >
+                    Remove
+                  </Button>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

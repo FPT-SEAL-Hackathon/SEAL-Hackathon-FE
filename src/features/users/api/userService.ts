@@ -6,11 +6,15 @@ export type UserRole =
   | "ORGANIZER"
   | "INTERNAL_JUDGE"
   | "GUEST_JUDGE"
+  | "MENTOR"
+  | "EXPERT"
   | "ROLE_FPT_STUDENT"
   | "ROLE_EXTERNAL_STUDENT"
   | "ROLE_ORGANIZER"
   | "ROLE_INTERNAL_JUDGE"
   | "ROLE_GUEST_JUDGE"
+  | "ROLE_MENTOR"
+  | "ROLE_EXPERT"
   | string;
 
 export type UserStatus =
@@ -99,6 +103,7 @@ export interface PaginatedUsersResponse {
 type BackendUser = {
   id?: string;
   userId?: string;
+  judgeId?: string;
   fullName?: string;
   name?: string;
   email?: string;
@@ -141,7 +146,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeUser(raw: BackendUser): UserManagementUser {
-  const userId = raw.userId ?? raw.id ?? "";
+  const userId = raw.userId ?? raw.judgeId ?? raw.id ?? "";
   const team = raw.team;
   const teamName = raw.teamName ?? team?.teamName ?? team?.name ?? null;
   return {
@@ -241,6 +246,12 @@ export const userService = {
 
   getUserById: async (userId: string) =>
     unwrapUser(await api.get<BackendUser | { data?: BackendUser }>(`/api/v1/users/${userId}`)),
+
+  getMentors: async () =>
+    unwrapUsers(await api.get<BackendUser[] | BackendPage<BackendUser>>("/api/v1/users/mentors")),
+
+  getJudges: async () =>
+    unwrapUsers(await api.get<BackendUser[] | BackendPage<BackendUser>>("/api/v1/users/judges")),
 
   createUser: async (payload: CreateUserRequest) =>
     unwrapUser(await api.post<BackendUser | { data?: BackendUser }>("/api/v1/users", payload)),

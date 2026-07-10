@@ -3,6 +3,7 @@ import { X, Search, UserCheck, Loader, Save } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { roundService } from "@/features/judging/api/roundService";
 import { userService } from "@/features/users/api/userService";
+import { categoryService } from "@/features/categories/api/categoryService";
 import { ApiError } from "@/lib/api/apiClient";
 import { COLORS } from "@/components/shared/UIComponents";
 
@@ -13,38 +14,103 @@ interface Props {
   onSaved: () => void;
 }
 
+const ASSIGNABLE_ROLES = new Set(["MENTOR", "EXPERT", "INTERNAL_JUDGE", "GUEST_JUDGE"]);
+
+function normalizeRole(role?: string | null) {
+  return String(role ?? "").toUpperCase().replace(/^ROLE_/, "").replace(/[\s-]+/g, "_");
+}
+
+function isAssignableRole(user: { role?: string | null; roleName?: string | null }) {
+  return ASSIGNABLE_ROLES.has(normalizeRole(user.role)) || ASSIGNABLE_ROLES.has(normalizeRole(user.roleName));
+}
+
 export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props) {
   const [candidates, setCandidates] = useState<any[]>([]);
+  const [assignedIds, setAssignedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState("");
+  const [assignedMap, setAssignedMap] = useState<Map<string, string>>(new Map());
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [categoryMentorIds, setCategoryMentorIds] = useState<Set<string>>(new Set());
+
+  const handleRemove = async (userId: string) => {
+    const roundJudgeId = assignedMap.get(userId);
+    if (!roundJudgeId) return;
+    
+    setRemovingId(userId);
+    setError("");
+    try {
+      await roundService.disableJudge(roundJudgeId);
+      // Refresh list to update UI
+      const res = await roundService.getJudges(roundId);
+      const newMap = new Map<string, string>();
+      const newIds = new Set<string>();
+      (res as any[]).forEach((j: any) => {
+        newMap.set(j.judgeId, j.roundJudgeId);
+        newIds.add(j.judgeId);
+      });
+      setAssignedMap(newMap);
+      setAssignedIds(newIds);
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to remove judge");
+    } finally {
+      setRemovingId(null);
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      userService.getUsers({ role: "JUDGE" }),
-      userService.getUsers({ role: "EXPERT" })
-    ])
-      .then(([judgesRes, expertsRes]) => {
-        const judges = judgesRes.content || [];
-        const experts = expertsRes.content || [];
-        // Combine and remove duplicates just in case
-        const combined = [...judges, ...experts];
-        const unique = Array.from(new Map(combined.map(u => [u.userId, u])).values());
+    roundService.getById(roundId)
+      .then(round => {
+        return Promise.all([
+          userService.getJudges(),
+          roundService.getJudges(roundId),
+          categoryService.getMentors(round.categoryId),
+        ]);
+      })
+      .then(([judgesRes, assignedJudges, assignedMentors]) => {
+        const combined = judgesRes.content || [];
+        const unique = Array.from(new Map(combined.map(u => [u.userId, u])).values())
+          .filter(isAssignableRole);
         setCandidates(unique);
+        
+        const map = new Map<string, string>();
+        const ids = new Set<string>();
+        (assignedJudges as any[]).forEach((j: any) => {
+          const uId = j.userId ?? j.judgeId ?? "";
+          ids.add(uId);
+          map.set(uId, j.roundJudgeId);
+        });
+        setAssignedIds(ids);
+        setAssignedMap(map);
+        
+        const mentorIds = new Set<string>();
+        assignedMentors.forEach((m: any) => mentorIds.add(m.mentorId || m.expertId));
+        setCategoryMentorIds(mentorIds);
       })
       .catch(() => setError("Failed to load judges and mentors"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [roundId]);
 
-  const filteredCandidates = candidates.filter(u =>
-    (u.email || "").toLowerCase().includes(search.toLowerCase()) ||
-    (u.fullName || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredCandidates = candidates
+    .filter(u =>
+      (u.email || "").toLowerCase().includes(search.toLowerCase()) ||
+      (u.fullName || "").toLowerCase().includes(search.toLowerCase())
+    )
+    .sort((a, b) => {
+      const aAssigned = assignedIds.has(a.userId);
+      const bAssigned = assignedIds.has(b.userId);
+      if (aAssigned === bAssigned) return 0;
+      return aAssigned ? 1 : -1;
+    });
 
   const toggleSelection = (id: string) => {
+    if (assignedIds.has(id)) return; // already assigned, not selectable
+    if (categoryMentorIds.has(id)) return; // is mentor, not selectable
     setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(uid => uid !== id) : [...prev, id]
     );
@@ -59,9 +125,11 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
     setError("");
     try {
       await roundService.assignJudges(roundId, selectedIds);
+      setSelectedIds([]);
       onSaved();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to assign judges");
+    } finally {
       setAssigning(false);
     }
   };
@@ -109,33 +177,58 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
                 <div className="text-center p-8 text-sm text-gray-500">No judges or mentors found</div>
               ) : (
                 filteredCandidates.map(user => {
-                  const isMentor = user.role?.toUpperCase() === "EXPERT" || user.role?.toUpperCase() === "MENTOR";
+                  const roleLabel = user.roleName ?? normalizeRole(user.role).replace(/_/g, " ");
+                  const alreadyAssigned = assignedIds.has(user.userId);
+                  const isCategoryMentor = categoryMentorIds.has(user.userId);
+                  const selected = selectedIds.includes(user.userId);
+                  const disabled = alreadyAssigned || isCategoryMentor;
+
                   return (
                     <div
                       key={user.userId}
                       onClick={() => toggleSelection(user.userId)}
-                      className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all hover:border-primary/30"
+                      className="flex items-center gap-3 p-3 rounded-xl border transition-all"
                       style={{
-                        borderColor: selectedIds.includes(user.userId) ? COLORS.primary : COLORS.border,
-                        background: selectedIds.includes(user.userId) ? `${COLORS.primary}05` : "transparent"
+                        borderColor: disabled ? COLORS.border : selected ? COLORS.primary : COLORS.border,
+                        background: disabled ? "#f9fafb" : selected ? `${COLORS.primary}05` : "transparent",
+                        cursor: disabled ? "not-allowed" : "pointer",
+                        opacity: disabled ? 0.6 : 1,
                       }}
                     >
-                      <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selectedIds.includes(user.userId) ? 'bg-primary border-primary' : 'border-gray-300'}`}>
-                        {selectedIds.includes(user.userId) && <UserCheck size={14} color="white" />}
+                      <div className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${selected && !disabled ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                        {selected && !disabled && <UserCheck size={14} color="white" />}
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>
                             {user.fullName}
                           </span>
-                          {isMentor && (
+                          {roleLabel && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider" style={{ background: `${COLORS.success}20`, color: COLORS.success }}>
-                              MENTOR
+                              {roleLabel}
                             </span>
                           )}
                         </div>
                         <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{user.email}</div>
                       </div>
+                      
+                      {alreadyAssigned && (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
+                          style={{ background: `${COLORS.primary}15`, color: COLORS.primary, fontWeight: 600 }}
+                        >
+                          Assigned
+                        </span>
+                      )}
+                      
+                      {!alreadyAssigned && isCategoryMentor && (
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full whitespace-nowrap"
+                          style={{ background: `#f59e0b15`, color: "#d97706", fontWeight: 600 }}
+                        >
+                          Already mentor for this category
+                        </span>
+                      )}
                     </div>
                   );
                 })

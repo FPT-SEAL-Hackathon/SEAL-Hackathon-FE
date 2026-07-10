@@ -119,10 +119,12 @@ export const categoryService = {
   assignMentors: async (categoryId: string, mentorIds: string[]) =>
     unwrapList(await api.post<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
       `/api/v1/category/expert/${categoryId}`,
-      { expertIds: mentorIds },
+      { expertIds: mentorIds, mentorIds, userIds: mentorIds },
     )).map(normalizeCategoryMentor),
   getMentors: async (categoryId: string) =>
     unwrapList(await api.get<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
       `/api/v1/category/experts/${categoryId}`,
     )).map(normalizeCategoryMentor),
+  removeMentor: (categoryId: string, mentorId: string) =>
+    api.delete(`/api/v1/category/expert/${categoryId}/${mentorId}`),
 };

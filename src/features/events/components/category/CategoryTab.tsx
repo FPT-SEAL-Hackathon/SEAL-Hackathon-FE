@@ -8,12 +8,19 @@ import { useCategoryContext } from "../../context/CategoryContext";
 // ── Tab ────────────────────────────────────────────────────────────────────
 
 export function CategoriesTab() {
+  const {
+    categories,
+    availableMentors,
+    categoryMentors,
+    loadCategoryMentors,
+    createCategory,
+    updateCategory,
+    deleteCategory,
+    assignMentors,
+    removeMentor,
+  } = useCategoryContext();
 
   const [showForm, setShowForm] = useState(false);
-  const {
-        categories,
-        createCategory,
-  } = useCategoryContext();
 
   return (
     <div className="space-y-4">
@@ -34,10 +41,11 @@ export function CategoriesTab() {
           initial={{
             categoryName: "",
             description: "",
-            sortOrder: categories.length + 1 }}
-          onSave={async (data) => { 
-            await createCategory(data); 
-            setShowForm(false); 
+            sortOrder: categories.length + 1,
+          }}
+          onSave={async (data) => {
+            await createCategory(data);
+            setShowForm(false);
           }}
           onCancel={() => setShowForm(false)}
         />
@@ -64,9 +72,16 @@ export function CategoriesTab() {
           .slice()
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map(category => (
-            <CategoryCard 
-                key={category.categoryId} 
-                category={category} 
+            <CategoryCard
+              key={category.categoryId}
+              category={category}
+              availableMentors={availableMentors}
+              mentors={categoryMentors[category.categoryId] ?? []}
+              loadCategoryMentors={loadCategoryMentors}
+              onAssignMentor={assignMentors}
+              onRemoveMentor={removeMentor}
+              onUpdate={updateCategory}
+              onDelete={deleteCategory}
             />
           ))
       )}

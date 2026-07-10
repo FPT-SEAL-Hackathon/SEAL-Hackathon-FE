@@ -1,6 +1,28 @@
 import { api } from "@/lib/api/apiClient";
 import { AssignJudgesRequest, ImportEventCriteriaRequest, Round, RoundCriteria, RoundJudge, RoundRequest, UpdateRoundCriterionRequest, Judge } from "../types/round";
 
+type BackendJudge = Partial<Judge> & {
+    id?: string;
+    userId?: string;
+    judgeId?: string;
+    name?: string;
+    role?: string;
+    roleName?: string;
+};
+
+function normalizeJudge(user: BackendJudge): Judge {
+    const id = String(user.judgeId ?? user.userId ?? user.id ?? "");
+    return {
+        judgeId: id,
+        userId: user.userId ?? id,
+        fullName: user.fullName ?? user.name ?? user.email ?? "Unknown",
+        email: user.email ?? "",
+        phone: user.phone ?? "",
+        role: user.role,
+        roleName: user.roleName,
+    };
+}
+
 export const roundService = {
     create: (
         categoryId: string,
@@ -47,9 +69,16 @@ export const roundService = {
         body: AssignJudgesRequest
     ) => api.post<RoundJudge[]>(
         `/api/v1/round/judges/${id}`,
-        body
+        {
+            ...body,
+            userIds: body.judgeIds,
+        }
     ),
     getJudgesByRound: (roundId: string) => api.get<RoundJudge[]>(`/api/v1/round/judges/${roundId}`),
-    removeJudge: (roundJudgeId: string) => api.delete<void>(`/api/v1/round/judge/${roundJudgeId}`),
-    getAllJudges: () => api.get<Judge[]>("/api/v1/users/judges"),
+    disableJudge: (roundJudgeId: string, force?: boolean) => api.delete<void>(`/api/v1/round/judge/${roundJudgeId}${force ? "?force=true" : ""}`),
+    getAllJudges: async (): Promise<Judge[]> => {
+        const raw = await api.get<BackendJudge[]>("/api/v1/users/judges");
+        const list = Array.isArray(raw) ? raw : [];
+        return list.map(normalizeJudge).filter(judge => judge.judgeId);
+    },
 }

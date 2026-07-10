@@ -9,7 +9,7 @@ import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
   ProgressBar, Button, DataTable, TimelineItem
 } from "@/components/shared/UIComponents";
-import { EventResponse } from "../../../features/events/api/eventService"
+import { EventResponse } from "@/features/events/api/eventService.ts"
 
 interface AdminViewProps {
   context: any;
