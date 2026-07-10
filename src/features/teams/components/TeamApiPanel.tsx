@@ -37,9 +37,7 @@ type ActionKey =
   | "remove"
   | "events"
   | "categories"
-  | "discover"
-  | "registerEvent"
-  | "withdrawEvent";
+  | "discover";
 
 type RoleMode = "auto" | "member" | "leader";
 type TeamFlow = "create" | "join" | null;
@@ -287,8 +285,6 @@ export function TeamApiPanel({
     run(
       "events",
       async () => {
-        // Team-first: tạo team KHÔNG cần là participant đã duyệt —
-        // leader sẽ đăng ký cả team vào event sau khi lập đội.
         const allEvents = await eventService.getAll(true);
         return {
           allEvents,
@@ -509,30 +505,6 @@ export function TeamApiPanel({
         setField("teamId", team.teamId);
       },
       "Team created and is waiting for organizer approval.",
-    );
-  };
-
-  // Team-first: leader đăng ký cả team vào event; tất cả thành viên thành participant PENDING.
-  const registerTeamEvent = () => {
-    const teamId = selectedTeam?.teamId ?? form.teamId.trim();
-    if (!teamId) return;
-    run(
-      "registerEvent",
-      () => teamService.registerEvent(teamId),
-      undefined,
-      "Team registered for the event. Waiting for organizer approval.",
-    );
-  };
-
-  // Leader rút đăng ký khi organizer chưa duyệt để chỉnh đội hình rồi đăng ký lại.
-  const withdrawTeamEvent = () => {
-    const teamId = selectedTeam?.teamId ?? form.teamId.trim();
-    if (!teamId) return;
-    run(
-      "withdrawEvent",
-      () => teamService.withdrawEvent(teamId),
-      undefined,
-      "Team registration withdrawn. You can adjust the roster and register again.",
     );
   };
 
@@ -1346,62 +1318,57 @@ export function TeamApiPanel({
           const sizeLabel = `${activeMemberCount} / ${minTeamSize ?? "?"}–${maxTeamSize ?? "?"}`;
 
           return (
-          <Card className="p-5">
-            <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-              <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>Leader Actions</div>
-              <span
-                className="px-2 py-1 rounded-lg"
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  background: sizeOk ? `${COLORS.success}12` : `${COLORS.error}12`,
-                  color: sizeOk ? COLORS.success : COLORS.error,
-                }}
-              >
-                Members: {sizeLabel}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                icon={<Eye size={14} />}
-                onClick={() => setLeaderActionPanel(current => current === "memberDetail" ? null : "memberDetail")}
-              >
-                Member Detail
-              </Button>
-              {canEditRoster && (
-                <>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={<Trash2 size={14} />}
-                    onClick={() => setLeaderActionPanel(current => current === "removeMember" ? null : "removeMember")}
-                  >
-                    Remove Member
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
-                    disabled={loading.requests}
-                    onClick={() => {
-                      setLeaderActionPanel("joinRequests");
-                      loadRequests(selectedTeam.teamId);
-                    }}
-                  >
-                    {loading.requests ? "Loading..." : "Load Join Requests"}
-                  </Button>
-                </>
-              )}
-            </div>
-            {false && (
-              <div className="mt-3 rounded-xl px-3 py-2" style={{ background: `${COLORS.error}08`, color: COLORS.error, fontSize: 12.5 }}>
-                Team must have {minTeamSize ?? "?"}–{maxTeamSize ?? "?"} members to register for this event.
+            <Card className="p-5">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+                <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>Leader Actions</div>
+                <span
+                  className="px-2 py-1 rounded-lg"
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    background: sizeOk ? `${COLORS.success}12` : `${COLORS.error}12`,
+                    color: sizeOk ? COLORS.success : COLORS.error,
+                  }}
+                >
+                  Members: {sizeLabel}
+                </span>
               </div>
-            )}
-            {renderLeaderActionPanel()}
-          </Card>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={<Eye size={14} />}
+                  onClick={() => setLeaderActionPanel(current => current === "memberDetail" ? null : "memberDetail")}
+                >
+                  Member Detail
+                </Button>
+                {canEditRoster && (
+                  <>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      icon={<Trash2 size={14} />}
+                      onClick={() => setLeaderActionPanel(current => current === "removeMember" ? null : "removeMember")}
+                    >
+                      Remove Member
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                      disabled={loading.requests}
+                      onClick={() => {
+                        setLeaderActionPanel("joinRequests");
+                        loadRequests(selectedTeam.teamId);
+                      }}
+                    >
+                      {loading.requests ? "Loading..." : "Load Join Requests"}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {renderLeaderActionPanel()}
+            </Card>
           );
         })()}
       </div>

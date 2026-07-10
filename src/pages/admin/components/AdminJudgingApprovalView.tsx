@@ -11,19 +11,56 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [judgingDetails, setJudgingDetails] = useState<any[]>([]);
   const [isJudgingLoading, setIsJudgingLoading] = useState(false);
+  
+  const [batchScores, setBatchScores] = useState<Record<string, Record<string, number>>>({});
+  const [judgesList, setJudgesList] = useState<string[]>([]);
+  const [isBatchLoading, setIsBatchLoading] = useState(false);
 
   const fetchSubmissions = async () => {
     if (!localRoundId) {
       setSubmissions([]);
+      setBatchScores({});
+      setJudgesList([]);
       return;
     }
     setIsLoading(true);
     try {
       const data = await api.get<any[]>(`/api/v1/admin/rounds/${localRoundId}/submissions`);
       setSubmissions(data || []);
+      
+      if (data && data.length > 0) {
+        setIsBatchLoading(true);
+        const subIds = data.map((s: any) => s.submissionId);
+        try {
+            const batchData = await api.post<any[]>(`/api/v1/judging/batch-scores`, { submissionIds: subIds });
+            
+            // Process batch data
+            const scoresMap: Record<string, Record<string, number>> = {};
+            const judgesSet = new Set<string>();
+            
+            (batchData || []).forEach((score: any) => {
+              if (!scoresMap[score.submissionId]) scoresMap[score.submissionId] = {};
+              if (!scoresMap[score.submissionId][score.judgeName]) scoresMap[score.submissionId][score.judgeName] = 0;
+              scoresMap[score.submissionId][score.judgeName] += score.scoreValue || 0;
+              judgesSet.add(score.judgeName);
+            });
+            
+            setBatchScores(scoresMap);
+            setJudgesList(Array.from(judgesSet));
+        } catch (e) {
+            console.error("Failed to fetch batch scores", e);
+        } finally {
+            setIsBatchLoading(false);
+        }
+      } else {
+         setBatchScores({});
+         setJudgesList([]);
+      }
     } catch (e) {
       console.error(e);
       setSubmissions([]);
+      setBatchScores({});
+      setJudgesList([]);
     } finally {
       setIsLoading(false);
     }
@@ -73,55 +110,87 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
     <>
       <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-max">
             <thead>
-              <tr style={{ borderBottom: `2px solid ${COLORS.border}` }}>
-                <th className="p-4 font-semibold text-sm text-gray-500">TEAM</th>
-                <th className="p-4 font-semibold text-sm text-gray-500">SUBMISSION STATUS</th>
-                <th className="p-4 font-semibold text-sm text-gray-500">SCORE APPROVED</th>
-                <th className="p-4 font-semibold text-sm text-gray-500 text-right">ACTIONS</th>
+              <tr style={{ borderBottom: `2px solid ${COLORS.border}`, backgroundColor: '#fefcf9' }}>
+                <th className="p-4 font-semibold text-sm text-gray-500 sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>TEAM</th>
+                <th className="p-4 font-semibold text-sm text-gray-500">STATUS</th>
+                {judgesList.map((judge, idx) => (
+                  <th key={idx} className="p-4 font-semibold text-sm text-gray-500 text-center">
+                    {judge.split(' ').pop()} {/* Show given name for brevity */}
+                  </th>
+                ))}
+                <th className="p-4 font-semibold text-sm text-gray-500 text-center">FINAL SCORE</th>
+                <th className="p-4 font-semibold text-sm text-gray-500 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>ACTIONS</th>
               </tr>
             </thead>
             <tbody>
-              {submissions.map((sub: any) => (
-                <tr key={sub.submissionId} className="border-b hover:bg-gray-50" style={{ borderColor: COLORS.border }}>
-                  <td className="p-4 font-medium text-sm">{sub.teamName}</td>
-                  <td className="p-4">
-                    <StatusBadge status={sub.submissionStatusName?.toLowerCase()} />
-                  </td>
-                  <td className="p-4">
-                    {sub.isScoreApproved ? (
-                      <span className="inline-flex items-center text-green-600 bg-green-50 px-2 py-1 rounded-md text-xs font-medium">
-                        <CheckCircle size={14} className="mr-1" /> Approved
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center text-yellow-600 bg-yellow-50 px-2 py-1 rounded-md text-xs font-medium">
-                        <Loader size={14} className="mr-1" /> Pending
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="secondary" size="sm" icon={<Eye size={14} />} onClick={() => viewScores(sub.submissionId)}>
-                        View Scores
-                      </Button>
-                      <Button 
-                        variant={sub.isScoreApproved ? "secondary" : "primary"} 
-                        size="sm" 
-                        icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
-                        onClick={() => toggleApproval(sub.submissionId, sub.isScoreApproved)}
-                        disabled={approvingId === sub.submissionId}
-                        style={!sub.isScoreApproved && approvingId !== sub.submissionId ? { background: COLORS.success } : {}}
-                      >
-                        {sub.isScoreApproved ? "Unapprove" : "Approve Score"}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {submissions.map((sub: any) => {
+                const subScores = batchScores[sub.submissionId] || {};
+                const scoresArray = Object.values(subScores);
+                const avgScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0) / scoresArray.length).toFixed(1) : "-";
+                
+                return (
+                  <tr 
+                    key={sub.submissionId} 
+                    className="border-b" 
+                    style={{ borderColor: COLORS.border, backgroundColor: '#fefcf9', transition: 'background-color 0.15s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fefcf9'}
+                  >
+                    <td className="p-4 font-medium text-sm sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>{sub.teamName}</td>
+                    <td className="p-4">
+                      <StatusBadge status={sub.submissionStatusName?.toLowerCase()} />
+                    </td>
+                    
+                    {judgesList.map((judge, idx) => {
+                      const score = subScores[judge];
+                      let bgColor = "";
+                      let textColor = "";
+                      if (score !== undefined) {
+                         if (score >= 80) { bgColor = "bg-green-100"; textColor = "text-green-800"; }
+                         else if (score < 50) { bgColor = "bg-red-100"; textColor = "text-red-800"; }
+                         else { bgColor = "bg-amber-100"; textColor = "text-amber-800"; }
+                      }
+                      
+                      return (
+                        <td key={idx} className="p-4 text-center">
+                          {score !== undefined ? (
+                            <span className={`inline-block px-3 py-1 rounded-md font-bold text-sm ${bgColor} ${textColor}`}>
+                              {score}
+                            </span>
+                          ) : (
+                            <span className="text-gray-300">-</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    
+                    <td className="p-4 text-center font-bold text-primary text-lg">
+                      {avgScore}
+                    </td>
+
+                    <td className="p-4 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="secondary" size="sm" icon={<Eye size={14} />} onClick={() => viewScores(sub.submissionId)} title="View Detail Scores" />
+                        <Button 
+                          variant={sub.isScoreApproved ? "secondary" : "primary"} 
+                          size="sm" 
+                          icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
+                          onClick={() => toggleApproval(sub.submissionId, sub.isScoreApproved)}
+                          disabled={approvingId === sub.submissionId}
+                          style={!sub.isScoreApproved && approvingId !== sub.submissionId ? { background: COLORS.success } : {}}
+                        >
+                          {sub.isScoreApproved ? "Un-Finalize" : "Finalize"}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
               {submissions.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-gray-500">No submissions found in this round.</td>
+                  <td colSpan={5 + judgesList.length} className="p-8 text-center text-gray-500">No submissions found in this round.</td>
                 </tr>
               )}
             </tbody>

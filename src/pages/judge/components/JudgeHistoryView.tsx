@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, SectionHeader, COLORS, StatusBadge, Button } from "@/components/shared/UIComponents";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
@@ -38,6 +38,33 @@ export function JudgeHistoryView({
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: "asc" | "desc" } | null>({ key: "date", direction: "desc" });
 
+  const [localSelectedRoundId, setLocalSelectedRoundId] = useState(selectedRoundId);
+
+  useEffect(() => {
+    setLocalSelectedRoundId(selectedRoundId);
+  }, [selectedRoundId]);
+
+  const [eventSearchInput, setEventSearchInput] = useState("");
+  const [isEventDropdownOpen, setIsEventDropdownOpen] = useState(false);
+  const eventSearchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (eventSearchRef.current && !eventSearchRef.current.contains(e.target as Node)) {
+        setIsEventDropdownOpen(false);
+        // Revert input to selected event name if they clicked away without selecting
+        if (selectedEventId) {
+          const selectedEvent = events.find(ev => ev.eventId === selectedEventId);
+          if (selectedEvent) setEventSearchInput(selectedEvent.eventName);
+        } else {
+          setEventSearchInput("");
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [selectedEventId, events]);
+
   useEffect(() => {
     eventService.getAll().then(setEvents).catch(console.error);
   }, []);
@@ -65,12 +92,26 @@ export function JudgeHistoryView({
   }, [apiRounds, selectedCategoryId, selectedEventId, categories]);
 
   useEffect(() => {
+    if (filteredRounds.length > 0) {
+      if (!filteredRounds.find(r => r.roundId === localSelectedRoundId)) {
+        setLocalSelectedRoundId(filteredRounds[0].roundId);
+      }
+    } else {
+      setLocalSelectedRoundId("");
+    }
+  }, [filteredRounds, localSelectedRoundId]);
+
+  const fetchScores = () => {
     if (!user?.userId) return;
     setLoading(true);
     judgingService.getByJudge(user.userId)
       .then(res => setScores(res || []))
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchScores();
   }, [user?.userId]);
 
   // Aggregate scores by submission
@@ -106,7 +147,8 @@ export function JudgeHistoryView({
 
       data.push({
         id: sub.submissionId,
-        teamId: sub.teamId, // Used as Team name for now since team name isn't in SubmissionResponse
+        teamId: sub.teamId,
+        teamName: sub.teamName || sub.teamId,
         title: sub.notes || `Submission ${sub.submissionId.slice(0, 8)}`,
         roundName: activeRoundName,
         criteriaScores,
@@ -120,9 +162,9 @@ export function JudgeHistoryView({
 
   // Unique teams for the dropdown
   const uniqueTeams = useMemo(() => {
-    const teams = new Set<string>();
-    historyData.forEach(d => teams.add(d.teamId));
-    return Array.from(teams);
+    const teams = new Map<string, string>();
+    historyData.forEach(d => teams.set(d.teamId, d.teamName));
+    return Array.from(teams.entries());
   }, [historyData]);
 
   const handleSort = (key: string) => {
@@ -144,8 +186,8 @@ export function JudgeHistoryView({
     if (searchQuery) {
       const lower = searchQuery.toLowerCase();
       result = result.filter(d => 
-        d.teamId.toLowerCase().includes(lower) || 
-        d.title.toLowerCase().includes(lower)
+        (d.teamName || "").toLowerCase().includes(lower) || 
+        (d.title || "").toLowerCase().includes(lower)
       );
     }
 
@@ -169,6 +211,10 @@ export function JudgeHistoryView({
   // Columns based on dynamic criteria for this round
   const criteriaNames = apiCriteria.map(c => c.criterionName);
 
+  const eventDropdownSuggestions = events.filter(e => 
+    e.eventName.toLowerCase().includes(eventSearchInput.toLowerCase())
+  );
+
   return (
     <>
       <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-2">
@@ -176,17 +222,66 @@ export function JudgeHistoryView({
         
         {/* Cascade Filters */}
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" ref={eventSearchRef}>
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Event:</span>
-            <select 
-              value={selectedEventId} 
-              onChange={(e) => setSelectedEventId(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-48 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
-            >
-              <option value="">All Events</option>
-              {events.map(e => <option key={e.eventId} value={e.eventId}>{e.eventName}</option>)}
-            </select>
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="Search events..." 
+                className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 focus:bg-white transition-colors text-sm w-48 truncate"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+                value={eventSearchInput}
+                onChange={(e) => {
+                  setEventSearchInput(e.target.value);
+                  setIsEventDropdownOpen(true);
+                }}
+                onFocus={() => {
+                  setIsEventDropdownOpen(true);
+                  if (selectedEventId) setEventSearchInput(""); // Clear on focus to allow easy new search
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && eventDropdownSuggestions.length > 0) {
+                    const firstMatch = eventDropdownSuggestions[0];
+                    setSelectedEventId(firstMatch.eventId);
+                    setEventSearchInput(firstMatch.eventName);
+                    setIsEventDropdownOpen(false);
+                  }
+                }}
+              />
+              {isEventDropdownOpen && (
+                <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border max-h-60 overflow-y-auto" style={{ borderColor: COLORS.border }}>
+                  <div 
+                    className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b"
+                    style={{ borderColor: COLORS.border, color: !selectedEventId ? COLORS.primary : COLORS.textPrimary, fontWeight: !selectedEventId ? 600 : 400 }}
+                    onClick={() => {
+                      setSelectedEventId("");
+                      setEventSearchInput("");
+                      setIsEventDropdownOpen(false);
+                    }}
+                  >
+                    All Events
+                  </div>
+                  {eventDropdownSuggestions.length > 0 ? (
+                    eventDropdownSuggestions.map(ev => (
+                      <div 
+                        key={ev.eventId}
+                        className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b last:border-0"
+                        style={{ borderColor: COLORS.border, color: selectedEventId === ev.eventId ? COLORS.primary : COLORS.textPrimary, fontWeight: selectedEventId === ev.eventId ? 600 : 400 }}
+                        onClick={() => {
+                          setSelectedEventId(ev.eventId);
+                          setEventSearchInput(ev.eventName);
+                          setIsEventDropdownOpen(false);
+                        }}
+                      >
+                        {ev.eventName}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-center" style={{ color: COLORS.textSecondary }}>No events found</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -206,9 +301,9 @@ export function JudgeHistoryView({
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Round:</span>
             <select 
-              value={selectedRoundId || ""} 
+              value={localSelectedRoundId || ""} 
               onChange={(e) => {
-                onSelectRound(e.target.value);
+                setLocalSelectedRoundId(e.target.value);
                 setSelectedTeamId(""); // reset team
               }}
               className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
@@ -223,6 +318,21 @@ export function JudgeHistoryView({
               )}
             </select>
           </div>
+
+          <Button 
+            variant="primary" 
+            size="sm" 
+            onClick={() => {
+              if (localSelectedRoundId) {
+                onSelectRound(localSelectedRoundId);
+                fetchScores();
+              }
+            }}
+            style={{ padding: "6px 16px", height: "auto" }}
+            disabled={!localSelectedRoundId}
+          >
+            <Search size={14} className="mr-1 inline-block" /> Search
+          </Button>
         </div>
       </div>
 
@@ -248,8 +358,8 @@ export function JudgeHistoryView({
               style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
             >
               <option value="">All Scored Teams</option>
-              {uniqueTeams.map(t => (
-                <option key={t} value={t}>{t}</option>
+              {uniqueTeams.map(([tId, tName]) => (
+                <option key={tId} value={tId}>{tName}</option>
               ))}
             </select>
           </div>
@@ -296,8 +406,8 @@ export function JudgeHistoryView({
                   else if (row.total >= 50) totalColor = COLORS.warning;
 
                   return (
-                    <tr key={row.id} className="hover:bg-gray-50/50 transition-colors" style={{ borderBottom: i < finalData.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
-                      <td className="px-4 py-4 text-sm font-semibold text-gray-900">{row.teamId}</td>
+                    <tr key={row.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="px-4 py-4 text-sm font-semibold text-gray-900">{row.teamName}</td>
                       <td className="px-4 py-4 text-xs text-gray-600 max-w-[200px] truncate" title={row.title}>{row.title}</td>
                       <td className="px-4 py-4">
                         <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium border border-gray-200">{row.roundName}</span>

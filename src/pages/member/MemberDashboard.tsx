@@ -226,22 +226,6 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [teamMembers] = useState<MemberTeamMember[]>([]);
   const eventsRequestInFlightRef = useRef(false);
   const lastEventsLoadAtRef = useRef(0);
-  // Load leaderboard when on that page — needs eventId + categoryId from user's team
-  useEffect(() => {
-    if (currentPage !== "leaderboard") return;
-    // Try to get active events and load leaderboard for first one
-    eventService.getAll().then(evs => {
-      if (!evs[0]) return;
-      import("@/features/categories/api/categoryService").then(({ categoryService }) =>
-        categoryService.getByEvent(evs[0].eventId).then(cats => {
-          if (!cats[0]) return;
-          rankingService.getLeaderboard(evs[0].eventId, cats[0].categoryId)
-            .then(setApiLeaderboard).catch(() => { });
-        })
-      );
-    }).catch(() => { });
-  }, [currentPage]);
-
   const loadEvents = useCallback(() => {
     const now = Date.now();
     if (
@@ -356,6 +340,14 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionStatus, setSubmissionStatus] = useState("");
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
+  useEffect(() => {
+    if (currentPage !== "leaderboard") return;
+    if (!activeTeamContext?.eventId || !activeTeamContext?.categoryId) return;
+    
+    rankingService.getLeaderboard(activeTeamContext.eventId, activeTeamContext.categoryId)
+      .then(setApiLeaderboard)
+      .catch(() => { setApiLeaderboard([]); });
+  }, [currentPage, activeTeamContext?.eventId, activeTeamContext?.categoryId]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
@@ -1241,10 +1233,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 <tr>
                   <td colSpan={4} className="px-4 py-8 text-center">
                     <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                      The results are currently being compiled and approved by the Judging Panel.
+                      The leaderboard has not been published yet.
                     </div>
                     <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                      Please come back later!
+                      Results will appear here once they are officially announced.
                     </div>
                   </td>
                 </tr>
