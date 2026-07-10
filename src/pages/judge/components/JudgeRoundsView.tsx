@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { ChevronRight, Loader2, CheckCircle2, Target, Search } from "lucide-react";
+import { ChevronRight, Loader2, CheckCircle2, Target } from "lucide-react";
 import { Card, SectionHeader, COLORS, StatusBadge, ProgressBar, Button } from "@/components/shared/UIComponents";
 import { type RoundResponse } from "@/features/judging/api/roundService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
@@ -8,6 +8,7 @@ import { categoryService, type CategoryResponse } from "@/features/categories/ap
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { useAuth } from "@/features/auth/store/authStore";
 import { Calendar } from "lucide-react";
+import { JudgeEventsStep } from "./JudgeEventsStep";
 
 interface JudgeRoundsViewProps {
   apiRounds: RoundResponse[];
@@ -20,9 +21,6 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchInputValue, setSearchInputValue] = useState("");
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   
@@ -246,15 +244,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
     fetchVisibleStats();
   }, [selectedCategoryId, apiRounds, categories, user?.userId, visibleEventIds, loading]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+
 
   const renderContent = () => {
     if (Object.keys(eventGroups).length === 0 && Object.keys(events).length === 0) {
@@ -266,97 +256,14 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
     }
 
     if (!selectedEventId) {
-      // Calculate suggestions for dropdown
-      const dropdownSuggestions = Object.values(events).filter(e => 
-        e.eventName.toLowerCase().includes(searchInputValue.toLowerCase())
-      );
-
       return (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center" ref={searchRef}>
-            <h2 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>Select an Event</h2>
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              <input 
-                type="text" 
-                placeholder="Search events..." 
-                className="pl-9 pr-4 py-2 bg-white rounded-lg border text-sm w-64 shadow-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
-                value={searchInputValue}
-                onChange={(e) => {
-                  setSearchInputValue(e.target.value);
-                  setIsDropdownOpen(true);
-                }}
-                onFocus={() => setIsDropdownOpen(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    setSearchQuery(searchInputValue);
-                    setIsDropdownOpen(false);
-                  }
-                }}
-              />
-              {isDropdownOpen && searchInputValue && (
-                <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-lg border max-h-60 overflow-y-auto" style={{ borderColor: COLORS.border }}>
-                  {dropdownSuggestions.length > 0 ? (
-                    dropdownSuggestions.map(ev => (
-                      <div 
-                        key={ev.eventId}
-                        className="px-4 py-2 hover:bg-gray-50 cursor-pointer text-sm border-b last:border-0"
-                        style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
-                        onClick={() => {
-                          setSearchInputValue(ev.eventName);
-                          setSearchQuery(ev.eventName);
-                          setIsDropdownOpen(false);
-                        }}
-                      >
-                        {ev.eventName}
-                      </div>
-                    ))
-                  ) : (
-                    <div className="px-4 py-3 text-sm text-center" style={{ color: COLORS.textSecondary }}>No suggestions</div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-          {Object.keys(eventGroups).length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-gray-200 shadow-sm">
-              <p style={{ color: COLORS.textSecondary, fontSize: 15 }}>No events found matching "{searchQuery}".</p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-            {Object.entries(eventGroups).map(([eventId, data]) => {
-              const ev = data.event;
-              const isDone = data.totalRounds > 0 && data.completedRounds === data.totalRounds;
-              return (
-                <div 
-                  key={eventId} 
-                  className="bg-white rounded-2xl px-6 py-5 border-2 hover:border-primary/30 transition-all cursor-pointer flex flex-row items-center justify-between shadow-sm"
-                  onClick={() => setSelectedEventId(eventId)}
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm font-bold" style={{ background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.accent})` }}>
-                      <Calendar size={24} />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold" style={{ color: COLORS.textPrimary }}>
-                        {ev ? ev.eventName : 'Unknown Event'}
-                      </h3>
-                      <p className="text-sm text-gray-500">Evaluation Event</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <span className="text-sm font-medium text-gray-500">
-                      {data.completedRounds} / {data.totalRounds} Rounds Scored
-                    </span>
-                    {isDone ? <CheckCircle2 size={24} className="text-green-500" /> : <ChevronRight size={24} className="text-gray-400" />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          )}
-        </div>
+        <JudgeEventsStep 
+          eventGroups={eventGroups}
+          onSelectEvent={setSelectedEventId}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          events={events}
+        />
       );
     }
 
