@@ -359,7 +359,11 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       if (currentPage === "submissions") setSubmissionsError("");
       setSubmissionActionMessage("");
       try {
-        const data = currentPage === "dashboard" || submissionScope === "event"
+        const selectedRound = apiRounds.find(round => round.roundId === selectedSubmissionRoundId);
+        const shouldLoadSelectedRound = currentPage === "submissions"
+          && selectedSubmissionRoundId
+          && (submissionScope !== "event" || selectedRound?.isCalibrationRound);
+        const data = currentPage === "dashboard" || !shouldLoadSelectedRound
           ? await submissionService.getByEvent(selectedEventId ?? "")
           : submissionScope === "unreview"
             ? await submissionService.getUnreviewByRound(selectedSubmissionRoundId)
@@ -375,13 +379,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       }
     };
 
-    if (submissionScope === "event" && selectedEventId) {
+    const selectedRound = apiRounds.find(round => round.roundId === selectedSubmissionRoundId);
+    if (submissionScope === "event" && selectedEventId && !selectedRound?.isCalibrationRound) {
       loadSubmissions();
     }
-    if (submissionScope !== "event" && selectedSubmissionRoundId) {
+    if ((submissionScope !== "event" || selectedRound?.isCalibrationRound) && selectedSubmissionRoundId) {
       loadSubmissions();
     }
-  }, [currentPage, selectedEventId, selectedSubmissionRoundId, submissionScope, submissionReloadKey]);
+  }, [currentPage, selectedEventId, selectedSubmissionRoundId, submissionScope, submissionReloadKey, apiRounds]);
 
   // Disqualify with real API
   const handleDisqualifyConfirm = async () => {
