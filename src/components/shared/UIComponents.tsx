@@ -126,9 +126,15 @@ export function StatCard({ title, value, trend, icon, color = COLORS.primary, su
 }
 
 // Card
-export function Card({ children, className = "", style = {} }: { children: ReactNode; className?: string; style?: React.CSSProperties }) {
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+};
+
+export function Card({ children, className = "", style = {}, ...rest }: CardProps) {
   return (
-    <div className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
+    <div {...rest} className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
       {children}
     </div>
   );
@@ -136,7 +142,7 @@ export function Card({ children, className = "", style = {} }: { children: React
 
 // Button
 interface ButtonProps {
-  children: ReactNode;
+  children?: ReactNode;
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
   onClick?: () => void;
@@ -145,8 +151,9 @@ interface ButtonProps {
   icon?: ReactNode;
   fullWidth?: boolean;
   style?: React.CSSProperties;
+  title?: string;
 }
-export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style }: ButtonProps) {
+export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style, title }: ButtonProps) {
   const sizes = {
     sm: { padding: "6px 12px", fontSize: 12 },
     md: { padding: "8px 16px", fontSize: 13 },
@@ -186,6 +193,7 @@ export function Button({ children, variant = "primary", size = "md", onClick, di
     <motion.button
       onClick={onClick}
       disabled={disabled}
+      title={title}
       whileHover={disabled ? {} : { scale: 1.02, y: -1 }}
       whileTap={disabled ? {} : { scale: 0.97 }}
       className={`inline-flex items-center gap-2 rounded-xl font-medium transition-all duration-150 cursor-pointer ${fullWidth ? "w-full justify-center" : ""} ${className}`}

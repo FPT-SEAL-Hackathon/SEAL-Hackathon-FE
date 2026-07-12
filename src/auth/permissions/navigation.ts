@@ -67,8 +67,10 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   [ROLES.LEADER]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
     { icon: "Users", label: "My Team", key: "team" },
+    { icon: "UserCheck", label: "Join Requests", key: "requests" },
     { icon: "MessageSquare", label: "My Mentor", key: "mentor" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
+    { icon: "Eye", label: "Judge Feedback", key: "feedback" },
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],

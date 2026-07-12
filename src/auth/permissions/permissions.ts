@@ -1,4 +1,4 @@
-import { JUDGE_ROLES, ORGANIZER_ROLES, ROLES, STUDENT_ROLES, type Role, isJudge, isOrganizer } from "@/auth/rbac/roles";
+import { JUDGE_ROLES, LEADER_ROLES, ORGANIZER_ROLES, ROLES, STUDENT_ROLES, type Role, isJudge, isOrganizer } from "@/auth/rbac/roles";
 
 export type PageKey =
   | "dashboard"
@@ -16,6 +16,8 @@ export type PageKey =
   | "scoring"
   | "calibration"
   | "history"
+  | "feedback"
+  | "requests"
   | "categories"
   | "criteria"
   | "users"
@@ -68,6 +70,8 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   scoring: [...JUDGE_ROLES],
   calibration: [...JUDGE_ROLES],
   history: [...JUDGE_ROLES],
+  feedback: [...LEADER_ROLES],
+  requests: [...LEADER_ROLES],
   categories: [...ORGANIZER_ROLES, ...MENTOR_ROLES],
   criteria: [...ORGANIZER_ROLES],
   users: [...ORGANIZER_ROLES],
