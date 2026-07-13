@@ -5,7 +5,7 @@ import {
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save, Download, Eye
+  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -22,8 +22,9 @@ import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
-import { isTeamActive, teamService } from "@/features/teams/api/teamService";
+import { isTeamActive, teamService, type JoinTeamRequestResponse } from "@/features/teams/api/teamService";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
+import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import {
   eventParticipantService,
   type EventParticipantResponse,
@@ -384,6 +385,12 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [handlingRequestId, setHandlingRequestId] = useState<string | null>(null);
+  const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(false);
+  const [feedbackError, setFeedbackError] = useState("");
   const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
   const [certificateCategoryId, setCertificateCategoryId] = useState("all");
   const [certificateLoading, setCertificateLoading] = useState(false);
@@ -629,6 +636,55 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   useEffect(() => {
     void loadSubmissionHistory();
   }, [loadSubmissionHistory]);
+
+  const loadRequests = useCallback(async () => {
+    if (!activeTeamContext?.teamId) {
+      setPendingRequests([]);
+      return;
+    }
+    setRequestsLoading(true);
+    try {
+      setPendingRequests(await teamService.getPendingRequests(activeTeamContext.teamId));
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, [activeTeamContext?.teamId]);
+
+  useEffect(() => {
+    if (currentPage !== "requests") return;
+    void loadRequests();
+  }, [currentPage, loadRequests]);
+
+  const handleRequest = async (requestId: string, action: "APPROVED" | "REJECTED") => {
+    setHandlingRequestId(requestId);
+    try {
+      await teamService.handleJoinRequest(requestId, action);
+      setPendingRequests(prev => prev.filter(request => request.requestId !== requestId));
+    } finally {
+      setHandlingRequestId(null);
+    }
+  };
+
+  const loadFeedback = async () => {
+    const targetSubmission = (submissionForm.roundId
+      ? submissionHistory.find(submission => submission.roundId === submissionForm.roundId)
+      : null) ?? submissionHistory[0];
+
+    if (!targetSubmission?.submissionId) {
+      setFeedbackError("Load or select a submitted round first.");
+      return;
+    }
+
+    setFeedbackLoading(true);
+    setFeedbackError("");
+    try {
+      setJudgingScores(await judgingService.getBySubmission(targetSubmission.submissionId));
+    } catch (error) {
+      setFeedbackError(error instanceof Error ? error.message : "Could not load feedback.");
+    } finally {
+      setFeedbackLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (currentPage !== "submissions" || !submissionForm.teamId || !submissionForm.roundId) return;
@@ -1590,6 +1646,144 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
+  const renderFeedback = () => (
+    <>
+      <SectionHeader
+        title="Judge Feedback"
+        subtitle="View judge scores and comments for the selected or latest submission"
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<Eye size={14} />}
+            onClick={loadFeedback}
+            disabled={feedbackLoading}
+          >
+            {feedbackLoading ? "Loading..." : "Load Feedback"}
+          </Button>
+        }
+      />
+      {feedbackError && (
+        <Card className="p-4" style={{ color: COLORS.error }}>
+          {feedbackError}
+        </Card>
+      )}
+      {judgingScores.length === 0 ? (
+        <Card className="p-8 text-center">
+          <MessageSquare size={34} className="mx-auto mb-3" style={{ color: COLORS.border }} />
+          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>No feedback loaded yet.</div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {judgingScores.map(score => (
+            <Card key={score.id} className="p-5">
+              <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{score.criterionName}</div>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>Judge: {score.judgeName}</div>
+              <div className="mt-3" style={{ fontSize: 22, fontWeight: 800, color: COLORS.primary }}>{score.scoreValue}</div>
+              {score.comment && <p style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 8 }}>{score.comment}</p>}
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 8 }}>{formatSubmissionDate(score.scoredAt)}</div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
+  const renderRequests = () => {
+    const isLeader = activeTeamContext?.leaderUserId === user?.userId;
+
+    if (!activeTeamContext?.teamId) {
+      return (
+        <>
+          <SectionHeader title="Join Requests" subtitle="Load a team before reviewing join requests" />
+          <Card className="p-8" style={{ color: COLORS.textSecondary }}>
+            No active team is loaded.
+          </Card>
+        </>
+      );
+    }
+
+    if (!isLeader) {
+      return (
+        <>
+          <SectionHeader title="Join Requests" subtitle="Only the team leader can approve join requests" />
+          <Card className="p-8" style={{ color: COLORS.textSecondary }}>
+            You are not the leader of {activeTeamContext.teamName ?? "this team"}.
+          </Card>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <SectionHeader
+          title="Join Requests"
+          subtitle={`Pending requests to join ${activeTeamContext.teamName ?? "your team"}`}
+          action={
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Search size={14} />}
+              onClick={loadRequests}
+              disabled={requestsLoading}
+            >
+              {requestsLoading ? "Loading..." : "Load Requests"}
+            </Button>
+          }
+        />
+        {requestsLoading && (
+          <div className="flex items-center justify-center py-12 gap-2" style={{ color: COLORS.textSecondary }}>
+            Loading...
+          </div>
+        )}
+        {!requestsLoading && pendingRequests.length === 0 && (
+          <Card className="p-8 text-center">
+            <CheckCircle size={36} className="mx-auto mb-3" style={{ color: COLORS.border }} />
+            <div style={{ fontSize: 15, color: COLORS.textSecondary }}>No pending join requests</div>
+          </Card>
+        )}
+        <div className="space-y-3">
+          {pendingRequests.map(request => (
+            <Card key={request.requestId} className="p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{request.fullName}</div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                    University: {request.universityName || "-"}
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                    Requested: {formatSubmissionDate(request.requestedAt)}
+                  </div>
+                  <div className="mt-2"><StatusBadge status={request.requestStatus.toLowerCase()} /></div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<CheckCircle size={13} />}
+                    onClick={() => handleRequest(request.requestId, "APPROVED")}
+                    disabled={handlingRequestId === request.requestId}
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={<Trash2 size={13} />}
+                    onClick={() => handleRequest(request.requestId, "REJECTED")}
+                    disabled={handlingRequestId === request.requestId}
+                  >
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </>
+    );
+  };
+
   const renderSubmissions = () => {
     if (!activeTeamContext?.teamId) {
       return (
@@ -1861,6 +2055,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "leaderboard": return renderLeaderboard();
       case "certificates": return renderCertificates();
       case "submissions": return renderSubmissions();
+      case "feedback": return renderFeedback();
+      case "requests": return renderRequests();
       case "notifications": return renderNotifications();
       case "profile": return renderProfile();
       case "mentor": return <MyMentor isLeader={false} onNavigate={onNavigate} />;
