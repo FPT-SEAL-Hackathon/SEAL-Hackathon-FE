@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router";
 import { DEFAULT_PAGE_BY_ROLE, canAccessPage } from "@/auth/permissions/permissions";
 import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, type Role, ROLES } from "@/auth/rbac/roles";
@@ -186,12 +187,17 @@ function MainLayout() {
     return <Navigate to="/403" replace />;
   }
 
-  const handlePageNavigate = (newPage: string) => {
+  const [navKey, setNavKey] = useState(0);
+
+  const handlePageNavigate = (newPage: string, options?: { state?: any }) => {
+    if (newPage === page) {
+      setNavKey(prev => prev + 1);
+    }
     if (!canAccessPage(role, newPage)) {
       navigate("/403");
       return;
     }
-    navigate(`/${getRoleRouteSegment(role)}/${newPage}`);
+    navigate(`/${getRoleRouteSegment(role)}/${newPage}`, options);
   };
 
   const handleLogout = async () => {
@@ -207,24 +213,24 @@ function MainLayout() {
       onRoleChange={handleLogout}
       userName={user?.fullName ?? "User"}
     >
-      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} />
+      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} navKey={navKey} />
     </Layout>
   );
 }
 
-function DashboardByRole({ role, currentPage, onNavigate }: { role: Role; currentPage: string; onNavigate: (page: string) => void }) {
-  if (role === ROLES.EXPERT || role === ROLES.INTERNAL_JUDGE) {
+function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role; currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number }) {
+  if (role === ROLES.EXPERT) {
     const mentorPages = ["dashboard", "categories", "tracks", "teams", "consultations", "progress", "schedule"];
     if (mentorPages.includes(currentPage)) {
       return <MentorDashboard currentPage={currentPage} onNavigate={onNavigate} />;
     }
-    return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
   }
   if (isStudent(role)) {
     return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   if (isJudge(role)) {
-    return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
   }
   if (isOrganizer(role)) {
     return <AdminDashboard currentPage={currentPage} onNavigate={onNavigate} />;

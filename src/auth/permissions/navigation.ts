@@ -82,7 +82,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   ],
   [ROLES.EXPERT]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
-    { icon: "ClipboardList", label: "Event", key: "rounds" },
+    { icon: "ClipboardList", label: "Judging", key: "rounds" },
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
     { icon: "BookOpen", label: "Assigned Categories", key: "categories" },
     { icon: "Users", label: "Category Teams", key: "teams" },

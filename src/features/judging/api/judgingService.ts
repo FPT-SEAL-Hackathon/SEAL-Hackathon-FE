@@ -76,9 +76,9 @@ async function getOptionalWithFallbacks<T>(paths: string[], emptyValue: T) {
 
 export const judgingService = {
   recordScores: (scores: ScoreSubmissionDTO[]) =>
-    api.post<void>("/api/v1/judging", scores),
+    api.post<{ message: string }>("/api/v1/judging", scores),
   updateScores: (updates: UpdateScoreSubmissionDTO[]) =>
-    api.patch<void>("/api/v1/judging", updates),
+    api.patch<{ message: string }>("/api/v1/judging", updates),
   getBySubmission: (submissionId: string) =>
     api.get<JudgingDTO[]>(`/api/v1/judging/submission/${submissionId}`),
   getByJudge: (judgeUserId: string) =>
@@ -91,8 +91,10 @@ export const judgingService = {
     if (roundId) params.append("roundId", roundId);
     if (categoryId) params.append("categoryId", categoryId);
     const query = params.toString();
+    const pathEventId = eventId || "all";
     const suffix = query ? `?${query}` : "";
     return getOptionalWithFallbacks<ReliabilityMetricResponse[]>([
+      `/api/v1/judging/events/${pathEventId}/calibration-metrics${suffix}`,
       `/api/v1/research/calibration-metrics${suffix}`,
       `/api/v1/research/reliability-metrics${suffix}`,
     ], []);
