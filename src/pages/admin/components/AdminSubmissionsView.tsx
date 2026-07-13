@@ -46,6 +46,38 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
     (submission.submissionStatusName ?? "").toLowerCase().includes("scored")
   ).length;
   const selectedRound = apiRounds.find((round: any) => round.roundId === selectedSubmissionRoundId);
+  const getSubmissionRound = (submission: any) =>
+    apiRounds.find((round: any) => round.roundId === submission.roundId);
+  const getRoundName = (submission: any) =>
+    submission.roundName
+    ?? submission.round?.roundName
+    ?? getSubmissionRound(submission)?.roundName
+    ?? submission.roundId
+    ?? "Unknown round";
+  const getSubmissionName = (submission: any) =>
+    submission.submissionName
+    ?? submission.name
+    ?? submission.title
+    ?? submission.notes
+    ?? "Untitled submission";
+  const isCalibrationSubmission = (submission: any) => {
+    const round = getSubmissionRound(submission);
+    return Boolean(
+      submission.isCalibrationRound
+      ?? submission.isCalibration
+      ?? submission.isSampleSubmission
+      ?? submission.sampleSubmission
+      ?? submission.round?.isCalibrationRound
+      ?? round?.isCalibrationRound
+      ?? (selectedRound?.roundId === submission.roundId ? selectedRound?.isCalibrationRound : false)
+    );
+  };
+  const getTeamName = (submission: any) =>
+    submission.teamName
+    ?? submission.team?.teamName
+    ?? submission.team?.name
+    ?? submission.teamId
+    ?? "Unknown team";
 
   return (
     <>
@@ -84,7 +116,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
               onChange={e => setSelectedSubmissionCategoryId(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl outline-none"
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={submissionScope === "event"}
+              disabled={!selectedEventId || apiCategories.length === 0}
             >
               {apiCategories.length === 0 && <option value="">No categories found</option>}
               {apiCategories.map((category: any) => (
@@ -96,10 +128,13 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
             <select
               value={selectedSubmissionRoundId}
-              onChange={e => setSelectedSubmissionRoundId(e.target.value)}
+              onChange={e => {
+                setSelectedSubmissionRoundId(e.target.value);
+                if (e.target.value) setSubmissionScope("round");
+              }}
               className="w-full px-3 py-2.5 rounded-xl outline-none"
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={submissionScope === "event"}
+              disabled={!selectedSubmissionCategoryId || apiRounds.length === 0}
             >
               {apiRounds.length === 0 && <option value="">No rounds loaded</option>}
               {apiRounds.map((round: any) => (
@@ -153,7 +188,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLORS.bg }}>
-                {["Team", "Round", "Status", "Submitted", "Artifacts", "Repo Stats", "Action"].map(header => (
+                {["Team Name", "Round Name", "Submission Name", "Status", "Submitted", "Artifacts", "Repo Stats", "Action"].map(header => (
                   <th key={header} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>
                     {header.toUpperCase()}
                   </th>
@@ -163,20 +198,25 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
             <tbody>
               {adminSubmissions.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center" style={{ color: COLORS.textSecondary, fontSize: 13 }}>
+                  <td colSpan={8} className="px-4 py-8 text-center" style={{ color: COLORS.textSecondary, fontSize: 13 }}>
                     {submissionsLoading ? "Loading submissions..." : "No submissions found for the selected scope."}
                   </td>
                 </tr>
               )}
               {adminSubmissions.map((submission: any) => {
                 const status = (submission.submissionStatusName || "draft").toLowerCase().replace(/\s+/g, "_");
+                const isCalibration = isCalibrationSubmission(submission);
                 return (
                   <tr key={submission.submissionId} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <td className="px-4 py-3">
-                      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{submission.teamId}</div>
-                      <div style={{ fontSize: 11, color: COLORS.textSecondary }}>By {submission.submittedByUserId ?? "unknown"}</div>
+                      {isCalibration ? (
+                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>None</span>
+                      ) : (
+                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{getTeamName(submission)}</div>
+                      )}
                     </td>
-                    <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>{submission.roundId}</td>
+                    <td className="px-4 py-3" style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{getRoundName(submission)}</td>
+                    <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{getSubmissionName(submission)}</td>
                     <td className="px-4 py-3"><StatusBadge status={status} /></td>
                     <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
                       {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString("en-US") : "Not submitted"}

@@ -28,7 +28,7 @@ import {
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
-import { isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
+import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
@@ -66,6 +66,12 @@ function getStoredTeam(): StoredTeam | null {
 
 function formatDate(value?: string) {
   return value ? new Date(value).toLocaleString() : "-";
+}
+
+function isBeforeSubmissionDeadline(round?: Round) {
+  if (!round?.submissionDeadline) return true;
+  const deadline = new Date(round.submissionDeadline).getTime();
+  return Number.isNaN(deadline) || Date.now() <= deadline;
 }
 
 function display(value?: string | number | null) {
@@ -212,6 +218,11 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmitError("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
     }
+    const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
+    if (!isBeforeSubmissionDeadline(selectedRound)) {
+      setSubmitError("The submission deadline for this round has passed.");
+      return;
+    }
 
     setSubmitLoading(true);
     setSubmitError("");
@@ -346,6 +357,21 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderSubmissions = () => (
     <>
       <SectionHeader title="Submission Center" subtitle="Submit and load your team's work from backend API" />
+      {activeTeam && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+              Team status
+            </span>
+            <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId).badge} />
+            {!isTeamActive(activeTeam.teamStatusId) && (
+              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                Submissions unlock after organizer approval.
+              </span>
+            )}
+          </div>
+        </Card>
+      )}
       <Card className="p-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="block">
@@ -362,6 +388,18 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
                 <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
               ))}
             </select>
+            {submissionForm.roundId && (() => {
+              const round = submissionRounds.find(item => item.roundId === submissionForm.roundId);
+              const open = isBeforeSubmissionDeadline(round);
+              return (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={open ? "open" : "closed"} />
+                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                    Deadline: {formatDate(round?.submissionDeadline)}
+                  </span>
+                </div>
+              );
+            })()}
           </label>
           <TextField label="Submission Name" value={submissionForm.submissionName} onChange={value => setSubmissionForm(prev => ({ ...prev, submissionName: value }))} icon={<FileText size={14} />} />
           <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }))} icon={<Github size={14} />} />
@@ -633,6 +671,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "dashboard": return renderDashboard();
       case "team": return renderTeam();
       case "submissions": return renderSubmissions();
+      case "leaderboard": return renderRankings();
       case "rankings": return renderRankings();
       case "notifications": return renderNotifications();
       case "feedback": return renderFeedback();

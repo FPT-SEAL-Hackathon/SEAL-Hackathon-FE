@@ -2,6 +2,8 @@ import { api } from "@/lib/api/apiClient";
 import { TemplateRequest, CriteriaTemplate } from "../types/template";
 
 export const criteriaTemplateService = {
+    getAll: () => api.get<CriteriaTemplate[]>("/api/v1/criteria/templates"),
+
     getAllActive: () => api.get<CriteriaTemplate[]>("/api/v1/criteria/templates"),
 
     create: (body: TemplateRequest) => api.post<CriteriaTemplate>(

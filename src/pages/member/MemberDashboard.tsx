@@ -539,23 +539,34 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   }, [activeTeamContext?.categoryId, currentPage]);
 
   const loadSubmissionHistory = useCallback(async () => {
-    if (currentPage !== "submissions" || !submissionForm.teamId || submissionRounds.length === 0) {
+    if (currentPage !== "submissions" || !submissionForm.teamId) {
       setSubmissionHistory([]);
       return;
     }
 
     setSubmissionHistoryLoading(true);
     try {
-      const results = await Promise.all(
-        submissionRounds.map(round =>
-          submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId)
-            .then(submission => submission)
-            .catch(() => null),
-        ),
-      );
+      const directResults = submissionRounds.length > 0
+        ? await Promise.all(
+          submissionRounds.map(round =>
+            submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId)
+              .then(submission => submission)
+              .catch(() => null),
+          ),
+        )
+        : [];
+      const eventResults = activeTeamContext?.eventId
+        ? await submissionService.getByEvent(activeTeamContext.eventId)
+          .then(submissions => submissions.filter(submission => submission.teamId === submissionForm.teamId))
+          .catch(() => [])
+        : [];
+      const uniqueSubmissions = new Map<string, SubmissionResponse>();
+      [...directResults, ...eventResults]
+        .filter((submission): submission is SubmissionResponse => Boolean(submission?.submissionId))
+        .forEach(submission => uniqueSubmissions.set(submission.submissionId, submission));
+
       setSubmissionHistory(
-        results
-          .filter((submission): submission is SubmissionResponse => Boolean(submission?.submissionId))
+        Array.from(uniqueSubmissions.values())
           .sort((a, b) => {
             const aTime = new Date(a.submittedAt || a.lastUpdatedAt || 0).getTime();
             const bTime = new Date(b.submittedAt || b.lastUpdatedAt || 0).getTime();
@@ -565,7 +576,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     } finally {
       setSubmissionHistoryLoading(false);
     }
-  }, [currentPage, submissionForm.teamId, submissionRounds]);
+  }, [activeTeamContext?.eventId, currentPage, submissionForm.teamId, submissionRounds]);
 
   useEffect(() => {
     void loadSubmissionHistory();
@@ -614,7 +625,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setSubmissionLoading(true);
     setSubmissionStatus("");
     try {
-      await submissionService.submit({
+      const payload = {
         teamId: submissionForm.teamId,
         roundId: submissionForm.roundId,
         repositoryUrl: submissionForm.repositoryUrl,
@@ -622,9 +633,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         reportUrl: submissionForm.reportUrl,
         slideUrl: submissionForm.slideUrl,
         notes: submissionForm.submissionName.trim(),
-      });
+      };
+      const saved = await submissionService.submit(payload);
+      setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
       setSubmissionStatus("Submission saved.");
-      void loadSubmissionHistory();
     } catch (error) {
       setSubmissionStatus(error instanceof Error ? error.message : "Submission failed.");
     } finally {
@@ -649,6 +661,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         reportUrl: submission.reportUrl ?? "",
         slideUrl: submission.slideUrl ?? "",
       }));
+      setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
       setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
     } catch (error) {
       setSubmissionStatus(error instanceof Error ? error.message : "Could not load current submission.");

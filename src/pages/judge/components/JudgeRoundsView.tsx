@@ -12,9 +12,14 @@ import { JudgeEventsStep } from "./JudgeEventsStep";
 
 interface JudgeRoundsViewProps {
   apiRounds: RoundResponse[];
+  apiSubmissions?: SubmissionResponse[];
+  apiCriteria?: unknown[];
   onSelectRound: (roundId: string) => void;
+  onSelectSubmission?: (submission: SubmissionResponse) => void;
   onNavigate: (page: string) => void;
   isLoadingRounds?: boolean;
+  selectedRoundId?: string | null;
+  resetKey?: number;
 }
 
 export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadingRounds = false }: JudgeRoundsViewProps) {
@@ -169,7 +174,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
     });
 
     const sortedEventEntries = Object.entries(eGroups).sort(([, a], [, b]) => {
-      return new Date(b.event?.startDate || 0).getTime() - new Date(a.event?.startDate || 0).getTime();
+      return new Date(b.event?.eventStartDate || 0).getTime() - new Date(a.event?.eventStartDate || 0).getTime();
     });
 
     let visibleEventEntries = [];

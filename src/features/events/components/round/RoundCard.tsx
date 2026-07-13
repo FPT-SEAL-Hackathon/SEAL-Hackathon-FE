@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Edit, Trash2, X, ChevronDown, ChevronRight, GitBranch, UserCheck } from "lucide-react";
+import { Edit, Trash2, X, ChevronDown, ChevronRight, GitBranch, UserCheck, Upload, Loader } from "lucide-react";
 import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared/UIComponents";
 import { CriteriaImportPanel } from "../../shared/ui/shared";
 import { RoundForm } from "./RoundForm";
@@ -7,6 +7,25 @@ import { Round } from "../../types/round";
 import { getRoundStatus } from "../../utils/roundUtils";
 import { useRoundContext } from "../../context/RoundContext";
 import { AssignJudgesModal } from "./AssignJudgesModal";
+import { parseApiError } from "@/lib/api/apiClient";
+import { submissionService } from "@/features/submissions/api/submissionService";
+
+const JUDGING_STATUS_ID = "40000000-0000-0000-0000-000000000003";
+const COMPLETED_STATUS_ID = "40000000-0000-0000-0000-000000000004";
+
+function normalizeStatus(value?: string | null) {
+  return String(value ?? "").trim().replace(/[-_\s]+/g, " ").toLowerCase();
+}
+
+function isSampleRoundLocked(round: Round) {
+  const statusId = String(round.roundStatusId ?? "").toLowerCase();
+  const statusName = normalizeStatus(getRoundStatus(round.roundStatusId)?.statusName);
+  return statusId === JUDGING_STATUS_ID
+    || statusId === COMPLETED_STATUS_ID
+    || statusName === "judging"
+    || statusName === "complete"
+    || statusName === "completed";
+}
 
 interface Props {
     round: Round;
@@ -17,7 +36,19 @@ export function RoundCard({
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [showJudgeModal, setShowJudgeModal] = useState(false);
+  const [showSampleForm, setShowSampleForm] = useState(false);
+  const [sampleSubmitting, setSampleSubmitting] = useState(false);
+  const [sampleMessage, setSampleMessage] = useState("");
+  const [sampleError, setSampleError] = useState("");
+  const [sampleForm, setSampleForm] = useState({
+    submissionName: "",
+    repositoryUrl: "",
+    demoUrl: "",
+    reportUrl: "",
+    slideUrl: "",
+  });
   const roundStatus = getRoundStatus(round.roundStatusId);
+  const sampleLocked = isSampleRoundLocked(round);
 
   const {
     eventCriteria,
@@ -48,6 +79,40 @@ export function RoundCard({
 
   const judges = roundJudges[round.roundId] ?? [];
   const importedCriteria = roundCriteria[round.roundId] ?? [];
+
+  const updateSampleForm = (key: keyof typeof sampleForm, value: string) => {
+    setSampleForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const createSampleSubmission = async () => {
+    if (sampleLocked) {
+      setSampleError("Sample submissions are locked once the round is judging or completed.");
+      return;
+    }
+
+    setSampleSubmitting(true);
+    setSampleError("");
+    setSampleMessage("");
+    try {
+      await submissionService.submitSample({
+        roundId: round.roundId,
+        repositoryUrl: sampleForm.repositoryUrl.trim(),
+        demoUrl: sampleForm.demoUrl.trim(),
+        reportUrl: sampleForm.reportUrl.trim(),
+        slideUrl: sampleForm.slideUrl.trim(),
+        notes: sampleForm.submissionName.trim(),
+      });
+      setSampleMessage("Calibration sample submission created.");
+    } catch (error) {
+      const parsed = parseApiError(error);
+      const details = parsed.fieldErrors
+        ? Object.entries(parsed.fieldErrors).map(([field, message]) => `${field}: ${message}`).join("; ")
+        : "";
+      setSampleError(details ? `${parsed.message}: ${details}` : parsed.message);
+    } finally {
+      setSampleSubmitting(false);
+    }
+  };
 
   if (editing) {
     return (
@@ -135,6 +200,20 @@ export function RoundCard({
             </div>
           </div>
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+            {round.isCalibrationRound && (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={<Upload size={12} />}
+                onClick={() => {
+                  setExpanded(true);
+                  setShowSampleForm(value => !value);
+                }}
+                disabled={sampleLocked}
+              >
+                Sample
+              </Button>
+            )}
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="ghost" size="sm" icon={<UserCheck size={12} />} onClick={() => setShowJudgeModal(true)}>Judges</Button>
             <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => deleteRound(round.categoryId, round.roundId)}>Delete</Button>
@@ -146,7 +225,7 @@ export function RoundCard({
 
         {expanded && (
           <div className="px-4 pb-4 space-y-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
-            {round.description && (
+            {round.description && !round.isCalibrationRound && (
               <div className="pt-3">
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{round.description}</span>
               </div>
@@ -172,6 +251,74 @@ export function RoundCard({
               <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Advancement: Top <strong style={{ color: COLORS.primary }}>{round.advancementTopN}</strong> teams advance
               </div>
+            )}
+
+            {round.isCalibrationRound && (
+              <Card className="p-4" style={{ border: `1px solid ${COLORS.warning}30`, background: `${COLORS.warning}06` }}>
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>Calibration Sample Submission</div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                      Create the organizer sample submission for this calibration round. Allowed until the round moves to Judging or Completed.
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={sampleLocked ? "locked" : "open"} />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Upload size={12} />}
+                      onClick={() => setShowSampleForm(value => !value)}
+                      disabled={sampleLocked}
+                    >
+                      {showSampleForm ? "Hide Form" : "Create Sample"}
+                    </Button>
+                  </div>
+                </div>
+                {sampleLocked && (
+                  <div className="mt-3 px-3 py-2 rounded-lg" style={{ background: `${COLORS.error}10`, color: COLORS.error, fontSize: 12, fontWeight: 600 }}>
+                    This calibration round is already judging or completed, so sample submissions can no longer be inserted.
+                  </div>
+                )}
+                {showSampleForm && !sampleLocked && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                      {[
+                        { label: "Submission Name", key: "submissionName" },
+                        { label: "Repository URL", key: "repositoryUrl" },
+                        { label: "Demo URL", key: "demoUrl" },
+                        { label: "Report URL", key: "reportUrl" },
+                        { label: "Slide URL", key: "slideUrl" },
+                      ].map(field => (
+                        <label key={field.key} className="block">
+                          <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 5 }}>
+                            {field.label}
+                          </span>
+                          <input
+                            value={sampleForm[field.key as keyof typeof sampleForm]}
+                            onChange={event => updateSampleForm(field.key as keyof typeof sampleForm, event.target.value)}
+                            className="w-full px-3 py-2 rounded-lg outline-none"
+                            style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={sampleSubmitting ? <Loader size={12} className="animate-spin" /> : <Upload size={12} />}
+                        onClick={createSampleSubmission}
+                        disabled={sampleSubmitting}
+                      >
+                        {sampleSubmitting ? "Creating..." : "Create Sample Submission"}
+                      </Button>
+                      {sampleMessage && <span style={{ fontSize: 12, color: COLORS.success, fontWeight: 700 }}>{sampleMessage}</span>}
+                      {sampleError && <span style={{ fontSize: 12, color: COLORS.error, fontWeight: 700 }}>{sampleError}</span>}
+                    </div>
+                  </>
+                )}
+              </Card>
             )}
 
             {/* Round criteria */}

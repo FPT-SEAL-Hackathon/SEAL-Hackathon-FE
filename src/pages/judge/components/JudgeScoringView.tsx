@@ -149,14 +149,17 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
       setSubmitStatus("success");
       setScoreSaved(true);
       updateGlobalScoreCache(selectedSubmission.id?.toString() ?? "", {
-        judgingId: "dummy",
-        judgeId: "dummy",
+        id: "local-score-cache",
+        roundJudgeId: "local-score-cache",
+        judgeName: "Current judge",
         submissionId: selectedSubmission.id?.toString() ?? "",
-        roundCriterionId: "dummy",
+        roundCriterionId: apiCriteria[0]?.roundCriterionId ?? "local-score-cache",
+        criterionName: apiCriteria[0]?.criterionName ?? "Criterion",
         scoreValue: 0,
         comment: "",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+        scoredAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isCalibration: isCalibrationRound,
       });
     } catch (err: any) {
       setSubmitStatus("error");
@@ -176,7 +179,7 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
     <>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
         <div>
-          <Button variant="outline" size="sm" onClick={() => onNavigate("submissions")}>
+          <Button variant="outline" size="sm" onClick={() => onNavigate?.("submissions")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to Submissions
           </Button>
         </div>
