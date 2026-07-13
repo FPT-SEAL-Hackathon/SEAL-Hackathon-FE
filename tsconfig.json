@@ -11,7 +11,6 @@
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "moduleResolution": "bundler",
     "noEmit": true,
     "jsx": "react-jsx",
     "types": ["vite/client"],

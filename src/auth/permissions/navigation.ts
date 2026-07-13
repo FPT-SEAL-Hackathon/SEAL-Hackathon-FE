@@ -43,7 +43,6 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "Event Management", key: "events" },
     { icon: "BookOpen", label: "Categories", key: "categories" },
     { icon: "UserCheck", label: "Event Participants", key: "event-participants" },
-    { icon: "Users", label: "Team Approval", key: "team-approval" },
     { icon: "GitBranch", label: "Rounds", key: "rounds" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "Users", label: "Users", key: "users" },
@@ -67,8 +66,10 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   [ROLES.LEADER]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
     { icon: "Users", label: "My Team", key: "team" },
+    { icon: "UserCheck", label: "Join Requests", key: "requests" },
     { icon: "MessageSquare", label: "My Mentor", key: "mentor" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
+    { icon: "Eye", label: "Judge Feedback", key: "feedback" },
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
