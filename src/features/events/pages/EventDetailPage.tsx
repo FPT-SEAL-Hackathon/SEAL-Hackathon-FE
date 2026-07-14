@@ -105,7 +105,7 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
             )}
           
             {activeTab === "teams" && (
-              <EventTeamsSection eventId={event.eventId} />
+              <EventTeamsSection eventId={event.eventId} event={event} />
             )}       
           </RoundProvider>
         </CategoryProvider>

@@ -28,6 +28,7 @@ import {
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { notificationService } from "@/features/notifications/api/notificationService";
@@ -53,6 +54,7 @@ type StoredTeam = {
   categoryId?: string;
   teamName?: string;
   leaderUserId?: string;
+  teamStatusName?: string;
 };
 
 function getStoredTeam(): StoredTeam | null {
@@ -108,6 +110,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [submissionFieldErrors, setSubmissionFieldErrors] = useState<SubmissionUrlErrors>({});
 
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
@@ -225,13 +228,19 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmitError("Submission name is required.");
       return;
     }
-    if (activeTeam && !isTeamActive(activeTeam.teamStatusId)) {
+    if (activeTeam && !isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName)) {
       setSubmitError("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
     }
     const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
     if (!isBeforeSubmissionDeadline(selectedRound)) {
       setSubmitError("The submission deadline for this round has passed.");
+      return;
+    }
+    const urlErrors = validateSubmissionUrls(submissionForm);
+    setSubmissionFieldErrors(urlErrors);
+    if (hasSubmissionUrlErrors(urlErrors)) {
+      setSubmitError("Please enter valid URLs or leave optional URL fields blank.");
       return;
     }
 
@@ -277,6 +286,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         reportUrl: submission.reportUrl ?? "",
         slideUrl: submission.slideUrl ?? "",
       }));
+      setSubmissionFieldErrors({});
       setActiveSubmission(submission);
       setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
       setSubmitMessage("Submission loaded.");
@@ -379,8 +389,8 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
             <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
               Team status
             </span>
-            <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId).badge} />
-            {!isTeamActive(activeTeam.teamStatusId) && (
+            <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId, activeTeam.teamStatusName).badge} />
+            {!isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName) && (
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Submissions unlock after organizer approval.
               </span>
@@ -423,10 +433,22 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
             )}
           </label>
           <TextField label="Submission Name" value={submissionForm.submissionName} onChange={value => setSubmissionForm(prev => ({ ...prev, submissionName: value }))} icon={<FileText size={14} />} />
-          <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }))} icon={<Github size={14} />} />
-          <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, demoUrl: value }))} icon={<Globe size={14} />} />
-          <TextField label="Report URL" value={submissionForm.reportUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, reportUrl: value }))} icon={<FileText size={14} />} />
-          <TextField label="Slide URL" value={submissionForm.slideUrl} onChange={value => setSubmissionForm(prev => ({ ...prev, slideUrl: value }))} icon={<FileText size={14} />} />
+          <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => {
+            setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }));
+            setSubmissionFieldErrors(prev => ({ ...prev, repositoryUrl: undefined }));
+          }} icon={<Github size={14} />} error={submissionFieldErrors.repositoryUrl} />
+          <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => {
+            setSubmissionForm(prev => ({ ...prev, demoUrl: value }));
+            setSubmissionFieldErrors(prev => ({ ...prev, demoUrl: undefined }));
+          }} icon={<Globe size={14} />} error={submissionFieldErrors.demoUrl} />
+          <TextField label="Report URL" value={submissionForm.reportUrl} onChange={value => {
+            setSubmissionForm(prev => ({ ...prev, reportUrl: value }));
+            setSubmissionFieldErrors(prev => ({ ...prev, reportUrl: undefined }));
+          }} icon={<FileText size={14} />} error={submissionFieldErrors.reportUrl} />
+          <TextField label="Slide URL" value={submissionForm.slideUrl} onChange={value => {
+            setSubmissionForm(prev => ({ ...prev, slideUrl: value }));
+            setSubmissionFieldErrors(prev => ({ ...prev, slideUrl: undefined }));
+          }} icon={<FileText size={14} />} error={submissionFieldErrors.slideUrl} />
         </div>
         <div className="flex flex-wrap items-center gap-3 mt-5">
           <Button
@@ -715,11 +737,13 @@ function TextField({
   value,
   onChange,
   icon,
+  error,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   icon?: React.ReactNode;
+  error?: string;
 }) {
   return (
     <label className="block">
@@ -730,8 +754,13 @@ function TextField({
         value={value}
         onChange={event => onChange(event.target.value)}
         className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+        style={{ fontSize: 14, border: `1px solid ${error ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
       />
+      {error && (
+        <span style={{ display: "block", marginTop: 4, fontSize: 11, color: COLORS.error, fontWeight: 600 }}>
+          {error}
+        </span>
+      )}
     </label>
   );
 }

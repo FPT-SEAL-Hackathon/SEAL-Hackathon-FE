@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button, Card, COLORS, StatusBadge } from "@/components/shared/UIComponents";
 import {
+  canOrganizerApproveTeam,
   getTeamStatusInfo,
   teamService,
   type TeamEligibilityReviewResponse,
@@ -21,6 +22,7 @@ import {
   type TeamResponse,
 } from "@/features/teams/api/teamService";
 import type { Category } from "@/features/events/types/category";
+import type { EventResponse } from "@/features/events/api/eventService";
 import { useCategoryContext } from "../context/CategoryContext";
 import {
   eventParticipantService,
@@ -30,22 +32,116 @@ import { userService, type UserManagementUser } from "@/features/users/api/userS
 
 interface EventTeamsSectionProps {
   eventId: string;
+  event?: EventResponse;
   //categories: Category[];
 }
 
-export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; onOpen: () => void }) {
+function activeMemberCountForTeam(
+  team: TeamEligibilityReviewResponse,
+  eventTeam?: TeamResponse,
+) {
+  const eventTeamMembers = eventTeam?.members ?? [];
+  const reviewMembers = team.members ?? [];
+  if (eventTeamMembers.length > 0) {
+    return eventTeamMembers.filter(member => member.active !== false).length;
+  }
+  if (reviewMembers.length > 0) {
+    return reviewMembers.filter(member => member.active !== false).length;
+  }
+  return team.activeMemberCount ?? 0;
+}
+
+function teamResponseToEligibilityReview(
+  team: TeamResponse,
+  event?: EventResponse,
+): TeamEligibilityReviewResponse {
+  const activeMemberCount = team.activeMemberCount ?? team.members.filter(member => member.active !== false).length;
+  const minTeamSize = team.minTeamSize ?? event?.minTeamSize ?? 0;
+  const maxTeamSize = team.maxTeamSize ?? event?.maxTeamSize ?? 0;
+  const teamSizeEligible = !minTeamSize || activeMemberCount >= minTeamSize;
+  const withinMaximumSize = !maxTeamSize || activeMemberCount <= maxTeamSize;
+
+  return {
+    teamId: team.teamId,
+    eventId: team.eventId,
+    categoryId: team.categoryId,
+    teamName: team.teamName,
+    teamStatusId: team.teamStatusId,
+    teamStatusName: team.teamStatusName,
+    leaderUserId: team.leaderUserId,
+    minTeamSize,
+    maxTeamSize,
+    activeMemberCount,
+    teamSizeEligible: team.teamSizeEligible ?? (teamSizeEligible && withinMaximumSize),
+    membersInfoComplete: team.membersInfoComplete ?? true,
+    eligibleForCompetition: team.teamSizeEligible ?? (teamSizeEligible && withinMaximumSize),
+    issues: team.approvalIssues ?? [],
+    canRequestApproval: team.canRequestApproval,
+    approvalIssues: team.approvalIssues,
+    members: team.members.map(member => ({
+      teamMemberId: member.teamMemberId,
+      userId: member.userId,
+      fullName: member.userId,
+      email: "",
+      phone: "",
+      fptStudentCode: "",
+      externalStudentCode: "",
+      universityName: "",
+      userTypeName: "",
+      accountStatusName: "",
+      joinedAt: member.joinedAt,
+      active: member.active,
+      profileComplete: true,
+      issues: [],
+    })),
+  };
+}
+
+function mergeReviewAndEventTeams(
+  reviewTeams: TeamEligibilityReviewResponse[],
+  eventTeams: TeamResponse[],
+  event?: EventResponse,
+) {
+  const eventTeamsById = new Map(eventTeams.map(team => [team.teamId, team]));
+  const mergedTeamsById = new Map<string, TeamEligibilityReviewResponse>();
+
+  reviewTeams.forEach(team => {
+    const eventTeam = eventTeamsById.get(team.teamId);
+    const activeMemberCount = activeMemberCountForTeam(team, eventTeam);
+
+    mergedTeamsById.set(team.teamId, {
+      ...team,
+      teamStatusId: eventTeam?.teamStatusId ?? team.teamStatusId,
+      teamStatusName: eventTeam?.teamStatusName ?? team.teamStatusName,
+      activeMemberCount,
+    });
+  });
+
+  eventTeams.forEach(eventTeam => {
+    if (mergedTeamsById.has(eventTeam.teamId)) return;
+    mergedTeamsById.set(eventTeam.teamId, teamResponseToEligibilityReview(eventTeam, event));
+  });
+
+  return Array.from(mergedTeamsById.values());
+}
+
+export function EventTeamsSummaryCard({ eventId, event, onOpen }: { eventId: string; event?: EventResponse; onOpen: () => void }) {
   const [summary, setSummary] = useState({ teams: 0, participants: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    teamService.reviewEligibility(eventId)
-      .then(teams => {
+    Promise.all([
+      teamService.reviewEligibility(eventId),
+      teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
+    ])
+      .then(([teams, eventTeams]) => {
         if (cancelled) return;
+        const visibleTeams = mergeReviewAndEventTeams(teams, eventTeams, event);
         setSummary({
-          teams: teams.length,
-          participants: teams.reduce((total, team) => total + team.activeMemberCount, 0),
+          teams: visibleTeams.length,
+          participants: visibleTeams.reduce((total, team) => total + team.activeMemberCount, 0),
         });
       })
       .catch(() => {
@@ -57,7 +153,7 @@ export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; on
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, event]);
 
   return (
     <Card className="p-5">
@@ -93,7 +189,7 @@ export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; on
   );
 }
 
-export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
+export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const [teams, setTeams] = useState<TeamEligibilityReviewResponse[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamEligibilityReviewResponse | null>(null);
   const [disqualifyTarget, setDisqualifyTarget] = useState<TeamEligibilityReviewResponse | null>(null);
@@ -110,8 +206,12 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
     setLoading(true);
     setError("");
     try {
-      const data = await teamService.reviewEligibility(eventId);
-      const sorted = [...data].sort((left, right) => left.teamName.localeCompare(right.teamName));
+      const [data, eventTeams] = await Promise.all([
+        teamService.reviewEligibility(eventId),
+        teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
+      ]);
+      const enrichedTeams = mergeReviewAndEventTeams(data, eventTeams, event);
+      const sorted = [...enrichedTeams].sort((left, right) => left.teamName.localeCompare(right.teamName));
       setTeams(sorted);
       setSelectedTeam(current => current
         ? sorted.find(team => team.teamId === current.teamId) ?? null
@@ -281,19 +381,27 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
       if (member.userId) mergedMembers.set(member.userId, member);
     });
 
-    const activeMemberCount = Array.from(mergedMembers.values())
+    const activeMemberCount = latestTeam.activeMemberCount ?? Array.from(mergedMembers.values())
       .filter(member => member.active).length;
-    const teamSizeEligible = activeMemberCount >= team.minTeamSize
-      && activeMemberCount <= team.maxTeamSize;
-    const issues = teamSizeEligible
+    const teamSizeEligible = latestTeam.teamSizeEligible ?? (
+      activeMemberCount >= team.minTeamSize && activeMemberCount <= team.maxTeamSize
+    );
+    const membersInfoComplete = latestTeam.membersInfoComplete ?? team.membersInfoComplete;
+    const issues = latestTeam.approvalIssues?.length
+      ? latestTeam.approvalIssues
+      : teamSizeEligible
       ? team.issues.filter(issue => !issue.toLowerCase().includes("fewer active members"))
       : team.issues;
     const mergedTeam = {
       ...team,
       teamStatusId: eventTeam?.teamStatusId ?? latestTeam.teamStatusId,
+      teamStatusName: eventTeam?.teamStatusName ?? latestTeam.teamStatusName ?? team.teamStatusName,
       activeMemberCount,
       teamSizeEligible,
-      eligibleForCompetition: teamSizeEligible && team.membersInfoComplete,
+      membersInfoComplete,
+      eligibleForCompetition: latestTeam.teamSizeEligible ?? (teamSizeEligible && membersInfoComplete),
+      canRequestApproval: latestTeam.canRequestApproval,
+      approvalIssues: latestTeam.approvalIssues,
       issues,
       members: Array.from(mergedMembers.values()),
     };
@@ -319,6 +427,14 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
 
   const decide = async (approved: boolean) => {
     if (!selectedTeam) return;
+    if (getTeamStatusInfo(selectedTeam.teamStatusId, selectedTeam.teamStatusName).badge !== "pending_approval") {
+      setError("Only Pending teams can be approved or rejected.");
+      return;
+    }
+    if (approved && !canOrganizerApproveTeam(selectedTeam)) {
+      setError("Resolve the approval issues before approving this team.");
+      return;
+    }
     if (!approved && !decisionNote.trim()) {
       setError("Enter a rejection reason before rejecting this team.");
       return;
@@ -367,7 +483,7 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary }}>Team Management</div>
             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-              {teams.length} team(s) registered for this event
+              {teams.length} team(s) found for this event
             </div>
           </div>
           <Button
@@ -395,13 +511,13 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
         {!loading && teams.length === 0 && (
           <div className="rounded-xl p-6 text-center" style={{ border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary }}>
             <Users size={28} className="mx-auto mb-2" />
-            No teams registered for this event.
+            No teams found for this event.
           </div>
         )}
 
         <div className="space-y-2">
           {teams.map(team => {
-            const status = getTeamStatusInfo(team.teamStatusId);
+            const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
             const isActive = status.badge === "active";
             return (
               <div
@@ -534,8 +650,11 @@ function TeamDetailDialog({
   onApprove: () => void;
   onReject: () => void;
 }) {
-  const status = getTeamStatusInfo(team.teamStatusId);
+  const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
   const isPending = status.badge === "pending_approval";
+  const shouldShowApprovalIssues = status.badge === "forming" || isPending;
+  const canApprove = canOrganizerApproveTeam(team);
+  const issues = team.approvalIssues?.length ? team.approvalIssues : team.issues;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(35,20,10,0.3)" }}>
@@ -560,9 +679,9 @@ function TeamDetailDialog({
           </button>
         </div>
 
-        {team.issues.length > 0 && (
+        {shouldShowApprovalIssues && issues.length > 0 && (
           <ul className="rounded-xl px-5 py-3 mt-4 list-disc" style={{ color: COLORS.error, background: `${COLORS.error}08`, fontSize: 12 }}>
-            {team.issues.map(issue => <li key={issue}>{issue}</li>)}
+            {issues.map(issue => <li key={issue}>{issue}</li>)}
           </ul>
         )}
 
@@ -598,7 +717,7 @@ function TeamDetailDialog({
                 variant="primary"
                 size="sm"
                 icon={isActing ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                disabled={isActing || !team.eligibleForCompetition}
+                disabled={isActing || !canApprove}
                 onClick={onApprove}
               >
                 Approve
