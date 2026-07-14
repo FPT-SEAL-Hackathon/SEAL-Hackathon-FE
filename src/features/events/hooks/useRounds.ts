@@ -12,7 +12,6 @@ export function useRounds(eventId: string) {
     //const [rounds, setRounds] = useState<Round[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [roundsByCategory, setRoundsByCategory] = useState<Record<string, Round[]>>({});
-    const [eventCriteria, setEventCriteria] = useState<EventCriteria[]>([]);
     const [roundCriteria, setRoundCriteria] = useState<Record<string, RoundCriteria[]>>({});
     const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
     const [roundJudges, setRoundJudges] = useState<Record<string, RoundJudge[]>>({});
@@ -81,11 +80,6 @@ export function useRounds(eventId: string) {
         }));
     }
 
-    const loadEventCriteria = async () => {
-        const data = await eventCriteriaService.getCriteriaByEvent(eventId);
-        setEventCriteria(data);
-    }
-
     const importEventCriteria = async (
         roundId: string,
         body: ImportEventCriteriaRequest
@@ -96,7 +90,10 @@ export function useRounds(eventId: string) {
         );
         setRoundCriteria(prev => ({
             ...prev,
-            [roundId]: data
+            [roundId]: [
+                ...(prev[roundId] ?? []),
+                ...data,
+            ],
         }));
     }
 
@@ -176,7 +173,6 @@ export function useRounds(eventId: string) {
 
     useEffect(() => {
         loadCategories();
-        loadEventCriteria();
         loadAvailableJudges();
     }, [eventId]);
 
@@ -197,13 +193,11 @@ export function useRounds(eventId: string) {
 
     return {
         roundsByCategory,
-        eventCriteria,
         roundCriteria,
         availableJudges,
         roundJudges,
 
         loadRounds,
-        loadEventCriteria,
         loadRoundCriteria,
         loadAvailableJudges,
         loadRoundJudges,

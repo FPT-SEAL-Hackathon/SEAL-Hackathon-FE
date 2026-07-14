@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { Edit, Trash2, X, ChevronDown, ChevronRight, GitBranch, UserCheck, Upload, Loader } from "lucide-react";
+import { Edit, Trash2, X, ChevronDown, ChevronRight, GitBranch, UserCheck, Upload, Loader, User, Mail } from "lucide-react";
 import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared/UIComponents";
 import { CriteriaImportPanel } from "../../shared/ui/shared";
 import { RoundForm } from "./RoundForm";
-import { Round } from "../../types/round";
+import { Round, RoundCriteria, RoundJudge } from "../../types/round";
 import { getRoundStatus } from "../../utils/roundUtils";
 import { useRoundContext } from "../../context/RoundContext";
 import { AssignJudgesModal } from "./AssignJudgesModal";
 import { parseApiError } from "@/lib/api/apiClient";
 import { submissionService } from "@/features/submissions/api/submissionService";
+import { useEventCriteria } from "../../hooks/useEventCriteria";
+import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
 
 const JUDGING_STATUS_ID = "40000000-0000-0000-0000-000000000003";
 const COMPLETED_STATUS_ID = "40000000-0000-0000-0000-000000000004";
@@ -29,9 +31,21 @@ function isSampleRoundLocked(round: Round) {
 
 interface Props {
     round: Round;
+    onDeleteRound: (round: Round) => void;
+    onRemoveJudge: (
+      round: Round,
+      judge: RoundJudge
+    ) => void;
+    onRemoveCriterion: (
+      round: Round,
+      criterion: RoundCriteria
+    ) => void;
 }
 export function RoundCard({
   round,
+  onDeleteRound,
+  onRemoveCriterion,
+  onRemoveJudge
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -51,7 +65,6 @@ export function RoundCard({
   const sampleLocked = isSampleRoundLocked(round);
 
   const {
-    eventCriteria,
 
     roundCriteria, 
 
@@ -76,6 +89,8 @@ export function RoundCard({
     loadRoundCriteria,
     loadRoundJudges
   } = useRoundContext();
+
+  const { eventCriteria } = useEventCriteriaContext()
 
   const judges = roundJudges[round.roundId] ?? [];
   const importedCriteria = roundCriteria[round.roundId] ?? [];
@@ -216,7 +231,7 @@ export function RoundCard({
             )}
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="ghost" size="sm" icon={<UserCheck size={12} />} onClick={() => setShowJudgeModal(true)}>Judges</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => deleteRound(round.categoryId, round.roundId)}>Delete</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => onDeleteRound(round)}>Delete</Button>
           </div>
           {expanded
             ? <ChevronDown size={15} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />
@@ -342,12 +357,8 @@ export function RoundCard({
                       body
                     )
                 }
-                onRemoveRoundCriteria={
-                  (roundCriterionId) => 
-                    removeRoundCriterion(
-                      round.roundId,
-                      roundCriterionId
-                    )
+                onRemoveRoundCriteria={(criterion) =>
+                  onRemoveCriterion(round, criterion)
                 }
               />
             </div>
@@ -368,16 +379,59 @@ export function RoundCard({
                   No judges assigned
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-3">
                   {judges.map(j => (
                     <div
                       key={j.judgeId}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-                      style={{ background: `${COLORS.warning}10`, border: `1px solid ${COLORS.warning}25` }}
+                      className="flex items-start justify-between gap-3 min-w-[250px] max-w-[320px] px-4 py-3 rounded-xl"
+                      style={{
+                        background: `${COLORS.warning}08`,
+                        border: `1px solid ${COLORS.warning}20`,
+                      }}
                     >
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309" }}>{j.fullName}</span>
-                      <button onClick={() => disableJudge(round.roundId, j.roundJudgeId)} style={{ color: COLORS.warning }}>
-                        <X size={11} />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <User
+                            size={14}
+                            style={{ color: COLORS.warning }}
+                          />
+                          <span
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: "#b45309",
+                            }}
+                          >
+                            {j.fullName}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Mail
+                            size={13}
+                            style={{ color: COLORS.textSecondary }}
+                          />
+                          <span
+                            style={{
+                              fontSize: 12,
+                              color: COLORS.textSecondary,
+                            }}
+                          >
+                            {j.email}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => onRemoveJudge(round, j)}
+                        title="Remove judge"
+                        className="p-1.5 rounded-lg transition-all duration-200 hover:bg-red-50"
+                      >
+                        <X
+                          size={14}
+                          className="transition-colors duration-200 hover:text-red-600"
+                          style={{ color: COLORS.textSecondary }}
+                        />
                       </button>
                     </div>
                   ))}
