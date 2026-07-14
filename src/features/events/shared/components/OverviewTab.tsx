@@ -104,7 +104,7 @@ export function OverviewTab({ event, totalPrize, onOpenTeamManagement }: Props) 
             </div>
           ))}
         </Card>
-        <EventTeamsSummaryCard eventId={event.eventId} onOpen={onOpenTeamManagement} />
+        <EventTeamsSummaryCard eventId={event.eventId} event={event} onOpen={onOpenTeamManagement} />
       </div>
     </div>
   );

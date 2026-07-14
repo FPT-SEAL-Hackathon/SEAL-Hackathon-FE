@@ -31,6 +31,7 @@ const glassSurface: React.CSSProperties = {
 // Status Badge
 export function StatusBadge({ status }: { status: string }) {
   const configs: Record<string, { bg: string; color: string; label: string; border: string }> = {
+    forming:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Forming", border: "rgba(244,121,32,0.22)" },
     active:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Active",       border: "rgba(0,148,68,0.22)" },
     pending_approval: { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Pending Approval", border: "rgba(245,158,11,0.22)" },
     temporary:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Temporary", border: "rgba(244,121,32,0.22)" },
@@ -244,8 +245,9 @@ export function DataTable({ columns, data }: { columns: Column[]; data: Record<s
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="text-left px-4 py-3.5"
+                className="px-4 py-3.5"
                 style={{
+                  textAlign: col.key === "action" ? "center" : "left",
                   fontSize: 10,
                   fontWeight: 700,
                   color: "#a07850",
@@ -266,7 +268,11 @@ export function DataTable({ columns, data }: { columns: Column[]; data: Record<s
               style={{ borderBottom: i < data.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none" }}
             >
               {columns.map((col) => (
-                <td key={col.key} className="px-4 py-3.5" style={{ fontSize: 13.5, color: COLORS.textPrimary }}>
+                <td
+                  key={col.key}
+                  className="px-4 py-3.5"
+                  style={{ fontSize: 13.5, color: COLORS.textPrimary, textAlign: col.key === "action" ? "center" : "left" }}
+                >
                   {col.render ? col.render(row[col.key], row) : row[col.key]}
                 </td>
               ))}
