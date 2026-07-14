@@ -114,12 +114,15 @@ export function AdminRankingsView({ context }: AdminViewProps) {
     try {
       if (activeTab === "round" && localRoundId && localCategoryId) {
         await rankingService.publishRound(localRoundId, localCategoryId);
+        const roundData = await rankingService.getRoundRankings(localRoundId, localCategoryId);
+        setLocalRankings(roundData);
       } else if (activeTab === "event") {
         await rankingService.publishEvent(context.selectedEventId, context.awardPatternCategoryId ?? "");
+        const eventData = await rankingService.getAdminEventRankings(context.selectedEventId);
+        setLocalRankings(eventData);
       }
       context.setRankingsPublished(true);
       setTimeout(() => context.setRankingsPublished(false), 3000);
-      doCompute();
     } catch (e) {
       console.error(e);
     } finally {
