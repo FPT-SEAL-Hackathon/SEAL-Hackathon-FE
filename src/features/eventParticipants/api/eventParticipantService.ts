@@ -19,6 +19,8 @@ export interface EventParticipantResponse {
   studentId: string;
   studentName: string;
   studentEmail: string;
+  teamId?: string;
+  teamName?: string;
   fptStudentCode?: string;
   externalStudentCode?: string;
   universityName?: string;
@@ -42,6 +44,11 @@ export interface EventParticipantResponse {
   event?: {
     eventId?: string;
     eventName?: string;
+  };
+  team?: {
+    teamId?: string;
+    teamName?: string;
+    name?: string;
   };
 }
 
@@ -84,6 +91,13 @@ type RawParticipantRecord = EventParticipantResponse & {
   studentCode?: string;
   university?: string;
   email?: string;
+  teamId?: string;
+  teamName?: string;
+  team?: {
+    teamId?: string;
+    teamName?: string;
+    name?: string;
+  };
   status?: EventParticipantStatus;
   currentStatus?: EventParticipantStatus;
   registeredAt?: string;
@@ -105,6 +119,8 @@ function normalizeParticipant(participant: RawParticipantRecord): EventParticipa
     studentId: String(participant.studentId ?? participant.userId ?? participant.user?.userId ?? ""),
     studentName: participant.studentName ?? participant.fullName ?? participant.user?.fullName ?? "",
     studentEmail: participant.studentEmail ?? participant.email ?? participant.user?.email ?? "",
+    teamId: participant.teamId ?? participant.team?.teamId,
+    teamName: participant.teamName ?? participant.team?.teamName ?? participant.team?.name,
     fptStudentCode: participant.fptStudentCode ?? participant.user?.fptStudentCode,
     externalStudentCode: participant.externalStudentCode ?? participant.user?.externalStudentCode,
     universityName: participant.universityName ?? participant.university ?? participant.user?.universityName,

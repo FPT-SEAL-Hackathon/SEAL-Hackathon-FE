@@ -95,7 +95,7 @@ export async function discoverUserTeamsForEvents(events: EventLike[], userId?: s
     });
 
   const discoveredTeams = Array.from(teamsById.values());
-  const mergedTeams = mergeTeams(discoveredTeams, cachedTeams);
+  const mergedTeams = mergeTeams(cachedTeams, discoveredTeams);
   saveStoredUserTeams(mergedTeams, userId);
   return mergedTeams;
 }
