@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { EventCriteria, ImportCriteriaRequest } from "../types/eventCriteria";
+import { EventCriteria, ImportCriteriaRequest, UpdateEventCriteriaRequest } from "../types/eventCriteria";
 import { eventCriteriaService } from "../service/eventCriteriaService";
 import { CriteriaTemplate } from "@/features/criteriaTemplates/types/template";
 import { criteriaTemplateService } from "@/features/criteriaTemplates/service/criteriaTemplateService";
@@ -30,8 +30,18 @@ export function useEventCriteria(eventId: string) {
         setSelectedTemplates([]);
     };
 
-    const updateEventCriteria = async () => {};
-    const removeEventCriteria = async () => {};
+    const updateEventCriteria = async (
+        eventCriterionId: string,
+        body: UpdateEventCriteriaRequest
+    ) => {
+        await eventCriteriaService.update(eventCriterionId, body);
+        await loadEventCriteria();
+    };
+
+    const removeEventCriteria = async (eventCriterionId: string) => {
+        await eventCriteriaService.remove(eventCriterionId);
+        await loadEventCriteria();
+    };
 
     useEffect(() => {
         loadCriteriaTemplates();

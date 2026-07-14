@@ -48,7 +48,7 @@ export function StatusBadge({ status }: { status: string }) {
     finalist:      { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Finalist",     border: "rgba(245,158,11,0.22)" },
     winner:        { bg: "rgba(244,121,32,0.12)", color: "#c06010", label: "Winner",      border: "rgba(244,121,32,0.3)" },
     open:          { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Open",         border: "rgba(0,148,68,0.22)" },
-    closed:        { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Closed",       border: "rgba(100,70,30,0.14)" },
+    closed:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Closed",       border: "rgba(229,62,46,0.2)" },
     scoring:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Scoring",      border: "rgba(244,121,32,0.22)" },
     calibration:   { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Calibration",  border: "rgba(245,158,11,0.22)" },
     scheduled:     { bg: "rgba(244,121,32,0.08)", color: "#b25310", label: "Scheduled",   border: "rgba(244,121,32,0.18)" },
@@ -126,9 +126,15 @@ export function StatCard({ title, value, trend, icon, color = COLORS.primary, su
 }
 
 // Card
-export function Card({ children, className = "", style = {} }: { children: ReactNode; className?: string; style?: React.CSSProperties }) {
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+};
+
+export function Card({ children, className = "", style = {}, ...rest }: CardProps) {
   return (
-    <div className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
+    <div {...rest} className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
       {children}
     </div>
   );
@@ -136,7 +142,7 @@ export function Card({ children, className = "", style = {} }: { children: React
 
 // Button
 interface ButtonProps {
-  children: ReactNode;
+  children?: ReactNode;
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
   onClick?: () => void;
@@ -145,8 +151,9 @@ interface ButtonProps {
   icon?: ReactNode;
   fullWidth?: boolean;
   style?: React.CSSProperties;
+  title?: string;
 }
-export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style }: ButtonProps) {
+export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style, title }: ButtonProps) {
   const sizes = {
     sm: { padding: "6px 12px", fontSize: 12 },
     md: { padding: "8px 16px", fontSize: 13 },
@@ -186,6 +193,7 @@ export function Button({ children, variant = "primary", size = "md", onClick, di
     <motion.button
       onClick={onClick}
       disabled={disabled}
+      title={title}
       whileHover={disabled ? {} : { scale: 1.02, y: -1 }}
       whileTap={disabled ? {} : { scale: 0.97 }}
       className={`inline-flex items-center gap-2 rounded-xl font-medium transition-all duration-150 cursor-pointer ${fullWidth ? "w-full justify-center" : ""} ${className}`}
