@@ -4,6 +4,8 @@ import { Card, Button, COLORS } from "../../../../components/shared/UIComponents
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
 import { useCategoryContext } from "../../context/CategoryContext";
+import { Category, CategoryMentor } from "../../types/category";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +23,12 @@ export function CategoriesTab() {
   } = useCategoryContext();
 
   const [showForm, setShowForm] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+
+  const [removingMentor, setRemovingMentor] = useState<{
+    category: Category;
+    mentor: CategoryMentor;
+  } | null>(null);
 
   return (
     <div className="space-y-4">
@@ -79,11 +87,42 @@ export function CategoriesTab() {
               mentors={categoryMentors[category.categoryId] ?? []}
               loadCategoryMentors={loadCategoryMentors}
               onAssignMentor={assignMentors}
-              onRemoveMentor={removeMentor}
+              onRemoveMentor={(category, mentor) => 
+                setRemovingMentor({category, mentor})
+              }
               onUpdate={updateCategory}
-              onDelete={deleteCategory}
+              onDelete={setDeletingCategory}
             />
           ))
+      )}
+      {deletingCategory && (
+        <ConfirmDialog 
+          title="Delete Category"
+          message={`Are you sure you want to delete "${deletingCategory.categoryName}"? This action cannot be undone.`}
+          confirmText="Delete"
+          confirmVariant="danger"
+          onCancel={() => setDeletingCategory(null)}
+          onConfirm={async () => {
+            await deleteCategory(deletingCategory.categoryId);
+            setDeletingCategory(null);
+          }}
+        />
+      )}
+      {removingMentor && (
+        <ConfirmDialog 
+          title="Remove Mentor"
+          message={`Remove "${removingMentor.mentor.fullName}" from "${removingMentor.category.categoryName}"?`}
+          confirmText="Remove"
+          confirmVariant="danger"
+          onCancel={() => setRemovingMentor(null)}
+          onConfirm={async () => {
+            await removeMentor(
+              removingMentor?.category.categoryId,
+              removingMentor?.mentor.mentorId
+            );
+            setRemovingMentor(null);
+          }}
+        />
       )}
     </div>
   );

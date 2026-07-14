@@ -3,30 +3,22 @@ import { Card, Button, COLORS } from "../../../../components/shared/UIComponents
 import type { EventCriteria, ImportCriteriaRequest } from "../../types/eventCriteria";
 import { CriteriaTemplate } from "../../../criteriaTemplates/types/template";
 import { useState } from "react";
+import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { EventCriterionRow } from "./EventCriterionRow";
 
-interface Props {
-  templates: CriteriaTemplate[];
-  eventCriteria: EventCriteria[];
-  onImport: (templateIds: ImportCriteriaRequest) => void;
+export function CriteriaTab() {
+  const {
+    criteriaTemplates, 
+    eventCriteria,
+    importCriteria,
+    updateEventCriteria,
+    removeEventCriteria
+  } = useEventCriteriaContext();
 
-  onUpdate: (
-    eventCriterionId: string, 
-    field: "weight" | "maxScore", 
-    value: number
-  ) => void;
-
-  onRemove: (eventCriterionId: string) => void;
-}
-
-export function CriteriaTab({ 
-    templates,
-    eventCriteria, 
-    onImport, 
-    onUpdate, 
-    onRemove 
-}: Props) {
   const totalWeight = eventCriteria.reduce((s, c) => s + c.weight, 0);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
+  const [removingEventCriterion, setRemovingEventCriterion] = useState<EventCriteria | null>(null);
 
   return (
     <div className="space-y-4">
@@ -39,7 +31,7 @@ export function CriteriaTab({
           </div>
         </div>
         <div className="space-y-2">
-          {templates.map(template => {
+          {criteriaTemplates.map(template => {
             const imported = eventCriteria.some(eventCriterion => eventCriterion.templateId === template.templateId);
             return (
               <div
@@ -75,7 +67,7 @@ export function CriteriaTab({
                       <span style={{ fontSize: 12, fontWeight: 600 }}>Imported</span>
                     </div>
                   ) : (
-                    <Button variant="primary" size="sm" icon={<Upload size={12} />} onClick={() => onImport({ templateIds: [template.templateId] })}>
+                    <Button variant="primary" size="sm" icon={<Upload size={12} />} onClick={() => importCriteria({ templateIds: [template.templateId]})}>
                       Import
                     </Button>
                   )}
@@ -99,49 +91,11 @@ export function CriteriaTab({
         ) : (
           <div className="space-y-2">
             {eventCriteria.map(eventCriterion => (
-              <div
+              <EventCriterionRow
                 key={eventCriterion.eventCriterionId}
-                className="flex items-center gap-3 p-3 rounded-xl"
-                style={{ background: "var(--surface-bg)", border: `1px solid ${COLORS.border}` }}
-              >
-                <div className="flex-1 min-w-0">
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{eventCriterion.criterionName}</span>
-                    {eventCriterion.description && (
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 1 }}>{eventCriterion.description}</div>
-                    )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <SlidersHorizontal size={12} style={{ color: COLORS.textSecondary }} />
-                    <span style={{ fontSize: 11, color: COLORS.textSecondary }}>Weight</span>
-                    <input
-                      type="number"
-                      value={eventCriterion.weight}
-                      onChange={e => onUpdate(eventCriterion.eventCriterionId, "weight", Number(e.target.value))}
-                      className="rounded-lg px-2 py-1 outline-none"
-                      style={{ width: 64, fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, textAlign: "center" }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Award size={12} style={{ color: COLORS.textSecondary }} />
-                    <span style={{ fontSize: 11, color: COLORS.textSecondary }}>Max Score</span>
-                    <input
-                      type="number"
-                      value={eventCriterion.maxScore}
-                      onChange={e => onUpdate(eventCriterion.eventCriterionId, "maxScore", Number(e.target.value))}
-                      className="rounded-lg px-2 py-1 outline-none"
-                      style={{ width: 64, fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, textAlign: "center" }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => onRemove(eventCriterion.eventCriterionId)}
-                    className="p-1.5 rounded-lg transition-colors hover:bg-red-50"
-                    style={{ color: COLORS.error }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
+                criterion={eventCriterion}
+                onDelete={setRemovingEventCriterion}
+              />
             ))}
             <div className="pt-2 flex items-center gap-2">
               <div className="h-px flex-1" style={{ background: COLORS.border }} />
@@ -157,6 +111,22 @@ export function CriteriaTab({
           </div>
         )}
       </Card>
+      {removingEventCriterion && (
+        <ConfirmDialog
+            title="Remove Criterion"
+            message={`Remove "${removingEventCriterion.criterionName}" from this event?`}
+            confirmText="Remove"
+            confirmVariant="danger"
+            onCancel={() => setRemovingEventCriterion(null)}
+            onConfirm={async () => {
+                await removeEventCriteria(
+                    removingEventCriterion.eventCriterionId
+                );
+
+                setRemovingEventCriterion(null);
+            }}
+        />
+      )}
     </div>
   );
 }
