@@ -433,10 +433,10 @@ export function TeamApiPanel({
   ) => {
     loadedMemberDetailsTeamIdRef.current = null;
     setMemberDetails(prev => ({ ...readStoredMemberDetails(), ...prev }));
-    void loadTeamMemberDetails(team, mergeTeams([team], knownTeams));
+    void loadTeamMemberDetails(team, mergeTeams(knownTeams, [team]));
     setSelectedTeam(team);
     setUserTeams(prev => {
-      const nextTeams = mergeTeams([team], prev);
+      const nextTeams = mergeTeams(prev, [team]);
       saveStoredUserTeams(nextTeams, user?.userId);
       return nextTeams;
     });
@@ -649,7 +649,6 @@ export function TeamApiPanel({
     if (cachedTeam) {
       activateTeam(cachedTeam);
       setMessage({ tone: "success", text: "Team loaded successfully." });
-      return;
     }
     run(
       "getById",
@@ -676,7 +675,7 @@ export function TeamApiPanel({
     const storedTeam = getStoredActiveTeam(user.userId);
     const teamId = initialTeamId || storedTeam?.teamId;
 
-    if (!teamId && events.length === 0) {
+    if (events.length === 0) {
       setMessage({
         tone: "info",
         text: "Loading events before checking your teams...",
@@ -825,7 +824,7 @@ export function TeamApiPanel({
         teamDiscoveryAttemptedRef.current = true;
         activateTeam(team);
         setUserTeams(prev => {
-          const nextTeams = mergeTeams([team], prev);
+          const nextTeams = mergeTeams(prev, [team]);
           saveStoredUserTeams(nextTeams, user?.userId);
           return nextTeams;
         });

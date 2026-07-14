@@ -17,9 +17,16 @@ import {
   teamService,
   type TeamEligibilityReviewResponse,
   type TeamEligibilityMemberResponse,
+  type TeamMemberDetailResponse,
+  type TeamResponse,
 } from "@/features/teams/api/teamService";
 import type { Category } from "@/features/events/types/category";
 import { useCategoryContext } from "../context/CategoryContext";
+import {
+  eventParticipantService,
+  type EventParticipantResponse,
+} from "@/features/eventParticipants/api/eventParticipantService";
+import { userService, type UserManagementUser } from "@/features/users/api/userService";
 
 interface EventTeamsSectionProps {
   eventId: string;
@@ -94,6 +101,7 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
   const [disqualifyReason, setDisqualifyReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionTeamId, setActionTeamId] = useState("");
+  const [viewTeamId, setViewTeamId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const { categories } = useCategoryContext();
@@ -123,6 +131,191 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
 
   const categoryName = (categoryId: string) =>
     categories.find(category => category.categoryId === categoryId)?.categoryName ?? "None";
+
+  const toEligibilityMember = (
+    member: TeamResponse["members"][number],
+    detail?: TeamMemberDetailResponse | null,
+  ): TeamEligibilityMemberResponse => {
+    const hasProfile = Boolean(detail?.fullName?.trim() || detail?.email?.trim());
+    return {
+      teamMemberId: member.teamMemberId,
+      userId: member.userId,
+      fullName: detail?.fullName || member.userId,
+      email: detail?.email || "",
+      phone: detail?.phone || "",
+      fptStudentCode: detail?.fptStudentCode || "",
+      externalStudentCode: detail?.externalStudentCode || "",
+      universityName: detail?.universityName || "",
+      userTypeName: detail?.userTypeName || "",
+      accountStatusName: detail?.accountStatusName || "",
+      joinedAt: member.joinedAt,
+      active: member.active,
+      profileComplete: hasProfile,
+      issues: hasProfile ? [] : ["Member profile could not be loaded"],
+    };
+  };
+
+  const participantBelongsToTeam = (participant: EventParticipantResponse, team: TeamEligibilityReviewResponse) => {
+    if (participant.eventId && participant.eventId !== eventId) return false;
+    if (participant.categoryId && participant.categoryId !== team.categoryId) return false;
+    if (participant.teamId) return participant.teamId === team.teamId;
+    return participant.teamName?.trim().toLowerCase() === team.teamName.trim().toLowerCase();
+  };
+
+  const participantToEligibilityMember = (participant: EventParticipantResponse): TeamEligibilityMemberResponse => {
+    const hasProfile = Boolean(participant.studentName?.trim() || participant.studentEmail?.trim());
+    return {
+      teamMemberId: participant.eventParticipantId || participant.studentId,
+      userId: participant.studentId,
+      fullName: participant.studentName || participant.studentEmail || participant.studentId,
+      email: participant.studentEmail || "",
+      phone: "",
+      fptStudentCode: participant.fptStudentCode || "",
+      externalStudentCode: participant.externalStudentCode || "",
+      universityName: participant.universityName || "",
+      userTypeName: "FPT Student",
+      accountStatusName: participant.participantStatus === "REJECTED" ? "Rejected" : "Active",
+      joinedAt: participant.appliedAt || participant.approvedAt || "",
+      active: participant.participantStatus !== "REJECTED",
+      profileComplete: hasProfile,
+      issues: hasProfile ? [] : ["Member profile could not be loaded"],
+    };
+  };
+
+  const userToEligibilityMember = (user: UserManagementUser): TeamEligibilityMemberResponse => {
+    const hasProfile = Boolean(user.fullName?.trim() || user.email?.trim());
+    return {
+      teamMemberId: user.userId,
+      userId: user.userId,
+      fullName: user.fullName || user.email || user.userId,
+      email: user.email || "",
+      phone: user.phone || "",
+      fptStudentCode: user.fptStudentCode || "",
+      externalStudentCode: user.externalStudentCode || "",
+      universityName: user.universityName || "",
+      userTypeName: user.roleName || user.role || "",
+      accountStatusName: user.accountStatusName || user.accountStatus || "",
+      joinedAt: user.createdAt || "",
+      active: user.accountStatus !== "REJECTED",
+      profileComplete: hasProfile,
+      issues: hasProfile ? [] : ["Member profile could not be loaded"],
+    };
+  };
+
+  const mergeLatestTeamMembers = async (team: TeamEligibilityReviewResponse) => {
+    const [latestTeam, eventTeams, participantPage, usersPage] = await Promise.all([
+      teamService.getById(team.teamId),
+      teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
+      eventParticipantService.getOrganizerParticipants({
+        eventId,
+        categoryId: team.categoryId,
+        size: 500,
+      }).catch(() => null),
+      userService.getUsers({
+        teamName: team.teamName,
+        size: 500,
+      }).catch(() => null),
+    ]);
+    const eventTeam = eventTeams.find(item => item.teamId === team.teamId);
+    const sourceMembers = [
+      ...latestTeam.members,
+      ...(eventTeam?.members ?? []),
+    ];
+    const sourceMembersByUserId = new Map<string, TeamResponse["members"][number]>();
+    sourceMembers.forEach(member => {
+      if (member.userId) sourceMembersByUserId.set(member.userId, member);
+    });
+
+    const mergedMembers = new Map<string, TeamEligibilityMemberResponse>();
+    team.members.forEach(member => {
+      if (member.userId) mergedMembers.set(member.userId, member);
+    });
+
+    const participants = participantPage?.content
+      .filter(participant => participantBelongsToTeam(participant, team))
+      .filter(participant => participant.studentId) ?? [];
+    participants.forEach(participant => {
+      if (!mergedMembers.has(participant.studentId)) {
+        mergedMembers.set(participant.studentId, participantToEligibilityMember(participant));
+      }
+    });
+
+    const teamUsers = usersPage?.content
+      .filter(user => user.userId)
+      .filter(user => user.teamId === team.teamId || user.teamName?.trim().toLowerCase() === team.teamName.trim().toLowerCase()) ?? [];
+    teamUsers.forEach(user => {
+      if (!mergedMembers.has(user.userId)) {
+        mergedMembers.set(user.userId, userToEligibilityMember(user));
+      }
+    });
+
+    const existingMembers = new Map(Array.from(mergedMembers.values()).map(member => [member.userId, member]));
+    const missingMembers = Array.from(sourceMembersByUserId.values())
+      .filter(member => !existingMembers.has(member.userId));
+
+    const fetchedMembers = await Promise.all(
+      missingMembers.map(async member => {
+        const detail = await teamService.getMemberDetail(latestTeam.teamId, member.userId)
+          .catch(() => userService.getUserById(member.userId)
+            .then(userProfile => ({
+              teamMemberId: member.teamMemberId,
+              teamId: latestTeam.teamId,
+              userId: userProfile.userId,
+              fullName: userProfile.fullName,
+              email: userProfile.email,
+              phone: userProfile.phone ?? "",
+              fptStudentCode: userProfile.fptStudentCode ?? "",
+              externalStudentCode: userProfile.externalStudentCode ?? "",
+              universityName: userProfile.universityName ?? "",
+              userTypeName: userProfile.roleName ?? userProfile.role,
+              accountStatusName: userProfile.accountStatusName ?? userProfile.accountStatus,
+              joinedAt: member.joinedAt,
+              active: member.active,
+            }))
+            .catch(() => null));
+        return toEligibilityMember(member, detail);
+      }),
+    );
+
+    fetchedMembers.forEach(member => {
+      if (member.userId) mergedMembers.set(member.userId, member);
+    });
+
+    const activeMemberCount = Array.from(mergedMembers.values())
+      .filter(member => member.active).length;
+    const teamSizeEligible = activeMemberCount >= team.minTeamSize
+      && activeMemberCount <= team.maxTeamSize;
+    const issues = teamSizeEligible
+      ? team.issues.filter(issue => !issue.toLowerCase().includes("fewer active members"))
+      : team.issues;
+    const mergedTeam = {
+      ...team,
+      teamStatusId: eventTeam?.teamStatusId ?? latestTeam.teamStatusId,
+      activeMemberCount,
+      teamSizeEligible,
+      eligibleForCompetition: teamSizeEligible && team.membersInfoComplete,
+      issues,
+      members: Array.from(mergedMembers.values()),
+    };
+
+    setTeams(prev => prev.map(item => item.teamId === team.teamId ? mergedTeam : item));
+    return mergedTeam;
+  };
+
+  const openTeamDetail = async (team: TeamEligibilityReviewResponse) => {
+    setError("");
+    setDecisionNote("");
+    setSelectedTeam(team);
+    setViewTeamId(team.teamId);
+    try {
+      const mergedTeam = await mergeLatestTeamMembers(team);
+      setSelectedTeam(mergedTeam);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load latest team members.");
+    } finally {
+      setViewTeamId("");
+    }
+  };
 
   const decide = async (approved: boolean) => {
     if (!selectedTeam) return;
@@ -226,14 +419,11 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={<Eye size={13} />}
-                  onClick={() => {
-                    setError("");
-                    setDecisionNote("");
-                    setSelectedTeam(team);
-                  }}
+                  icon={viewTeamId === team.teamId ? <Loader size={13} className="animate-spin" /> : <Eye size={13} />}
+                  disabled={viewTeamId === team.teamId}
+                  onClick={() => void openTeamDetail(team)}
                 >
-                  View
+                  {viewTeamId === team.teamId ? "Loading..." : "View"}
                 </Button>
                 <div className="md:w-28">
                   {isActive && (
