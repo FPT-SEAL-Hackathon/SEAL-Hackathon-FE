@@ -426,30 +426,40 @@ export function TeamApiPanel({
 
   const discoverUserTeams = () => {
     if (!user?.userId || loading.discover || userTeams.length > 0 || teamDiscoveryAttemptedRef.current) return;
-    if (events.length === 0) {
-      setMessage({ tone: "info", text: "Events are still loading. Please try again in a moment." });
+
+    const storedTeam = getStoredActiveTeam(user.userId);
+    const teamId = initialTeamId || storedTeam?.teamId;
+    teamDiscoveryAttemptedRef.current = true;
+
+    if (!teamId) {
+      setMessage({
+        tone: "info",
+        text: "No saved team found. Create a team or join one from the Join Another Event tab.",
+      });
       return;
     }
 
-    teamDiscoveryAttemptedRef.current = true;
     setTeamDiscoveryDone(false);
     run(
       "discover",
-      () => Promise.all(events.map(event => teamService.getByEvent(event.eventId).catch(() => [] as TeamResponse[]))),
-      results => {
-        const discoveredTeams = results
-          .flat()
-          .filter(item => userBelongsToTeam(item, user.userId));
-        setUserTeams(discoveredTeams);
-
-        const storedTeam = getStoredActiveTeam(user.userId);
-        if (storedTeam?.teamId && !discoveredTeams.some(team => team.teamId === storedTeam.teamId)) {
-          try {
-            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-          } catch {
-            // Ignore storage failures.
-          }
+      () => teamService.getById(teamId),
+      team => {
+        if (userBelongsToTeam(team, user.userId)) {
+          activateTeam(team);
+          setUserTeams([team]);
+          return;
         }
+
+        try {
+          localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+        } catch {
+          // Ignore storage failures.
+        }
+        setUserTeams([]);
+        setMessage({
+          tone: "info",
+          text: "No saved team found. Create a team or join one from the Join Another Event tab.",
+        });
       },
       "",
     ).finally(() => {
@@ -458,12 +468,12 @@ export function TeamApiPanel({
   };
 
   useEffect(() => {
-    if (teamPanelMode !== "current" || events.length === 0 || userTeams.length > 0 || loading.discover || teamDiscoveryAttemptedRef.current) {
+    if (teamPanelMode !== "current" || userTeams.length > 0 || loading.discover || teamDiscoveryAttemptedRef.current) {
       return;
     }
     discoverUserTeams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events.length, loading.discover, teamPanelMode, userTeams.length]);
+  }, [loading.discover, teamPanelMode, userTeams.length]);
 
   const loadTeamsByEvent = () => {
     run(
@@ -711,17 +721,10 @@ export function TeamApiPanel({
           </div>
         )}
 
-        {loading.discover || (teamPanelMode === "current" && events.length > 0 && !teamDiscoveryAttemptedRef.current && userTeams.length === 0) ? (
+        {loading.discover || (teamPanelMode === "current" && !teamDiscoveryAttemptedRef.current && userTeams.length === 0) ? (
           <div className="flex items-center gap-3" style={{ color: COLORS.textSecondary, marginTop: isCompact ? 0 : 20 }}>
             <Loader size={18} className="animate-spin" />
             <span style={{ fontSize: 14, fontWeight: 600 }}>Loading your teams...</span>
-          </div>
-        ) : events.length === 0 && !teamDiscoveryAttemptedRef.current ? (
-          <div
-            className="rounded-xl px-4 py-5 text-center mt-5"
-            style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}
-          >
-            Events are loading...
           </div>
         ) : userTeams.length === 0 ? (
           <div
