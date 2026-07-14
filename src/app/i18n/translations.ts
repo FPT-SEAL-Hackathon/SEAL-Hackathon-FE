@@ -9,7 +9,7 @@ export const en = {
   "nav.notifications": "Notifications",
   "nav.teamManagement": "Team Management",
   "nav.submissionCenter": "Submission Center",
-  "nav.rankings": "Rankings",
+  "nav.rankings": "Judging & Rankings",
   "nav.judgeFeedback": "Judge Feedback",
   "nav.settings": "Settings",
   "nav.assignedRounds": "Assigned Rounds",

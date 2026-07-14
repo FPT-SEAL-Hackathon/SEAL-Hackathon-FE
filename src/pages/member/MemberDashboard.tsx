@@ -331,6 +331,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
   const [teamInitialEventId, setTeamInitialEventId] = useState("");
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
+  const [leaderboardEventId, setLeaderboardEventId] = useState<string>("");
+  const [leaderboardRoundId, setLeaderboardRoundId] = useState("event");
+  const [leaderboardRounds, setLeaderboardRounds] = useState<Round[]>([]);
   const [teamMembers] = useState<MemberTeamMember[]>([]);
   const eventsRequestInFlightRef = useRef(false);
   const lastEventsLoadAtRef = useRef(0);
@@ -452,12 +455,37 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
   useEffect(() => {
     if (currentPage !== "leaderboard") return;
-    if (!activeTeamContext?.eventId || !activeTeamContext?.categoryId) return;
+    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (!targetEventId) return;
+
+    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
+    const targetCategoryId = team?.categoryId;
+    if (!targetCategoryId) return;
+
+    roundService.getByCategory(targetCategoryId)
+      .then(setLeaderboardRounds)
+      .catch(() => setLeaderboardRounds([]));
+  }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
+
+  useEffect(() => {
+    if (currentPage !== "leaderboard") return;
+    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (!targetEventId) return;
+
+    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
+    const targetCategoryId = team?.categoryId;
+    if (!targetCategoryId) return;
     
-    rankingService.getLeaderboard(activeTeamContext.eventId, activeTeamContext.categoryId)
-      .then(setApiLeaderboard)
-      .catch(() => { setApiLeaderboard([]); });
-  }, [currentPage, activeTeamContext?.eventId, activeTeamContext?.categoryId]);
+    if (leaderboardRoundId === "event") {
+      rankingService.getLeaderboard(targetEventId, targetCategoryId)
+        .then(setApiLeaderboard)
+        .catch(() => { setApiLeaderboard([]); });
+    } else {
+      rankingService.getRoundLeaderboard(leaderboardRoundId, targetCategoryId)
+        .then(setApiLeaderboard)
+        .catch(() => { setApiLeaderboard([]); });
+    }
+  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
@@ -1543,15 +1571,64 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
-  const renderLeaderboard = () => (
-    <>
-      <SectionHeader title="Leaderboard" subtitle="Event leaderboard rankings" />
+  const renderLeaderboard = () => {
+    const leaderboardEvents = apiEvents.filter(ev => submissionTeams.some(t => t.eventId === ev.eventId));
+    const currentEventId = leaderboardEventId || activeTeamContext?.eventId || "";
+
+    return (
+      <>
+        <SectionHeader 
+          title="Leaderboard" 
+          subtitle={leaderboardRoundId === "event" ? "Event leaderboard rankings" : `Round Rankings`} 
+          action={
+            <div className="flex items-center gap-2">
+              {leaderboardEvents.length > 0 && (
+                <select
+                  value={currentEventId}
+                  onChange={(e) => { setLeaderboardEventId(e.target.value); setLeaderboardRoundId("event"); }}
+                  className="px-3 py-1.5 rounded-md"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.textPrimary,
+                    outline: "none",
+                    fontSize: 13
+                  }}
+                >
+                  <option value="">Select Event</option>
+                  {leaderboardEvents.map(ev => (
+                    <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
+                  ))}
+                </select>
+              )}
+              {leaderboardRounds.length > 0 && (
+                <select
+                  value={leaderboardRoundId}
+                  onChange={(e) => setLeaderboardRoundId(e.target.value)}
+                  className="px-3 py-1.5 rounded-md"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.textPrimary,
+                    outline: "none",
+                    fontSize: 13
+                  }}
+                >
+                  <option value="event">Event Ranking</option>
+                  {leaderboardRounds.map(r => (
+                    <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          }
+        />
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLORS.bg }}>
-                {["Rank", "Team", "Score", "Category"].map(h => (
+                {["Rank", "Team", "Score", "Category"].concat(leaderboardRoundId !== "event" ? ["Result"] : []).map(h => (
                   <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                 ))}
               </tr>
@@ -1578,17 +1655,24 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                     </td>
                     <td className="px-4 py-3">
                       <span style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}>
-                        {row.teamId ?? row.team}
+                        {row.teamName ?? row.teamId ?? row.team}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
-                        {row.finalScore?.toFixed(1) ?? row.score}
+                        {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryId ?? row.track ?? "—"}</span>
+                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "—"}</span>
                     </td>
+                    {leaderboardRoundId !== "event" && (
+                       <td className="px-4 py-3">
+                          {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
+                          {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
+                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                       </td>
+                    )}
                   </tr>
                 );
               }) : (
@@ -1609,6 +1693,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       </Card>
     </>
   );
+};
 
   const renderCertificates = () => {
     if (!activeTeamContext?.eventId) {
