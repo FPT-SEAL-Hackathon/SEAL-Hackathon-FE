@@ -22,7 +22,8 @@ import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
-import { isTeamActive, teamService, type JoinTeamRequestResponse } from "@/features/teams/api/teamService";
+import { isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
+import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import {
@@ -414,13 +415,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
 
     setSubmissionTeamsLoading(true);
-    Promise.all(apiEvents.map(event => teamService.getByEvent(event.eventId).catch(() => [])))
+    discoverUserTeamsForEvents(apiEvents, user.userId)
       .then(results => {
         if (cancelled) return;
-        const userTeams = results
-          .flat()
-          .filter(team => team.members.some(member => member.userId === user.userId && member.active))
-          .map(team => teamToActiveContext(team, user.userId));
+        const userTeams = results.map(team => teamToActiveContext(team, user.userId));
 
         setSubmissionTeams(userTeams);
 
@@ -877,6 +875,19 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setSubmissionStatus("");
   };
 
+  const handleTeamChange = useCallback((team: TeamResponse) => {
+    const nextTeam = teamToActiveContext(team, user?.userId);
+    setActiveTeamContext(nextTeam);
+    setSubmissionTeams(prev => [nextTeam, ...prev.filter(item => item.teamId !== nextTeam.teamId)]);
+    setSubmissionForm(prev => ({
+      ...prev,
+      teamId: nextTeam.teamId,
+      roundId: prev.teamId === nextTeam.teamId ? prev.roundId : "",
+    }));
+    localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
+    rememberUserTeam(team, user?.userId);
+  }, [user?.userId]);
+
   const selectedSubmissionRound = submissionRounds.find(item => item.roundId === submissionForm.roundId);
   const selectedSubmissionRoundOpen = isBeforeSubmissionDeadline(selectedSubmissionRound);
 
@@ -1250,7 +1261,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   );
 
   const renderTeam = () => (
-    <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} />
+    <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
   );
 
   const renderEvents = () => (

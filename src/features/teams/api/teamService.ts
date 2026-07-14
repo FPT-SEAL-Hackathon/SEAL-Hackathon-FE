@@ -61,6 +61,54 @@ export interface TeamMemberDetailResponse {
   active: boolean;
 }
 
+type BackendEnvelope<T> = {
+  data?: T;
+};
+
+type RawTeamMemberDetailResponse = Partial<TeamMemberDetailResponse> & {
+  id?: string;
+  fullName?: string;
+  name?: string;
+  email?: string;
+  studentEmail?: string;
+  user?: {
+    userId?: string;
+    fullName?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+    fptStudentCode?: string;
+    externalStudentCode?: string;
+    universityName?: string;
+    userTypeName?: string;
+    accountStatusName?: string;
+  };
+};
+
+function unwrapMemberDetail(response: RawTeamMemberDetailResponse | BackendEnvelope<RawTeamMemberDetailResponse>) {
+  if ("data" in response && response.data) return response.data;
+  return response as RawTeamMemberDetailResponse;
+}
+
+function normalizeMemberDetail(response: RawTeamMemberDetailResponse | BackendEnvelope<RawTeamMemberDetailResponse>): TeamMemberDetailResponse {
+  const raw = unwrapMemberDetail(response);
+  return {
+    teamMemberId: raw.teamMemberId ?? raw.id ?? "",
+    teamId: raw.teamId ?? "",
+    userId: raw.userId ?? raw.user?.userId ?? "",
+    fullName: raw.fullName ?? raw.name ?? raw.user?.fullName ?? raw.user?.name ?? raw.email ?? raw.user?.email ?? "",
+    email: raw.email ?? raw.studentEmail ?? raw.user?.email ?? "",
+    phone: raw.phone ?? raw.user?.phone ?? "",
+    fptStudentCode: raw.fptStudentCode ?? raw.user?.fptStudentCode ?? "",
+    externalStudentCode: raw.externalStudentCode ?? raw.user?.externalStudentCode ?? "",
+    universityName: raw.universityName ?? raw.user?.universityName ?? "",
+    userTypeName: raw.userTypeName ?? raw.user?.userTypeName ?? "",
+    accountStatusName: raw.accountStatusName ?? raw.user?.accountStatusName ?? "",
+    joinedAt: raw.joinedAt ?? "",
+    active: raw.active ?? true,
+  };
+}
+
 export interface JoinTeamRequestResponse {
   requestId: string;
   teamId: string;
@@ -141,8 +189,10 @@ export const teamService = {
     api.put<JoinTeamRequestResponse>(`/api/v1/teams/requests/${requestId}`, { action, responseNote }),
 
   // Members
-  getMemberDetail: (teamId: string, userId: string) =>
-    api.get<TeamMemberDetailResponse>(`/api/v1/teams/${teamId}/members/${userId}`),
+  getMemberDetail: async (teamId: string, userId: string) =>
+    normalizeMemberDetail(await api.get<RawTeamMemberDetailResponse | BackendEnvelope<RawTeamMemberDetailResponse>>(
+      `/api/v1/teams/${teamId}/members/${userId}`,
+    )),
   removeMember: (teamId: string, userId: string) =>
     api.delete(`/api/v1/teams/${teamId}/members/${userId}`),
 
