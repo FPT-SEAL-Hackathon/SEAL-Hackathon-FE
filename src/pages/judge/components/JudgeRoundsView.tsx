@@ -22,7 +22,7 @@ interface JudgeRoundsViewProps {
   resetKey?: number;
 }
 
-export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadingRounds = false }: JudgeRoundsViewProps) {
+export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadingRounds = false, resetKey }: JudgeRoundsViewProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -179,7 +179,7 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
 
     let visibleEventEntries = [];
     if (searchQuery.trim() === '') {
-      visibleEventEntries = sortedEventEntries.slice(0, 2);
+      visibleEventEntries = sortedEventEntries.slice(0, 3);
     } else {
       const q = searchQuery.toLowerCase();
       visibleEventEntries = sortedEventEntries.filter(([, data]) => 
@@ -195,6 +195,11 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
 
   const [statsLoading, setStatsLoading] = useState(false);
   const fetchedRoundsRef = useRef<Set<string>>(new Set());
+
+  // Clear cache when resetKey changes so it refetches
+  useEffect(() => {
+    fetchedRoundsRef.current.clear();
+  }, [resetKey]);
 
   // Lazy load submissions and scores based on visible events or selected category
   useEffect(() => {
@@ -237,17 +242,16 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
           return subsMap;
         });
         
-        setScores(prev => {
-           if (prev.length === 0 && scoresRes) return scoresRes;
-           return prev;
-        });
+        if (scoresRes) {
+          setScores(scoresRes);
+        }
       } finally {
         setStatsLoading(false);
       }
     };
 
     fetchVisibleStats();
-  }, [selectedCategoryId, apiRounds, categories, user?.userId, visibleEventIds, loading]);
+  }, [selectedCategoryId, apiRounds, categories, user?.userId, visibleEventIds, loading, resetKey]);
 
 
 

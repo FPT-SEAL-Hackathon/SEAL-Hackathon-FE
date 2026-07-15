@@ -156,7 +156,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [selectedSubmissionCategoryId, setSelectedSubmissionCategoryId] = useState("");
   const [selectedSubmissionRoundId, setSelectedSubmissionRoundId] = useState("");
   const [adminSubmissions, setAdminSubmissions] = useState<SubmissionResponse[]>([]);
-  const [submissionScope, setSubmissionScope] = useState<"event" | "round" | "unreview">("event");
+  const [submissionScope, setSubmissionScope] = useState<"round" | "unreview">("round");
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [submissionsError, setSubmissionsError] = useState("");
   const [submissionReloadKey, setSubmissionReloadKey] = useState(0);
@@ -286,14 +286,31 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
-    if (!selectedEventId) return;
+    if (!selectedEventId) {
+      setCategoryLoadError("");
+      setApiCategories([]);
+      setApiRounds([]);
+      setApiDashboardRounds([]);
+      setApiTeamEligibility([]);
+      setApiAwards([]);
+      setAdminSubmissions([]);
+      setAwardPatternCategoryId("");
+      setManualAwardForm(createEmptyManualAwardForm());
+      setSelectedSubmissionCategoryId("");
+      setSelectedSubmissionRoundId("");
+      setSubmissionScope("round");
+      setSubmissionsError("");
+      return;
+    }
     setCategoryLoadError("");
     setApiCategories([]);
+    setApiRounds([]);
     setApiDashboardRounds([]);
     setAwardPatternCategoryId("");
     setManualAwardForm(createEmptyManualAwardForm());
     setSelectedSubmissionCategoryId("");
     setSelectedSubmissionRoundId("");
+    setSubmissionScope("round");
     categoryService.getByEvent(selectedEventId).then(data => {
       setCategoryLoadError("");
       setApiCategories(data);
@@ -362,11 +379,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       if (currentPage === "submissions") setSubmissionsError("");
       setSubmissionActionMessage("");
       try {
-        const selectedRound = apiRounds.find(round => round.roundId === selectedSubmissionRoundId);
-        const shouldLoadSelectedRound = currentPage === "submissions"
-          && selectedSubmissionRoundId
-          && (submissionScope !== "event" || selectedRound?.isCalibrationRound);
-        const data = currentPage === "dashboard" || !shouldLoadSelectedRound
+        const data = currentPage === "dashboard"
           ? await submissionService.getByEvent(selectedEventId ?? "")
           : submissionScope === "unreview"
             ? await submissionService.getUnreviewByRound(selectedSubmissionRoundId)
@@ -382,11 +395,10 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       }
     };
 
-    const selectedRound = apiRounds.find(round => round.roundId === selectedSubmissionRoundId);
-    if (submissionScope === "event" && selectedEventId && !selectedRound?.isCalibrationRound) {
+    if (currentPage === "dashboard" && selectedEventId) {
       loadSubmissions();
     }
-    if ((submissionScope !== "event" || selectedRound?.isCalibrationRound) && selectedSubmissionRoundId) {
+    if (currentPage === "submissions" && selectedSubmissionRoundId) {
       loadSubmissions();
     }
   }, [currentPage, selectedEventId, selectedSubmissionRoundId, submissionScope, submissionReloadKey, apiRounds]);

@@ -9,6 +9,7 @@ import { useRoundContext } from "../../context/RoundContext";
 import { AssignJudgesModal } from "./AssignJudgesModal";
 import { parseApiError } from "@/lib/api/apiClient";
 import { submissionService } from "@/features/submissions/api/submissionService";
+import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { useEventCriteria } from "../../hooks/useEventCriteria";
 import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
 
@@ -54,6 +55,7 @@ export function RoundCard({
   const [sampleSubmitting, setSampleSubmitting] = useState(false);
   const [sampleMessage, setSampleMessage] = useState("");
   const [sampleError, setSampleError] = useState("");
+  const [sampleFieldErrors, setSampleFieldErrors] = useState<SubmissionUrlErrors>({});
   const [sampleForm, setSampleForm] = useState({
     submissionName: "",
     repositoryUrl: "",
@@ -97,6 +99,7 @@ export function RoundCard({
 
   const updateSampleForm = (key: keyof typeof sampleForm, value: string) => {
     setSampleForm(prev => ({ ...prev, [key]: value }));
+    setSampleFieldErrors(prev => ({ ...prev, [key]: undefined }));
   };
 
   const createSampleSubmission = async () => {
@@ -108,6 +111,13 @@ export function RoundCard({
     setSampleSubmitting(true);
     setSampleError("");
     setSampleMessage("");
+    const urlErrors = validateSubmissionUrls(sampleForm);
+    setSampleFieldErrors(urlErrors);
+    if (hasSubmissionUrlErrors(urlErrors)) {
+      setSampleSubmitting(false);
+      setSampleError("Please enter valid URLs or leave optional URL fields blank.");
+      return;
+    }
     try {
       await submissionService.submitSample({
         roundId: round.roundId,
@@ -120,6 +130,7 @@ export function RoundCard({
       setSampleMessage("Calibration sample submission created.");
     } catch (error) {
       const parsed = parseApiError(error);
+      setSampleFieldErrors(parsed.fieldErrors ?? {});
       const details = parsed.fieldErrors
         ? Object.entries(parsed.fieldErrors).map(([field, message]) => `${field}: ${message}`).join("; ")
         : "";
@@ -313,8 +324,18 @@ export function RoundCard({
                             value={sampleForm[field.key as keyof typeof sampleForm]}
                             onChange={event => updateSampleForm(field.key as keyof typeof sampleForm, event.target.value)}
                             className="w-full px-3 py-2 rounded-lg outline-none"
-                            style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                            style={{
+                              fontSize: 13,
+                              border: `1px solid ${sampleFieldErrors[field.key as keyof SubmissionUrlErrors] ? COLORS.error : COLORS.border}`,
+                              background: COLORS.bg,
+                              color: COLORS.textPrimary,
+                            }}
                           />
+                          {sampleFieldErrors[field.key as keyof SubmissionUrlErrors] && (
+                            <span style={{ display: "block", marginTop: 4, fontSize: 11, color: COLORS.error, fontWeight: 600 }}>
+                              {sampleFieldErrors[field.key as keyof SubmissionUrlErrors]}
+                            </span>
+                          )}
                         </label>
                       ))}
                     </div>

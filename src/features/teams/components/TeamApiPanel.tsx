@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import {
   CheckCircle,
   Eye,
@@ -6,24 +8,37 @@ import {
   LogOut,
   PlusCircle,
   Search,
+  Send,
   Trash2,
+  Undo2,
   UserCheck,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/store/authStore";
+import { getCurrentUser, refreshAccessToken } from "@/features/auth/api/authService";
 import { Button, Card, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
+import { parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
-import { eventParticipantService } from "@/features/eventParticipants/api/eventParticipantService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import {
   teamService,
-  getTeamStatusInfo,
+  getTeamStatusInfoForTeam,
+  isTeamRejected,
   type JoinTeamRequestResponse,
   type TeamMemberDetailResponse,
   type TeamMemberResponse,
   type TeamResponse,
 } from "@/features/teams/api/teamService";
+import {
+  discoverUserTeamsForEvents,
+  mergeTeams,
+  rememberUserTeam,
+  saveStoredUserTeams,
+  userBelongsToTeam,
+} from "@/features/teams/api/userTeamDiscovery";
+import { userService } from "@/features/users/api/userService";
 
 type ActionKey =
   | "create"
@@ -35,6 +50,8 @@ type ActionKey =
   | "reject"
   | "memberDetail"
   | "remove"
+  | "register"
+  | "withdraw"
   | "events"
   | "categories"
   | "discover";
@@ -86,7 +103,7 @@ function InlineMessage({ message, tone }: { message: string; tone: "success" | "
 }
 
 function formatError(error: unknown) {
-  return error instanceof Error ? error.message : "Request failed.";
+  return parseApiError(error).message || "Request failed.";
 }
 
 function memberRows(members: TeamMemberResponse[]) {
@@ -99,8 +116,72 @@ function memberRows(members: TeamMemberResponse[]) {
 }
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
+const MEMBER_DETAILS_STORAGE_KEY = "seal_member_details";
+const EVENT_NAMES_STORAGE_KEY = "seal_event_names";
+
+function isMemberDetail(value: unknown): value is TeamMemberDetailResponse {
+  const detail = value as Partial<TeamMemberDetailResponse>;
+  return typeof detail?.userId === "string"
+    && typeof detail?.teamMemberId === "string"
+    && (typeof detail?.fullName === "string" || typeof detail?.email === "string");
+}
+
+function readStoredMemberDetails() {
+  try {
+    const raw = localStorage.getItem(MEMBER_DETAILS_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) as unknown : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {} as Record<string, TeamMemberDetailResponse>;
+
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, value]) => isMemberDetail(value) && hasDisplayableMemberDetail(value))
+    ) as Record<string, TeamMemberDetailResponse>;
+  } catch {
+    return {} as Record<string, TeamMemberDetailResponse>;
+  }
+}
+
+function rememberMemberDetails(details: Record<string, TeamMemberDetailResponse>) {
+  try {
+    const existing = readStoredMemberDetails();
+    localStorage.setItem(MEMBER_DETAILS_STORAGE_KEY, JSON.stringify({ ...existing, ...details }));
+  } catch {
+    // Ignore storage failures; live API data still works.
+  }
+}
+
+function readStoredEventNames() {
+  try {
+    const raw = localStorage.getItem(EVENT_NAMES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) as unknown : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {} as Record<string, string>;
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter((entry): entry is [string, string] =>
+        typeof entry[0] === "string" && typeof entry[1] === "string" && entry[1].trim().length > 0
+      )
+    );
+  } catch {
+    return {} as Record<string, string>;
+  }
+}
+
+function rememberEventNames(events: EventResponse[]) {
+  try {
+    const existing = readStoredEventNames();
+    const nextNames = Object.fromEntries(
+      events
+        .filter(event => event.eventId && event.eventName)
+        .map(event => [event.eventId, event.eventName])
+    );
+    localStorage.setItem(EVENT_NAMES_STORAGE_KEY, JSON.stringify({ ...existing, ...nextNames }));
+  } catch {
+    // Ignore storage failures; event names can still load from the API.
+  }
+}
 
 function saveActiveTeam(team: TeamResponse, currentUserId?: string) {
+  if (isTeamRejected(team)) return;
   try {
     localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify({
       teamId: team.teamId,
@@ -109,21 +190,117 @@ function saveActiveTeam(team: TeamResponse, currentUserId?: string) {
       teamName: team.teamName,
       leaderUserId: team.leaderUserId,
       teamStatusId: team.teamStatusId,
+      teamStatusName: team.teamStatusName,
       userId: currentUserId,
       memberUserIds: team.members.map(member => member.userId),
     }));
   } catch {
     // Ignore storage failures; the team can still be used in this view.
   }
+  rememberUserTeam(team, currentUserId);
 }
 
-function userBelongsToTeam(team: TeamResponse, currentUserId?: string) {
-  if (!currentUserId) return false;
-  return team.members.some(member => member.userId === currentUserId && member.active);
+function memberDetailFromUser(
+  member: TeamMemberResponse,
+  user: Awaited<ReturnType<typeof userService.getUserById>>,
+): TeamMemberDetailResponse {
+  return {
+    teamMemberId: member.teamMemberId,
+    teamId: user.teamId ?? "",
+    userId: user.userId,
+    fullName: user.fullName,
+    email: user.email,
+    phone: user.phone ?? "",
+    fptStudentCode: user.fptStudentCode ?? "",
+    externalStudentCode: user.externalStudentCode ?? "",
+    universityName: user.universityName ?? "",
+    userTypeName: user.roleName ?? user.role,
+    accountStatusName: user.accountStatusName ?? user.accountStatus,
+    joinedAt: member.joinedAt,
+    active: member.active,
+  };
+}
+
+type TeamMemberWithProfile = TeamMemberResponse & {
+  fullName?: string;
+  name?: string;
+  email?: string;
+  studentEmail?: string;
+  user?: {
+    fullName?: string;
+    name?: string;
+    email?: string;
+  };
+};
+
+function memberDetailFromTeamMember(member: TeamMemberResponse): TeamMemberDetailResponse | null {
+  const source = member as TeamMemberWithProfile;
+  const fullName = source.fullName ?? source.name ?? source.user?.fullName ?? source.user?.name ?? "";
+  const email = source.email ?? source.studentEmail ?? source.user?.email ?? "";
+  if (!fullName && !email) return null;
+
+  return {
+    teamMemberId: member.teamMemberId,
+    teamId: "",
+    userId: member.userId,
+    fullName: fullName || email,
+    email,
+    phone: "",
+    fptStudentCode: "",
+    externalStudentCode: "",
+    universityName: "",
+    userTypeName: "",
+    accountStatusName: "",
+    joinedAt: member.joinedAt,
+    active: member.active,
+  };
+}
+
+function hasDisplayableMemberDetail(detail?: TeamMemberDetailResponse) {
+  return Boolean(detail?.fullName?.trim() || detail?.email?.trim());
 }
 
 function displayValue(value?: string | null) {
   return value && value.trim() ? value : "-";
+}
+
+function getEventLifecycleStatus(event?: EventResponse | null) {
+  if (!event) return "";
+  if (typeof event.eventStatus === "object") {
+    return (event.eventStatus.eventStatusName || event.eventStatusName || "").trim().toUpperCase();
+  }
+  return (event.eventStatusName || event.eventStatus || "").trim().toUpperCase();
+}
+
+function normalizeEventStatusKey(status?: string | null) {
+  return status?.trim().replace(/[\s-]+/g, "_").toUpperCase() ?? "";
+}
+
+function registrationUnavailableMessage(event?: EventResponse | null) {
+  if (!event) return "Registration is not available because event data could not be loaded.";
+
+  const status = normalizeEventStatusKey(getEventLifecycleStatus(event));
+  if (status !== "REGISTRATION_OPEN") {
+    return "Registration is not available because this event is not open for registration.";
+  }
+
+  const registrationStart = new Date(event.registrationStart).getTime();
+  const registrationEnd = new Date(event.registrationEnd).getTime();
+  const now = Date.now();
+
+  if (Number.isNaN(registrationStart) || now < registrationStart) {
+    return "Registration is not available because the registration period has not started.";
+  }
+
+  if (Number.isNaN(registrationEnd) || now > registrationEnd) {
+    return "Registration is not available because the registration deadline has passed.";
+  }
+
+  return "";
+}
+
+function isEventRegistrationOpen(event?: EventResponse | null) {
+  return Boolean(event) && !registrationUnavailableMessage(event);
 }
 
 function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
@@ -153,9 +330,13 @@ function getStoredActiveTeam(currentUserId?: string): { teamId: string } | null 
       leaderUserId?: string;
       userId?: string;
       memberUserIds?: string[];
+      teamStatusId?: string;
+      teamStatusName?: string;
     };
+    if (isTeamRejected(team)) return null;
     const belongsToUser = !currentUserId
       || team.userId === currentUserId
+      || team.leaderUserId === currentUserId
       || team.memberUserIds?.includes(currentUserId);
     return team.teamId && belongsToUser ? { teamId: team.teamId } : null;
   } catch {
@@ -169,14 +350,16 @@ export function TeamApiPanel({
   mode = "auto",
   onTeamLeft,
   onNavigate,
+  onTeamChange,
 }: {
   initialEventId?: string;
   initialTeamId?: string;
   mode?: RoleMode;
   onTeamLeft?: () => void;
   onNavigate?: (page: string) => void;
+  onTeamChange?: (team: TeamResponse) => void;
 }) {
-  const { user } = useAuth();
+  const { user, setAuth } = useAuth();
   const [form, setForm] = useState({
     eventId: initialEventId,
     categoryId: "",
@@ -195,13 +378,15 @@ export function TeamApiPanel({
   const [teamSearchEventId, setTeamSearchEventId] = useState("");
   const [events, setEvents] = useState<EventResponse[]>([]);
   const [approvedEvents, setApprovedEvents] = useState<EventResponse[]>([]);
+  const [eventNames, setEventNames] = useState<Record<string, string>>(() => readStoredEventNames());
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryResponse | null>(null);
   const [requests, setRequests] = useState<JoinTeamRequestResponse[]>([]);
-  const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>({});
+  const [memberDetails, setMemberDetails] = useState<Record<string, TeamMemberDetailResponse>>(() => readStoredMemberDetails());
   const [loading, setLoading] = useState<Partial<Record<ActionKey, boolean>>>({});
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
   const [leaderActionPanel, setLeaderActionPanel] = useState<LeaderActionPanel>(null);
+  const [selectedMemberDetailUserId, setSelectedMemberDetailUserId] = useState<string | null>(null);
   const [removeMemberName, setRemoveMemberName] = useState("");
   const [joinTeamName, setJoinTeamName] = useState("");
   const [joinCategoryId, setJoinCategoryId] = useState("");
@@ -209,22 +394,149 @@ export function TeamApiPanel({
   const loadedMemberDetailsTeamIdRef = useRef<string | null>(null);
   const loadedCategoryIdRef = useRef<string | null>(null);
   const teamDiscoveryAttemptedRef = useRef(false);
+  const currentUserId = user?.userId ?? "";
 
   const setField = (key: keyof typeof form, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
 
-  const activateTeam = (team: TeamResponse, shouldPersist = true, nextPanelMode: TeamPanelMode = "current") => {
+  const resolveMemberDetail = async (
+    team: TeamResponse,
+    member: TeamMemberResponse,
+    knownTeams = userTeams,
+  ): Promise<TeamMemberDetailResponse | null> => {
+    const embeddedDetail = memberDetailFromTeamMember(member);
+    if (embeddedDetail) return embeddedDetail;
+
+    const storedDetail = readStoredMemberDetails()[member.userId];
+    if (storedDetail && hasDisplayableMemberDetail(storedDetail)) {
+      return {
+        ...storedDetail,
+        teamMemberId: member.teamMemberId,
+        joinedAt: member.joinedAt || storedDetail.joinedAt,
+        active: member.active,
+      };
+    }
+
+    const currentTeamDetail = await teamService.getMemberDetail(team.teamId, member.userId).catch(() => null);
+    if (currentTeamDetail && hasDisplayableMemberDetail(currentTeamDetail)) return currentTeamDetail;
+
+    const alternateTeams = knownTeams.filter(knownTeam =>
+      knownTeam.teamId !== team.teamId
+      && knownTeam.members.some(knownMember => knownMember.userId === member.userId)
+    );
+
+    for (const alternateTeam of alternateTeams) {
+      const alternateMember = alternateTeam.members.find(knownMember => knownMember.userId === member.userId);
+      if (!alternateMember) continue;
+
+      const alternateEmbeddedDetail = memberDetailFromTeamMember(alternateMember);
+      if (alternateEmbeddedDetail) {
+        return {
+          ...alternateEmbeddedDetail,
+          teamMemberId: member.teamMemberId,
+          joinedAt: member.joinedAt,
+          active: member.active,
+        };
+      }
+
+      const alternateDetail = await teamService.getMemberDetail(alternateTeam.teamId, member.userId).catch(() => null);
+      if (alternateDetail && hasDisplayableMemberDetail(alternateDetail)) {
+        return {
+          ...alternateDetail,
+          teamMemberId: member.teamMemberId,
+          joinedAt: member.joinedAt || alternateDetail.joinedAt,
+          active: member.active,
+        };
+      }
+    }
+
+    const userProfileDetail = await userService.getUserById(member.userId)
+      .then(userProfile => memberDetailFromUser(member, userProfile))
+      .catch(() => null);
+    return userProfileDetail && hasDisplayableMemberDetail(userProfileDetail) ? userProfileDetail : null;
+  };
+
+  const loadTeamMemberDetails = async (team: TeamResponse, knownTeams = userTeams) => {
+    const entries = await Promise.all(
+      team.members.map(member =>
+        resolveMemberDetail(team, member, knownTeams)
+          .then(detail => detail ? [member.userId, detail] as const : null)
+      ),
+    );
+    setMemberDetails(prev => {
+      const nextDetails = { ...prev };
+      entries.forEach(entry => {
+        if (entry) nextDetails[entry[0]] = entry[1];
+      });
+      rememberMemberDetails(nextDetails);
+      return nextDetails;
+    });
+    return entries;
+  };
+
+  const activateTeam = (
+    team: TeamResponse,
+    shouldPersist = true,
+    nextPanelMode: TeamPanelMode = "current",
+    knownTeams = userTeams,
+  ) => {
+    if (isTeamRejected(team)) {
+      clearTeamLocally(team.teamId, false, team.eventId);
+      return;
+    }
+    loadedMemberDetailsTeamIdRef.current = null;
+    setMemberDetails(prev => ({ ...readStoredMemberDetails(), ...prev }));
+    void loadTeamMemberDetails(team, mergeTeams(knownTeams, [team]));
     setSelectedTeam(team);
-    setUserTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
-    if (shouldPersist && userBelongsToTeam(team, user?.userId)) {
-      saveActiveTeam(team, user?.userId);
+    if (userBelongsToTeam(team, currentUserId)) {
+      setUserTeams(prev => {
+        const nextTeams = mergeTeams(prev, [team]);
+        saveStoredUserTeams(nextTeams, currentUserId);
+        return nextTeams;
+      });
+    }
+    if (shouldPersist && userBelongsToTeam(team, currentUserId)) {
+      saveActiveTeam(team, currentUserId);
+    }
+    if (userBelongsToTeam(team, currentUserId)) {
+      onTeamChange?.(team);
     }
     setField("teamId", team.teamId);
     setField("eventId", team.eventId);
     setField("categoryId", team.categoryId);
     setTeamFlow(null);
     setTeamPanelMode(nextPanelMode);
+  };
+
+  const clearTeamLocally = (teamId: string, shouldNotifyTeamLeft = false, eventId?: string) => {
+    if (!teamId) return;
+    try {
+      localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+    } catch {
+      // Ignore storage failures.
+    }
+    setSelectedTeam(prev => prev?.teamId === teamId ? null : prev);
+    setUserTeams(prev => {
+      const nextTeams = prev.filter(team => team.teamId !== teamId);
+      saveStoredUserTeams(nextTeams, currentUserId);
+      return nextTeams;
+    });
+    setTeams(prev => prev.filter(team => team.teamId !== teamId));
+    setMemberDetails({});
+    setRequests([]);
+    setJoinRequestsLoaded(false);
+    setTeamDiscoveryDone(true);
+    teamDiscoveryAttemptedRef.current = true;
+    setField("teamId", "");
+    if (eventId && teamSearchEventId === eventId) {
+      void teamService.getByEvent(eventId)
+        .then(eventTeams => setTeams(eventTeams.filter(team => team.teamId !== teamId)))
+        .catch(() => {
+          setTeams(prev => prev.filter(team => team.teamId !== teamId));
+        });
+    }
+    if (shouldNotifyTeamLeft) onTeamLeft?.();
   };
 
   const startTeamFlow = (flow: Exclude<TeamFlow, null>, eventId = form.eventId) => {
@@ -242,8 +554,8 @@ export function TeamApiPanel({
   const isLeader = useMemo(() => {
     if (mode === "leader") return true;
     if (mode === "member") return false;
-    return !!selectedTeam && !!user?.userId && selectedTeam.leaderUserId === user.userId;
-  }, [mode, selectedTeam, user?.userId]);
+    return !!selectedTeam && !!currentUserId && selectedTeam.leaderUserId === currentUserId;
+  }, [mode, selectedTeam, currentUserId]);
 
   const canUseTeam = form.teamId.trim().length > 0;
   const canUseEvent = form.eventId.trim().length > 0;
@@ -251,16 +563,33 @@ export function TeamApiPanel({
   const canCreate = approvedEvents.some(event => event.eventId === form.eventId.trim())
     && form.categoryId.trim().length > 0
     && form.teamName.trim().length > 0;
+  const normalizeId = (value?: string | null) => value?.trim().toLowerCase() ?? "";
+  const activeMemberCountForTeam = (team: TeamResponse) =>
+    team.activeMemberCount ?? team.members.filter(member => member.active !== false).length;
+  const maxTeamSizeForTeam = (team: TeamResponse, event?: EventResponse) =>
+    team.maxTeamSize ?? event?.maxTeamSize ?? 0;
+  const teamHasOpenSlot = (team: TeamResponse, event?: EventResponse) => {
+    const maxTeamSize = maxTeamSizeForTeam(team, event);
+    return !maxTeamSize || activeMemberCountForTeam(team) < maxTeamSize;
+  };
+  const teamMatchesJoinCategory = (team: TeamResponse) =>
+    !joinCategoryId || normalizeId(team.categoryId) === normalizeId(joinCategoryId);
   const joinTeams = useMemo(() => {
     const selectedEvent = events.find(event => event.eventId === form.eventId);
+    if (!isEventRegistrationOpen(selectedEvent)) return [];
+
     return teams.filter(team => {
-      const isPending = getTeamStatusInfo(team.teamStatusId).badge === "pending_approval";
-      const hasCapacity = !selectedEvent?.maxTeamSize || team.members.length < selectedEvent.maxTeamSize;
-      const matchesCategory = !joinCategoryId || team.categoryId === joinCategoryId;
-      return isPending && hasCapacity && matchesCategory;
+      const isForming = getTeamStatusInfoForTeam(team).badge === "forming";
+      return isForming && teamHasOpenSlot(team, selectedEvent) && teamMatchesJoinCategory(team);
     });
   }, [events, form.eventId, joinCategoryId, teams]);
-  const selectedEventName = events.find(event => event.eventId === selectedTeam?.eventId)?.eventName
+  const getEventName = (eventId?: string) => {
+    if (!eventId) return "-";
+    return events.find(event => event.eventId === eventId)?.eventName
+      ?? eventNames[eventId]
+      ?? eventId;
+  };
+  const selectedEventName = getEventName(selectedTeam?.eventId)
     ?? selectedTeam?.eventId
     ?? "-";
   const selectedCategoryName = selectedCategory?.categoryName
@@ -288,12 +617,19 @@ export function TeamApiPanel({
         const allEvents = await eventService.getAll(true);
         return {
           allEvents,
-          approved: allEvents,
+          approved: allEvents.filter(isEventRegistrationOpen),
         };
       },
       ({ allEvents, approved }) => {
         setEvents(allEvents);
         setApprovedEvents(approved);
+        const nextEventNames = Object.fromEntries(
+          allEvents
+            .filter(event => event.eventId && event.eventName)
+            .map(event => [event.eventId, event.eventName])
+        );
+        setEventNames(prev => ({ ...prev, ...nextEventNames }));
+        rememberEventNames(allEvents);
         if (approved[0] && !form.eventId) setField("eventId", approved[0].eventId);
       },
       "",
@@ -353,17 +689,16 @@ export function TeamApiPanel({
       loadedMemberDetailsTeamIdRef.current = null;
       return;
     }
-    const hasAllMemberDetails = selectedTeam.members.every(member => !!memberDetails[member.userId]);
+    const hasAllMemberDetails = selectedTeam.members.every(member => hasDisplayableMemberDetail(memberDetails[member.userId]));
     if (loadedMemberDetailsTeamIdRef.current === selectedTeam.teamId && hasAllMemberDetails) return;
 
     let cancelled = false;
     Promise.all(
       selectedTeam.members.map(member => {
         const cachedDetail = memberDetails[member.userId];
-        if (cachedDetail) return Promise.resolve([member.userId, cachedDetail] as const);
-        return teamService.getMemberDetail(selectedTeam.teamId, member.userId)
-          .then(detail => [member.userId, detail] as const)
-          .catch(() => null);
+        if (hasDisplayableMemberDetail(cachedDetail)) return Promise.resolve([member.userId, cachedDetail] as const);
+        return resolveMemberDetail(selectedTeam, member, userTeams)
+          .then(detail => detail ? [member.userId, detail] as const : null);
       })
     ).then(results => {
       if (cancelled) return;
@@ -372,7 +707,8 @@ export function TeamApiPanel({
         if (result) nextDetails[result[0]] = result[1];
       });
       setMemberDetails(nextDetails);
-      loadedMemberDetailsTeamIdRef.current = selectedTeam.teamId;
+      const loadedEveryMember = selectedTeam.members.every(member => hasDisplayableMemberDetail(nextDetails[member.userId]));
+      loadedMemberDetailsTeamIdRef.current = loadedEveryMember ? selectedTeam.teamId : null;
     });
 
     return () => {
@@ -386,55 +722,121 @@ export function TeamApiPanel({
     setRequests([]);
     setJoinRequestsLoaded(false);
     setRemoveMemberName("");
+    setSelectedMemberDetailUserId(null);
     setField("responseNote", "");
   }, [selectedTeam?.teamId]);
 
-  async function run<T>(key: ActionKey, caller: () => Promise<T>, onSuccess?: (data: T) => void, successText = "Done.") {
+  async function run<T>(
+    key: ActionKey,
+    caller: () => Promise<T>,
+    onSuccess?: (data: T) => void,
+    successText = "Done.",
+    notify = false,
+  ) {
     setLoading(prev => ({ ...prev, [key]: true }));
     setMessage(null);
     try {
       const data = await caller();
       onSuccess?.(data);
-      if (successText) setMessage({ tone: "success", text: successText });
+      if (successText) {
+        setMessage({ tone: "success", text: successText });
+        if (notify) toast.success(successText);
+      }
     } catch (error) {
-      setMessage({ tone: "error", text: formatError(error) });
+      const errorText = formatError(error);
+      setMessage({ tone: "error", text: errorText });
+      if (notify) toast.error(errorText);
     } finally {
       setLoading(prev => ({ ...prev, [key]: false }));
     }
   }
 
-  const loadTeam = (teamId = form.teamId.trim()) => {
+  const loadTeam = (teamId = form.teamId.trim(), requireCurrentMembership = teamPanelMode === "current") => {
     if (!teamId) return;
-    const cachedTeam = userTeams.find(team => team.teamId === teamId);
-    if (cachedTeam) {
-      activateTeam(cachedTeam);
-      setMessage({ tone: "success", text: "Team loaded." });
-      return;
-    }
     run(
       "getById",
-      () => teamService.getById(teamId),
+      async () => {
+        const team = await teamService.getById(teamId);
+        const shouldVerifyMembership = requireCurrentMembership
+          || userTeams.some(userTeam => userTeam.teamId === team.teamId);
+        const detail = currentUserId && shouldVerifyMembership
+          ? await teamService.getMemberDetail(team.teamId, currentUserId).catch(() => null)
+          : null;
+        if (currentUserId && shouldVerifyMembership && (!detail || detail.active === false)) {
+          throw new Error("You are no longer an active member of this team.");
+        }
+        return team;
+      },
       (team: any) => {
         activateTeam(team);
         setField("teamId", team.teamId);
         setField("eventId", team.eventId);
         setField("categoryId", team.categoryId);
       },
-      "Team loaded.",
+      "Team loaded successfully.",
     );
   };
 
-  const discoverUserTeams = () => {
-    if (!user?.userId || loading.discover || userTeams.length > 0 || teamDiscoveryAttemptedRef.current) return;
+  const discoverUserTeamsFromEvents = async () => {
+    const discoveredTeams = await discoverUserTeamsForEvents(events, currentUserId);
+    setUserTeams(discoveredTeams);
+    return discoveredTeams;
+  };
 
-    const storedTeam = getStoredActiveTeam(user.userId);
+  const discoverUserTeams = (forceRefresh = false, autoLoadTeam = true) => {
+    if (!currentUserId || loading.discover || (!forceRefresh && teamDiscoveryAttemptedRef.current)) return;
+
+    const storedTeam = getStoredActiveTeam(currentUserId);
     const teamId = initialTeamId || storedTeam?.teamId;
+
+    if (events.length === 0) {
+      setMessage({
+        tone: "info",
+        text: "Loading events before checking your teams...",
+      });
+      return;
+    }
+
     teamDiscoveryAttemptedRef.current = true;
 
     if (!teamId) {
-      setMessage({
-        tone: "info",
-        text: "No saved team found. Create a team or join one from the Join Another Event tab.",
+      setTeamDiscoveryDone(false);
+      run(
+        "discover",
+        discoverUserTeamsFromEvents,
+        teams => {
+          if (!autoLoadTeam) {
+            if (selectedTeam && !teams.some(team => team.teamId === selectedTeam.teamId)) {
+              setSelectedTeam(null);
+              setField("teamId", "");
+              try {
+                localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+              } catch {
+                // Ignore storage failures.
+              }
+            } else {
+              setField("teamId", selectedTeam?.teamId ?? "");
+            }
+            if (teams.length === 0) {
+              setMessage({
+                tone: "info",
+                text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
+              });
+            }
+            return;
+          }
+          if (teams[0]) {
+            activateTeam(teams[0], true, "current", teams);
+            return;
+          }
+          setMessage({
+            tone: "info",
+            text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
+          });
+        },
+        "",
+      ).finally(() => {
+        setTeamDiscoveryDone(true);
       });
       return;
     }
@@ -442,11 +844,47 @@ export function TeamApiPanel({
     setTeamDiscoveryDone(false);
     run(
       "discover",
-      () => teamService.getById(teamId),
-      team => {
-        if (userBelongsToTeam(team, user.userId)) {
-          activateTeam(team);
-          setUserTeams([team]);
+      async () => {
+        const discoveredTeams = await discoverUserTeamsFromEvents();
+        if (discoveredTeams.length > 0) return discoveredTeams;
+        if (!teamId) return [] as TeamResponse[];
+
+        const team = await teamService.getById(teamId);
+        return userBelongsToTeam(team, currentUserId) && !isTeamRejected(team) ? [team] : [] as TeamResponse[];
+      },
+      teams => {
+        const selected = teams.find(team => team.teamId === teamId) ?? teams[0];
+        if (!autoLoadTeam) {
+          setUserTeams(teams);
+          saveStoredUserTeams(teams, currentUserId);
+          if (selectedTeam && !teams.some(team => team.teamId === selectedTeam.teamId)) {
+            setSelectedTeam(null);
+            setField("teamId", "");
+            try {
+              localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+            } catch {
+              // Ignore storage failures.
+            }
+          } else {
+            setField("teamId", selectedTeam?.teamId ?? "");
+          }
+          if (teams.length === 0) {
+            try {
+              localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+            } catch {
+              // Ignore storage failures.
+            }
+            setMessage({
+              tone: "info",
+              text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
+            });
+          }
+          return;
+        }
+        if (selected) {
+          setUserTeams(teams);
+          saveStoredUserTeams(teams, currentUserId);
+          activateTeam(selected, true, "current", teams);
           return;
         }
 
@@ -458,7 +896,7 @@ export function TeamApiPanel({
         setUserTeams([]);
         setMessage({
           tone: "info",
-          text: "No saved team found. Create a team or join one from the Join Another Event tab.",
+          text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
         });
       },
       "",
@@ -468,12 +906,12 @@ export function TeamApiPanel({
   };
 
   useEffect(() => {
-    if (teamPanelMode !== "current" || userTeams.length > 0 || loading.discover || teamDiscoveryAttemptedRef.current) {
+    if (teamPanelMode !== "current" || loading.discover || teamDiscoveryAttemptedRef.current) {
       return;
     }
     discoverUserTeams();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading.discover, teamPanelMode, userTeams.length]);
+  }, [events.length, loading.discover, teamPanelMode, userTeams.length]);
 
   const loadTeamsByEvent = () => {
     run(
@@ -496,42 +934,79 @@ export function TeamApiPanel({
         setRequests(data);
         setJoinRequestsLoaded(true);
       },
-      "Join requests loaded.",
+      "",
     );
   };
 
   const createTeam = () => {
+    const selectedEvent = events.find(event => event.eventId === form.eventId.trim());
+    const unavailableMessage = registrationUnavailableMessage(selectedEvent);
+    if (unavailableMessage) {
+      setMessage({ tone: "error", text: unavailableMessage });
+      return;
+    }
+
     run(
       "create",
-      () => teamService.create({
-        eventId: form.eventId.trim(),
-        categoryId: form.categoryId.trim(),
-        teamName: form.teamName.trim(),
-      }),
+      async () => {
+        const team = await teamService.create({
+          eventId: form.eventId.trim(),
+          categoryId: form.categoryId.trim(),
+          teamName: form.teamName.trim(),
+        });
+        await refreshAccessToken().catch(() => null);
+        const currentUser = await getCurrentUser().catch(() => null);
+        if (currentUser) setAuth(currentUser);
+        return team;
+      },
       (team: any) => {
         teamDiscoveryAttemptedRef.current = true;
         activateTeam(team);
+        setUserTeams(prev => {
+          const nextTeams = mergeTeams(prev, [team]);
+          saveStoredUserTeams(nextTeams, currentUserId);
+          return nextTeams;
+        });
         setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
         setField("teamId", team.teamId);
       },
-      "Team created and is waiting for organizer approval.",
+      "Team created in forming status. Add members, then press Join to send it for organizer approval.",
     );
   };
 
   const requestJoin = (teamId = form.teamId.trim()) => {
     if (!teamId) return;
     const team = teams.find(item => item.teamId === teamId);
-    if (team && getTeamStatusInfo(team.teamStatusId).badge !== "pending_approval") {
-      setMessage({ tone: "error", text: "This team's roster is locked because it is no longer pending approval." });
+    if (team && getTeamStatusInfoForTeam(team).badge !== "forming") {
+      setMessage({ tone: "error", text: "This team's roster is locked because it is no longer forming." });
       return;
     }
     const selectedEvent = events.find(event => event.eventId === team?.eventId);
-    if (team && selectedEvent?.maxTeamSize && team.members.length >= selectedEvent.maxTeamSize) {
+    const unavailableMessage = registrationUnavailableMessage(selectedEvent);
+    if (unavailableMessage) {
+      setMessage({ tone: "error", text: unavailableMessage });
+      return;
+    }
+    if (team && !teamHasOpenSlot(team, selectedEvent)) {
       setMessage({ tone: "error", text: "This team has reached the event's maximum team size." });
       return;
     }
     setField("teamId", teamId);
-    run("join", () => teamService.requestJoin(teamId), undefined, "Join request sent.");
+    run(
+      "join",
+      async () => {
+        const request = await teamService.requestJoin(teamId);
+        const eventId = team?.eventId || form.eventId.trim();
+        const eventTeams = eventId ? await teamService.getByEvent(eventId).catch(() => teams) : teams;
+        return { request, eventTeams, eventId };
+      },
+      ({ eventTeams, eventId }) => {
+        setTeams(eventTeams);
+        if (eventId) setTeamSearchEventId(eventId);
+      },
+      "Join request sent. Ask the team leader to approve it from Join Requests.",
+      true,
+    );
   };
 
   const requestJoinByName = () => {
@@ -547,7 +1022,7 @@ export function TeamApiPanel({
   };
 
   const decideRequest = (requestId: string, action: "APPROVED" | "REJECTED") => {
-    if (action === "APPROVED" && selectedTeam && getTeamStatusInfo(selectedTeam.teamStatusId).badge !== "pending_approval") {
+    if (action === "APPROVED" && selectedTeam && getTeamStatusInfoForTeam(selectedTeam).badge !== "forming") {
       setMessage({ tone: "error", text: "The team roster is locked and cannot accept new members." });
       return;
     }
@@ -577,42 +1052,99 @@ export function TeamApiPanel({
 
   const removeMember = (userId = form.memberUserId.trim()) => {
     if (!form.teamId.trim() || !userId) return;
-    if (selectedTeam && getTeamStatusInfo(selectedTeam.teamStatusId).badge !== "pending_approval") {
-      setMessage({ tone: "error", text: "The team roster is locked after organizer approval." });
+    if (selectedTeam && getTeamStatusInfoForTeam(selectedTeam).badge !== "forming") {
+      setMessage({ tone: "error", text: "The team roster is locked unless the team is forming." });
       return;
     }
-    const removingCurrentUser = userId === user?.userId;
+    const removingCurrentUser = userId === currentUserId;
+    const targetTeamId = form.teamId.trim();
+    const targetTeam = selectedTeam?.teamId === targetTeamId
+      ? selectedTeam
+      : userTeams.find(team => team.teamId === targetTeamId)
+        ?? teams.find(team => team.teamId === targetTeamId);
+    const targetEventId = targetTeam?.eventId || form.eventId.trim();
     run(
       "remove",
       async () => {
-        await teamService.removeMember(form.teamId.trim(), userId);
-        return true;
+        await teamService.removeMember(targetTeamId, userId);
+        const refreshedTeam = await teamService.getById(targetTeamId).catch(error => {
+          const parsedError = parseApiError(error);
+          if (parsedError.status === 404) return null;
+          throw error;
+        });
+        return { refreshedTeam };
       },
-      () => {
-        if (removingCurrentUser) {
-          try {
-            localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-          } catch {
-            // Ignore storage failures.
-          }
-          setSelectedTeam(null);
-          setUserTeams(prev => prev.filter(team => team.teamId !== form.teamId.trim()));
-          setTeamDiscoveryDone(true);
-          setTeams([]);
-          setMemberDetails({});
-          setField("teamId", "");
-          onTeamLeft?.();
+      ({ refreshedTeam }) => {
+        const remainingActiveMembers = refreshedTeam?.members.filter(member => member.active !== false).length ?? 0;
+        if (!refreshedTeam || remainingActiveMembers === 0) {
+          clearTeamLocally(targetTeamId, removingCurrentUser, targetEventId);
           return;
         }
-        setSelectedTeam(prev => prev ? { ...prev, members: prev.members.filter(member => member.userId !== userId) } : prev);
+        if (removingCurrentUser) {
+          clearTeamLocally(targetTeamId, true, targetEventId);
+          return;
+        }
+        activateTeam(refreshedTeam);
+        setTeams(prev => [refreshedTeam, ...prev.filter(team => team.teamId !== refreshedTeam.teamId)]);
       },
-      removingCurrentUser ? "You left the team." : "Member removed.",
+      removingCurrentUser ? "Left team successfully." : "Member removed.",
     );
   };
 
   const leaveTeam = () => {
-    if (!selectedTeam || !user?.userId) return;
-    removeMember(user.userId);
+    if (!selectedTeam || !currentUserId) return;
+    removeMember(currentUserId);
+  };
+
+  const submitTeamForApproval = () => {
+    if (!selectedTeam || getTeamStatusInfoForTeam(selectedTeam).badge !== "forming") return;
+    const selectedEvent = events.find(event => event.eventId === selectedTeam.eventId);
+    const unavailableMessage = registrationUnavailableMessage(selectedEvent);
+    if (unavailableMessage) {
+      setMessage({ tone: "error", text: unavailableMessage });
+      return;
+    }
+    if (selectedTeam.canRequestApproval === false) {
+      setMessage({
+        tone: "error",
+        text: selectedTeam.approvalIssues?.join(" ") || "Resolve the team approval issues before sending.",
+      });
+      return;
+    }
+    run(
+      "register",
+      async () => {
+        await teamService.registerEvent(selectedTeam.teamId);
+        return teamService.getById(selectedTeam.teamId);
+      },
+      team => {
+        activateTeam(team);
+        setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
+        setLeaderActionPanel(null);
+        setRequests([]);
+        setJoinRequestsLoaded(false);
+      },
+      "Team sent to organizer for approval.",
+    );
+  };
+
+  const withdrawTeamApprovalRequest = () => {
+    if (!selectedTeam || getTeamStatusInfoForTeam(selectedTeam).badge !== "pending_approval") return;
+    run(
+      "withdraw",
+      async () => {
+        await teamService.withdrawEvent(selectedTeam.teamId);
+        return teamService.getById(selectedTeam.teamId);
+      },
+      team => {
+        activateTeam(team);
+        setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
+        setLeaderActionPanel(null);
+        setRequests([]);
+        setJoinRequestsLoaded(false);
+      },
+      "Approval request withdrawn. Your team is back to forming.",
+    );
   };
 
   const getMemberDetail = () => {
@@ -625,24 +1157,19 @@ export function TeamApiPanel({
   };
 
   const removeMemberByName = (team: TeamResponse) => {
-    const query = removeMemberName.trim().toLowerCase();
-    if (!query) {
-      setMessage({ tone: "error", text: "Enter the member name or email before removing." });
+    const selectedUserId = removeMemberName.trim();
+    if (!selectedUserId) {
+      setMessage({ tone: "error", text: "Select a member before removing." });
       return;
     }
 
-    const target = team.members.find(member => {
-      const detail = memberDetails[member.userId];
-      const name = detail?.fullName?.toLowerCase() ?? "";
-      const email = detail?.email?.toLowerCase() ?? "";
-      return name === query || email === query;
-    });
+    const target = team.members.find(member => member.userId === selectedUserId);
 
     if (!target) {
-      setMessage({ tone: "error", text: "No team member matches that name or email." });
+      setMessage({ tone: "error", text: "Selected member was not found." });
       return;
     }
-    if (target.userId === user?.userId || target.userId === team.leaderUserId) {
+    if (target.userId === currentUserId || target.userId === team.leaderUserId) {
       setMessage({ tone: "error", text: "The team leader cannot be removed from the team." });
       return;
     }
@@ -665,7 +1192,7 @@ export function TeamApiPanel({
               setTeamPanelMode("current");
               setTeamFlow(null);
               setMessage(null);
-              discoverUserTeams();
+              discoverUserTeams(true, false);
             }}
             className="flex items-center gap-2 rounded-lg px-3 py-2 transition-all"
             style={{
@@ -705,7 +1232,8 @@ export function TeamApiPanel({
   const renderCurrentTeamPicker = () => {
     if (mode === "leader") return null;
     const isCompact = !!selectedTeam;
-    const selectedPickerTeamId = form.teamId || selectedTeam?.teamId || userTeams[0]?.teamId || "";
+    const currentUserTeams = userTeams.filter(team => userBelongsToTeam(team, currentUserId));
+    const selectedPickerTeamId = form.teamId || selectedTeam?.teamId || "";
 
     return (
       <Card className={isCompact ? "p-3" : "p-5"}>
@@ -721,12 +1249,12 @@ export function TeamApiPanel({
           </div>
         )}
 
-        {loading.discover || (teamPanelMode === "current" && !teamDiscoveryAttemptedRef.current && userTeams.length === 0) ? (
+        {loading.discover || (teamPanelMode === "current" && !teamDiscoveryAttemptedRef.current && currentUserTeams.length === 0) ? (
           <div className="flex items-center gap-3" style={{ color: COLORS.textSecondary, marginTop: isCompact ? 0 : 20 }}>
             <Loader size={18} className="animate-spin" />
             <span style={{ fontSize: 14, fontWeight: 600 }}>Loading your teams...</span>
           </div>
-        ) : userTeams.length === 0 ? (
+        ) : currentUserTeams.length === 0 ? (
           <div
             className="rounded-xl px-4 py-5 text-center mt-5"
             style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14, fontWeight: 700 }}
@@ -734,16 +1262,20 @@ export function TeamApiPanel({
             No teams yet
           </div>
         ) : (
-          <div className={`grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end ${isCompact ? "" : "mt-5"}`}>
+          <div className={isCompact ? "" : "mt-5"}>
             <label className="block">
               <select
                 value={selectedPickerTeamId}
-                onChange={event => setField("teamId", event.target.value)}
+                onChange={event => loadTeam(event.target.value, true)}
                 className="w-full px-3 py-2.5 rounded-xl outline-none"
                 style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                disabled={loading.getById}
               >
-                {userTeams.map(team => {
-                  const eventName = events.find(event => event.eventId === team.eventId)?.eventName ?? team.eventId;
+                {!selectedPickerTeamId && (
+                  <option value="" disabled hidden>Select a team...</option>
+                )}
+                {currentUserTeams.map(team => {
+                  const eventName = getEventName(team.eventId);
                   return (
                     <option key={team.teamId} value={team.teamId}>
                       {team.teamName} - {eventName}
@@ -752,15 +1284,6 @@ export function TeamApiPanel({
                 })}
               </select>
             </label>
-            <Button
-              variant="primary"
-              size="md"
-              icon={loading.getById ? <Loader size={14} className="animate-spin" /> : <Eye size={14} />}
-              disabled={!selectedPickerTeamId || loading.getById}
-              onClick={() => loadTeam(selectedPickerTeamId)}
-            >
-              {loading.getById ? "Loading..." : isCompact ? "Switch Team" : "Load Team"}
-            </Button>
           </div>
         )}
       </Card>
@@ -800,7 +1323,7 @@ export function TeamApiPanel({
               setTeamPanelMode("current");
               setTeamFlow(null);
               setMessage(null);
-              discoverUserTeams();
+              discoverUserTeams(true, false);
             }}
           >
             View My Teams
@@ -834,8 +1357,8 @@ export function TeamApiPanel({
     </div>
   );
 
-  const renderPanelHeading = () => (
-    <div style={{ fontWeight: 800, fontSize: 24, color: COLORS.textPrimary, marginBottom: 18 }}>
+  const renderPanelHeading = (marginBottom = 18) => (
+    <div style={{ fontWeight: 800, fontSize: 24, color: COLORS.textPrimary, marginBottom }}>
       My Team
     </div>
   );
@@ -848,6 +1371,7 @@ export function TeamApiPanel({
           <>
             {renderPanelHeading()}
             {renderTeamEntryChoices()}
+            {message && <InlineMessage tone={message.tone} message={message.text} />}
           </>
         )}
         {teamPanelMode === "current" && renderCurrentTeamPicker()}
@@ -1037,7 +1561,7 @@ export function TeamApiPanel({
                 disabled={!joinTeamName.trim() || joinTeams.length === 0 || loading.join}
                 onClick={requestJoinByName}
               >
-                {loading.join ? "Sending..." : "Request Join"}
+                {loading.join ? "Sending..." : "Join"}
               </Button>
             </div>
           </Card>
@@ -1052,8 +1576,8 @@ export function TeamApiPanel({
                 style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}
               >
                 {joinCategoryId
-                  ? "There are no pending teams with open slots in this category."
-                  : "There are no pending teams with open slots for this event."}
+                  ? "There are no forming teams with open slots in this category."
+                  : "There are no forming teams with open slots for this event."}
               </div>
             ) : (
               <DataTable
@@ -1072,15 +1596,20 @@ export function TeamApiPanel({
                         disabled={loading.join}
                         onClick={() => requestJoin(row.teamId)}
                       >
-                        Request Join
+                        Join
                       </Button>
                     ),
                   },
                 ]}
                 data={joinTeams.map(team => ({
                   teamName: team.teamName,
-                  categoryName: categories.find(category => category.categoryId === team.categoryId)?.categoryName || "-",
-                  memberCount: team.members.length,
+                  categoryName: categories.find(category => normalizeId(category.categoryId) === normalizeId(team.categoryId))?.categoryName || "-",
+                  memberCount: (() => {
+                    const selectedEvent = events.find(event => event.eventId === team.eventId);
+                    const maxTeamSize = maxTeamSizeForTeam(team, selectedEvent);
+                    const activeMemberCount = activeMemberCountForTeam(team);
+                    return maxTeamSize ? `${activeMemberCount}/${maxTeamSize}` : activeMemberCount;
+                  })(),
                   teamId: team.teamId,
                   action: team.teamId,
                 }))}
@@ -1095,18 +1624,162 @@ export function TeamApiPanel({
   if (selectedTeam) {
     const leaderDetail = memberDetails[selectedTeam.leaderUserId];
     const leaderLabel = leaderDetail?.fullName || leaderDetail?.email || "Team leader";
-    const teamStatus = getTeamStatusInfo(selectedTeam.teamStatusId);
-    const canEditRoster = teamStatus.badge === "pending_approval";
-    const memberTableRows = selectedTeam.members.map(member => {
+    const baseTeamStatus = getTeamStatusInfoForTeam(selectedTeam);
+    const teamStatus = baseTeamStatus;
+    const teamStatusColor = teamStatus.badge === "forming"
+      ? COLORS.primary
+      : teamStatus.badge === "pending_approval"
+        ? COLORS.warning
+      : teamStatus.badge === "active"
+        ? COLORS.success
+      : teamStatus.badge === "rejected" || teamStatus.badge === "disqualified"
+        ? COLORS.error
+        : COLORS.textPrimary;
+    const isTeamLoadMessage = message?.text.toLowerCase().includes("team loaded");
+    const currentUserRole = isLeader ? "Leader" : "Member";
+    const canEditRoster = teamStatus.badge === "forming";
+    const canWithdrawApprovalRequest = isLeader && teamStatus.badge === "pending_approval";
+    const teamEvent = events.find(event => event.eventId === selectedTeam.eventId);
+    const teamEventUnavailableMessage = registrationUnavailableMessage(teamEvent);
+    const teamEventRegistrationOpen = !teamEventUnavailableMessage;
+    const activeMemberCount = selectedTeam.activeMemberCount ?? selectedTeam.members.filter(member => member.active).length;
+    const minTeamSize = selectedTeam.minTeamSize ?? teamEvent?.minTeamSize ?? 0;
+    const maxTeamSize = selectedTeam.maxTeamSize ?? teamEvent?.maxTeamSize ?? 0;
+    const hasMinimumMembers = !minTeamSize || activeMemberCount >= minTeamSize;
+    const withinMaximumMembers = !maxTeamSize || activeMemberCount <= maxTeamSize;
+    const hasTeamSizeRequirement = Boolean(minTeamSize || maxTeamSize);
+    const computedTeamSizeEligible = hasMinimumMembers && withinMaximumMembers;
+    const teamSizeEligible = hasTeamSizeRequirement
+      ? computedTeamSizeEligible
+      : selectedTeam.teamSizeEligible ?? computedTeamSizeEligible;
+    const membersInfoComplete = selectedTeam.membersInfoComplete ?? true;
+    const isRedundantApprovalIssue = (issue: string) => {
+      const normalizedIssue = issue.trim().toLowerCase();
+      if (!membersInfoComplete && normalizedIssue.includes("incomplete profile")) return true;
+      if (!teamSizeEligible && normalizedIssue.includes("team size")) return true;
+      return false;
+    };
+    const approvalIssues = Array.from(new Set([
+      ...(teamEventUnavailableMessage ? [teamEventUnavailableMessage] : []),
+      ...(teamSizeEligible ? [] : ["Team size is outside the event requirement."]),
+      ...(membersInfoComplete ? [] : ["Some member profiles are incomplete."]),
+      ...(selectedTeam.approvalIssues ?? []).filter(issue => !isRedundantApprovalIssue(issue)),
+    ]));
+    const canRequestApproval = teamEventRegistrationOpen
+      && (selectedTeam.canRequestApproval ?? (teamSizeEligible && membersInfoComplete));
+    const canSubmitForApproval = isLeader && canEditRoster && canRequestApproval;
+    const memberRequirementLabel = minTeamSize && maxTeamSize
+      ? `${activeMemberCount}/${minTeamSize}-${maxTeamSize}`
+      : maxTeamSize
+        ? `${activeMemberCount}/${maxTeamSize}`
+        : String(activeMemberCount);
+    const getMemberDisplay = (member: TeamMemberResponse) => {
       const detail = memberDetails[member.userId];
+      const embeddedDetail = memberDetailFromTeamMember(member);
+      const isCurrentUser = member.userId === user?.userId;
+      return {
+        name: detail?.fullName || detail?.email || embeddedDetail?.fullName || embeddedDetail?.email || (isCurrentUser ? user?.fullName : undefined) || member.userId,
+        email: detail?.email || embeddedDetail?.email || (isCurrentUser ? user?.email : undefined) || "-",
+      };
+    };
+    const memberTableRows = selectedTeam.members.map(member => {
+      const display = getMemberDisplay(member);
       return {
         userId: member.userId,
-        member: detail?.fullName || detail?.email || "Member",
-        email: detail?.email || "-",
+        member: display.name,
+        role: member.userId === selectedTeam.leaderUserId ? "Leader" : "Member",
+        email: display.email,
         active: member.active ? "Active" : "Inactive",
         joinedAt: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-",
+        action: member.userId,
       };
     });
+    const removableMembers = selectedTeam.members.filter(member =>
+      member.userId !== user?.userId && member.userId !== selectedTeam.leaderUserId
+    );
+    const renderCenteredModal = (title: string, onClose: () => void, content: ReactNode) => {
+      if (typeof document === "undefined") return null;
+
+      return createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background: "rgba(35, 24, 14, 0.58)", backdropFilter: "blur(2px)" }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-3xl rounded-2xl p-5 shadow-2xl"
+            style={{ background: "#fffaf4", border: `1px solid ${COLORS.border}`, maxHeight: "86vh", overflowY: "auto" }}
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div style={{ fontWeight: 900, fontSize: 18, color: COLORS.textPrimary }}>{title}</div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex items-center justify-center rounded-lg"
+                style={{ width: 34, height: 34, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, background: COLORS.bg }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            {content}
+          </div>
+        </div>,
+        document.body,
+      );
+    };
+    const renderFinalizeTeamCard = () => {
+      if (!isLeader || (!canEditRoster && !canWithdrawApprovalRequest)) return null;
+
+      return (
+        <div
+          className="w-full lg:w-[280px] rounded-xl px-4 py-3"
+          style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary }}>
+              FINALIZE TEAM
+            </div>
+            <StatusBadge status={canSubmitForApproval || canWithdrawApprovalRequest ? teamStatus.badge : "pending"} />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textPrimary, marginTop: 8 }}>
+            Members: {memberRequirementLabel}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {[
+              { ok: teamSizeEligible, label: teamSizeEligible ? "Size OK" : "Size Issue" },
+              { ok: membersInfoComplete, label: membersInfoComplete ? "Profiles OK" : "Profile Issue" },
+            ].map(item => (
+              <span
+                key={item.label}
+                className="px-2 py-1 rounded-lg"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: item.ok ? COLORS.success : COLORS.error,
+                  background: item.ok ? `${COLORS.success}10` : `${COLORS.error}10`,
+                  border: `1px solid ${item.ok ? COLORS.success : COLORS.error}22`,
+                }}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
+          {(canWithdrawApprovalRequest || canRequestApproval) && (
+            <div style={{ fontSize: 12, color: COLORS.success, marginTop: 8 }}>
+              {canWithdrawApprovalRequest
+                ? "Waiting for organizer approval."
+                : "Ready to send for organizer approval."}
+            </div>
+          )}
+          {approvalIssues.length > 0 && !canWithdrawApprovalRequest && (
+            <ul className="mt-2 pl-4 list-disc" style={{ fontSize: 11.5, color: COLORS.error }}>
+              {approvalIssues.map(issue => <li key={issue}>{issue}</li>)}
+            </ul>
+          )}
+        </div>
+      );
+    };
     const renderLeaderActionPanel = () => {
       if (leaderActionPanel === "memberDetail") {
         return (
@@ -1115,14 +1788,17 @@ export function TeamApiPanel({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {selectedTeam.members.map(member => {
                 const detail = memberDetails[member.userId];
+                const display = getMemberDisplay(member);
                 const detailRows = detail ? visibleMemberDetailRows(detail) : [
+                  { label: "Full Name", value: display.name },
+                  { label: "Email", value: display.email },
                   { label: "Joined At", value: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-" },
                   { label: "Active", value: member.active ? "Yes" : "No" },
                 ];
                 return (
                   <div key={member.userId} className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}>
                     <div style={{ fontWeight: 800, fontSize: 14, color: COLORS.textPrimary }}>
-                      {detail?.fullName || detail?.email || "Member"}
+                      {display.name}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
                       {detailRows.map(row => (
@@ -1148,10 +1824,32 @@ export function TeamApiPanel({
           <div className="mt-5 rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 8 }}>Remove Member</div>
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
-              Enter the exact member name or email to remove them from this team.
+              Select a member to remove from this team.
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
-              <Field label="MEMBER NAME OR EMAIL" value={removeMemberName} onChange={setRemoveMemberName} placeholder="Enter member name or email" />
+              <label className="block">
+                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
+                  MEMBER
+                </span>
+                <select
+                  value={removeMemberName}
+                  onChange={event => setRemoveMemberName(event.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                  disabled={removableMembers.length === 0 || loading.remove}
+                >
+                  <option value="" disabled hidden>Select a member...</option>
+                  {removableMembers.map(member => {
+                    const display = getMemberDisplay(member);
+                    const email = display.email !== "-" && display.email !== display.name ? ` - ${display.email}` : "";
+                    return (
+                      <option key={member.userId} value={member.userId}>
+                        {display.name}{email}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
               <Button
                 variant="danger"
                 size="md"
@@ -1237,8 +1935,13 @@ export function TeamApiPanel({
 
     return (
       <div className="space-y-3">
-        {mode !== "leader" && renderPanelHeading()}
-        {renderTeamEntryChoices()}
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+          <div className="flex flex-col gap-2">
+            {mode !== "leader" ? renderPanelHeading(0) : <span />}
+            {renderTeamEntryChoices()}
+          </div>
+          {renderFinalizeTeamCard()}
+        </div>
         {mode !== "leader" && renderCurrentTeamPicker()}
         <Card className="p-5">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -1246,76 +1949,241 @@ export function TeamApiPanel({
               <div className="flex items-center gap-2">
                 <Users size={18} style={{ color: COLORS.primary }} />
                 <div style={{ fontWeight: 800, fontSize: 18, color: COLORS.textPrimary }}>My Team</div>
-                <StatusBadge status={teamStatus.badge} />
               </div>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-              {message && <InlineMessage tone={message.tone} message={message.text} />}
-              {user?.userId && canEditRoster && (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <LogOut size={13} />}
-                  disabled={loading.remove}
-                  onClick={leaveTeam}
-                >
-                  {loading.remove ? "Leaving..." : "Leave Team"}
-                </Button>
-              )}
-            </div>
+            {message && isTeamLoadMessage && (
+              <div className="w-full lg:w-auto">
+                <InlineMessage tone={message.tone} message={message.text} />
+              </div>
+            )}
           </div>
-          {!canEditRoster && teamStatus.badge === "active" && (
-            <div
-              className="rounded-xl px-4 py-3 mt-4"
-              style={{ background: `${COLORS.success}08`, border: `1px solid ${COLORS.success}20`, color: COLORS.success, fontSize: 13 }}
-            >
-              This team is approved. Its members and category are locked for competition submissions.
-            </div>
-          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
-            {[
-              { label: "Team Name", value: selectedTeam.teamName },
-              { label: "Event", value: selectedEventName },
-              { label: "Category", value: selectedCategoryName },
-              { label: "Leader", value: leaderLabel },
-              { label: "Members", value: String(selectedTeam.members.length) },
-              { label: "Status", value: teamStatus.label },
-            ].map(item => (
-              <div key={item.label} className="rounded-xl px-4 py-3" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 5 }}>{item.label.toUpperCase()}</div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{item.value}</div>
-              </div>
-            ))}
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-5">
+              {[
+                { label: "Team Name", value: selectedTeam.teamName },
+                { label: "Event", value: selectedEventName },
+                { label: "Category", value: selectedCategoryName },
+                { label: "Role", value: currentUserRole },
+                { label: "Members", value: String(selectedTeam.members.length) },
+                {
+                  label: "Status",
+                  value: teamStatus.label,
+                  color: teamStatusColor,
+                },
+              ].map(item => (
+                <div key={item.label} className="rounded-xl px-4 py-3" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, marginBottom: 5 }}>{item.label.toUpperCase()}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: item.color ?? COLORS.textPrimary }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </Card>
 
         <Card className="p-5">
           <div className="flex items-center justify-between gap-3 mb-4">
-            <div>
+            <div className="flex flex-wrap items-center gap-3">
               <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>{selectedTeam.teamName}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-                Leader: {leaderLabel}
-              </div>
+              {isLeader && canEditRoster && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                  disabled={loading.requests}
+                  onClick={() => {
+                    setLeaderActionPanel(current => current === "joinRequests" ? null : "joinRequests");
+                    if (leaderActionPanel !== "joinRequests") loadRequests(selectedTeam.teamId);
+                  }}
+                >
+                  {loading.requests ? "Loading..." : "Join Request"}
+                </Button>
+              )}
             </div>
-            <StatusBadge status={teamStatus.badge} />
           </div>
+          {message && !isTeamLoadMessage && (
+            <div className="mb-4">
+              <InlineMessage tone={message.tone} message={message.text} />
+            </div>
+          )}
           <DataTable
             columns={[
               { key: "member", label: "Member" },
+              { key: "role", label: "Role" },
               { key: "email", label: "Email" },
               { key: "active", label: "Status" },
               { key: "joinedAt", label: "Joined" },
+              {
+                key: "action",
+                label: "Action",
+                render: (memberUserId) => {
+                  const canRemoveMember = isLeader
+                    && canEditRoster
+                    && memberUserId !== user?.userId
+                    && memberUserId !== selectedTeam.leaderUserId;
+                  const isCurrentUserRow = memberUserId === user?.userId;
+                  return (
+                    <div className="flex justify-center">
+                      <div className="grid grid-cols-2 gap-2" style={{ width: 188 }}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={<Eye size={13} />}
+                          onClick={() => setSelectedMemberDetailUserId(current => current === memberUserId ? null : memberUserId)}
+                        >
+                          Detail
+                        </Button>
+                        {isCurrentUserRow && canEditRoster ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <LogOut size={13} />}
+                            disabled={loading.remove}
+                            onClick={leaveTeam}
+                          >
+                            {loading.remove ? "Leaving..." : "Leave"}
+                          </Button>
+                        ) : canRemoveMember ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                            disabled={loading.remove}
+                            onClick={() => removeMember(memberUserId)}
+                          >
+                            Remove
+                          </Button>
+                        ) : (
+                          <span />
+                        )}
+                      </div>
+                    </div>
+                  );
+                },
+              },
             ]}
             data={memberTableRows}
           />
+          {selectedMemberDetailUserId && (() => {
+            const member = selectedTeam.members.find(item => item.userId === selectedMemberDetailUserId);
+            if (!member) return null;
+            const detail = memberDetails[member.userId];
+            const display = getMemberDisplay(member);
+            const detailRows = detail ? visibleMemberDetailRows(detail) : [
+              { label: "Full Name", value: display.name },
+              { label: "Email", value: display.email },
+              { label: "Joined At", value: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-" },
+              { label: "Active", value: member.active ? "Yes" : "No" },
+            ];
+            return renderCenteredModal(
+              "Member Detail",
+              () => setSelectedMemberDetailUserId(null),
+              <>
+                <div style={{ fontWeight: 800, fontSize: 14, color: COLORS.textPrimary }}>
+                  {display.name}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4">
+                  {detailRows.map(row => (
+                    <div key={row.label} className="rounded-lg px-3 py-2" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>{row.label.toUpperCase()}</div>
+                      <div style={{ fontSize: 12, color: COLORS.textPrimary, marginTop: 3, wordBreak: "break-word" }}>
+                        {row.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>,
+            );
+          })()}
+          {leaderActionPanel === "joinRequests" && renderCenteredModal(
+            "Join Requests",
+            () => setLeaderActionPanel(null),
+            <>
+              {joinRequestsLoaded && requests.length === 0 && (
+                <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
+                  There are no join requests waiting for review.
+                </div>
+              )}
+              {requests.length > 0 && <div className="space-y-3">
+                {requests.map(request => (
+                  <div
+                    key={request.requestId}
+                    className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                        {request.fullName}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                        University: {request.universityName}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                        {request.requestStatus} - {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : "-"}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={loading.approve ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+                        disabled={loading.approve || loading.reject}
+                        onClick={() => decideRequest(request.requestId, "APPROVED")}
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        icon={loading.reject ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                        disabled={loading.approve || loading.reject}
+                        onClick={() => decideRequest(request.requestId, "REJECTED")}
+                      >
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>}
+              <div className="mt-4">
+                <Field label="RESPONSE NOTE" value={form.responseNote} onChange={value => setField("responseNote", value)} />
+              </div>
+            </>,
+          )}
         </Card>
 
-        {isLeader && (() => {
-          const teamEvent = events.find(event => event.eventId === selectedTeam.eventId);
-          const activeMemberCount = selectedTeam.members.filter(member => member.active).length;
-          const minTeamSize = teamEvent?.minTeamSize;
-          const maxTeamSize = teamEvent?.maxTeamSize;
+        {isLeader && (canEditRoster || canWithdrawApprovalRequest) && (
+          <div className="flex justify-end">
+            {canWithdrawApprovalRequest ? (
+              <Button
+                variant="outline"
+                size="md"
+                icon={loading.withdraw ? <Loader size={14} className="animate-spin" /> : <Undo2 size={14} />}
+                disabled={loading.withdraw}
+                onClick={withdrawTeamApprovalRequest}
+              >
+                {loading.withdraw ? "Withdrawing..." : "Withdraw Request"}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="lg"
+                style={{ minWidth: 180, justifyContent: "center" }}
+                icon={loading.register ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
+                disabled={!canSubmitForApproval || loading.register}
+                onClick={submitTeamForApproval}
+              >
+                {loading.register ? "Sending..." : "Request Approval"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {false && isLeader && (() => {
+          const teamEvent = events.find(event => event.eventId === selectedTeam!.eventId);
+          const activeMemberCount = selectedTeam!.members.filter(member => member.active).length;
+          const minTeamSize = teamEvent?.minTeamSize ?? 0;
+          const maxTeamSize = teamEvent?.maxTeamSize ?? 0;
           const sizeOk = (!minTeamSize || activeMemberCount >= minTeamSize)
             && (!maxTeamSize || activeMemberCount <= maxTeamSize);
           const sizeLabel = `${activeMemberCount} / ${minTeamSize ?? "?"}–${maxTeamSize ?? "?"}`;
@@ -1336,6 +2204,11 @@ export function TeamApiPanel({
                   Members: {sizeLabel}
                 </span>
               </div>
+              {message && (
+                <div className="mb-4">
+                  <InlineMessage tone={message!.tone} message={message!.text} />
+                </div>
+              )}
               <div className="flex flex-wrap gap-3">
                 <Button
                   variant="outline"
@@ -1362,7 +2235,7 @@ export function TeamApiPanel({
                       disabled={loading.requests}
                       onClick={() => {
                         setLeaderActionPanel("joinRequests");
-                        loadRequests(selectedTeam.teamId);
+                        loadRequests(selectedTeam!.teamId);
                       }}
                     >
                       {loading.requests ? "Loading..." : "Load Join Requests"}
@@ -1432,7 +2305,7 @@ export function TeamApiPanel({
                 disabled={!canUseTeam || loading.join}
                 onClick={requestJoin}
               >
-                Request Join
+                Join
               </Button>
               <Button
                 variant="danger"
@@ -1568,7 +2441,7 @@ export function TeamApiPanel({
               disabled={!canUseTeam || loading.join}
               onClick={() => requestJoin()}
             >
-              Request Join
+              Join
             </Button>
           </div>
         </Card>
@@ -1598,7 +2471,7 @@ export function TeamApiPanel({
                         disabled={loading.join}
                         onClick={() => requestJoin(row.teamId)}
                       >
-                        Request Join
+                        Join
                       </Button>
                     )}
                   </div>

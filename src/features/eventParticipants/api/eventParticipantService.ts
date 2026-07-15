@@ -3,12 +3,18 @@ import { api, ApiError, request } from "@/lib/api/apiClient";
 export type EventParticipantStatus =
   | "PENDING"
   | "ACTIVE"
-  | "REJECTED";
+  | "REJECTED"
+  | "SUSPENDED"
+  | "TEMPORARY"
+  | "UNVERIFIED";
 
 export const EVENT_PARTICIPANT_STATUSES: EventParticipantStatus[] = [
   "PENDING",
   "ACTIVE",
   "REJECTED",
+  "SUSPENDED",
+  "TEMPORARY",
+  "UNVERIFIED",
 ];
 
 export interface EventParticipantResponse {
@@ -19,6 +25,8 @@ export interface EventParticipantResponse {
   studentId: string;
   studentName: string;
   studentEmail: string;
+  teamId?: string;
+  teamName?: string;
   fptStudentCode?: string;
   externalStudentCode?: string;
   universityName?: string;
@@ -42,6 +50,11 @@ export interface EventParticipantResponse {
   event?: {
     eventId?: string;
     eventName?: string;
+  };
+  team?: {
+    teamId?: string;
+    teamName?: string;
+    name?: string;
   };
 }
 
@@ -84,6 +97,13 @@ type RawParticipantRecord = EventParticipantResponse & {
   studentCode?: string;
   university?: string;
   email?: string;
+  teamId?: string;
+  teamName?: string;
+  team?: {
+    teamId?: string;
+    teamName?: string;
+    name?: string;
+  };
   status?: EventParticipantStatus;
   currentStatus?: EventParticipantStatus;
   registeredAt?: string;
@@ -105,6 +125,8 @@ function normalizeParticipant(participant: RawParticipantRecord): EventParticipa
     studentId: String(participant.studentId ?? participant.userId ?? participant.user?.userId ?? ""),
     studentName: participant.studentName ?? participant.fullName ?? participant.user?.fullName ?? "",
     studentEmail: participant.studentEmail ?? participant.email ?? participant.user?.email ?? "",
+    teamId: participant.teamId ?? participant.team?.teamId,
+    teamName: participant.teamName ?? participant.team?.teamName ?? participant.team?.name,
     fptStudentCode: participant.fptStudentCode ?? participant.user?.fptStudentCode,
     externalStudentCode: participant.externalStudentCode ?? participant.user?.externalStudentCode,
     universityName: participant.universityName ?? participant.university ?? participant.user?.universityName,
@@ -125,7 +147,9 @@ function normalizeParticipant(participant: RawParticipantRecord): EventParticipa
 function normalizeParticipantStatus(status: unknown): EventParticipantStatus {
   const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
   if (value === "PENDING_APPROVAL") return "PENDING";
-  if (value === "ACTIVE" || value === "REJECTED" || value === "PENDING") return value;
+  if (EVENT_PARTICIPANT_STATUSES.includes(value as EventParticipantStatus)) {
+    return value as EventParticipantStatus;
+  }
   return "PENDING";
 }
 

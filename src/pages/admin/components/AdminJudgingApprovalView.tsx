@@ -7,6 +7,8 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
   const [judgingDetails, setJudgingDetails] = useState<any[]>([]);
@@ -77,6 +79,22 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
       setSubmissions(prev => prev.map(s => 
         s.submissionId === submissionId ? { ...s, isScoreApproved: !currentStatus } : s
       ));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const rejectScore = async (submissionId: string) => {
+    if (!rejectReason.trim()) return;
+    setApprovingId(submissionId); // Borrow this state for loading indicator
+    try {
+      await api.post(`/api/v1/admin/submissions/${submissionId}/reject-score`, { reason: rejectReason });
+      setRejectingId(null);
+      setRejectReason("");
+      // Reload submissions to get empty scores
+      fetchSubmissions();
     } catch (e) {
       console.error(e);
     } finally {
@@ -171,19 +189,64 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                     </td>
 
                     <td className="p-4 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>
-                      <div className="flex items-center justify-end gap-2">
-                        <Button variant="secondary" size="sm" icon={<Eye size={14} />} onClick={() => viewScores(sub.submissionId)} title="View Detail Scores" />
-                        <Button 
-                          variant={sub.isScoreApproved ? "secondary" : "primary"} 
-                          size="sm" 
-                          icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
-                          onClick={() => toggleApproval(sub.submissionId, sub.isScoreApproved)}
-                          disabled={approvingId === sub.submissionId}
-                          style={!sub.isScoreApproved && approvingId !== sub.submissionId ? { background: COLORS.success } : {}}
-                        >
-                          {sub.isScoreApproved ? "Un-Finalize" : "Finalize"}
-                        </Button>
-                      </div>
+                      {rejectingId === sub.submissionId ? (
+                        <div className="flex flex-col gap-2 items-end min-w-[200px]">
+                          <input 
+                            type="text" 
+                            className="px-2 py-1 text-sm border rounded w-full" 
+                            placeholder="Reason for rejection..." 
+                            value={rejectReason} 
+                            onChange={e => setRejectReason(e.target.value)}
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => { setRejectingId(null); setRejectReason(""); }}
+                              disabled={approvingId === sub.submissionId}
+                            >
+                              Cancel
+                            </Button>
+                            <Button 
+                              variant="danger"
+                              size="sm" 
+                              onClick={() => rejectScore(sub.submissionId)}
+                              disabled={!rejectReason.trim() || approvingId === sub.submissionId}
+                              icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : undefined}
+                            >
+                              Confirm Reject
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-2">
+                          <Button variant="secondary" size="sm" icon={<Eye size={14} />} onClick={() => viewScores(sub.submissionId)} title="View Detail Scores" />
+                          {!sub.isScoreApproved && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              icon={<XCircle size={14}/>}
+                              onClick={() => setRejectingId(sub.submissionId)}
+                              disabled={approvingId === sub.submissionId}
+                              style={{ color: COLORS.danger, borderColor: COLORS.danger }}
+                              title="Reject and require re-score"
+                            >
+                              Reject
+                            </Button>
+                          )}
+                          <Button 
+                            variant={sub.isScoreApproved ? "secondary" : "primary"} 
+                            size="sm" 
+                            icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
+                            onClick={() => toggleApproval(sub.submissionId, sub.isScoreApproved)}
+                            disabled={approvingId === sub.submissionId}
+                            style={!sub.isScoreApproved && approvingId !== sub.submissionId ? { background: COLORS.success } : {}}
+                          >
+                            {sub.isScoreApproved ? "Un-Finalize" : "Finalize"}
+                          </Button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
