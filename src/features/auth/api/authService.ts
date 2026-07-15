@@ -108,7 +108,11 @@ export async function logout(): Promise<void> {
 
 export async function refreshAccessToken(): Promise<TokenResponse> {
   const refreshToken = getRefreshToken();
-  return api.post<TokenResponse>("/auth/refresh", { refreshToken }, false);
+  const response = await api.post<TokenResponse & { refreshToken?: string }>("/auth/refresh", { refreshToken }, false);
+  if (response.accessToken && refreshToken) {
+    setTokens(response.accessToken, response.refreshToken ?? refreshToken);
+  }
+  return response;
 }
 
 export async function verifyEmail(token: string): Promise<string> {

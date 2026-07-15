@@ -16,7 +16,8 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
     selectedEventId,
     setSelectedEventId,
     apiCategories,
-    apiRounds,
+    apiRounds = [],
+    apiDashboardRounds = [],
     selectedSubmissionCategoryId,
     setSelectedSubmissionCategoryId,
     selectedSubmissionRoundId,
@@ -45,7 +46,53 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
   const scored = adminSubmissions.filter((submission: any) =>
     (submission.submissionStatusName ?? "").toLowerCase().includes("scored")
   ).length;
-  const selectedRound = apiRounds.find((round: any) => round.roundId === selectedSubmissionRoundId);
+  const eventRounds = [...apiDashboardRounds, ...apiRounds].filter(
+    (round, index, rounds) => rounds.findIndex(item => item.roundId === round.roundId) === index
+  );
+  const selectedRound = eventRounds.find((round: any) => round.roundId === selectedSubmissionRoundId);
+  const getSubmissionRound = (submission: any) =>
+    eventRounds.find((round: any) => round.roundId === submission.roundId);
+  const getRoundName = (submission: any) =>
+    submission.roundName
+    ?? submission.round?.name
+    ?? submission.round?.roundName
+    ?? getSubmissionRound(submission)?.roundName
+    ?? getSubmissionRound(submission)?.name
+    ?? submission.roundId
+    ?? "Unknown round";
+  const getSubmissionName = (submission: any) =>
+    submission.submissionName
+    ?? submission.name
+    ?? submission.title
+    ?? submission.notes
+    ?? "Untitled submission";
+  const isCalibrationSubmission = (submission: any) => {
+    const round = getSubmissionRound(submission);
+    return Boolean(
+      submission.isCalibrationRound
+      ?? submission.isCalibration
+      ?? submission.isSampleSubmission
+      ?? submission.sampleSubmission
+      ?? submission.round?.isCalibrationRound
+      ?? round?.isCalibrationRound
+      ?? (selectedRound?.roundId === submission.roundId ? selectedRound?.isCalibrationRound : false)
+    );
+  };
+  const getTeamName = (submission: any) =>
+    submission.teamName
+    ?? submission.team?.teamName
+    ?? submission.team?.name
+    ?? submission.teamId
+    ?? "Unknown team";
+  const submissionColumns = [
+    { label: "Team Name", width: "14%", align: "left" },
+    { label: "Round Name", width: "12%", align: "left" },
+    { label: "Submission Name", width: "15%", align: "left" },
+    { label: "Status", width: "9%", align: "left" },
+    { label: "Submitted", width: "15%", align: "left" },
+    { label: "Artifacts", width: "25%", align: "center" },
+    { label: "Action", width: "10%", align: "center" },
+  ] as const;
 
   return (
     <>
@@ -71,7 +118,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
               className="w-full px-3 py-2.5 rounded-xl outline-none"
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
             >
-              {apiEvents.length === 0 && <option value="">No events found</option>}
+              <option value="">{apiEvents.length === 0 ? "No events found" : "Select an event"}</option>
               {apiEvents.map((event: any) => (
                 <option key={event.id} value={event.id}>{event.name}</option>
               ))}
@@ -84,7 +131,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
               onChange={e => setSelectedSubmissionCategoryId(e.target.value)}
               className="w-full px-3 py-2.5 rounded-xl outline-none"
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={submissionScope === "event"}
+              disabled={!selectedEventId || apiCategories.length === 0}
             >
               {apiCategories.length === 0 && <option value="">No categories found</option>}
               {apiCategories.map((category: any) => (
@@ -96,10 +143,13 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
             <select
               value={selectedSubmissionRoundId}
-              onChange={e => setSelectedSubmissionRoundId(e.target.value)}
+              onChange={e => {
+                setSelectedSubmissionRoundId(e.target.value);
+                if (e.target.value) setSubmissionScope("round");
+              }}
               className="w-full px-3 py-2.5 rounded-xl outline-none"
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={submissionScope === "event"}
+              disabled={!selectedSubmissionCategoryId || apiRounds.length === 0}
             >
               {apiRounds.length === 0 && <option value="">No rounds loaded</option>}
               {apiRounds.map((round: any) => (
@@ -111,11 +161,10 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>VIEW</label>
             <select
               value={submissionScope}
-              onChange={e => setSubmissionScope(e.target.value as "event" | "round" | "unreview")}
+              onChange={e => setSubmissionScope(e.target.value as "round" | "unreview")}
               className="w-full px-3 py-2.5 rounded-xl outline-none"
               style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
             >
-              <option value="event">All submissions in event</option>
               <option value="round">All submissions in round</option>
               <option value="unreview">Unreviewed submissions in round</option>
             </select>
@@ -130,7 +179,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
             {submissionsLoading ? "Loading..." : "Refresh"}
           </Button>
         </div>
-        {selectedRound && submissionScope !== "event" && (
+        {selectedRound && (
           <div className="mt-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
             Deadline: {selectedRound.submissionDeadline ? new Date(selectedRound.submissionDeadline).toLocaleString("en-US") : "Not set"}
           </div>
@@ -150,12 +199,17 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
 
       <Card className="mt-6">
         <div className="overflow-x-auto">
-          <table className="w-full" style={{ borderCollapse: "collapse" }}>
+          <table className="w-full" style={{ borderCollapse: "collapse", tableLayout: "fixed", minWidth: 1180 }}>
+            <colgroup>
+              {submissionColumns.map(column => (
+                <col key={column.label} style={{ width: column.width }} />
+              ))}
+            </colgroup>
             <thead>
               <tr style={{ background: COLORS.bg }}>
-                {["Team", "Round", "Status", "Submitted", "Artifacts", "Repo Stats", "Action"].map(header => (
-                  <th key={header} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>
-                    {header.toUpperCase()}
+                {submissionColumns.map(column => (
+                  <th key={column.label} className="px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, textAlign: column.align }}>
+                    {column.label.toUpperCase()}
                   </th>
                 ))}
               </tr>
@@ -170,19 +224,24 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
               )}
               {adminSubmissions.map((submission: any) => {
                 const status = (submission.submissionStatusName || "draft").toLowerCase().replace(/\s+/g, "_");
+                const isCalibration = isCalibrationSubmission(submission);
                 return (
                   <tr key={submission.submissionId} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                    <td className="px-4 py-3">
-                      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{submission.teamId}</div>
-                      <div style={{ fontSize: 11, color: COLORS.textSecondary }}>By {submission.submittedByUserId ?? "unknown"}</div>
+                    <td className="px-4 py-3" style={{ verticalAlign: "middle" }}>
+                      {isCalibration ? (
+                        <span style={{ fontSize: 12, color: COLORS.textSecondary }}>None</span>
+                      ) : (
+                        <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{getTeamName(submission)}</div>
+                      )}
                     </td>
-                    <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>{submission.roundId}</td>
-                    <td className="px-4 py-3"><StatusBadge status={status} /></td>
-                    <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                    <td className="px-4 py-3" style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary, verticalAlign: "middle" }}>{getRoundName(submission)}</td>
+                    <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary, verticalAlign: "middle" }}>{getSubmissionName(submission)}</td>
+                    <td className="px-4 py-3" style={{ verticalAlign: "middle" }}><StatusBadge status={status} /></td>
+                    <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary, verticalAlign: "middle" }}>
                       {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString("en-US") : "Not submitted"}
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
+                    <td className="px-4 py-3" style={{ verticalAlign: "middle", textAlign: "center" }}>
+                      <div className="flex flex-wrap justify-center gap-2">
                         {[
                           { label: "Repo", url: submission.repositoryUrl, icon: <Github size={12} /> },
                           { label: "Demo", url: submission.demoUrl, icon: <Eye size={12} /> },
@@ -202,10 +261,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                         ) : null)}
                       </div>
                     </td>
-                    <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                      {submission.repoStarCount ?? 0} stars / {submission.repoForkCount ?? 0} forks
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-center" style={{ verticalAlign: "middle" }}>
                       <Button
                         variant="danger"
                         size="sm"
@@ -229,9 +285,6 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
           <div className="flex items-start justify-between gap-4">
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Disqualify submission</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
-                {submissionDisqualifyTarget.submissionId}
-              </div>
             </div>
             <Button variant="ghost" size="sm" icon={<X size={13} />} onClick={() => setSubmissionDisqualifyTarget(null)}>
               Cancel
@@ -241,7 +294,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
             value={submissionDisqualifyReason}
             onChange={e => setSubmissionDisqualifyReason(e.target.value)}
             rows={3}
-            placeholder="Reason required by backend"
+            placeholder="Reason required"
             className="w-full px-3 py-2.5 rounded-xl outline-none resize-none mt-4"
             style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
           />

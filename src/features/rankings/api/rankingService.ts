@@ -29,6 +29,8 @@ export const rankingService = {
   // Public leaderboard (no auth required)
   getLeaderboard: (eventId: string, categoryId: string) =>
     api.get<EventRankingDTO[]>(`/api/v1/public/leaderboard/${eventId}/${categoryId}`, false),
+  getRoundLeaderboard: (roundId: string, categoryId: string) =>
+    api.get<RoundRankingDTO[]>(`/api/v1/public/leaderboard/rounds/${roundId}/${categoryId}`, false),
 
   // Admin compute
   computeRound: (roundId: string, categoryId: string) =>

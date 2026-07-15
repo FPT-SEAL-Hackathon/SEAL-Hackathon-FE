@@ -33,6 +33,8 @@ export interface CreateSubmissionRequest {
   notes?: string;
 }
 
+export type CreateSampleSubmissionRequest = Omit<CreateSubmissionRequest, "teamId">;
+
 export interface SubmissionDisqualificationResponse {
   disqualificationId: string;
   submissionId: string;
@@ -58,6 +60,12 @@ export const submissionService = {
 
   submitWork: (data: CreateSubmissionRequest) =>
     api.post<SubmissionResponse>("/api/v1/submissions", data),
+
+  submitSample: (data: CreateSampleSubmissionRequest) =>
+    api.post<SubmissionResponse>("/api/v1/admin/calibration-sample-submissions", data),
+
+  submitCalibrationSample: (data: CreateSampleSubmissionRequest) =>
+    api.post<SubmissionResponse>("/api/v1/admin/calibration-sample-submissions", data),
 
   getByTeamAndRound: (teamId: string, roundId: string) =>
     api.get<SubmissionResponse>(`/api/v1/teams/${enc(teamId)}/rounds/${enc(roundId)}/submission`),

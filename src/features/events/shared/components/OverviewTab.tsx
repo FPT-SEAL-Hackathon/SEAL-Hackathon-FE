@@ -6,16 +6,17 @@ import type { EventCriteria } from "../../types/eventCriteria";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
 import { EventTeamsSummaryCard } from "../../components/EventTeamsSection";
+import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
 
 interface Props {
   event: EventResponse;
-  eventCriteria: EventCriteria[];
   totalPrize: { amount: number; currency: string } | null;
   onOpenTeamManagement: () => void;
 }
 
-export function OverviewTab({ event, eventCriteria, totalPrize, onOpenTeamManagement }: Props) {
+export function OverviewTab({ event, totalPrize, onOpenTeamManagement }: Props) {
   
+  const { eventCriteria } = useEventCriteriaContext();
   const { categories, categoryMentors } = useCategoryContext();
   const { roundJudges } = useRoundContext();
 
@@ -103,7 +104,7 @@ export function OverviewTab({ event, eventCriteria, totalPrize, onOpenTeamManage
             </div>
           ))}
         </Card>
-        <EventTeamsSummaryCard eventId={event.eventId} onOpen={onOpenTeamManagement} />
+        <EventTeamsSummaryCard eventId={event.eventId} event={event} onOpen={onOpenTeamManagement} />
       </div>
     </div>
   );

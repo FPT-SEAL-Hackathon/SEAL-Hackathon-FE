@@ -13,6 +13,7 @@ import { EventTeamsSection } from "../components/EventTeamsSection";
 import { CategoryProvider } from "../context/CategoryContext";
 import { RoundProvider } from "../context/RoundContext";
 import { EventDetailHeader } from "../shared/components/EventDetailHeader";
+import { EventCriteriaProvider, useEventCriteriaContext } from "../context/EventCriteriaContext";
 
 type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams";
 
@@ -26,18 +27,6 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 
 export function EventDetailPage({ event, onBack }: { event: EventResponse; onBack: () => void }) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
-
-  const {
-    criteriaTemplates,
-    selectedTemplates,
-    setSelectedTemplates,
-
-    eventCriteria,
-    loadEventCriteria,
-    importCriteria,
-    updateEventCriteria,
-    removeEventCriteria
-  } = useEventCriteria(event.eventId);
 
   // ── Shared state lifted here so all tabs can read/write ──────────────────
 
@@ -56,75 +45,71 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
   }, [event.eventId]);
 
   return (
-    <div className="p-6 space-y-6">    
-      <CategoryProvider eventId={event.eventId}>
-        <RoundProvider eventId={event.eventId}>
+    <div className="p-6 space-y-6">   
+      <EventCriteriaProvider eventId={event.eventId}>
 
-          {/* Header */}
-          <EventDetailHeader 
-            event={event}
-            totalPrize={totalPrize}
-            onBack={onBack}
-          />
-          {/* Tab bar */}
-          <div
-            className="flex gap-1 p-1 rounded-2xl"
-            style={{ background: "var(--surface-bg)", border: `1px solid ${COLORS.border}`, width: "fit-content" }}
-          >
-            {TABS.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-orange-100"
-                style={{
-                  fontSize: 13,
-                  fontWeight: activeTab === tab.key ? 600 : 400,
-                  color: activeTab === tab.key ? "#fff" : COLORS.textSecondary,
-                  ...(activeTab === tab.key && {
-                    background: COLORS.primary, 
-                  }),
-                  boxShadow: activeTab === tab.key ? `0 2px 12px ${COLORS.primary}40` : "none",
-                }}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        <CategoryProvider eventId={event.eventId}>
+          <RoundProvider eventId={event.eventId}>
 
-          {/* Tab content */}
-          {activeTab === "overview" && (
-            <OverviewTab 
-              event={event} 
-              eventCriteria={eventCriteria}
+            {/* Header */}
+            <EventDetailHeader 
+              event={event}
               totalPrize={totalPrize}
-              onOpenTeamManagement={() => setActiveTab("teams")}
+              onBack={onBack}
             />
-          )}
+            {/* Tab bar */}
+            <div
+              className="flex gap-1 p-1 rounded-2xl"
+              style={{ background: "var(--surface-bg)", border: `1px solid ${COLORS.border}`, width: "fit-content" }}
+            >
+              {TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-orange-100"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: activeTab === tab.key ? 600 : 400,
+                    color: activeTab === tab.key ? "#fff" : COLORS.textSecondary,
+                    ...(activeTab === tab.key && {
+                      background: COLORS.primary, 
+                    }),
+                    boxShadow: activeTab === tab.key ? `0 2px 12px ${COLORS.primary}40` : "none",
+                  }}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          {activeTab === "criteria" && (
-            <CriteriaTab
-              templates={criteriaTemplates}
-              eventCriteria={eventCriteria}
-              onImport={importCriteria}
-              onUpdate={updateEventCriteria}
-              onRemove={removeEventCriteria}
-            />
-          )}
+            {/* Tab content */}
+            {activeTab === "overview" && (
+              <OverviewTab 
+                event={event} 
+                totalPrize={totalPrize}
+                onOpenTeamManagement={() => setActiveTab("teams")}
+              />
+            )}
 
-          {activeTab === "categories" && (
-            <CategoriesTab />
-          )}
-      
-          {activeTab === "rounds" && (
-            <RoundsTab />
-          )}
+            {activeTab === "criteria" && (
+              <CriteriaTab />
+            )}
+
+            {activeTab === "categories" && (
+              <CategoriesTab />
+            )}
         
-          {activeTab === "teams" && (
-            <EventTeamsSection eventId={event.eventId} />
-          )}       
-        </RoundProvider>
-      </CategoryProvider>
+            {activeTab === "rounds" && (
+              <RoundsTab />
+            )}
+          
+            {activeTab === "teams" && (
+              <EventTeamsSection eventId={event.eventId} event={event} />
+            )}       
+          </RoundProvider>
+        </CategoryProvider>
+      </EventCriteriaProvider> 
     </div>
   );
 }

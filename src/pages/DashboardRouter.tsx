@@ -1,5 +1,4 @@
 import { MemberDashboard } from "@/pages/member/MemberDashboard";
-import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
@@ -9,7 +8,7 @@ export function DashboardRouter({ role, currentPage, onNavigate }: { role: strin
     case "member":
       return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
     case "leader":
-      return <LeaderDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+      return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
     case "judge":
       return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} />;
     case "mentor":
