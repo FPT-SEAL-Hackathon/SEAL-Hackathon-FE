@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { AlertTriangle, ChevronDown, ChevronUp, Edit, Loader, PlusCircle, RefreshCw, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
+import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
+import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
   userService,
   type CreateUserRequest,
@@ -164,7 +165,12 @@ export function AdminUsersView() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => parseCsvParam(searchParams.get("status")));
   const [facets, setFacets] = useState<UserFacetsResponse | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
-  const [openGroups, setOpenGroups] = useState<{ role: boolean; status: boolean }>({ role: true, status: true });
+  const [openGroups, setOpenGroups] = useState<{ role: boolean; status: boolean; date: boolean; sort: boolean }>({
+    role: true,
+    status: true,
+    date: false,
+    sort: false,
+  });
   const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("q") ?? "");
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
@@ -335,7 +341,10 @@ export function AdminUsersView() {
     return option ? option.count : null;
   };
 
-  const activeFilterCount = selectedRoles.length + selectedStatuses.length;
+  const activeFilterCount = selectedRoles.length
+    + selectedStatuses.length
+    + (filters.joinedFrom ? 1 : 0)
+    + (filters.joinedTo ? 1 : 0);
 
   const openCreate = () => {
     setFieldErrors({});
@@ -524,7 +533,9 @@ export function AdminUsersView() {
       </div>
 
       <Card className="p-5 flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {/* Ngoài trang chỉ giữ search text; mọi thuộc tính CHỌN (ngày, sort, facet)
+            nằm trong panel "Filter and sort" để không che bảng danh sách. */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <FilterInput
             label="Search"
             value={filters.search ?? ""}
@@ -533,44 +544,8 @@ export function AdminUsersView() {
             icon={<Search size={14} />}
           />
           <FilterInput label="Team" value={filters.teamName ?? ""} onChange={value => setFilter("teamName", value)} placeholder="Team name" />
-          <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
-          <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
-          <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
-            <option value="createdAt">Joined</option>
-            <option value="updatedAt">Updated</option>
-            <option value="fullName">Name</option>
-            <option value="email">Email</option>
-            <option value="role">Role</option>
-            <option value="accountStatus">Status</option>
-          </FilterSelect>
-          <FilterSelect label="Direction" value={filters.sortDir ?? "desc"} onChange={value => setFilter("sortDir", value as "asc" | "desc")}>
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </FilterSelect>
           <div className="flex items-end">
-            <button
-              type="button"
-              onClick={() => setFilterPanelOpen(true)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all"
-              style={{
-                border: `1px solid ${activeFilterCount > 0 ? COLORS.primary : COLORS.border}`,
-                background: activeFilterCount > 0 ? `${COLORS.primary}10` : COLORS.bg,
-                color: activeFilterCount > 0 ? COLORS.primary : COLORS.textPrimary,
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              <SlidersHorizontal size={14} />
-              Filter Role &amp; Status
-              {activeFilterCount > 0 && (
-                <span
-                  className="inline-flex items-center justify-center rounded-full"
-                  style={{ minWidth: 18, height: 18, background: COLORS.primary, color: "#fff", fontSize: 11, fontWeight: 700 }}
-                >
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+            <FilterSortButton activeCount={activeFilterCount} onClick={() => setFilterPanelOpen(true)} />
           </div>
         </div>
 
@@ -718,77 +693,74 @@ export function AdminUsersView() {
         </div>
       </Card>
 
-      {filterPanelOpen && (
-        <div
-          className="fixed inset-0 z-50 flex justify-end"
-          style={{ background: "rgba(0,0,0,0.35)" }}
-          onClick={event => { if (event.target === event.currentTarget) setFilterPanelOpen(false); }}
+      <FilterSortPanel
+        open={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        onClearAll={clearAllFacets}
+        hasActive={activeFilterCount > 0}
+        ctaLabel={facets ? `Show ${facets.total} user${facets.total === 1 ? "" : "s"}` : "Apply Filters"}
+      >
+        <FacetGroup
+          title="Role"
+          open={openGroups.role}
+          hasActive={selectedRoles.length > 0}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, role: !prev.role }))}
         >
-          <div
-            className="h-full w-full max-w-sm flex flex-col"
-            style={{ background: "#fff", boxShadow: "-12px 0 40px rgba(0,0,0,0.18)" }}
-          >
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-              <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>Filter Users</div>
-              <div className="flex items-center gap-3">
-                {activeFilterCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearAllFacets}
-                    style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
-                  >
-                    Clear All
-                  </button>
-                )}
-                <button type="button" onClick={() => setFilterPanelOpen(false)} style={{ color: COLORS.textSecondary, background: "none", border: "none", cursor: "pointer" }}>
-                  <X size={18} />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-              <FacetGroup
-                title="Role"
-                open={openGroups.role}
-                hasActive={selectedRoles.length > 0}
-                onToggle={() => setOpenGroups(prev => ({ ...prev, role: !prev.role }))}
-              >
-                {ROLE_OPTIONS.map(option => (
-                  <FacetOptionRow
-                    key={option.value}
-                    label={option.label}
-                    count={facetCount("roles", option.value)}
-                    checked={selectedRoles.includes(option.value)}
-                    onToggle={() => toggleRole(option.value)}
-                  />
-                ))}
-              </FacetGroup>
-              <FacetGroup
-                title="Account Status"
-                open={openGroups.status}
-                hasActive={selectedStatuses.length > 0}
-                onToggle={() => setOpenGroups(prev => ({ ...prev, status: !prev.status }))}
-              >
-                {STATUS_OPTIONS.map(option => (
-                  <FacetOptionRow
-                    key={option.value}
-                    label={option.label}
-                    count={facetCount("statuses", option.value)}
-                    checked={selectedStatuses.includes(option.value)}
-                    onToggle={() => toggleStatus(option.value)}
-                  />
-                ))}
-              </FacetGroup>
-            </div>
-
-            <div className="px-5 py-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
-              <Button variant="primary" size="md" className="w-full" onClick={() => setFilterPanelOpen(false)}>
-                {facets ? `Show ${facets.total} user${facets.total === 1 ? "" : "s"}` : "Apply Filters"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+          {ROLE_OPTIONS.map(option => (
+            <FacetOptionRow
+              key={option.value}
+              label={option.label}
+              count={facetCount("roles", option.value)}
+              checked={selectedRoles.includes(option.value)}
+              onToggle={() => toggleRole(option.value)}
+            />
+          ))}
+        </FacetGroup>
+        <FacetGroup
+          title="Account Status"
+          open={openGroups.status}
+          hasActive={selectedStatuses.length > 0}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, status: !prev.status }))}
+        >
+          {STATUS_OPTIONS.map(option => (
+            <FacetOptionRow
+              key={option.value}
+              label={option.label}
+              count={facetCount("statuses", option.value)}
+              checked={selectedStatuses.includes(option.value)}
+              onToggle={() => toggleStatus(option.value)}
+            />
+          ))}
+        </FacetGroup>
+        <FacetGroup
+          title="Joined Date"
+          open={openGroups.date}
+          hasActive={Boolean(filters.joinedFrom || filters.joinedTo)}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, date: !prev.date }))}
+        >
+          <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
+          <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
+        </FacetGroup>
+        <FacetGroup
+          title="Sort By"
+          open={openGroups.sort}
+          hasActive={filters.sortBy !== "createdAt" || filters.sortDir !== "desc"}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, sort: !prev.sort }))}
+        >
+          <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
+            <option value="createdAt">Joined</option>
+            <option value="updatedAt">Updated</option>
+            <option value="fullName">Name</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+            <option value="accountStatus">Status</option>
+          </FilterSelect>
+          <FilterSelect label="Direction" value={filters.sortDir ?? "desc"} onChange={value => setFilter("sortDir", value as "asc" | "desc")}>
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </FilterSelect>
+        </FacetGroup>
+      </FilterSortPanel>
 
       {modal && (
         <UserFormModal
@@ -918,68 +890,8 @@ function UserFormModal({
   );
 }
 
-// Chip filter đang chọn — hiển thị trên bảng, gỡ từng cái bằng nút X.
-function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-      style={{ background: `${COLORS.primary}12`, color: COLORS.primary, fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.primary}30` }}
-    >
-      {label}
-      <button type="button" onClick={onRemove} style={{ display: "inline-flex", background: "none", border: "none", cursor: "pointer", color: "inherit" }} aria-label={`Remove ${label}`}>
-        <X size={12} />
-      </button>
-    </span>
-  );
-}
-
-// Nhóm accordion trong panel filter; dot cạnh tên khi nhóm có filter active.
-function FacetGroup({ title, open, hasActive, onToggle, children }: {
-  title: string;
-  open: boolean;
-  hasActive: boolean;
-  onToggle: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <div style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4"
-        style={{ background: "none", border: "none", cursor: "pointer" }}
-      >
-        <span className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-          {title}
-          {hasActive && <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.primary, display: "inline-block" }} />}
-        </span>
-        {open ? <ChevronUp size={16} style={{ color: COLORS.textSecondary }} /> : <ChevronDown size={16} style={{ color: COLORS.textSecondary }} />}
-      </button>
-      {open && <div className="px-5 pb-4 space-y-1">{children}</div>}
-    </div>
-  );
-}
-
-// Một option trong nhóm facet: checkbox + nhãn + số lượng (drill-down count).
-function FacetOptionRow({ label, count, checked, onToggle }: {
-  label: string;
-  count: number | null;
-  checked: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <label
-      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer"
-      style={{ background: checked ? `${COLORS.primary}0A` : "transparent" }}
-    >
-      <span className="flex items-center gap-2.5">
-        <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: COLORS.primary, width: 15, height: 15, cursor: "pointer" }} />
-        <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{label}</span>
-      </span>
-      <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{count !== null ? `(${count})` : ""}</span>
-    </label>
-  );
-}
+// FilterChip/FacetGroup/FacetOptionRow chuyển sang shared FilterSortPanel.tsx
+// để dùng chung với màn Event Participants.
 
 function FilterInput({
   label,
