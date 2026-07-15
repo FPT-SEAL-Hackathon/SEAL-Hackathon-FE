@@ -33,6 +33,7 @@ export function StatusBadge({ status }: { status: string }) {
   const configs: Record<string, { bg: string; color: string; label: string; border: string }> = {
     forming:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Forming", border: "rgba(244,121,32,0.22)" },
     active:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Active",       border: "rgba(0,148,68,0.22)" },
+    inactive:      { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Inactive",     border: "rgba(100,70,30,0.14)" },
     pending_approval: { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Pending Approval", border: "rgba(245,158,11,0.22)" },
     temporary:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Temporary", border: "rgba(244,121,32,0.22)" },
     unverified:    { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Unverified", border: "rgba(100,70,30,0.14)" },
