@@ -1,13 +1,9 @@
 import {
-  Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
-  GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
-  Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
-  TrendingUp, Clock, Activity, Download, Send, Search, Filter,
-  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader, Database
+  Bell, Send,
 } from "lucide-react";
 import {
-  StatCard, Card, SectionHeader, COLORS, StatusBadge,
-  ProgressBar, Button, DataTable, TimelineItem
+  Card, SectionHeader, COLORS, StatusBadge,
+  Button,
 } from "@/components/shared/UIComponents";
 
 interface AdminViewProps {
@@ -18,90 +14,7 @@ export function AdminNotificationsView({ context }: AdminViewProps) {
   const {
     t,
     onNavigate,
-    events,
-    categories,
-    rounds,
-    criteria,
-    users,
-    rankings,
-    auditLogs,
     broadcastHistory,
-    roleColors,
-    AWARD_TIER_OPTIONS,
-    apiEvents,
-    setApiEvents,
-    selectedEventId,
-    setSelectedEventId,
-    apiCategories,
-    setApiCategories,
-    apiRounds,
-    setApiRounds,
-    apiTeamEligibility,
-    setApiTeamEligibility,
-    apiRankings,
-    setApiRankings,
-    apiAwards,
-    setApiAwards,
-    apiCriteriaTemplates,
-    setApiCriteriaTemplates,
-    eventLoadError,
-    setEventLoadError,
-    categoryLoadError,
-    setCategoryLoadError,
-    dataExportLoading,
-    setDataExportLoading,
-    dataExportDone,
-    setDataExportDone,
-    dataExportError,
-    setDataExportError,
-    eventModal,
-    setEventModal,
-    categoryModal,
-    setCategoryModal,
-    roundModal,
-    setRoundModal,
-    assignJudgeModal,
-    setAssignJudgeModal,
-    userSearch,
-    setUserSearch,
-    approvedUsers,
-    setApprovedUsers,
-    showGuestJudgeForm,
-    setShowGuestJudgeForm,
-    guestJudgeForm,
-    setGuestJudgeForm,
-    guestJudgeSuccess,
-    setGuestJudgeSuccess,
-    rankingsComputed,
-    setRankingsComputed,
-    rankingsPublished,
-    setRankingsPublished,
-    disqualifiedTeams,
-    setDisqualifiedTeams,
-    disqualifyTarget,
-    setDisqualifyTarget,
-    disqualifyReason,
-    setDisqualifyReason,
-    awardPatternCategoryId,
-    setAwardPatternCategoryId,
-    awardPatterns,
-    setAwardPatterns,
-    awardPatternLoading,
-    setAwardPatternLoading,
-    awardPatternMessage,
-    setAwardPatternMessage,
-    awardPatternError,
-    setAwardPatternError,
-    autoGrantLimit,
-    setAutoGrantLimit,
-    autoGrantLoading,
-    setAutoGrantLoading,
-    autoGrantMessage,
-    setAutoGrantMessage,
-    autoGrantError,
-    setAutoGrantError,
-    autoGrantPreview,
-    setAutoGrantPreview,
     broadcastTitle,
     setBroadcastTitle,
     broadcastMessage,
@@ -109,43 +22,7 @@ export function AdminNotificationsView({ context }: AdminViewProps) {
     broadcastAudience,
     setBroadcastAudience,
     broadcastSent,
-    setBroadcastSent,
-    notificationTargetMode,
-    setNotificationTargetMode,
-    notificationTeamId,
-    setNotificationTeamId,
-    notificationEmail,
-    setNotificationEmail,
-    notificationTitle,
-    setNotificationTitle,
-    notificationMessage,
-    setNotificationMessage,
-    notificationSending,
-    setNotificationSending,
-    notificationStatus,
-    setNotificationStatus,
-    notificationError,
-    setNotificationError,
-    settingsSaved,
-    setSettingsSaved,
-    systemSettings,
-    setSystemSettings,
-    filteredUsers,
-    updateAwardPattern,
-    addAwardPattern,
-    removeAwardPattern,
-    handleSaveAwardPatterns,
-    handleApproveUser,
-    handleGuestJudgeSubmit,
-    handleDisqualify,
-    handleDisqualifyConfirm,
-    handleComputeRankings,
-    handlePublishRankings,
-    handleAutoGrantAwards,
     handleBroadcast,
-    handleSendTargetedNotification,
-    handleDataExport,
-    createEmptyAwardPattern
   } = context;
 
   return (
@@ -160,6 +37,7 @@ export function AdminNotificationsView({ context }: AdminViewProps) {
         }
       />
       <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6">
+        {/* Send Broadcast */}
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>{t("admin.broadcastSend")}</div>
           <div className="space-y-4">
@@ -213,18 +91,29 @@ export function AdminNotificationsView({ context }: AdminViewProps) {
           </div>
         </Card>
 
+        {/* Broadcast History */}
         <Card className="p-5">
           <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>{t("admin.broadcastHistory")}</div>
-          {broadcastHistory.map((b: any) => (
-            <div key={b.id} className="mb-4 p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{b.title}</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{b.message}</div>
-              <div className="flex items-center justify-between mt-2">
-                <span style={{ fontSize: 11, color: COLORS.textSecondary }}>{b.audience} - {b.sent}</span>
-                <StatusBadge status={b.status} />
-              </div>
+          {broadcastHistory.length === 0 ? (
+            <div className="rounded-xl p-6 text-center" style={{ background: COLORS.bg, border: `1px dashed ${COLORS.border}` }}>
+              <Bell size={28} className="mx-auto mb-2" style={{ color: COLORS.border }} />
+              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No broadcasts sent yet. Send a broadcast to see it here.</div>
             </div>
-          ))}
+          ) : (
+            broadcastHistory.map((b: any) => (
+              <div key={b.id} className="mb-4 p-3 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{b.title}</div>
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{b.message}</div>
+                <div className="flex items-center justify-between mt-2">
+                  <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                    {[b.audience, b.sent, typeof b.recipientCount === "number" ? `${b.recipientCount} recipient${b.recipientCount !== 1 ? "s" : ""}` : null]
+                      .filter(Boolean).join(" · ")}
+                  </span>
+                  <StatusBadge status={b.status} />
+                </div>
+              </div>
+            ))
+          )}
         </Card>
       </div>
     </>
