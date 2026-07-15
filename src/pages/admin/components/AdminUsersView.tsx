@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Edit, Loader, PlusCircle, RefreshCw, Save, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import {
   userService,
   type CreateUserRequest,
   type UpdateUserRequest,
+  type UserFacetsResponse,
   type UserManagementUser,
   type UserQueryParams,
 } from "@/features/users/api/userService";
@@ -136,21 +138,34 @@ function teamLabelFor(user: UserManagementUser) {
   return isStudentRole(user.role) ? user.teamName || "No team" : "N/A";
 }
 
+// "FPT_STUDENT,ORGANIZER" (URL) <-> ["FPT_STUDENT","ORGANIZER"] (state)
+function parseCsvParam(value: string | null): string[] {
+  if (!value) return [];
+  return value.split(",").map(item => item.trim()).filter(Boolean);
+}
+
 export function AdminUsersView() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [users, setUsers] = useState<UserManagementUser[]>([]);
-  const [filters, setFilters] = useState<UserQueryParams>({
-    search: "",
-    role: "",
-    teamName: "",
-    accountStatus: "",
-    joinedFrom: "",
-    joinedTo: "",
-    page: 0,
-    size: 10,
-    sortBy: "createdAt",
-    sortDir: "desc",
-  });
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  // Khởi tạo từ URL: share link / F5 / back-forward khôi phục đúng bộ lọc.
+  const [filters, setFilters] = useState<UserQueryParams>(() => ({
+    search: searchParams.get("q") ?? "",
+    teamName: searchParams.get("team") ?? "",
+    joinedFrom: searchParams.get("from") ?? "",
+    joinedTo: searchParams.get("to") ?? "",
+    page: Math.max(Number(searchParams.get("page") ?? 0) || 0, 0),
+    size: Number(searchParams.get("size") ?? 10) || 10,
+    sortBy: searchParams.get("sortBy") ?? "createdAt",
+    sortDir: searchParams.get("sortDir") === "asc" ? "asc" : "desc",
+  }));
+  // Facet multi-select: OR trong nhóm, AND giữa nhóm (mã canonical trong URL).
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(() => parseCsvParam(searchParams.get("role")));
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => parseCsvParam(searchParams.get("status")));
+  const [facets, setFacets] = useState<UserFacetsResponse | null>(null);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<{ role: boolean; status: boolean }>({ role: true, status: true });
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("q") ?? "");
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -159,6 +174,7 @@ export function AdminUsersView() {
   const [modal, setModal] = useState<UserModalState>(null);
   const [form, setForm] = useState<UserFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const lastWrittenQs = useRef<string>(searchParams.toString());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -168,19 +184,81 @@ export function AdminUsersView() {
     return () => window.clearTimeout(timer);
   }, [filters.search]);
 
+  // Serialize trạng thái filter -> query string (bỏ giá trị mặc định cho URL gọn).
+  const serializeToParams = () => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    if (selectedRoles.length > 0) params.set("role", selectedRoles.join(","));
+    if (selectedStatuses.length > 0) params.set("status", selectedStatuses.join(","));
+    if (filters.teamName) params.set("team", String(filters.teamName));
+    if (filters.joinedFrom) params.set("from", String(filters.joinedFrom));
+    if (filters.joinedTo) params.set("to", String(filters.joinedTo));
+    if ((filters.page ?? 0) > 0) params.set("page", String(filters.page));
+    if ((filters.size ?? 10) !== 10) params.set("size", String(filters.size));
+    if (filters.sortBy && filters.sortBy !== "createdAt") params.set("sortBy", String(filters.sortBy));
+    if (filters.sortDir && filters.sortDir !== "desc") params.set("sortDir", String(filters.sortDir));
+    return params;
+  };
+
+  // Ghi trạng thái vào URL (History API, replace để không spam lịch sử).
+  useEffect(() => {
+    const params = serializeToParams();
+    const qs = params.toString();
+    if (qs !== searchParams.toString()) {
+      lastWrittenQs.current = qs;
+      setSearchParams(params, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    debouncedSearch,
+    selectedRoles,
+    selectedStatuses,
+    filters.teamName,
+    filters.joinedFrom,
+    filters.joinedTo,
+    filters.page,
+    filters.size,
+    filters.sortBy,
+    filters.sortDir,
+  ]);
+
+  // Đọc lại khi URL đổi từ bên ngoài (back/forward) — guard tránh vòng lặp.
+  useEffect(() => {
+    const qs = searchParams.toString();
+    if (qs === lastWrittenQs.current) return;
+    lastWrittenQs.current = qs;
+    setFilters({
+      search: searchParams.get("q") ?? "",
+      teamName: searchParams.get("team") ?? "",
+      joinedFrom: searchParams.get("from") ?? "",
+      joinedTo: searchParams.get("to") ?? "",
+      page: Math.max(Number(searchParams.get("page") ?? 0) || 0, 0),
+      size: Number(searchParams.get("size") ?? 10) || 10,
+      sortBy: searchParams.get("sortBy") ?? "createdAt",
+      sortDir: searchParams.get("sortDir") === "asc" ? "asc" : "desc",
+    });
+    setSelectedRoles(parseCsvParam(searchParams.get("role")));
+    setSelectedStatuses(parseCsvParam(searchParams.get("status")));
+    setDebouncedSearch(searchParams.get("q") ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const buildQuery = (): UserQueryParams => ({
+    ...filters,
+    search: debouncedSearch || undefined,
+    role: selectedRoles.length > 0 ? selectedRoles : undefined,
+    status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+    accountStatus: undefined,
+    teamName: filters.teamName || undefined,
+    joinedFrom: filters.joinedFrom || undefined,
+    joinedTo: filters.joinedTo || undefined,
+  });
+
   const loadUsers = async () => {
     setLoading(true);
     setError("");
     try {
-      const page = await userService.getUsers({
-        ...filters,
-        search: debouncedSearch || undefined,
-        role: filters.role || undefined,
-        teamName: filters.teamName || undefined,
-        accountStatus: filters.accountStatus || undefined,
-        joinedFrom: filters.joinedFrom || undefined,
-        joinedTo: filters.joinedTo || undefined,
-      });
+      const page = await userService.getUsers(buildQuery());
       setUsers(page.content);
       setTotalElements(page.totalElements);
       setTotalPages(Math.max(page.totalPages, 1));
@@ -204,9 +282,9 @@ export function AdminUsersView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
-    filters.role,
+    selectedRoles,
+    selectedStatuses,
     filters.teamName,
-    filters.accountStatus,
     filters.joinedFrom,
     filters.joinedTo,
     filters.page,
@@ -215,9 +293,49 @@ export function AdminUsersView() {
     filters.sortDir,
   ]);
 
+  // Facet counts (drill-down) cập nhật theo bộ lọc — dùng cho số cạnh option + preview CTA.
+  useEffect(() => {
+    let cancelled = false;
+    userService.getUserFacets(buildQuery())
+      .then(data => {
+        if (!cancelled) setFacets(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFacets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, selectedRoles, selectedStatuses, filters.teamName, filters.joinedFrom, filters.joinedTo]);
+
   const setFilter = (key: keyof UserQueryParams, value: string | number) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key === "page" ? Number(value) : 0 }));
   };
+
+  // Tick/untick một option trong nhóm facet — reset page về 0 như đổi filter.
+  const toggleRole = (code: string) => {
+    setSelectedRoles(prev => prev.includes(code) ? prev.filter(item => item !== code) : [...prev, code]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const toggleStatus = (code: string) => {
+    setSelectedStatuses(prev => prev.includes(code) ? prev.filter(item => item !== code) : [...prev, code]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const clearAllFacets = () => {
+    setSelectedRoles([]);
+    setSelectedStatuses([]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const facetCount = (group: "roles" | "statuses", code: string): number | null => {
+    const option = facets?.[group]?.find(item => item.code === code);
+    return option ? option.count : null;
+  };
+
+  const activeFilterCount = selectedRoles.length + selectedStatuses.length;
 
   const openCreate = () => {
     setFieldErrors({});
@@ -414,15 +532,7 @@ export function AdminUsersView() {
             placeholder="Name, email, phone"
             icon={<Search size={14} />}
           />
-          <FilterSelect label="Role" value={filters.role ?? ""} onChange={value => setFilter("role", value)}>
-            <option value="">All roles</option>
-            {ROLE_OPTIONS.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
-          </FilterSelect>
           <FilterInput label="Team" value={filters.teamName ?? ""} onChange={value => setFilter("teamName", value)} placeholder="Team name" />
-          <FilterSelect label="Status" value={filters.accountStatus ?? ""} onChange={value => setFilter("accountStatus", value)}>
-            <option value="">All statuses</option>
-            {STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </FilterSelect>
           <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
           <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
           <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
@@ -437,7 +547,58 @@ export function AdminUsersView() {
             <option value="desc">Descending</option>
             <option value="asc">Ascending</option>
           </FilterSelect>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => setFilterPanelOpen(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all"
+              style={{
+                border: `1px solid ${activeFilterCount > 0 ? COLORS.primary : COLORS.border}`,
+                background: activeFilterCount > 0 ? `${COLORS.primary}10` : COLORS.bg,
+                color: activeFilterCount > 0 ? COLORS.primary : COLORS.textPrimary,
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              <SlidersHorizontal size={14} />
+              Filter Role &amp; Status
+              {activeFilterCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center rounded-full"
+                  style={{ minWidth: 18, height: 18, background: COLORS.primary, color: "#fff", fontSize: 11, fontWeight: 700 }}
+                >
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {selectedRoles.map(code => (
+              <FilterChip
+                key={`role-${code}`}
+                label={`Role: ${ROLE_OPTIONS.find(option => option.value === code)?.label ?? code}`}
+                onRemove={() => toggleRole(code)}
+              />
+            ))}
+            {selectedStatuses.map(code => (
+              <FilterChip
+                key={`status-${code}`}
+                label={`Status: ${STATUS_OPTIONS.find(option => option.value === code)?.label ?? code}`}
+                onRemove={() => toggleStatus(code)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={clearAllFacets}
+              style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
+            >
+              Clear All Filters
+            </button>
+          </div>
+        )}
       </Card>
 
       {error && (
@@ -556,6 +717,78 @@ export function AdminUsersView() {
           </div>
         </div>
       </Card>
+
+      {filterPanelOpen && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end"
+          style={{ background: "rgba(0,0,0,0.35)" }}
+          onClick={event => { if (event.target === event.currentTarget) setFilterPanelOpen(false); }}
+        >
+          <div
+            className="h-full w-full max-w-sm flex flex-col"
+            style={{ background: "#fff", boxShadow: "-12px 0 40px rgba(0,0,0,0.18)" }}
+          >
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+              <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>Filter Users</div>
+              <div className="flex items-center gap-3">
+                {activeFilterCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllFacets}
+                    style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
+                  >
+                    Clear All
+                  </button>
+                )}
+                <button type="button" onClick={() => setFilterPanelOpen(false)} style={{ color: COLORS.textSecondary, background: "none", border: "none", cursor: "pointer" }}>
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              <FacetGroup
+                title="Role"
+                open={openGroups.role}
+                hasActive={selectedRoles.length > 0}
+                onToggle={() => setOpenGroups(prev => ({ ...prev, role: !prev.role }))}
+              >
+                {ROLE_OPTIONS.map(option => (
+                  <FacetOptionRow
+                    key={option.value}
+                    label={option.label}
+                    count={facetCount("roles", option.value)}
+                    checked={selectedRoles.includes(option.value)}
+                    onToggle={() => toggleRole(option.value)}
+                  />
+                ))}
+              </FacetGroup>
+              <FacetGroup
+                title="Account Status"
+                open={openGroups.status}
+                hasActive={selectedStatuses.length > 0}
+                onToggle={() => setOpenGroups(prev => ({ ...prev, status: !prev.status }))}
+              >
+                {STATUS_OPTIONS.map(option => (
+                  <FacetOptionRow
+                    key={option.value}
+                    label={option.label}
+                    count={facetCount("statuses", option.value)}
+                    checked={selectedStatuses.includes(option.value)}
+                    onToggle={() => toggleStatus(option.value)}
+                  />
+                ))}
+              </FacetGroup>
+            </div>
+
+            <div className="px-5 py-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <Button variant="primary" size="md" className="w-full" onClick={() => setFilterPanelOpen(false)}>
+                {facets ? `Show ${facets.total} user${facets.total === 1 ? "" : "s"}` : "Apply Filters"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {modal && (
         <UserFormModal
@@ -682,6 +915,69 @@ function UserFormModal({
         </div>
       </Card>
     </div>
+  );
+}
+
+// Chip filter đang chọn — hiển thị trên bảng, gỡ từng cái bằng nút X.
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+      style={{ background: `${COLORS.primary}12`, color: COLORS.primary, fontSize: 12, fontWeight: 600, border: `1px solid ${COLORS.primary}30` }}
+    >
+      {label}
+      <button type="button" onClick={onRemove} style={{ display: "inline-flex", background: "none", border: "none", cursor: "pointer", color: "inherit" }} aria-label={`Remove ${label}`}>
+        <X size={12} />
+      </button>
+    </span>
+  );
+}
+
+// Nhóm accordion trong panel filter; dot cạnh tên khi nhóm có filter active.
+function FacetGroup({ title, open, hasActive, onToggle, children }: {
+  title: string;
+  open: boolean;
+  hasActive: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between px-5 py-4"
+        style={{ background: "none", border: "none", cursor: "pointer" }}
+      >
+        <span className="flex items-center gap-2" style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+          {title}
+          {hasActive && <span style={{ width: 7, height: 7, borderRadius: "50%", background: COLORS.primary, display: "inline-block" }} />}
+        </span>
+        {open ? <ChevronUp size={16} style={{ color: COLORS.textSecondary }} /> : <ChevronDown size={16} style={{ color: COLORS.textSecondary }} />}
+      </button>
+      {open && <div className="px-5 pb-4 space-y-1">{children}</div>}
+    </div>
+  );
+}
+
+// Một option trong nhóm facet: checkbox + nhãn + số lượng (drill-down count).
+function FacetOptionRow({ label, count, checked, onToggle }: {
+  label: string;
+  count: number | null;
+  checked: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label
+      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg cursor-pointer"
+      style={{ background: checked ? `${COLORS.primary}0A` : "transparent" }}
+    >
+      <span className="flex items-center gap-2.5">
+        <input type="checkbox" checked={checked} onChange={onToggle} style={{ accentColor: COLORS.primary, width: 15, height: 15, cursor: "pointer" }} />
+        <span style={{ fontSize: 13, color: COLORS.textPrimary }}>{label}</span>
+      </span>
+      <span style={{ fontSize: 12, color: COLORS.textSecondary }}>{count !== null ? `(${count})` : ""}</span>
+    </label>
   );
 }
 
