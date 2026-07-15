@@ -505,6 +505,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [feedbackError, setFeedbackError] = useState("");
   const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
   const [certificateCategoryId, setCertificateCategoryId] = useState("all");
+  const [certificateSelectedEventId, setCertificateSelectedEventId] = useState("");
   const [certificateLoading, setCertificateLoading] = useState(false);
   const [certificateError, setCertificateError] = useState("");
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
@@ -610,34 +611,42 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
   }, [currentPage, submissionTeams.length, user?.userId]);
 
+  // Khi vào trang certificates, init event từ storedTeam hoặc apiEvents
   useEffect(() => {
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
+    // Nếu chưa chọn event, ưu tiên dùng eventId từ storedTeam
+    setCertificateSelectedEventId(prev => {
+      if (prev) return prev;
+      return storedTeam?.eventId ?? "";
+    });
+    setCertificateCategoryId("all");
+  }, [currentPage, user?.userId]);
 
-    if (!storedTeam?.eventId) {
+  // Load awards khi event được chọn
+  useEffect(() => {
+    if (currentPage !== "certificates") return;
+    if (!certificateSelectedEventId) {
       setCertificateAwards([]);
       setCertificateError("");
-      setCertificateCategoryId("all");
       return;
     }
 
+    const storedTeam = getStoredActiveTeam(user?.userId);
     let cancelled = false;
     setCertificateLoading(true);
     setCertificateError("");
-    awardService.getByEvent(storedTeam.eventId)
+    awardService.getByEvent(certificateSelectedEventId)
       .then(awards => {
         if (cancelled) return;
+        // Chỉ lọc theo teamId nếu có, không lọc cứng theo categoryId
         const visibleAwards = awards.filter((award: any) => (
-          (!storedTeam.teamId || award.teamId === storedTeam.teamId)
-          && (!storedTeam.categoryId || award.categoryId === storedTeam.categoryId)
+          (!storedTeam?.teamId || award.teamId === storedTeam.teamId)
           && award.isPublished
         ));
         setCertificateAwards(visibleAwards);
-        setCertificateCategoryId(prev => {
-          if (prev === "all" || visibleAwards.some((award: any) => award.categoryId === prev)) return prev;
-          return storedTeam.categoryId ?? "all";
-        });
+        setCertificateCategoryId("all");
       })
       .catch(error => {
         if (cancelled) return;
@@ -651,7 +660,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return () => {
       cancelled = true;
     };
-  }, [currentPage, user?.userId]);
+  }, [currentPage, certificateSelectedEventId, user?.userId]);
 
   useEffect(() => {
     if (currentPage !== "submissions" || !activeTeamContext?.eventId) {
@@ -1706,10 +1715,79 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 };
 
   const renderCertificates = () => {
-    if (!activeTeamContext?.eventId) {
-      return (
-        <>
-          <SectionHeader title="Certificates" subtitle="View and download certificates by event category" />
+    // Danh sách events mà user đang tham gia (ACTIVE)
+    const joinedEvents = apiEvents.filter(ev =>
+      normalizeParticipationStatus(participations[ev.eventId]?.participantStatus ?? ev.participantStatus) === "ACTIVE",
+    );
+
+    const selectedCertEvent = joinedEvents.find(ev => ev.eventId === certificateSelectedEventId)
+      ?? apiEvents.find(ev => ev.eventId === certificateSelectedEventId);
+
+    const categoryOptions = Array.from(
+      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
+    );
+    const filteredAwards = certificateCategoryId === "all"
+      ? certificateAwards
+      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
+
+    return (
+      <>
+        <SectionHeader
+          title="Certificates"
+          subtitle={selectedCertEvent ? `Certificates for ${activeTeamContext?.teamName ?? "your team"}` : "View and download your hackathon certificates"}
+        />
+
+        {/* Event selector */}
+        <Card className="p-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+                <Calendar size={14} /> Event
+              </span>
+              <select
+                value={certificateSelectedEventId}
+                onChange={e => {
+                  setCertificateSelectedEventId(e.target.value);
+                  setCertificateCategoryId("all");
+                }}
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                disabled={apiEvents.length === 0}
+              >
+                <option value="">Select an event...</option>
+                {joinedEvents.map(ev => (
+                  <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
+                ))}
+                {/* Hiển thị thêm các events khác nếu user chưa join */}
+                {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
+                  <option key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
+                    {ev.eventName} (not joined)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+                <Target size={14} /> Category
+              </span>
+              <select
+                value={certificateCategoryId}
+                onChange={event => setCertificateCategoryId(event.target.value)}
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                disabled={certificateLoading || !certificateSelectedEventId}
+              >
+                <option value="all">All categories</option>
+                {categoryOptions.map(([categoryId, categoryName]) => (
+                  <option key={categoryId} value={categoryId}>{categoryName}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </Card>
+
+        {!certificateSelectedEventId && (
           <Card className="p-8">
             <div className="max-w-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -1720,9 +1798,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   <Award size={22} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>No active event team</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Select an event</div>
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
-                    Select or create a team first so certificates can be matched to your event and category.
+                    Choose an event above to view your certificates.
                   </div>
                 </div>
               </div>
@@ -1736,37 +1814,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               </div>
             </div>
           </Card>
-        </>
-      );
-    }
-
-    const categoryOptions = Array.from(
-      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
-    );
-    const filteredAwards = certificateCategoryId === "all"
-      ? certificateAwards
-      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
-
-    return (
-      <>
-        <SectionHeader
-          title="Certificates"
-          subtitle={`Certificates for ${activeTeamContext.teamName ?? "your team"}`}
-          action={
-            <select
-              value={certificateCategoryId}
-              onChange={event => setCertificateCategoryId(event.target.value)}
-              className="px-3 py-2 rounded-lg outline-none"
-              style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={certificateLoading || categoryOptions.length === 0}
-            >
-              <option value="all">All categories</option>
-              {categoryOptions.map(([categoryId, categoryName]) => (
-                <option key={categoryId} value={categoryId}>{categoryName}</option>
-              ))}
-            </select>
-          }
-        />
+        )}
 
         {certificateError && (
           <Card className="p-4">
