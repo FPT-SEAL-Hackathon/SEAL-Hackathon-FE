@@ -5,6 +5,8 @@ export interface TeamMemberResponse {
   userId: string;
   joinedAt: string;
   active: boolean;
+  participantStatus?: string;
+  participantStatusName?: string;
 }
 
 export interface TeamResponse {
@@ -109,12 +111,16 @@ export function getTeamStatusInfo(teamStatusId?: string | null, statusName?: str
   return { label: "Unknown", badge: "unverified" };
 }
 
-export function getTeamStatusInfoForTeam(team?: Pick<TeamResponse, "teamStatusId" | "teamStatusName" | "statusName" | "status"> | null) {
+export function getTeamStatusInfoForTeam(team?: Partial<Pick<TeamResponse, "teamStatusId" | "teamStatusName" | "statusName" | "status">> | null) {
   return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName ?? team?.statusName ?? team?.status);
 }
 
 export function isTeamActive(teamStatusId?: string | null, statusName?: string | null) {
   return getTeamStatusInfo(teamStatusId, statusName).badge === "active";
+}
+
+export function isTeamRejected(team?: Partial<Pick<TeamResponse, "teamStatusId" | "teamStatusName" | "statusName" | "status">> | null) {
+  return getTeamStatusInfoForTeam(team).badge === "rejected";
 }
 
 export function canOrganizerApproveTeam(
@@ -190,6 +196,8 @@ export interface TeamMemberDetailResponse {
   universityName: string;
   userTypeName: string;
   accountStatusName: string;
+  participantStatus?: string;
+  participantStatusName?: string;
   joinedAt: string;
   active: boolean;
 }
@@ -233,6 +241,8 @@ function normalizeMemberDetail(response: RawTeamMemberDetailResponse | BackendEn
     universityName: raw.universityName ?? raw.user?.universityName ?? "",
     userTypeName: raw.userTypeName ?? raw.user?.userTypeName ?? "",
     accountStatusName: raw.accountStatusName ?? raw.user?.accountStatusName ?? "",
+    participantStatus: raw.participantStatus,
+    participantStatusName: raw.participantStatusName,
     joinedAt: raw.joinedAt ?? "",
     active: raw.active ?? true,
   };
@@ -262,6 +272,7 @@ export interface TeamEligibilityMemberResponse {
   universityName: string;
   userTypeName: string;
   accountStatusName: string;
+  participantStatusName?: string;
   joinedAt: string;
   active: boolean;
   profileComplete: boolean;

@@ -3,12 +3,18 @@ import { api, ApiError, request } from "@/lib/api/apiClient";
 export type EventParticipantStatus =
   | "PENDING"
   | "ACTIVE"
-  | "REJECTED";
+  | "REJECTED"
+  | "SUSPENDED"
+  | "TEMPORARY"
+  | "UNVERIFIED";
 
 export const EVENT_PARTICIPANT_STATUSES: EventParticipantStatus[] = [
   "PENDING",
   "ACTIVE",
   "REJECTED",
+  "SUSPENDED",
+  "TEMPORARY",
+  "UNVERIFIED",
 ];
 
 export interface EventParticipantResponse {
@@ -141,7 +147,9 @@ function normalizeParticipant(participant: RawParticipantRecord): EventParticipa
 function normalizeParticipantStatus(status: unknown): EventParticipantStatus {
   const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
   if (value === "PENDING_APPROVAL") return "PENDING";
-  if (value === "ACTIVE" || value === "REJECTED" || value === "PENDING") return value;
+  if (EVENT_PARTICIPANT_STATUSES.includes(value as EventParticipantStatus)) {
+    return value as EventParticipantStatus;
+  }
   return "PENDING";
 }
 

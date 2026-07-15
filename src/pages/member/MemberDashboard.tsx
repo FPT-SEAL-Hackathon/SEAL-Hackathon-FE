@@ -145,18 +145,26 @@ const participantStatusLabels: Record<EventCardParticipationStatus, string> = {
   PENDING: "Pending Approval",
   ACTIVE: "Approved",
   REJECTED: "Rejected",
+  SUSPENDED: "Suspended",
+  TEMPORARY: "Temporary",
+  UNVERIFIED: "Unverified",
 };
 
 const restrictedParticipationMessage: Record<Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">, string> = {
   PENDING: "Waiting for organizer approval.",
   REJECTED: "Registration rejected.",
+  SUSPENDED: "Your participation in this event is suspended.",
+  TEMPORARY: "Your participation is temporary and awaiting organizer review.",
+  UNVERIFIED: "Your participation is unverified. Please complete the required verification.",
 };
 
 function normalizeParticipationStatus(status?: string | null): EventCardParticipationStatus {
   const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
   if (!value || value === "NOT_REGISTERED") return "NOT_REGISTERED";
   if (value === "PENDING_APPROVAL") return "PENDING";
-  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED") return value as EventCardParticipationStatus;
+  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "TEMPORARY" || value === "UNVERIFIED") {
+    return value as EventCardParticipationStatus;
+  }
   return "NOT_REGISTERED";
 }
 
@@ -1325,13 +1333,15 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setApiEvents(prev => prev.map(event => event.eventId === eventId ? {
         ...event,
         eventParticipantId: participation.eventParticipantId ?? event.eventParticipantId,
-        participantStatus: nextStatus === "ACTIVE" ? "ACTIVE" : "PENDING",
+        participantStatus: nextStatus,
         rejectedReason: null,
         appliedAt: participation.appliedAt ?? event.appliedAt,
         approvedAt: null,
       } : event));
       const successMessage = nextStatus === "ACTIVE"
         ? "Registration approved."
+        : nextStatus === "SUSPENDED"
+          ? "Registration submitted, but your participation is currently suspended."
         : "Registration submitted. Waiting for organizer approval.";
       setEventActionMessage(prev => ({ ...prev, [eventId]: successMessage }));
       toast.success(successMessage);

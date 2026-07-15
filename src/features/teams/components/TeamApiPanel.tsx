@@ -25,6 +25,7 @@ import { categoryService, type CategoryResponse } from "@/features/categories/ap
 import {
   teamService,
   getTeamStatusInfoForTeam,
+  isTeamRejected,
   type JoinTeamRequestResponse,
   type TeamMemberDetailResponse,
   type TeamMemberResponse,
@@ -180,6 +181,7 @@ function rememberEventNames(events: EventResponse[]) {
 }
 
 function saveActiveTeam(team: TeamResponse, currentUserId?: string) {
+  if (isTeamRejected(team)) return;
   try {
     localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify({
       teamId: team.teamId,
@@ -328,7 +330,10 @@ function getStoredActiveTeam(currentUserId?: string): { teamId: string } | null 
       leaderUserId?: string;
       userId?: string;
       memberUserIds?: string[];
+      teamStatusId?: string;
+      teamStatusName?: string;
     };
+    if (isTeamRejected(team)) return null;
     const belongsToUser = !currentUserId
       || team.userId === currentUserId
       || team.leaderUserId === currentUserId
@@ -476,6 +481,10 @@ export function TeamApiPanel({
     nextPanelMode: TeamPanelMode = "current",
     knownTeams = userTeams,
   ) => {
+    if (isTeamRejected(team)) {
+      clearTeamLocally(team.teamId, false, team.eventId);
+      return;
+    }
     loadedMemberDetailsTeamIdRef.current = null;
     setMemberDetails(prev => ({ ...readStoredMemberDetails(), ...prev }));
     void loadTeamMemberDetails(team, mergeTeams(knownTeams, [team]));
@@ -841,7 +850,7 @@ export function TeamApiPanel({
         if (!teamId) return [] as TeamResponse[];
 
         const team = await teamService.getById(teamId);
-        return userBelongsToTeam(team, currentUserId) ? [team] : [] as TeamResponse[];
+        return userBelongsToTeam(team, currentUserId) && !isTeamRejected(team) ? [team] : [] as TeamResponse[];
       },
       teams => {
         const selected = teams.find(team => team.teamId === teamId) ?? teams[0];

@@ -1,4 +1,4 @@
-import { getTeamStatusInfoForTeam, teamService, type TeamResponse } from "@/features/teams/api/teamService";
+import { getTeamStatusInfoForTeam, isTeamRejected, teamService, type TeamResponse } from "@/features/teams/api/teamService";
 
 export const USER_TEAMS_STORAGE_KEY = "seal_user_teams";
 
@@ -17,11 +17,11 @@ export function userBelongsToTeam(team: TeamResponse, userId?: string) {
 }
 
 export function isCurrentUserTeam(team: TeamResponse, userId?: string) {
-  return userBelongsToTeam(team, userId);
+  return userBelongsToTeam(team, userId) && !isTeamRejected(team);
 }
 
 async function verifyCurrentMembership(team: TeamResponse, userId: string, options: DiscoverUserTeamsOptions = {}) {
-  if (!userBelongsToTeam(team, userId)) return false;
+  if (!isCurrentUserTeam(team, userId)) return false;
   if (options.activeOnly && getTeamStatusInfoForTeam(team).badge !== "active") return false;
 
   try {

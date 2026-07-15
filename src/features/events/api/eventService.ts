@@ -18,7 +18,10 @@ export type UserParticipationStatus =
   | "NOT_REGISTERED"
   | "PENDING"
   | "ACTIVE"
-  | "REJECTED";
+  | "REJECTED"
+  | "SUSPENDED"
+  | "TEMPORARY"
+  | "UNVERIFIED";
 
 export interface EventResponse {
   eventId: string;
@@ -84,6 +87,9 @@ const PARTICIPANT_STATUSES = new Set([
   "PENDING_APPROVAL",
   "ACTIVE",
   "REJECTED",
+  "SUSPENDED",
+  "TEMPORARY",
+  "UNVERIFIED",
 ]);
 
 function isRecord(value: unknown): value is RawEventRecord {
