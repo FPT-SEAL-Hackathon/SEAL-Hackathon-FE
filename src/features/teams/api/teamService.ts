@@ -4,6 +4,7 @@ export interface TeamMemberResponse {
   teamMemberId: string;
   userId: string;
   joinedAt: string;
+  leftAt?: string | null;
   active: boolean;
   participantStatus?: string;
   participantStatusName?: string;
@@ -14,6 +15,7 @@ export interface TeamResponse {
   eventId: string;
   categoryId: string;
   teamName: string;
+  rawTeamName?: string;
   teamStatusId: string;
   teamStatusName?: string;
   statusName?: string;
@@ -59,6 +61,8 @@ export const TEAM_STATUS_IDS = {
   FORMING: "60000000-0000-0000-0000-000000000001",
   ACTIVE: "60000000-0000-0000-0000-000000000002",
   DISQUALIFIED: "60000000-0000-0000-0000-000000000003",
+  PENDING: "60000000-0000-0000-0000-000000000005",
+  REJECTED: "60000000-0000-0000-0000-000000000006",
   WITHDRAWN: "60000000-0000-0000-0000-000000000004",
 } as const;
 
@@ -78,6 +82,10 @@ export function getTeamStatusInfo(teamStatusId?: string | null, statusName?: str
       return { label: "Active", badge: "active" };
     case TEAM_STATUS_IDS.DISQUALIFIED:
       return { label: "Disqualified", badge: "disqualified" };
+    case TEAM_STATUS_IDS.PENDING:
+      return { label: "Pending Approval", badge: "pending_approval" };
+    case TEAM_STATUS_IDS.REJECTED:
+      return { label: "Rejected", badge: "rejected" };
     case TEAM_STATUS_IDS.WITHDRAWN:
       return { label: "Withdrawn", badge: "withdrawn" };
   }
@@ -149,11 +157,18 @@ function unwrapArray<T>(response: T[] | BackendEnvelope<T[]>): T[] {
   throw new Error(response.message ?? "Unexpected teams response from server.");
 }
 
+const REJECTED_TEAM_NAME_SUFFIX_PATTERN = /\s*\[rejected:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]$/i;
+
+export function displayTeamName(teamName?: string | null) {
+  return (teamName ?? "").replace(REJECTED_TEAM_NAME_SUFFIX_PATTERN, "").trim();
+}
+
 function normalizeTeamResponse(response: RawTeamResponse | BackendEnvelope<RawTeamResponse>): TeamResponse {
   const raw = unwrapTeamResponse(response);
   const status = typeof raw.teamStatus === "object" ? raw.teamStatus : undefined;
   const statusText = typeof raw.teamStatus === "string" ? raw.teamStatus : undefined;
   const teamStatusId = raw.teamStatusId ?? status?.teamStatusId ?? status?.statusId ?? raw.statusId ?? status?.id ?? "";
+  const rawTeamName = raw.teamName ?? raw.name ?? "";
   const teamStatusName = raw.teamStatusName
     ?? raw.statusName
     ?? raw.teamStatusCode
@@ -170,7 +185,8 @@ function normalizeTeamResponse(response: RawTeamResponse | BackendEnvelope<RawTe
     teamId: raw.teamId ?? raw.id ?? "",
     eventId: raw.eventId ?? raw.event?.eventId ?? raw.event?.id ?? "",
     categoryId: raw.categoryId ?? raw.category?.categoryId ?? raw.category?.id ?? "",
-    teamName: raw.teamName ?? raw.name ?? "",
+    teamName: displayTeamName(rawTeamName),
+    rawTeamName,
     teamStatusId,
     teamStatusName,
     members: raw.members ?? [],
@@ -199,6 +215,7 @@ export interface TeamMemberDetailResponse {
   participantStatus?: string;
   participantStatusName?: string;
   joinedAt: string;
+  leftAt?: string | null;
   active: boolean;
 }
 
@@ -244,6 +261,7 @@ function normalizeMemberDetail(response: RawTeamMemberDetailResponse | BackendEn
     participantStatus: raw.participantStatus,
     participantStatusName: raw.participantStatusName,
     joinedAt: raw.joinedAt ?? "",
+    leftAt: raw.leftAt,
     active: raw.active ?? true,
   };
 }
@@ -274,6 +292,7 @@ export interface TeamEligibilityMemberResponse {
   accountStatusName: string;
   participantStatusName?: string;
   joinedAt: string;
+  leftAt?: string | null;
   active: boolean;
   profileComplete: boolean;
   issues: string[];

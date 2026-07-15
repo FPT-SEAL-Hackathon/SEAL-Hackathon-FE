@@ -64,7 +64,7 @@ export function AdminTeamApprovalView({ context }: any) {
         tone: "success",
         text: approved
           ? `Team "${team.teamName}" approved. All member registrations are now ACTIVE.`
-          : `Team "${team.teamName}" rejected. All member registrations are now REJECTED.`,
+          : `Team "${team.teamName}" rejected. Members were deactivated and can join or create another team for this event.`,
       });
       setRejectingTeamId(null);
       setRejectNote("");
@@ -249,7 +249,7 @@ export function AdminTeamApprovalView({ context }: any) {
                 <table className="w-full" style={{ borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: COLORS.bg }}>
-                      {["Name", "Email", "Student Code", "University", "Profile", "Issues"].map(header => (
+                      {["Name", "Email", "Student Code", "University", "Membership", "Profile", "Issues"].map(header => (
                         <th
                           key={header}
                           className="text-left px-3 py-2"
@@ -274,6 +274,16 @@ export function AdminTeamApprovalView({ context }: any) {
                           {member.fptStudentCode || member.externalStudentCode || "-"}
                         </td>
                         <td className="px-3 py-2" style={{ fontSize: 13, color: COLORS.textSecondary }}>{member.universityName || "-"}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-col gap-1">
+                            <StatusBadge status={member.active ? "active" : "inactive"} />
+                            {member.leftAt && (
+                              <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                                Left: {new Date(member.leftAt).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3 py-2">{badge(Boolean(member.profileComplete), "Complete", "Incomplete")}</td>
                         <td className="px-3 py-2" style={{ fontSize: 12, color: COLORS.error }}>
                           {member.issues?.length ? member.issues.join("; ") : ""}

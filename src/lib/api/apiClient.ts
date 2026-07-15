@@ -168,7 +168,10 @@ function messageForStatus(status?: number, code?: string, message?: string) {
   if (status === 403) return message || "You do not have permission to perform this action.";
   if (status === 409 || code === "REGISTRATION_CONFLICT") return message || "This action conflicts with the current resource state.";
   if (code === "DUPLICATE_RESOURCE") return message || "Duplicate resource.";
-  if (status === 500) return "Server error. Please try again later.";
+  if (status === 500) {
+    if (message === "Team name already exists in this event") return message;
+    return "Server error. Please try again later.";
+  }
   if (code === "BAD_REQUEST") return message || "Bad request.";
   return message || "Request failed.";
 }
