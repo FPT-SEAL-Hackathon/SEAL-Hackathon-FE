@@ -60,7 +60,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   team: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   events: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
   "event-participants": [...ORGANIZER_ROLES],
-  "team-approval": [...ORGANIZER_ROLES],
+  "team-approval": [],
   leaderboard: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   certificates: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   notifications: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
