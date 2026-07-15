@@ -1,4 +1,4 @@
-import { TEAM_STATUS_IDS, teamService, type TeamResponse } from "@/features/teams/api/teamService";
+import { getTeamStatusInfoForTeam, teamService, type TeamResponse } from "@/features/teams/api/teamService";
 
 export const USER_TEAMS_STORAGE_KEY = "seal_user_teams";
 
@@ -6,17 +6,30 @@ type EventLike = {
   eventId?: string;
 };
 
+type DiscoverUserTeamsOptions = {
+  activeOnly?: boolean;
+};
+
 export function userBelongsToTeam(team: TeamResponse, userId?: string) {
   if (!userId) return false;
   return team.leaderUserId === userId
-    || team.members.some(member => member.userId === userId);
+    || team.members.some(member => member.userId === userId && member.active !== false);
 }
 
 export function isCurrentUserTeam(team: TeamResponse, userId?: string) {
+  return userBelongsToTeam(team, userId);
+}
+
+async function verifyCurrentMembership(team: TeamResponse, userId: string, options: DiscoverUserTeamsOptions = {}) {
   if (!userBelongsToTeam(team, userId)) return false;
-  const statusId = team.teamStatusId?.toLowerCase();
-  return statusId === TEAM_STATUS_IDS.FORMING
-    || statusId === TEAM_STATUS_IDS.ACTIVE;
+  if (options.activeOnly && getTeamStatusInfoForTeam(team).badge !== "active") return false;
+
+  try {
+    const detail = await teamService.getMemberDetail(team.teamId, userId);
+    return detail.userId === userId && detail.active !== false;
+  } catch {
+    return false;
+  }
 }
 
 export function sortTeamsByNewest(teams: TeamResponse[]) {
@@ -71,7 +84,7 @@ export function rememberUserTeam(team: TeamResponse, userId?: string) {
   saveStoredUserTeams(mergeTeams(getStoredUserTeams(userId), [team]), userId);
 }
 
-export async function discoverUserTeamsForEvents(events: EventLike[], userId?: string) {
+export async function discoverUserTeamsForEvents(events: EventLike[], userId?: string, options: DiscoverUserTeamsOptions = {}) {
   if (!userId) return [] as TeamResponse[];
   const cachedTeams = getStoredUserTeams(userId);
 
@@ -86,16 +99,21 @@ export async function discoverUserTeamsForEvents(events: EventLike[], userId?: s
     eventIds.map(eventId => teamService.getByEvent(eventId).catch(() => [] as TeamResponse[])),
   );
 
-  const teamsById = new Map<string, TeamResponse>();
+  const candidatesById = new Map<string, TeamResponse>();
   results
     .flat()
     .filter(team => isCurrentUserTeam(team, userId))
+    .filter(team => !options.activeOnly || getTeamStatusInfoForTeam(team).badge === "active")
     .forEach(team => {
-      if (team.teamId) teamsById.set(team.teamId, team);
+      if (team.teamId) candidatesById.set(team.teamId, team);
     });
 
-  const discoveredTeams = Array.from(teamsById.values());
-  const mergedTeams = mergeTeams(discoveredTeams, cachedTeams);
-  saveStoredUserTeams(mergedTeams, userId);
-  return mergedTeams;
+  const verifiedTeams = await Promise.all(
+    Array.from(candidatesById.values()).map(async team => (
+      await verifyCurrentMembership(team, userId, options) ? team : null
+    )),
+  );
+  const discoveredTeams = verifiedTeams.filter((team): team is TeamResponse => Boolean(team));
+  saveStoredUserTeams(discoveredTeams, userId);
+  return discoveredTeams;
 }

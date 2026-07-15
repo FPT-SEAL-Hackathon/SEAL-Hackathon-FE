@@ -13,32 +13,135 @@ import {
 } from "lucide-react";
 import { Button, Card, COLORS, StatusBadge } from "@/components/shared/UIComponents";
 import {
+  canOrganizerApproveTeam,
   getTeamStatusInfo,
   teamService,
   type TeamEligibilityReviewResponse,
   type TeamEligibilityMemberResponse,
+  type TeamMemberDetailResponse,
+  type TeamResponse,
 } from "@/features/teams/api/teamService";
 import type { Category } from "@/features/events/types/category";
+import type { EventResponse } from "@/features/events/api/eventService";
 import { useCategoryContext } from "../context/CategoryContext";
+import {
+  eventParticipantService,
+  type EventParticipantResponse,
+} from "@/features/eventParticipants/api/eventParticipantService";
+import { userService, type UserManagementUser } from "@/features/users/api/userService";
 
 interface EventTeamsSectionProps {
   eventId: string;
+  event?: EventResponse;
   //categories: Category[];
 }
 
-export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; onOpen: () => void }) {
+function activeMemberCountForTeam(
+  team: TeamEligibilityReviewResponse,
+  eventTeam?: TeamResponse,
+) {
+  const eventTeamMembers = eventTeam?.members ?? [];
+  const reviewMembers = team.members ?? [];
+  if (eventTeamMembers.length > 0) {
+    return eventTeamMembers.filter(member => member.active !== false).length;
+  }
+  if (reviewMembers.length > 0) {
+    return reviewMembers.filter(member => member.active !== false).length;
+  }
+  return team.activeMemberCount ?? 0;
+}
+
+function teamResponseToEligibilityReview(
+  team: TeamResponse,
+  event?: EventResponse,
+): TeamEligibilityReviewResponse {
+  const activeMemberCount = team.activeMemberCount ?? team.members.filter(member => member.active !== false).length;
+  const minTeamSize = team.minTeamSize ?? event?.minTeamSize ?? 0;
+  const maxTeamSize = team.maxTeamSize ?? event?.maxTeamSize ?? 0;
+  const teamSizeEligible = !minTeamSize || activeMemberCount >= minTeamSize;
+  const withinMaximumSize = !maxTeamSize || activeMemberCount <= maxTeamSize;
+
+  return {
+    teamId: team.teamId,
+    eventId: team.eventId,
+    categoryId: team.categoryId,
+    teamName: team.teamName,
+    teamStatusId: team.teamStatusId,
+    teamStatusName: team.teamStatusName,
+    leaderUserId: team.leaderUserId,
+    minTeamSize,
+    maxTeamSize,
+    activeMemberCount,
+    teamSizeEligible: team.teamSizeEligible ?? (teamSizeEligible && withinMaximumSize),
+    membersInfoComplete: team.membersInfoComplete ?? true,
+    eligibleForCompetition: team.teamSizeEligible ?? (teamSizeEligible && withinMaximumSize),
+    issues: team.approvalIssues ?? [],
+    canRequestApproval: team.canRequestApproval,
+    approvalIssues: team.approvalIssues,
+    members: team.members.map(member => ({
+      teamMemberId: member.teamMemberId,
+      userId: member.userId,
+      fullName: member.userId,
+      email: "",
+      phone: "",
+      fptStudentCode: "",
+      externalStudentCode: "",
+      universityName: "",
+      userTypeName: "",
+      accountStatusName: "",
+      joinedAt: member.joinedAt,
+      active: member.active,
+      profileComplete: true,
+      issues: [],
+    })),
+  };
+}
+
+function mergeReviewAndEventTeams(
+  reviewTeams: TeamEligibilityReviewResponse[],
+  eventTeams: TeamResponse[],
+  event?: EventResponse,
+) {
+  const eventTeamsById = new Map(eventTeams.map(team => [team.teamId, team]));
+  const mergedTeamsById = new Map<string, TeamEligibilityReviewResponse>();
+
+  reviewTeams.forEach(team => {
+    const eventTeam = eventTeamsById.get(team.teamId);
+    const activeMemberCount = activeMemberCountForTeam(team, eventTeam);
+
+    mergedTeamsById.set(team.teamId, {
+      ...team,
+      teamStatusId: eventTeam?.teamStatusId ?? team.teamStatusId,
+      teamStatusName: eventTeam?.teamStatusName ?? team.teamStatusName,
+      activeMemberCount,
+    });
+  });
+
+  eventTeams.forEach(eventTeam => {
+    if (mergedTeamsById.has(eventTeam.teamId)) return;
+    mergedTeamsById.set(eventTeam.teamId, teamResponseToEligibilityReview(eventTeam, event));
+  });
+
+  return Array.from(mergedTeamsById.values());
+}
+
+export function EventTeamsSummaryCard({ eventId, event, onOpen }: { eventId: string; event?: EventResponse; onOpen: () => void }) {
   const [summary, setSummary] = useState({ teams: 0, participants: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    teamService.reviewEligibility(eventId)
-      .then(teams => {
+    Promise.all([
+      teamService.reviewEligibility(eventId),
+      teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
+    ])
+      .then(([teams, eventTeams]) => {
         if (cancelled) return;
+        const visibleTeams = mergeReviewAndEventTeams(teams, eventTeams, event);
         setSummary({
-          teams: teams.length,
-          participants: teams.reduce((total, team) => total + team.activeMemberCount, 0),
+          teams: visibleTeams.length,
+          participants: visibleTeams.reduce((total, team) => total + team.activeMemberCount, 0),
         });
       })
       .catch(() => {
@@ -50,7 +153,7 @@ export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; on
     return () => {
       cancelled = true;
     };
-  }, [eventId]);
+  }, [eventId, event]);
 
   return (
     <Card className="p-5">
@@ -86,7 +189,7 @@ export function EventTeamsSummaryCard({ eventId, onOpen }: { eventId: string; on
   );
 }
 
-export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
+export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const [teams, setTeams] = useState<TeamEligibilityReviewResponse[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamEligibilityReviewResponse | null>(null);
   const [disqualifyTarget, setDisqualifyTarget] = useState<TeamEligibilityReviewResponse | null>(null);
@@ -94,6 +197,7 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
   const [disqualifyReason, setDisqualifyReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionTeamId, setActionTeamId] = useState("");
+  const [viewTeamId, setViewTeamId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const { categories } = useCategoryContext();
@@ -102,8 +206,12 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
     setLoading(true);
     setError("");
     try {
-      const data = await teamService.reviewEligibility(eventId);
-      const sorted = [...data].sort((left, right) => left.teamName.localeCompare(right.teamName));
+      const [data, eventTeams] = await Promise.all([
+        teamService.reviewEligibility(eventId),
+        teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
+      ]);
+      const enrichedTeams = mergeReviewAndEventTeams(data, eventTeams, event);
+      const sorted = [...enrichedTeams].sort((left, right) => left.teamName.localeCompare(right.teamName));
       setTeams(sorted);
       setSelectedTeam(current => current
         ? sorted.find(team => team.teamId === current.teamId) ?? null
@@ -124,8 +232,209 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
   const categoryName = (categoryId: string) =>
     categories.find(category => category.categoryId === categoryId)?.categoryName ?? "None";
 
+  const toEligibilityMember = (
+    member: TeamResponse["members"][number],
+    detail?: TeamMemberDetailResponse | null,
+  ): TeamEligibilityMemberResponse => {
+    const hasProfile = Boolean(detail?.fullName?.trim() || detail?.email?.trim());
+    return {
+      teamMemberId: member.teamMemberId,
+      userId: member.userId,
+      fullName: detail?.fullName || member.userId,
+      email: detail?.email || "",
+      phone: detail?.phone || "",
+      fptStudentCode: detail?.fptStudentCode || "",
+      externalStudentCode: detail?.externalStudentCode || "",
+      universityName: detail?.universityName || "",
+      userTypeName: detail?.userTypeName || "",
+      accountStatusName: detail?.accountStatusName || "",
+      joinedAt: member.joinedAt,
+      active: member.active,
+      profileComplete: hasProfile,
+      issues: hasProfile ? [] : ["Member profile could not be loaded"],
+    };
+  };
+
+  const participantBelongsToTeam = (participant: EventParticipantResponse, team: TeamEligibilityReviewResponse) => {
+    if (participant.eventId && participant.eventId !== eventId) return false;
+    if (participant.categoryId && participant.categoryId !== team.categoryId) return false;
+    if (participant.teamId) return participant.teamId === team.teamId;
+    return participant.teamName?.trim().toLowerCase() === team.teamName.trim().toLowerCase();
+  };
+
+  const participantToEligibilityMember = (participant: EventParticipantResponse): TeamEligibilityMemberResponse => {
+    const hasProfile = Boolean(participant.studentName?.trim() || participant.studentEmail?.trim());
+    return {
+      teamMemberId: participant.eventParticipantId || participant.studentId,
+      userId: participant.studentId,
+      fullName: participant.studentName || participant.studentEmail || participant.studentId,
+      email: participant.studentEmail || "",
+      phone: "",
+      fptStudentCode: participant.fptStudentCode || "",
+      externalStudentCode: participant.externalStudentCode || "",
+      universityName: participant.universityName || "",
+      userTypeName: "FPT Student",
+      accountStatusName: participant.participantStatus === "REJECTED" ? "Rejected" : "Active",
+      joinedAt: participant.appliedAt || participant.approvedAt || "",
+      active: participant.participantStatus !== "REJECTED",
+      profileComplete: hasProfile,
+      issues: hasProfile ? [] : ["Member profile could not be loaded"],
+    };
+  };
+
+  const userToEligibilityMember = (user: UserManagementUser): TeamEligibilityMemberResponse => {
+    const hasProfile = Boolean(user.fullName?.trim() || user.email?.trim());
+    return {
+      teamMemberId: user.userId,
+      userId: user.userId,
+      fullName: user.fullName || user.email || user.userId,
+      email: user.email || "",
+      phone: user.phone || "",
+      fptStudentCode: user.fptStudentCode || "",
+      externalStudentCode: user.externalStudentCode || "",
+      universityName: user.universityName || "",
+      userTypeName: user.roleName || user.role || "",
+      accountStatusName: user.accountStatusName || user.accountStatus || "",
+      joinedAt: user.createdAt || "",
+      active: user.accountStatus !== "REJECTED",
+      profileComplete: hasProfile,
+      issues: hasProfile ? [] : ["Member profile could not be loaded"],
+    };
+  };
+
+  const mergeLatestTeamMembers = async (team: TeamEligibilityReviewResponse) => {
+    const [latestTeam, eventTeams, participantPage, usersPage] = await Promise.all([
+      teamService.getById(team.teamId),
+      teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
+      eventParticipantService.getOrganizerParticipants({
+        eventId,
+        categoryId: team.categoryId,
+        size: 500,
+      }).catch(() => null),
+      userService.getUsers({
+        teamName: team.teamName,
+        size: 500,
+      }).catch(() => null),
+    ]);
+    const eventTeam = eventTeams.find(item => item.teamId === team.teamId);
+    const sourceMembers = [
+      ...latestTeam.members,
+      ...(eventTeam?.members ?? []),
+    ];
+    const sourceMembersByUserId = new Map<string, TeamResponse["members"][number]>();
+    sourceMembers.forEach(member => {
+      if (member.userId) sourceMembersByUserId.set(member.userId, member);
+    });
+
+    const mergedMembers = new Map<string, TeamEligibilityMemberResponse>();
+    team.members.forEach(member => {
+      if (member.userId) mergedMembers.set(member.userId, member);
+    });
+
+    const participants = participantPage?.content
+      .filter(participant => participantBelongsToTeam(participant, team))
+      .filter(participant => participant.studentId) ?? [];
+    participants.forEach(participant => {
+      if (!mergedMembers.has(participant.studentId)) {
+        mergedMembers.set(participant.studentId, participantToEligibilityMember(participant));
+      }
+    });
+
+    const teamUsers = usersPage?.content
+      .filter(user => user.userId)
+      .filter(user => user.teamId === team.teamId || user.teamName?.trim().toLowerCase() === team.teamName.trim().toLowerCase()) ?? [];
+    teamUsers.forEach(user => {
+      if (!mergedMembers.has(user.userId)) {
+        mergedMembers.set(user.userId, userToEligibilityMember(user));
+      }
+    });
+
+    const existingMembers = new Map(Array.from(mergedMembers.values()).map(member => [member.userId, member]));
+    const missingMembers = Array.from(sourceMembersByUserId.values())
+      .filter(member => !existingMembers.has(member.userId));
+
+    const fetchedMembers = await Promise.all(
+      missingMembers.map(async member => {
+        const detail = await teamService.getMemberDetail(latestTeam.teamId, member.userId)
+          .catch(() => userService.getUserById(member.userId)
+            .then(userProfile => ({
+              teamMemberId: member.teamMemberId,
+              teamId: latestTeam.teamId,
+              userId: userProfile.userId,
+              fullName: userProfile.fullName,
+              email: userProfile.email,
+              phone: userProfile.phone ?? "",
+              fptStudentCode: userProfile.fptStudentCode ?? "",
+              externalStudentCode: userProfile.externalStudentCode ?? "",
+              universityName: userProfile.universityName ?? "",
+              userTypeName: userProfile.roleName ?? userProfile.role,
+              accountStatusName: userProfile.accountStatusName ?? userProfile.accountStatus,
+              joinedAt: member.joinedAt,
+              active: member.active,
+            }))
+            .catch(() => null));
+        return toEligibilityMember(member, detail);
+      }),
+    );
+
+    fetchedMembers.forEach(member => {
+      if (member.userId) mergedMembers.set(member.userId, member);
+    });
+
+    const activeMemberCount = latestTeam.activeMemberCount ?? Array.from(mergedMembers.values())
+      .filter(member => member.active).length;
+    const teamSizeEligible = latestTeam.teamSizeEligible ?? (
+      activeMemberCount >= team.minTeamSize && activeMemberCount <= team.maxTeamSize
+    );
+    const membersInfoComplete = latestTeam.membersInfoComplete ?? team.membersInfoComplete;
+    const issues = latestTeam.approvalIssues?.length
+      ? latestTeam.approvalIssues
+      : teamSizeEligible
+      ? team.issues.filter(issue => !issue.toLowerCase().includes("fewer active members"))
+      : team.issues;
+    const mergedTeam = {
+      ...team,
+      teamStatusId: eventTeam?.teamStatusId ?? latestTeam.teamStatusId,
+      teamStatusName: eventTeam?.teamStatusName ?? latestTeam.teamStatusName ?? team.teamStatusName,
+      activeMemberCount,
+      teamSizeEligible,
+      membersInfoComplete,
+      eligibleForCompetition: latestTeam.teamSizeEligible ?? (teamSizeEligible && membersInfoComplete),
+      canRequestApproval: latestTeam.canRequestApproval,
+      approvalIssues: latestTeam.approvalIssues,
+      issues,
+      members: Array.from(mergedMembers.values()),
+    };
+
+    setTeams(prev => prev.map(item => item.teamId === team.teamId ? mergedTeam : item));
+    return mergedTeam;
+  };
+
+  const openTeamDetail = async (team: TeamEligibilityReviewResponse) => {
+    setError("");
+    setDecisionNote("");
+    setSelectedTeam(team);
+    setViewTeamId(team.teamId);
+    try {
+      const mergedTeam = await mergeLatestTeamMembers(team);
+      setSelectedTeam(mergedTeam);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load latest team members.");
+    } finally {
+      setViewTeamId("");
+    }
+  };
+
   const decide = async (approved: boolean) => {
     if (!selectedTeam) return;
+    if (getTeamStatusInfo(selectedTeam.teamStatusId, selectedTeam.teamStatusName).badge !== "pending_approval") {
+      setError("Only Pending teams can be approved or rejected.");
+      return;
+    }
+    if (approved && !canOrganizerApproveTeam(selectedTeam)) {
+      setError("Resolve the approval issues before approving this team.");
+      return;
+    }
     if (!approved && !decisionNote.trim()) {
       setError("Enter a rejection reason before rejecting this team.");
       return;
@@ -174,7 +483,7 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
           <div>
             <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary }}>Team Management</div>
             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-              {teams.length} team(s) registered for this event
+              {teams.length} team(s) found for this event
             </div>
           </div>
           <Button
@@ -202,13 +511,13 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
         {!loading && teams.length === 0 && (
           <div className="rounded-xl p-6 text-center" style={{ border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary }}>
             <Users size={28} className="mx-auto mb-2" />
-            No teams registered for this event.
+            No teams found for this event.
           </div>
         )}
 
         <div className="space-y-2">
           {teams.map(team => {
-            const status = getTeamStatusInfo(team.teamStatusId);
+            const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
             const isActive = status.badge === "active";
             return (
               <div
@@ -226,14 +535,11 @@ export function EventTeamsSection({ eventId, }: EventTeamsSectionProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon={<Eye size={13} />}
-                  onClick={() => {
-                    setError("");
-                    setDecisionNote("");
-                    setSelectedTeam(team);
-                  }}
+                  icon={viewTeamId === team.teamId ? <Loader size={13} className="animate-spin" /> : <Eye size={13} />}
+                  disabled={viewTeamId === team.teamId}
+                  onClick={() => void openTeamDetail(team)}
                 >
-                  View
+                  {viewTeamId === team.teamId ? "Loading..." : "View"}
                 </Button>
                 <div className="md:w-28">
                   {isActive && (
@@ -344,8 +650,11 @@ function TeamDetailDialog({
   onApprove: () => void;
   onReject: () => void;
 }) {
-  const status = getTeamStatusInfo(team.teamStatusId);
+  const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
   const isPending = status.badge === "pending_approval";
+  const shouldShowApprovalIssues = status.badge === "forming" || isPending;
+  const canApprove = canOrganizerApproveTeam(team);
+  const issues = team.approvalIssues?.length ? team.approvalIssues : team.issues;
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(35,20,10,0.3)" }}>
@@ -370,9 +679,9 @@ function TeamDetailDialog({
           </button>
         </div>
 
-        {team.issues.length > 0 && (
+        {shouldShowApprovalIssues && issues.length > 0 && (
           <ul className="rounded-xl px-5 py-3 mt-4 list-disc" style={{ color: COLORS.error, background: `${COLORS.error}08`, fontSize: 12 }}>
-            {team.issues.map(issue => <li key={issue}>{issue}</li>)}
+            {issues.map(issue => <li key={issue}>{issue}</li>)}
           </ul>
         )}
 
@@ -408,7 +717,7 @@ function TeamDetailDialog({
                 variant="primary"
                 size="sm"
                 icon={isActing ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                disabled={isActing || !team.eligibleForCompetition}
+                disabled={isActing || !canApprove}
                 onClick={onApprove}
               >
                 Approve

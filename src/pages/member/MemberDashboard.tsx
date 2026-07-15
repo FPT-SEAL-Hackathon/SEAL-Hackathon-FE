@@ -16,13 +16,15 @@ import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { roundService } from "@/features/events/service/roundService";
 import type { Round } from "@/features/events/types/round";
+import { getRoundStatus } from "@/features/events/utils/roundUtils";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
-import { isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
+import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
@@ -48,6 +50,7 @@ type ActiveTeamContext = {
   teamName?: string;
   leaderUserId?: string;
   teamStatusId?: string;
+  teamStatusName?: string;
   userId?: string;
   memberUserIds?: string[];
 };
@@ -60,9 +63,14 @@ function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById
     teamName: team.teamName,
     leaderUserId: team.leaderUserId,
     teamStatusId: team.teamStatusId,
+    teamStatusName: team.teamStatusName,
     userId,
     memberUserIds: team.members.map(member => member.userId),
   };
+}
+
+function isActiveTeamContext(team?: ActiveTeamContext | null) {
+  return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "active";
 }
 
 function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
@@ -114,6 +122,7 @@ type MemberEvent = {
   description?: string;
   eventStartDate?: string;
   eventEndDate?: string;
+  registrationStart?: string;
   registrationEnd?: string;
   location?: string;
   mode?: string;
@@ -159,6 +168,7 @@ function mapEvent(event: EventResponse): MemberEvent {
     description: event.description ?? "",
     eventStartDate: event.eventStartDate,
     eventEndDate: event.eventEndDate,
+    registrationStart: event.registrationStart,
     registrationEnd: event.registrationEnd,
     location: event.location,
     eventStatus: typeof event.eventStatus === "object" ? event.eventStatus.eventStatusName : event.eventStatusName,
@@ -181,12 +191,22 @@ function mergeEventParticipation(event: MemberEvent, participation?: EventPartic
   };
 }
 
-function registrationUnavailableReason(eventStatus?: string | null) {
-  const status = eventStatus?.toUpperCase();
-  if (status === "DRAFT") return "Not open yet";
-  if (status === "CANCELLED") return "Cancelled";
-  if (status === "COMPLETED") return "Completed";
-  if (status === "ONGOING") return "Already started";
+function normalizeEventStatusKey(status?: string | null) {
+  return status?.trim().replace(/[\s-]+/g, "_").toUpperCase() ?? "";
+}
+
+function registrationUnavailableReason(event?: Pick<MemberEvent, "eventStatus" | "registrationStart" | "registrationEnd"> | null) {
+  if (!event) return "Registration unavailable";
+
+  const status = normalizeEventStatusKey(String(event.eventStatus || ""));
+  if (status !== "REGISTRATION_OPEN") return "Registration not open";
+
+  const registrationStart = new Date(event.registrationStart ?? "").getTime();
+  const registrationEnd = new Date(event.registrationEnd ?? "").getTime();
+  const now = Date.now();
+  if (Number.isNaN(registrationStart) || now < registrationStart) return "Not open yet";
+  if (Number.isNaN(registrationEnd) || now > registrationEnd) return "Deadline passed";
+
   return "";
 }
 
@@ -231,10 +251,64 @@ function formatSubmissionDate(value?: string | null) {
   return value ? new Date(value).toLocaleString("en-US") : "Not submitted";
 }
 
+function parseDateTime(value?: string | null) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function normalizeRoundStatusName(round?: Round | null) {
+  return (getRoundStatus(round?.roundStatusId ?? "")?.statusName ?? "")
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+}
+
+function roundStatusLabel(round?: Round | null) {
+  return getRoundStatus(round?.roundStatusId ?? "")?.statusName?.trim() || "Unknown";
+}
+
+function getSubmissionRoundState(round?: Round | null) {
+  const now = Date.now();
+  const startTime = parseDateTime(round?.startDate);
+  const deadlineTime = parseDateTime(round?.submissionDeadline);
+  const status = normalizeRoundStatusName(round);
+  const hasStarted = !startTime || now >= startTime;
+  const deadlinePassed = Boolean(deadlineTime && now > deadlineTime);
+  const statusAllowsSubmission = status === "submission_open" || status === "open";
+  const statusClosed = ["judging", "completed", "closed"].includes(status);
+  const canSubmit = !!round
+    && isOfficialSubmissionRound(round)
+    && statusAllowsSubmission
+    && hasStarted
+    && !deadlinePassed;
+
+  let reason = "";
+  if (!round) {
+    reason = "Select a round to submit work.";
+  } else if (!isOfficialSubmissionRound(round)) {
+    reason = "Only official competition rounds accept team submissions.";
+  } else if (deadlinePassed) {
+    reason = "The submission deadline has passed.";
+  } else if (!hasStarted) {
+    reason = "Round has not started yet.";
+  } else if (!statusAllowsSubmission || statusClosed) {
+    reason = `Round is ${roundStatusLabel(round)} and is not accepting submissions.`;
+  }
+
+  return {
+    canSubmit,
+    canDownloadProblem: Boolean(round) && hasStarted,
+    deadlinePassed,
+    hasStarted,
+    statusAllowsSubmission,
+    statusClosed,
+    reason,
+  };
+}
+
 function isBeforeSubmissionDeadline(round?: Round) {
-  if (!round?.submissionDeadline) return true;
-  const deadline = new Date(round.submissionDeadline).getTime();
-  return Number.isNaN(deadline) || Date.now() <= deadline;
+  return !getSubmissionRoundState(round).deadlinePassed;
 }
 
 function isOfficialSubmissionRound(round: Round) {
@@ -257,6 +331,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
   const [teamInitialEventId, setTeamInitialEventId] = useState("");
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
+  const [leaderboardEventId, setLeaderboardEventId] = useState<string>("");
+  const [leaderboardRoundId, setLeaderboardRoundId] = useState("event");
+  const [leaderboardRounds, setLeaderboardRounds] = useState<Round[]>([]);
   const [teamMembers] = useState<MemberTeamMember[]>([]);
   const eventsRequestInFlightRef = useRef(false);
   const lastEventsLoadAtRef = useRef(0);
@@ -373,16 +450,42 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [allSubmissionRounds, setAllSubmissionRounds] = useState<Round[]>([]);
   const [submissionRoundsLoading, setSubmissionRoundsLoading] = useState(false);
   const [submissionStatus, setSubmissionStatus] = useState("");
+  const [submissionFieldErrors, setSubmissionFieldErrors] = useState<SubmissionUrlErrors>({});
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
   useEffect(() => {
     if (currentPage !== "leaderboard") return;
-    if (!activeTeamContext?.eventId || !activeTeamContext?.categoryId) return;
+    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (!targetEventId) return;
+
+    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
+    const targetCategoryId = team?.categoryId;
+    if (!targetCategoryId) return;
+
+    roundService.getByCategory(targetCategoryId)
+      .then(setLeaderboardRounds)
+      .catch(() => setLeaderboardRounds([]));
+  }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
+
+  useEffect(() => {
+    if (currentPage !== "leaderboard") return;
+    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (!targetEventId) return;
+
+    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
+    const targetCategoryId = team?.categoryId;
+    if (!targetCategoryId) return;
     
-    rankingService.getLeaderboard(activeTeamContext.eventId, activeTeamContext.categoryId)
-      .then(setApiLeaderboard)
-      .catch(() => { setApiLeaderboard([]); });
-  }, [currentPage, activeTeamContext?.eventId, activeTeamContext?.categoryId]);
+    if (leaderboardRoundId === "event") {
+      rankingService.getLeaderboard(targetEventId, targetCategoryId)
+        .then(setApiLeaderboard)
+        .catch(() => { setApiLeaderboard([]); });
+    } else {
+      rankingService.getRoundLeaderboard(leaderboardRoundId, targetCategoryId)
+        .then(setApiLeaderboard)
+        .catch(() => { setApiLeaderboard([]); });
+    }
+  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
@@ -407,23 +510,24 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
     let cancelled = false;
     const storedTeam = getStoredActiveTeam(user?.userId);
-    setActiveTeamContext(storedTeam);
-    if (storedTeam?.teamId) {
-      setSubmissionForm(prev => ({ ...prev, teamId: storedTeam.teamId }));
+    const storedSubmissionTeam = isActiveTeamContext(storedTeam) ? storedTeam : null;
+    setActiveTeamContext(storedSubmissionTeam);
+    if (storedSubmissionTeam?.teamId) {
+      setSubmissionForm(prev => ({ ...prev, teamId: storedSubmissionTeam.teamId }));
     } else {
       setSubmissionForm(prev => ({ ...prev, teamId: "" }));
     }
 
     setSubmissionTeamsLoading(true);
-    discoverUserTeamsForEvents(apiEvents, user.userId)
+    discoverUserTeamsForEvents(apiEvents, user.userId, { activeOnly: true })
       .then(results => {
         if (cancelled) return;
         const userTeams = results.map(team => teamToActiveContext(team, user.userId));
 
         setSubmissionTeams(userTeams);
 
-        const selectedTeam = (storedTeam?.teamId
-          ? userTeams.find(team => team.teamId === storedTeam.teamId)
+        const selectedTeam = (storedSubmissionTeam?.teamId
+          ? userTeams.find(team => team.teamId === storedSubmissionTeam.teamId)
           : null) ?? userTeams[0] ?? null;
 
         setActiveTeamContext(selectedTeam);
@@ -445,10 +549,15 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       .catch(() => {
         if (!cancelled) {
           setSubmissionTeams([]);
-          if (storedTeam?.teamId) {
-            teamService.getById(storedTeam.teamId)
+          if (storedSubmissionTeam?.teamId) {
+            teamService.getById(storedSubmissionTeam.teamId)
               .then(team => {
                 if (cancelled) return;
+                if (!isTeamActive(team.teamStatusId, team.teamStatusName)) {
+                  setActiveTeamContext(null);
+                  setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+                  return;
+                }
                 const refreshedTeam = teamToActiveContext(team, user.userId);
                 setSubmissionTeams([refreshedTeam]);
                 setActiveTeamContext(refreshedTeam);
@@ -473,9 +582,14 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   useEffect(() => {
     if (currentPage !== "submissions") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
-    if (storedTeam?.teamId && submissionTeams.length === 0) {
+    if (storedTeam?.teamId && isActiveTeamContext(storedTeam) && submissionTeams.length === 0) {
       teamService.getById(storedTeam.teamId)
         .then(team => {
+          if (!isTeamActive(team.teamStatusId, team.teamStatusName)) {
+            setActiveTeamContext(null);
+            setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+            return;
+          }
           const refreshedTeam = teamToActiveContext(team, user?.userId);
           setActiveTeamContext(refreshedTeam);
           setSubmissionTeams([refreshedTeam]);
@@ -727,7 +841,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus("Only the team leader can submit or update team work.");
       return;
     }
-    if (activeTeamContext?.teamStatusId && !isTeamActive(activeTeamContext.teamStatusId)) {
+    if (activeTeamContext?.teamStatusId && !isTeamActive(activeTeamContext.teamStatusId, activeTeamContext.teamStatusName)) {
       setSubmissionStatus("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
     }
@@ -736,12 +850,19 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       return;
     }
     const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
-    if (!isBeforeSubmissionDeadline(selectedRound)) {
-      setSubmissionStatus("This round's submission deadline has passed.");
+    const roundState = getSubmissionRoundState(selectedRound);
+    if (!roundState.canSubmit) {
+      setSubmissionStatus(roundState.reason || "This round is not accepting submissions.");
       return;
     }
     if (!submissionForm.submissionName.trim()) {
       setSubmissionStatus("Submission name is required.");
+      return;
+    }
+    const urlErrors = validateSubmissionUrls(submissionForm);
+    setSubmissionFieldErrors(urlErrors);
+    if (hasSubmissionUrlErrors(urlErrors)) {
+      setSubmissionStatus("Please enter valid URLs or leave optional URL fields blank.");
       return;
     }
     setSubmissionLoading(true);
@@ -750,17 +871,19 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       const payload = {
         teamId: submissionForm.teamId,
         roundId: submissionForm.roundId,
-        repositoryUrl: submissionForm.repositoryUrl,
-        demoUrl: submissionForm.demoUrl,
-        reportUrl: submissionForm.reportUrl,
-        slideUrl: submissionForm.slideUrl,
+        repositoryUrl: submissionForm.repositoryUrl.trim(),
+        demoUrl: submissionForm.demoUrl.trim(),
+        reportUrl: submissionForm.reportUrl.trim(),
+        slideUrl: submissionForm.slideUrl.trim(),
         notes: submissionForm.submissionName.trim(),
       };
       const saved = await submissionService.submit(payload);
       setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
       setSubmissionStatus("Submission saved.");
     } catch (error) {
-      setSubmissionStatus(error instanceof Error ? error.message : "Submission failed.");
+      const parsed = parseApiError(error);
+      setSubmissionFieldErrors(parsed.fieldErrors ?? {});
+      setSubmissionStatus(parsed.message || "Submission failed.");
     } finally {
       setSubmissionLoading(false);
     }
@@ -783,6 +906,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         reportUrl: submission.reportUrl ?? "",
         slideUrl: submission.slideUrl ?? "",
       }));
+      setSubmissionFieldErrors({});
       setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
       setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
     } catch (error) {
@@ -821,8 +945,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus("Only official competition rounds can be updated from Submission Center.");
       return;
     }
-    if (!isBeforeSubmissionDeadline(round)) {
-      setSubmissionStatus("This round's submission deadline has passed.");
+    const roundState = getSubmissionRoundState(round);
+    if (!roundState.canSubmit) {
+      setSubmissionStatus(roundState.reason || "This round is not accepting submissions.");
       return;
     }
 
@@ -835,6 +960,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       reportUrl: submission.reportUrl ?? "",
       slideUrl: submission.slideUrl ?? "",
     }));
+    setSubmissionFieldErrors({});
     setSubmissionStatus("Loaded submitted work. Update the fields and submit again before the deadline.");
     submissionFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -854,6 +980,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       slideUrl: "",
     }));
     setSubmissionStatus("");
+    setSubmissionFieldErrors({});
     setSubmissionHistory([]);
     setSubmissionParticipation(null);
     if (nextTeam) {
@@ -873,6 +1000,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       slideUrl: "",
     }));
     setSubmissionStatus("");
+    setSubmissionFieldErrors({});
   };
 
   const handleTeamChange = useCallback((team: TeamResponse) => {
@@ -889,7 +1017,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   }, [user?.userId]);
 
   const selectedSubmissionRound = submissionRounds.find(item => item.roundId === submissionForm.roundId);
-  const selectedSubmissionRoundOpen = isBeforeSubmissionDeadline(selectedSubmissionRound);
+  const selectedSubmissionRoundState = getSubmissionRoundState(selectedSubmissionRound);
+  const selectedSubmissionRoundOpen = selectedSubmissionRoundState.canSubmit;
 
   const renderSubmissionTeamSelector = () => (
     <Card className="p-4">
@@ -932,11 +1061,17 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
             ))}
           </select>
-          {selectedSubmissionRound ? (
+          {selectedSubmissionRound && selectedSubmissionRoundState.canSubmit ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusBadge status={selectedSubmissionRoundOpen ? "open" : "closed"} />
+              <StatusBadge status={selectedSubmissionRoundOpen ? "open" : selectedSubmissionRoundState.deadlinePassed ? "closed" : roundStatusLabel(selectedSubmissionRound)} />
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Submitting for: <strong>{selectedSubmissionRound.roundName}</strong>
+              </span>
+              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                Status: <strong>{roundStatusLabel(selectedSubmissionRound)}</strong>
+              </span>
+              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                Starts: {formatSubmissionDate(selectedSubmissionRound.startDate)}
               </span>
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Deadline: {formatSubmissionDate(selectedSubmissionRound.submissionDeadline)}
@@ -989,7 +1124,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           <div className="space-y-3">
             {visibleSubmissionHistory.map(submission => {
               const round = roundById.get(submission.roundId);
-              const canUpdateSubmission = isSubmissionLeader && !!round && isOfficialSubmissionRound(round) && isBeforeSubmissionDeadline(round);
+              const canUpdateSubmission = isSubmissionLeader && getSubmissionRoundState(round).canSubmit;
               const links = [
                 { label: "Repo", url: submission.repositoryUrl, icon: <Github size={13} /> },
                 { label: "Demo", url: submission.demoUrl, icon: <Globe size={13} /> },
@@ -1058,6 +1193,57 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     );
   };
 
+  const renderRoundSubmissionNotice = () => {
+    if (!selectedSubmissionRound || selectedSubmissionRoundState.canSubmit) return null;
+    const isExpired = selectedSubmissionRoundState.deadlinePassed;
+
+    return (
+      <Card
+        className="p-6"
+        style={{
+          border: `2px solid ${isExpired ? COLORS.error : COLORS.warning}`,
+          background: isExpired ? "rgba(229,62,46,0.08)" : `${COLORS.warning}12`,
+        }}
+      >
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div
+            className="flex items-center justify-center rounded-xl shrink-0"
+            style={{
+              width: 52,
+              height: 52,
+              background: isExpired ? "rgba(229,62,46,0.14)" : `${COLORS.warning}18`,
+              color: isExpired ? COLORS.error : COLORS.warning,
+            }}
+          >
+            <AlertCircle size={28} />
+          </div>
+          <div>
+            <div
+              style={{
+                fontSize: isExpired ? 24 : 20,
+                fontWeight: 900,
+                color: isExpired ? COLORS.error : COLORS.textPrimary,
+              }}
+            >
+              {isExpired ? "The submission deadline has passed" : "Round is not open for submissions"}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+              <span>Round: <strong>{selectedSubmissionRound.roundName}</strong></span>
+              <span>Status: <strong>{roundStatusLabel(selectedSubmissionRound)}</strong></span>
+              <span>Starts: {formatSubmissionDate(selectedSubmissionRound.startDate)}</span>
+              <span>Deadline: {formatSubmissionDate(selectedSubmissionRound.submissionDeadline)}</span>
+            </div>
+            {!isExpired && (
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 8, fontWeight: 700 }}>
+                {selectedSubmissionRoundState.reason}
+              </div>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  };
+
   const handleCertificateFile = async (award: AwardResponse, mode: "view" | "download") => {
     setCertificateActionLoading(prev => ({ ...prev, [award.id]: mode }));
     setCertificateError("");
@@ -1115,7 +1301,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
 
     const participantStatus = normalizeParticipationStatus(participations[eventId]?.participantStatus ?? targetEvent.participantStatus);
-    const unavailableReason = registrationUnavailableReason(String(targetEvent.eventStatus || ""));
+    const unavailableReason = registrationUnavailableReason(targetEvent);
     if (unavailableReason) {
       setEventActionMessage(prev => ({ ...prev, [eventId]: `Registration unavailable: ${unavailableReason}.` }));
       return;
@@ -1289,7 +1475,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           const isRegistered = participantStatus !== "NOT_REGISTERED";
           const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
           const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
-          const unavailableReason = registrationUnavailableReason(lifecycleStatus);
+          const unavailableReason = registrationUnavailableReason(ev);
           const isSelected = selectedEventDetailId === ev.eventId;
           const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
           const isPendingParticipant = participantStatus === "PENDING";
@@ -1385,15 +1571,64 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     </>
   );
 
-  const renderLeaderboard = () => (
-    <>
-      <SectionHeader title="Leaderboard" subtitle="Event leaderboard rankings" />
+  const renderLeaderboard = () => {
+    const leaderboardEvents = apiEvents.filter(ev => submissionTeams.some(t => t.eventId === ev.eventId));
+    const currentEventId = leaderboardEventId || activeTeamContext?.eventId || "";
+
+    return (
+      <>
+        <SectionHeader 
+          title="Leaderboard" 
+          subtitle={leaderboardRoundId === "event" ? "Event leaderboard rankings" : `Round Rankings`} 
+          action={
+            <div className="flex items-center gap-2">
+              {leaderboardEvents.length > 0 && (
+                <select
+                  value={currentEventId}
+                  onChange={(e) => { setLeaderboardEventId(e.target.value); setLeaderboardRoundId("event"); }}
+                  className="px-3 py-1.5 rounded-md"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.textPrimary,
+                    outline: "none",
+                    fontSize: 13
+                  }}
+                >
+                  <option value="">Select Event</option>
+                  {leaderboardEvents.map(ev => (
+                    <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
+                  ))}
+                </select>
+              )}
+              {leaderboardRounds.length > 0 && (
+                <select
+                  value={leaderboardRoundId}
+                  onChange={(e) => setLeaderboardRoundId(e.target.value)}
+                  className="px-3 py-1.5 rounded-md"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.textPrimary,
+                    outline: "none",
+                    fontSize: 13
+                  }}
+                >
+                  <option value="event">Event Ranking</option>
+                  {leaderboardRounds.map(r => (
+                    <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          }
+        />
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLORS.bg }}>
-                {["Rank", "Team", "Score", "Category"].map(h => (
+                {["Rank", "Team", "Score", "Category"].concat(leaderboardRoundId !== "event" ? ["Result"] : []).map(h => (
                   <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                 ))}
               </tr>
@@ -1420,17 +1655,24 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                     </td>
                     <td className="px-4 py-3">
                       <span style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}>
-                        {row.teamId ?? row.team}
+                        {row.teamName ?? row.teamId ?? row.team}
                       </span>
                     </td>
                     <td className="px-4 py-3">
                       <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
-                        {row.finalScore?.toFixed(1) ?? row.score}
+                        {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryId ?? row.track ?? "—"}</span>
+                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "—"}</span>
                     </td>
+                    {leaderboardRoundId !== "event" && (
+                       <td className="px-4 py-3">
+                          {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
+                          {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
+                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                       </td>
+                    )}
                   </tr>
                 );
               }) : (
@@ -1451,6 +1693,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       </Card>
     </>
   );
+};
 
   const renderCertificates = () => {
     if (!activeTeamContext?.eventId) {
@@ -1909,6 +2152,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       <>
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
         {renderSubmissionTeamSelector()}
+        {renderRoundSubmissionNotice()}
+        {selectedSubmissionRoundState.canSubmit && (
         <div ref={submissionFormRef}>
           <Card className="p-5">
             <div className="grid md:grid-cols-2 gap-4">
@@ -1925,10 +2170,23 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   </span>
                   <input
                     value={submissionForm[field.key as keyof typeof submissionForm]}
-                    onChange={e => setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }))}
+                    onChange={e => {
+                      setSubmissionForm(prev => ({ ...prev, [field.key]: e.target.value }));
+                      setSubmissionFieldErrors(prev => ({ ...prev, [field.key]: undefined }));
+                    }}
                     className="w-full px-3 py-2 rounded-lg outline-none"
-                    style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                    style={{
+                      fontSize: 14,
+                      border: `1px solid ${submissionFieldErrors[field.key as keyof SubmissionUrlErrors] ? COLORS.error : COLORS.border}`,
+                      background: COLORS.bg,
+                      color: COLORS.textPrimary,
+                    }}
                   />
+                  {submissionFieldErrors[field.key as keyof SubmissionUrlErrors] && (
+                    <span style={{ display: "block", marginTop: 4, fontSize: 11, color: COLORS.error, fontWeight: 600 }}>
+                      {submissionFieldErrors[field.key as keyof SubmissionUrlErrors]}
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
@@ -1939,10 +2197,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading || !submissionForm.roundId}>
                 {submissionLookupLoading ? "Loading..." : selectedSubmissionRound ? `Load ${selectedSubmissionRound.roundName}` : "Load Current"}
               </Button>
-              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null || !submissionForm.roundId}>
+              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null || !submissionForm.roundId || !selectedSubmissionRoundState.canDownloadProblem}>
                 {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
               </Button>
-              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null || !submissionForm.roundId}>
+              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null || !submissionForm.roundId || !selectedSubmissionRoundState.canDownloadProblem}>
                 {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
               </Button>
               {submissionStatus && (
@@ -1963,6 +2221,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             </div>
           </Card>
         </div>
+        )}
         {renderSubmissionHistory()}
       </>
     );

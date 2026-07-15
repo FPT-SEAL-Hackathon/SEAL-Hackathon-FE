@@ -6,6 +6,7 @@ import { judgingService } from "@/features/judging/api/judgingService";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { useAuth } from "@/features/auth/store/authStore";
+import { JudgeConsensusMatrix } from "./JudgeConsensusMatrix";
 
 export function JudgeCalibrationView({ 
   apiRounds = [], 
@@ -102,6 +103,9 @@ export function JudgeCalibrationView({
     // Calculate panel averages
     const panelAvg = (data.reduce((sum, j) => sum + (j.averageScore || 0), 0) / data.length).toFixed(1);
     const calibrationScore = currentUserObj?.comparableScoreCount ? Math.min(100, Math.max(0, 100 - (currentUserObj.averageAbsoluteDeviation || 0) * 5)).toFixed(0) + "%" : "N/A";
+    
+    // Dynamically calculate the theoretical max score (10 or 100) based on max given scores
+    const theoreticalMax = data.some(d => (d.maxScore || 0) > 10) ? 100 : 10;
 
     // Sort data so current judge is at the top
     const sortedData = [...data].sort((a, b) => {
@@ -141,7 +145,7 @@ export function JudgeCalibrationView({
                       <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>Avg: {avg}</span>
                     </div>
                   </div>
-                  <ProgressBar value={j.averageScore} max={100} color={isMe ? COLORS.primary : COLORS.secondary} />
+                  <ProgressBar value={j.averageScore} max={theoreticalMax} color={isMe ? COLORS.primary : COLORS.secondary} />
                 </div>
               );
             })}
@@ -165,6 +169,11 @@ export function JudgeCalibrationView({
             ))}
           </div>
         </Card>
+        
+        {/* Consensus Matrix Component */}
+        {selectedRoundId && (
+          <JudgeConsensusMatrix roundId={selectedRoundId} />
+        )}
       </>
     );
   };

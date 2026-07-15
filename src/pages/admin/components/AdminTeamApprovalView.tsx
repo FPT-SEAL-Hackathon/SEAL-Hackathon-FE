@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle, ChevronDown, ChevronUp, Loader, RefreshCw, Users, XCircle } from "lucide-react";
-import { Button, Card, COLORS } from "@/components/shared/UIComponents";
+import { Button, Card, COLORS, StatusBadge } from "@/components/shared/UIComponents";
 import { parseApiError } from "@/lib/api/apiClient";
-import { teamService, type TeamEligibilityReviewResponse } from "@/features/teams/api/teamService";
+import {
+  canOrganizerApproveTeam,
+  getTeamStatusInfo,
+  teamService,
+  type TeamEligibilityReviewResponse,
+} from "@/features/teams/api/teamService";
 
 /**
  * Màn organizer duyệt team theo sự kiện.
@@ -43,6 +48,14 @@ export function AdminTeamApprovalView({ context }: any) {
   }, [loadTeams]);
 
   const decide = async (team: TeamEligibilityReviewResponse, approved: boolean, note?: string) => {
+    if (getTeamStatusInfo(team.teamStatusId, team.teamStatusName).badge !== "pending_approval") {
+      setMessage({ tone: "error", text: "Only Pending teams can be approved or rejected." });
+      return;
+    }
+    if (approved && !canOrganizerApproveTeam(team)) {
+      setMessage({ tone: "error", text: "Resolve the approval issues before approving this team." });
+      return;
+    }
     setActingTeamId(team.teamId);
     setMessage(null);
     try {
@@ -134,7 +147,10 @@ export function AdminTeamApprovalView({ context }: any) {
       )}
 
       {teams.map(team => {
-        const eligible = Boolean(team.eligibleForCompetition);
+        const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
+        const isPending = status.badge === "pending_approval";
+        const eligible = canOrganizerApproveTeam(team);
+        const issues = team.approvalIssues?.length ? team.approvalIssues : team.issues ?? [];
         const expanded = expandedTeamId === team.teamId;
         const rejecting = rejectingTeamId === team.teamId;
         const acting = actingTeamId === team.teamId;
@@ -145,6 +161,7 @@ export function AdminTeamApprovalView({ context }: any) {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{team.teamName}</div>
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <StatusBadge status={status.badge} />
                   <span
                     className="px-2 py-1 rounded-lg"
                     style={{ fontSize: 12, fontWeight: 700, background: COLORS.bg, color: COLORS.textPrimary }}
@@ -154,9 +171,9 @@ export function AdminTeamApprovalView({ context }: any) {
                   {badge(Boolean(team.teamSizeEligible), "Size OK", "Size out of range")}
                   {badge(Boolean(team.membersInfoComplete), "Profiles complete", "Profiles incomplete")}
                 </div>
-                {team.issues?.length > 0 && (
+                {issues.length > 0 && (
                   <ul className="mt-2" style={{ fontSize: 12.5, color: COLORS.error, paddingLeft: 18 }}>
-                    {team.issues.map(issue => <li key={issue}>{issue}</li>)}
+                    {issues.map(issue => <li key={issue}>{issue}</li>)}
                   </ul>
                 )}
               </div>
@@ -173,7 +190,7 @@ export function AdminTeamApprovalView({ context }: any) {
                   variant="primary"
                   size="sm"
                   icon={acting ? <Loader size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                  disabled={!eligible || acting}
+                  disabled={!isPending || !eligible || acting}
                   onClick={() => decide(team, true)}
                 >
                   Approve Team
@@ -182,7 +199,7 @@ export function AdminTeamApprovalView({ context }: any) {
                   variant="danger"
                   size="sm"
                   icon={<XCircle size={14} />}
-                  disabled={acting}
+                  disabled={!isPending || acting}
                   onClick={() => {
                     setRejectingTeamId(rejecting ? null : team.teamId);
                     setRejectNote("");
@@ -193,7 +210,7 @@ export function AdminTeamApprovalView({ context }: any) {
               </div>
             </div>
 
-            {!eligible && (
+            {isPending && !eligible && (
               <div className="mt-3 rounded-xl px-3 py-2" style={{ background: `${COLORS.error}08`, color: COLORS.error, fontSize: 12.5 }}>
                 Approve is disabled until every issue above is resolved
                 (team size must be within the event's {team.minTeamSize ?? "?"}–{team.maxTeamSize ?? "?"} range
@@ -201,7 +218,13 @@ export function AdminTeamApprovalView({ context }: any) {
               </div>
             )}
 
-            {rejecting && (
+            {!isPending && (
+              <div className="mt-3 rounded-xl px-3 py-2" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 12.5 }}>
+                Only Pending teams can be approved or rejected from this queue.
+              </div>
+            )}
+
+            {isPending && rejecting && (
               <div className="mt-3 flex items-center gap-2 flex-wrap">
                 <input
                   value={rejectNote}
