@@ -16,7 +16,6 @@ import { MemberDashboard } from "@/pages/member/MemberDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
-import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { ForbiddenPage } from "@/pages/ForbiddenPage";
 import { DevHub } from "@/pages/dev/DevHub";
 
@@ -239,7 +238,7 @@ function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role
     return <MentorDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   if (role === ROLES.LEADER || role === ROLES.MEMBER) {
-    return <LeaderDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   return null;
 }
