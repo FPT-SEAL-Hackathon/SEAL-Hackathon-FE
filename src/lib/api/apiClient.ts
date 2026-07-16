@@ -376,6 +376,16 @@ export const api = {
     request<T>(path, { method: "PUT", body: bodyIsFormData(body as RequestInit["body"]) ? body as BodyInit : JSON.stringify(body) }, auth),
   patch: <T>(path: string, body?: unknown, auth = true) =>
     request<T>(path, { method: "PATCH", body: bodyIsFormData(body as RequestInit["body"]) ? body as BodyInit : body ? JSON.stringify(body) : undefined }, auth),
-  delete: <T>(path: string, auth = true) => request<T>(path, { method: "DELETE" }, auth),
+  delete: <T>(path: string, authOrBody: boolean | unknown = true, maybeAuth = true) => {
+    const hasBody = typeof authOrBody !== "boolean";
+    return request<T>(
+      path,
+      {
+        method: "DELETE",
+        body: hasBody ? JSON.stringify(authOrBody) : undefined,
+      },
+      hasBody ? maybeAuth : authOrBody,
+    );
+  },
   blob: (path: string, auth = true) => requestBlob(path, { method: "GET" }, auth),
 };
