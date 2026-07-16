@@ -363,9 +363,11 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderTeam = () => (
     <>
       <SectionHeader title="Team Management" subtitle="Team data and member actions from backend API" />
+      {/* mode="auto": quyền leader phải suy ra từ leaderUserId thực tế —
+          nếu quyền đã được chuyển cho người khác thì không hiện nút leader nữa. */}
       <TeamApiPanel
         initialTeamId={teamId}
-        mode="leader"
+        mode="auto"
         onTeamLeft={() => {
           setActiveTeam(null);
           setTeamId("");

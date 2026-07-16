@@ -54,7 +54,11 @@ type ActionKey =
   | "withdraw"
   | "events"
   | "categories"
-  | "discover";
+  | "discover"
+  | "transfer"
+  | "disband"
+  | "cancelRequest"
+  | "myRequests";
 
 type RoleMode = "auto" | "member" | "leader";
 type TeamFlow = "create" | "join" | null;
@@ -391,6 +395,16 @@ export function TeamApiPanel({
   const [joinTeamName, setJoinTeamName] = useState("");
   const [joinCategoryId, setJoinCategoryId] = useState("");
   const [joinRequestsLoaded, setJoinRequestsLoaded] = useState(false);
+  // Request PENDING của chính user (mọi team) — hiển thị trạng thái + cho phép hủy.
+  const [myPendingRequests, setMyPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
+  // Confirm dialog cho các hành động phá hủy (leave/kick/disband/chuyển leader).
+  const [confirmAction, setConfirmAction] = useState<
+    | { kind: "leave" }
+    | { kind: "kick"; userId: string; name: string }
+    | { kind: "disband" }
+    | { kind: "makeLeader"; userId: string; name: string }
+    | null
+  >(null);
   const loadedMemberDetailsTeamIdRef = useRef<string | null>(null);
   const loadedCategoryIdRef = useRef<string | null>(null);
   const teamDiscoveryAttemptedRef = useRef(false);
@@ -637,6 +651,12 @@ export function TeamApiPanel({
     // Load once when the team panel opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    // Trạng thái request PENDING của chính user (để hiển thị và cho phép hủy).
+    loadMyPendingRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
 
   useEffect(() => {
     if (!teamDiscoveryDone || selectedTeam || !form.eventId) {
@@ -945,6 +965,14 @@ export function TeamApiPanel({
       setMessage({ tone: "error", text: unavailableMessage });
       return;
     }
+    const existingTeam = activeTeamInEvent(form.eventId.trim());
+    if (existingTeam) {
+      setMessage({
+        tone: "error",
+        text: `You already belong to team "${existingTeam.teamName}" in this event. Leave it before creating a new team.`,
+      });
+      return;
+    }
 
     run(
       "create",
@@ -991,6 +1019,18 @@ export function TeamApiPanel({
       setMessage({ tone: "error", text: "This team has reached the event's maximum team size." });
       return;
     }
+    const existingTeam = activeTeamInEvent(team?.eventId || form.eventId.trim());
+    if (existingTeam) {
+      setMessage({
+        tone: "error",
+        text: `You already belong to team "${existingTeam.teamName}" in this event. Leave it before joining another team.`,
+      });
+      return;
+    }
+    if (myPendingRequests.some(request => request.teamId === teamId)) {
+      setMessage({ tone: "info", text: "You already have a pending request for this team. Wait for the leader to respond or cancel it below." });
+      return;
+    }
     setField("teamId", teamId);
     run(
       "join",
@@ -1000,9 +1040,10 @@ export function TeamApiPanel({
         const eventTeams = eventId ? await teamService.getByEvent(eventId).catch(() => teams) : teams;
         return { request, eventTeams, eventId };
       },
-      ({ eventTeams, eventId }) => {
+      ({ request, eventTeams, eventId }) => {
         setTeams(eventTeams);
         if (eventId) setTeamSearchEventId(eventId);
+        setMyPendingRequests(prev => [request, ...prev.filter(item => item.requestId !== request.requestId)]);
       },
       "Join request sent. Ask the team leader to approve it from Join Requests.",
       true,
@@ -1094,6 +1135,81 @@ export function TeamApiPanel({
   const leaveTeam = () => {
     if (!selectedTeam || !currentUserId) return;
     removeMember(currentUserId);
+  };
+
+  // Thành viên active sớm nhất (ngoài leader) — người sẽ được backend
+  // tự động trao quyền nếu leader rời team.
+  const successorMember = useMemo(() => {
+    if (!selectedTeam) return null;
+    const candidates = selectedTeam.members
+      .filter(member => member.active !== false && member.userId !== selectedTeam.leaderUserId)
+      .slice()
+      .sort((a, b) => (a.joinedAt ?? "").localeCompare(b.joinedAt ?? ""));
+    return candidates[0] ?? null;
+  }, [selectedTeam]);
+
+  const transferLeadershipTo = (newLeaderUserId: string) => {
+    if (!selectedTeam) return;
+    run(
+      "transfer",
+      () => teamService.transferLeadership(selectedTeam.teamId, newLeaderUserId),
+      team => {
+        activateTeam(team);
+        setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
+        setUserTeams(prev => {
+          const nextTeams = mergeTeams(prev, [team]);
+          saveStoredUserTeams(nextTeams, currentUserId);
+          return nextTeams;
+        });
+      },
+      "Leadership transferred.",
+      true,
+    );
+  };
+
+  const disbandTeam = () => {
+    if (!selectedTeam) return;
+    const targetTeamId = selectedTeam.teamId;
+    const targetEventId = selectedTeam.eventId;
+    run(
+      "disband",
+      () => teamService.disband(targetTeamId),
+      () => {
+        clearTeamLocally(targetTeamId, true, targetEventId);
+      },
+      "Team disbanded.",
+      true,
+    );
+  };
+
+  const loadMyPendingRequests = () => {
+    if (!currentUserId) return;
+    teamService.getMyPendingRequests()
+      .then(setMyPendingRequests)
+      .catch(() => setMyPendingRequests([]));
+  };
+
+  const cancelMyRequest = (requestId: string) => {
+    run(
+      "cancelRequest",
+      () => teamService.cancelJoinRequest(requestId),
+      () => {
+        setMyPendingRequests(prev => prev.filter(request => request.requestId !== requestId));
+      },
+      "Join request cancelled.",
+      true,
+    );
+  };
+
+  // Team active của user trong một event (pre-guard "đã có team" phía UI,
+  // thay vì chờ backend trả 409).
+  const activeTeamInEvent = (eventId?: string) => {
+    if (!eventId) return null;
+    return userTeams.find(team =>
+      team.eventId === eventId
+      && !isTeamRejected(team)
+      && team.members.some(member => member.userId === currentUserId && member.active !== false),
+    ) ?? null;
   };
 
   const submitTeamForApproval = () => {
@@ -1567,6 +1683,44 @@ export function TeamApiPanel({
           </Card>
         )}
 
+        {teamFlow === "join" && myPendingRequests.length > 0 && (
+          <Card className="p-5">
+            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>
+              Your Pending Join Requests
+            </div>
+            <div className="space-y-3">
+              {myPendingRequests.map(request => (
+                <div
+                  key={request.requestId}
+                  className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-xl"
+                  style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
+                >
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                      {teams.find(team => team.teamId === request.teamId)?.teamName
+                        ?? userTeams.find(team => team.teamId === request.teamId)?.teamName
+                        ?? "Team"}
+                    </div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                      Waiting for the team leader to respond
+                      {request.requestedAt ? ` — sent ${new Date(request.requestedAt).toLocaleString()}` : ""}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={loading.cancelRequest ? <Loader size={13} className="animate-spin" /> : <Undo2 size={13} />}
+                    disabled={loading.cancelRequest}
+                    onClick={() => cancelMyRequest(request.requestId)}
+                  >
+                    Cancel Request
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         {teamPanelMode === "other" && teamFlow === "join" && !!teamSearchEventId && teamSearchEventId === form.eventId && (
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Teams In Event</div>
@@ -1588,17 +1742,27 @@ export function TeamApiPanel({
                   {
                     key: "action",
                     label: "Action",
-                    render: (_value, row) => (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
-                        disabled={loading.join}
-                        onClick={() => requestJoin(row.teamId)}
-                      >
-                        Join
-                      </Button>
-                    ),
+                    render: (_value, row) => {
+                      const alreadyRequested = myPendingRequests.some(request => request.teamId === row.teamId);
+                      if (alreadyRequested) {
+                        return (
+                          <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.warning }}>
+                            Requested
+                          </span>
+                        );
+                      }
+                      return (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={loading.join ? <Loader size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                          disabled={loading.join}
+                          onClick={() => requestJoin(row.teamId)}
+                        >
+                          Join
+                        </Button>
+                      );
+                    },
                   },
                 ]}
                 data={joinTeams.map(team => ({
@@ -2022,9 +2186,13 @@ export function TeamApiPanel({
                     && memberUserId !== user?.userId
                     && memberUserId !== selectedTeam.leaderUserId;
                   const isCurrentUserRow = memberUserId === user?.userId;
+                  const canMakeLeader = canRemoveMember; // leader + roster mở + không phải mình/leader hiện tại
+                  const memberName = getMemberDisplay(
+                    selectedTeam.members.find(item => item.userId === memberUserId) ?? { userId: memberUserId } as any,
+                  ).name;
                   return (
                     <div className="flex justify-center">
-                      <div className="grid grid-cols-2 gap-2" style={{ width: 188 }}>
+                      <div className="flex flex-wrap justify-center gap-2" style={{ minWidth: 188 }}>
                         <Button
                           variant="outline"
                           size="sm"
@@ -2033,13 +2201,24 @@ export function TeamApiPanel({
                         >
                           Detail
                         </Button>
+                        {canMakeLeader && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={loading.transfer ? <Loader size={13} className="animate-spin" /> : <UserCheck size={13} />}
+                            disabled={loading.transfer}
+                            onClick={() => setConfirmAction({ kind: "makeLeader", userId: memberUserId, name: memberName })}
+                          >
+                            Make Leader
+                          </Button>
+                        )}
                         {isCurrentUserRow && canEditRoster ? (
                           <Button
                             variant="danger"
                             size="sm"
                             icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <LogOut size={13} />}
                             disabled={loading.remove}
-                            onClick={leaveTeam}
+                            onClick={() => setConfirmAction({ kind: "leave" })}
                           >
                             {loading.remove ? "Leaving..." : "Leave"}
                           </Button>
@@ -2049,7 +2228,7 @@ export function TeamApiPanel({
                             size="sm"
                             icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
                             disabled={loading.remove}
-                            onClick={() => removeMember(memberUserId)}
+                            onClick={() => setConfirmAction({ kind: "kick", userId: memberUserId, name: memberName })}
                           >
                             Remove
                           </Button>
@@ -2153,7 +2332,18 @@ export function TeamApiPanel({
         </Card>
 
         {isLeader && (canEditRoster || canWithdrawApprovalRequest) && (
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            {canEditRoster && (
+              <Button
+                variant="danger"
+                size="md"
+                icon={loading.disband ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                disabled={loading.disband}
+                onClick={() => setConfirmAction({ kind: "disband" })}
+              >
+                {loading.disband ? "Disbanding..." : "Disband Team"}
+              </Button>
+            )}
             {canWithdrawApprovalRequest ? (
               <Button
                 variant="outline"
@@ -2178,6 +2368,54 @@ export function TeamApiPanel({
             )}
           </div>
         )}
+
+        {confirmAction && (() => {
+          const isLeaderLeaving = confirmAction.kind === "leave" && isLeader;
+          const title = confirmAction.kind === "leave" ? "Leave team?"
+            : confirmAction.kind === "kick" ? "Remove member?"
+            : confirmAction.kind === "disband" ? "Disband team?"
+            : "Transfer leadership?";
+          const description = confirmAction.kind === "leave"
+            ? (isLeaderLeaving
+                ? (successorMember
+                    ? `You are the team leader. If you leave, leadership will automatically transfer to ${getMemberDisplay(successorMember).name} (earliest member). You can also use "Make Leader" first to pick someone else.`
+                    : "You are the only member. Leaving will delete this team permanently, including all pending join requests.")
+                : "You will leave this team. You can request to join another team afterwards.")
+            : confirmAction.kind === "kick"
+              ? `Remove ${confirmAction.name} from the team? They can request to join again later.`
+              : confirmAction.kind === "disband"
+                ? "This will permanently delete the team, its membership history and all pending join requests. This cannot be undone."
+                : `Make ${confirmAction.name} the new team leader? You will become a regular member and lose leader controls.`;
+          const confirmLabel = confirmAction.kind === "leave" ? "Leave team"
+            : confirmAction.kind === "kick" ? "Remove"
+            : confirmAction.kind === "disband" ? "Disband"
+            : "Transfer";
+          const onConfirm = () => {
+            const action = confirmAction;
+            setConfirmAction(null);
+            if (action.kind === "leave") leaveTeam();
+            else if (action.kind === "kick") removeMember(action.userId);
+            else if (action.kind === "disband") disbandTeam();
+            else transferLeadershipTo(action.userId);
+          };
+          return renderCenteredModal(
+            title,
+            () => setConfirmAction(null),
+            <>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.7 }}>{description}</div>
+              <div className="mt-5 flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setConfirmAction(null)}>Cancel</Button>
+                <Button
+                  variant={confirmAction.kind === "makeLeader" ? "primary" : "danger"}
+                  size="sm"
+                  onClick={onConfirm}
+                >
+                  {confirmLabel}
+                </Button>
+              </div>
+            </>,
+          );
+        })()}
 
         {false && isLeader && (() => {
           const teamEvent = events.find(event => event.eventId === selectedTeam!.eventId);
