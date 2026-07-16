@@ -158,7 +158,10 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
         action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setEventModal({ open: true })}>New Event</Button>}
       />
       <div className="space-y-3">
-        {apiEvents.map((ev: any) => (
+        {apiEvents.map((ev: any) => {
+          const visibleTeamCount = ev.visibleTeamCount ?? ev.teams ?? 0;
+
+          return (
           <Card key={ev.id} className="p-5">
             <div className="flex items-center gap-4">
               <div className="flex-1">
@@ -166,7 +169,7 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
                   <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{ev.name}</span>
                   <StatusBadge status={ev.status} />
                 </div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {ev.teamCount ?? 0} teams • {ev.roundCount ?? 0} rounds • Deadline: {ev.eventEndDate}</div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {visibleTeamCount ?? "..."} teams • {ev.roundCount ?? 0} rounds • Deadline: {ev.eventEndDate}</div>
               </div>
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>
@@ -178,8 +181,10 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
               </div>
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </>
   );
 }
+

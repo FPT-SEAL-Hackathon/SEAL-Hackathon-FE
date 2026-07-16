@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
   CheckCircle,
   Eye,
   Loader,
@@ -327,6 +328,12 @@ function isEventRegistrationOpen(event?: EventResponse | null) {
   return Boolean(event) && !registrationUnavailableMessage(event);
 }
 
+function hasRegistrationDeadlinePassed(event?: EventResponse | null) {
+  if (!event) return false;
+  const registrationEnd = new Date(event.registrationEnd).getTime();
+  return !Number.isNaN(registrationEnd) && Date.now() > registrationEnd;
+}
+
 function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
   const fptStudentCode = detail.fptStudentCode?.trim();
   const externalStudentCode = detail.externalStudentCode?.trim();
@@ -418,6 +425,7 @@ export function TeamApiPanel({
   const [joinTeamName, setJoinTeamName] = useState("");
   const [joinCategoryId, setJoinCategoryId] = useState("");
   const [joinRequestsLoaded, setJoinRequestsLoaded] = useState(false);
+  const [dismissedExpiredTeamId, setDismissedExpiredTeamId] = useState<string | null>(null);
   const loadedMemberDetailsTeamIdRef = useRef<string | null>(null);
   const loadedCategoryIdRef = useRef<string | null>(null);
   const teamDiscoveryAttemptedRef = useRef(false);
@@ -1730,6 +1738,7 @@ export function TeamApiPanel({
     const teamEvent = events.find(event => event.eventId === selectedTeam.eventId);
     const teamEventUnavailableMessage = registrationUnavailableMessage(teamEvent);
     const teamEventRegistrationOpen = !teamEventUnavailableMessage;
+    const registrationDeadlinePassed = hasRegistrationDeadlinePassed(teamEvent);
     const activeMemberCount = selectedTeam.activeMemberCount ?? selectedTeam.members.filter(member => member.active).length;
     const minTeamSize = selectedTeam.minTeamSize ?? teamEvent?.minTeamSize ?? 0;
     const maxTeamSize = selectedTeam.maxTeamSize ?? teamEvent?.maxTeamSize ?? 0;
@@ -1875,6 +1884,62 @@ export function TeamApiPanel({
             </ul>
           )}
         </div>
+      );
+    };
+    const renderRegistrationExpiredModal = () => {
+      if (!registrationDeadlinePassed || dismissedExpiredTeamId === selectedTeam.teamId) return null;
+
+      return renderCenteredModal(
+        "Registration Expired",
+        () => setDismissedExpiredTeamId(selectedTeam.teamId),
+        <>
+          <div
+            className="rounded-xl p-4"
+            style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}
+          >
+            <div className="flex gap-4">
+              <div
+                className="flex shrink-0 items-center justify-center rounded-xl"
+                style={{
+                  width: 44,
+                  height: 44,
+                  background: `${COLORS.error}12`,
+                  color: COLORS.error,
+                  border: `1px solid ${COLORS.error}24`,
+                }}
+              >
+                <AlertTriangle size={22} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: 18, color: COLORS.textPrimary }}>
+                  Registration deadline has passed
+                </div>
+                <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 6, lineHeight: 1.6 }}>
+                  This team can no longer request approval for {selectedEventName}. Please leave this team and join or create a team in another event that is still open for registration.
+                </div>
+                {teamEventUnavailableMessage && (
+                  <div
+                    className="mt-3 rounded-xl px-3 py-2"
+                    style={{ background: `${COLORS.error}08`, border: `1px solid ${COLORS.error}18`, color: COLORS.error, fontSize: 12, fontWeight: 700 }}
+                  >
+                    {teamEventUnavailableMessage}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="danger"
+              size="md"
+              icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <LogOut size={14} />}
+              disabled={loading.remove}
+              onClick={leaveTeam}
+            >
+              {loading.remove ? "Leaving..." : "Leave Team"}
+            </Button>
+          </div>
+        </>,
       );
     };
     const renderLeaderActionPanel = () => {
@@ -2460,6 +2525,7 @@ export function TeamApiPanel({
               </div>
             </>,
           )}
+          {renderRegistrationExpiredModal()}
         </Card>
 
         {isLeader && (canEditRoster || canWithdrawApprovalRequest) && (
