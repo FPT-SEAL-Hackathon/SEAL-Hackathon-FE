@@ -20,6 +20,7 @@ import { AdminDashboardView } from "./components/AdminDashboardView";
 import { AdminEventsView } from "./components/AdminEventsView";
 import { AdminEventParticipantsView } from "./components/AdminEventParticipantsView";
 import { AdminTeamApprovalView } from "./components/AdminTeamApprovalView";
+import { getVisibleEventTeams } from "@/features/events/components/EventTeamsSection";
 import { AdminCategoriesView } from "./components/AdminCategoriesView";
 import { AdminRoundsView } from "./components/AdminRoundsView";
 import { AdminCriteriaView } from "./components/AdminCriteriaView";
@@ -258,19 +259,26 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   useEffect(() => {
     eventService.getAll()
-      .then(data => {
+      .then(async data => {
         setEventLoadError("");
-        const mapped = data.map(e => ({
+        const mapped = await Promise.all(data.map(async e => {
+          const visibleTeamCount = await getVisibleEventTeams(e.eventId, e)
+            .then(teams => teams.length)
+            .catch(() => 0);
+
+          return {
           ...e,
           //Field to display on UI
           id: e.eventId, 
           name: e.eventName,
           description: e.description ?? "—", 
           status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
-          teams: 0,
+          teams: visibleTeamCount,
+          visibleTeamCount,
           rounds: 0, 
           deadline: e.eventEndDate ?? "—", 
           prize: "—",
+          };
         }));
         setApiEvents(mapped as any);
       })
