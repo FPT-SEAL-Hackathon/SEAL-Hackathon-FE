@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
+import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
   userService,
   type CreateUserRequest,
   type UpdateUserRequest,
+  type UserFacetsResponse,
   type UserManagementUser,
   type UserQueryParams,
 } from "@/features/users/api/userService";
@@ -136,21 +139,39 @@ function teamLabelFor(user: UserManagementUser) {
   return isStudentRole(user.role) ? user.teamName || "No team" : "N/A";
 }
 
+// "FPT_STUDENT,ORGANIZER" (URL) <-> ["FPT_STUDENT","ORGANIZER"] (state)
+function parseCsvParam(value: string | null): string[] {
+  if (!value) return [];
+  return value.split(",").map(item => item.trim()).filter(Boolean);
+}
+
 export function AdminUsersView() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [users, setUsers] = useState<UserManagementUser[]>([]);
-  const [filters, setFilters] = useState<UserQueryParams>({
-    search: "",
-    role: "",
-    teamName: "",
-    accountStatus: "",
-    joinedFrom: "",
-    joinedTo: "",
-    page: 0,
-    size: 10,
-    sortBy: "createdAt",
-    sortDir: "desc",
+  // Khởi tạo từ URL: share link / F5 / back-forward khôi phục đúng bộ lọc.
+  const [filters, setFilters] = useState<UserQueryParams>(() => ({
+    search: searchParams.get("q") ?? "",
+    teamName: searchParams.get("team") ?? "",
+    joinedFrom: searchParams.get("from") ?? "",
+    joinedTo: searchParams.get("to") ?? "",
+    page: Math.max(Number(searchParams.get("page") ?? 0) || 0, 0),
+    size: Number(searchParams.get("size") ?? 10) || 10,
+    sortBy: searchParams.get("sortBy") ?? "createdAt",
+    sortDir: searchParams.get("sortDir") === "asc" ? "asc" : "desc",
+  }));
+  // Facet multi-select: OR trong nhóm, AND giữa nhóm (mã canonical trong URL).
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(() => parseCsvParam(searchParams.get("role")));
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => parseCsvParam(searchParams.get("status")));
+  const [facets, setFacets] = useState<UserFacetsResponse | null>(null);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<{ role: boolean; status: boolean; date: boolean; sort: boolean }>({
+    role: true,
+    status: true,
+    date: false,
+    sort: false,
   });
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("q") ?? "");
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -159,6 +180,7 @@ export function AdminUsersView() {
   const [modal, setModal] = useState<UserModalState>(null);
   const [form, setForm] = useState<UserFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const lastWrittenQs = useRef<string>(searchParams.toString());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -168,19 +190,81 @@ export function AdminUsersView() {
     return () => window.clearTimeout(timer);
   }, [filters.search]);
 
+  // Serialize trạng thái filter -> query string (bỏ giá trị mặc định cho URL gọn).
+  const serializeToParams = () => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    if (selectedRoles.length > 0) params.set("role", selectedRoles.join(","));
+    if (selectedStatuses.length > 0) params.set("status", selectedStatuses.join(","));
+    if (filters.teamName) params.set("team", String(filters.teamName));
+    if (filters.joinedFrom) params.set("from", String(filters.joinedFrom));
+    if (filters.joinedTo) params.set("to", String(filters.joinedTo));
+    if ((filters.page ?? 0) > 0) params.set("page", String(filters.page));
+    if ((filters.size ?? 10) !== 10) params.set("size", String(filters.size));
+    if (filters.sortBy && filters.sortBy !== "createdAt") params.set("sortBy", String(filters.sortBy));
+    if (filters.sortDir && filters.sortDir !== "desc") params.set("sortDir", String(filters.sortDir));
+    return params;
+  };
+
+  // Ghi trạng thái vào URL (History API, replace để không spam lịch sử).
+  useEffect(() => {
+    const params = serializeToParams();
+    const qs = params.toString();
+    if (qs !== searchParams.toString()) {
+      lastWrittenQs.current = qs;
+      setSearchParams(params, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    debouncedSearch,
+    selectedRoles,
+    selectedStatuses,
+    filters.teamName,
+    filters.joinedFrom,
+    filters.joinedTo,
+    filters.page,
+    filters.size,
+    filters.sortBy,
+    filters.sortDir,
+  ]);
+
+  // Đọc lại khi URL đổi từ bên ngoài (back/forward) — guard tránh vòng lặp.
+  useEffect(() => {
+    const qs = searchParams.toString();
+    if (qs === lastWrittenQs.current) return;
+    lastWrittenQs.current = qs;
+    setFilters({
+      search: searchParams.get("q") ?? "",
+      teamName: searchParams.get("team") ?? "",
+      joinedFrom: searchParams.get("from") ?? "",
+      joinedTo: searchParams.get("to") ?? "",
+      page: Math.max(Number(searchParams.get("page") ?? 0) || 0, 0),
+      size: Number(searchParams.get("size") ?? 10) || 10,
+      sortBy: searchParams.get("sortBy") ?? "createdAt",
+      sortDir: searchParams.get("sortDir") === "asc" ? "asc" : "desc",
+    });
+    setSelectedRoles(parseCsvParam(searchParams.get("role")));
+    setSelectedStatuses(parseCsvParam(searchParams.get("status")));
+    setDebouncedSearch(searchParams.get("q") ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const buildQuery = (): UserQueryParams => ({
+    ...filters,
+    search: debouncedSearch || undefined,
+    role: selectedRoles.length > 0 ? selectedRoles : undefined,
+    status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+    accountStatus: undefined,
+    teamName: filters.teamName || undefined,
+    joinedFrom: filters.joinedFrom || undefined,
+    joinedTo: filters.joinedTo || undefined,
+  });
+
   const loadUsers = async () => {
     setLoading(true);
     setError("");
     try {
-      const page = await userService.getUsers({
-        ...filters,
-        search: debouncedSearch || undefined,
-        role: filters.role || undefined,
-        teamName: filters.teamName || undefined,
-        accountStatus: filters.accountStatus || undefined,
-        joinedFrom: filters.joinedFrom || undefined,
-        joinedTo: filters.joinedTo || undefined,
-      });
+      const page = await userService.getUsers(buildQuery());
       setUsers(page.content);
       setTotalElements(page.totalElements);
       setTotalPages(Math.max(page.totalPages, 1));
@@ -204,9 +288,9 @@ export function AdminUsersView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
-    filters.role,
+    selectedRoles,
+    selectedStatuses,
     filters.teamName,
-    filters.accountStatus,
     filters.joinedFrom,
     filters.joinedTo,
     filters.page,
@@ -215,9 +299,52 @@ export function AdminUsersView() {
     filters.sortDir,
   ]);
 
+  // Facet counts (drill-down) cập nhật theo bộ lọc — dùng cho số cạnh option + preview CTA.
+  useEffect(() => {
+    let cancelled = false;
+    userService.getUserFacets(buildQuery())
+      .then(data => {
+        if (!cancelled) setFacets(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFacets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, selectedRoles, selectedStatuses, filters.teamName, filters.joinedFrom, filters.joinedTo]);
+
   const setFilter = (key: keyof UserQueryParams, value: string | number) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key === "page" ? Number(value) : 0 }));
   };
+
+  // Tick/untick một option trong nhóm facet — reset page về 0 như đổi filter.
+  const toggleRole = (code: string) => {
+    setSelectedRoles(prev => prev.includes(code) ? prev.filter(item => item !== code) : [...prev, code]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const toggleStatus = (code: string) => {
+    setSelectedStatuses(prev => prev.includes(code) ? prev.filter(item => item !== code) : [...prev, code]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const clearAllFacets = () => {
+    setSelectedRoles([]);
+    setSelectedStatuses([]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const facetCount = (group: "roles" | "statuses", code: string): number | null => {
+    const option = facets?.[group]?.find(item => item.code === code);
+    return option ? option.count : null;
+  };
+
+  const activeFilterCount = selectedRoles.length
+    + selectedStatuses.length
+    + (filters.joinedFrom ? 1 : 0)
+    + (filters.joinedTo ? 1 : 0);
 
   const openCreate = () => {
     setFieldErrors({});
@@ -406,7 +533,9 @@ export function AdminUsersView() {
       </div>
 
       <Card className="p-5 flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {/* Ngoài trang chỉ giữ search text; mọi thuộc tính CHỌN (ngày, sort, facet)
+            nằm trong panel "Filter and sort" để không che bảng danh sách. */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <FilterInput
             label="Search"
             value={filters.search ?? ""}
@@ -414,30 +543,37 @@ export function AdminUsersView() {
             placeholder="Name, email, phone"
             icon={<Search size={14} />}
           />
-          <FilterSelect label="Role" value={filters.role ?? ""} onChange={value => setFilter("role", value)}>
-            <option value="">All roles</option>
-            {ROLE_OPTIONS.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
-          </FilterSelect>
           <FilterInput label="Team" value={filters.teamName ?? ""} onChange={value => setFilter("teamName", value)} placeholder="Team name" />
-          <FilterSelect label="Status" value={filters.accountStatus ?? ""} onChange={value => setFilter("accountStatus", value)}>
-            <option value="">All statuses</option>
-            {STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </FilterSelect>
-          <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
-          <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
-          <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
-            <option value="createdAt">Joined</option>
-            <option value="updatedAt">Updated</option>
-            <option value="fullName">Name</option>
-            <option value="email">Email</option>
-            <option value="role">Role</option>
-            <option value="accountStatus">Status</option>
-          </FilterSelect>
-          <FilterSelect label="Direction" value={filters.sortDir ?? "desc"} onChange={value => setFilter("sortDir", value as "asc" | "desc")}>
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </FilterSelect>
+          <div className="flex items-end">
+            <FilterSortButton activeCount={activeFilterCount} onClick={() => setFilterPanelOpen(true)} />
+          </div>
         </div>
+
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {selectedRoles.map(code => (
+              <FilterChip
+                key={`role-${code}`}
+                label={`Role: ${ROLE_OPTIONS.find(option => option.value === code)?.label ?? code}`}
+                onRemove={() => toggleRole(code)}
+              />
+            ))}
+            {selectedStatuses.map(code => (
+              <FilterChip
+                key={`status-${code}`}
+                label={`Status: ${STATUS_OPTIONS.find(option => option.value === code)?.label ?? code}`}
+                onRemove={() => toggleStatus(code)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={clearAllFacets}
+              style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
+            >
+              Clear All Filters
+            </button>
+          </div>
+        )}
       </Card>
 
       {error && (
@@ -556,6 +692,75 @@ export function AdminUsersView() {
           </div>
         </div>
       </Card>
+
+      <FilterSortPanel
+        open={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        onClearAll={clearAllFacets}
+        hasActive={activeFilterCount > 0}
+        ctaLabel={facets ? `Show ${facets.total} user${facets.total === 1 ? "" : "s"}` : "Apply Filters"}
+      >
+        <FacetGroup
+          title="Role"
+          open={openGroups.role}
+          hasActive={selectedRoles.length > 0}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, role: !prev.role }))}
+        >
+          {ROLE_OPTIONS.map(option => (
+            <FacetOptionRow
+              key={option.value}
+              label={option.label}
+              count={facetCount("roles", option.value)}
+              checked={selectedRoles.includes(option.value)}
+              onToggle={() => toggleRole(option.value)}
+            />
+          ))}
+        </FacetGroup>
+        <FacetGroup
+          title="Account Status"
+          open={openGroups.status}
+          hasActive={selectedStatuses.length > 0}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, status: !prev.status }))}
+        >
+          {STATUS_OPTIONS.map(option => (
+            <FacetOptionRow
+              key={option.value}
+              label={option.label}
+              count={facetCount("statuses", option.value)}
+              checked={selectedStatuses.includes(option.value)}
+              onToggle={() => toggleStatus(option.value)}
+            />
+          ))}
+        </FacetGroup>
+        <FacetGroup
+          title="Joined Date"
+          open={openGroups.date}
+          hasActive={Boolean(filters.joinedFrom || filters.joinedTo)}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, date: !prev.date }))}
+        >
+          <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
+          <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
+        </FacetGroup>
+        <FacetGroup
+          title="Sort By"
+          open={openGroups.sort}
+          hasActive={filters.sortBy !== "createdAt" || filters.sortDir !== "desc"}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, sort: !prev.sort }))}
+        >
+          <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
+            <option value="createdAt">Joined</option>
+            <option value="updatedAt">Updated</option>
+            <option value="fullName">Name</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+            <option value="accountStatus">Status</option>
+          </FilterSelect>
+          <FilterSelect label="Direction" value={filters.sortDir ?? "desc"} onChange={value => setFilter("sortDir", value as "asc" | "desc")}>
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </FilterSelect>
+        </FacetGroup>
+      </FilterSortPanel>
 
       {modal && (
         <UserFormModal
@@ -684,6 +889,9 @@ function UserFormModal({
     </div>
   );
 }
+
+// FilterChip/FacetGroup/FacetOptionRow chuyển sang shared FilterSortPanel.tsx
+// để dùng chung với màn Event Participants.
 
 function FilterInput({
   label,

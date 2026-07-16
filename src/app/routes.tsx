@@ -8,6 +8,7 @@ import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { OAuthSuccessPage } from "@/features/auth/pages/OAuthSuccessPage";
 import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage";
 import { LinkAccountPage } from "@/features/auth/pages/LinkAccountPage";
+import { LinkGooglePage } from "@/features/auth/pages/LinkGooglePage";
 import { ForgotPasswordPage } from "@/features/auth/pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/features/auth/pages/ResetPasswordPage";
 import { LandingPage } from "@/pages/landing/LandingPage";
@@ -259,6 +260,7 @@ export const router = createBrowserRouter([
   { path: "/register", element: <AuthRoute mode="register" /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "/oauth2/success", element: <OAuthSuccessPage /> },
+  { path: "/link-google", element: <LinkGooglePage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/403", element: <ForbiddenPage /> },

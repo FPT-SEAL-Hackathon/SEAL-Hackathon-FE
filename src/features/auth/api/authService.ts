@@ -142,6 +142,53 @@ export async function exchangeOAuthCode(code: string): Promise<LoginResponse> {
   return storeSession(res);
 }
 
+// ─── Account linking (một người = một user; Google & local là 2 phương thức) ─
+
+/**
+ * Hoàn tất gắn định danh Google vào tài khoản hiện có.
+ * Xác minh chủ sở hữu bằng mật khẩu local HOẶC OTP email đã verify trước đó.
+ */
+export async function googleLink(data: { linkingToken: string; password?: string }): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse & { user: RawUserResponse }>(
+    "/api/v1/auth/google/link",
+    data,
+    false,
+  );
+  return storeSession(res);
+}
+
+/** Gỡ liên kết Google khỏi tài khoản hiện tại (yêu cầu mật khẩu local). */
+export async function googleUnlink(password: string): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>("/api/v1/auth/google/unlink", { password });
+}
+
+/** Gửi OTP 6 số tới email của tài khoản đích trong phiên liên kết. */
+export async function sendLinkOtp(linkingToken: string): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>("/api/v1/auth/link/send-otp", { linkingToken }, false);
+}
+
+/** Xác minh OTP cho phiên liên kết. */
+export async function verifyLinkOtp(linkingToken: string, otp: string): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>("/api/v1/auth/link/verify-otp", { linkingToken, otp }, false);
+}
+
+/**
+ * Email đã có tài khoản Google-only: sau khi verify OTP, thiết lập mật khẩu
+ * local cho CHÍNH user đó (không tạo user mới) và đăng nhập luôn.
+ */
+export async function setupLocalPassword(data: {
+  linkingToken: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse & { user: RawUserResponse }>(
+    "/api/v1/auth/local/setup-password",
+    data,
+    false,
+  );
+  return storeSession(res);
+}
+
 // ─── Current user / profile ─────────────────────────────────────────────────
 
 export async function getCurrentUser(): Promise<UserResponse> {
