@@ -514,11 +514,10 @@ export function AdminUsersView() {
   };
 
   return (
-    <div className="h-full min-h-0 overflow-hidden flex flex-col gap-5">
+    <div className="h-full min-h-0 overflow-hidden flex flex-col gap-3">
       <div className="flex-shrink-0">
         <SectionHeader
           title="User Management"
-          subtitle={`${totalElements} user(s)`}
           action={
             <div className="flex gap-2">
               <Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />} onClick={loadUsers} disabled={loading}>
