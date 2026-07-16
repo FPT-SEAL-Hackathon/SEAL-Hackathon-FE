@@ -60,6 +60,8 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   team: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   events: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
   "event-participants": [...ORGANIZER_ROLES],
+  // Duyệt team nằm trong Event Management -> Team Management (EventTeamsSection),
+  // không còn là trang riêng trên sidebar.
   "team-approval": [],
   leaderboard: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   certificates: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
