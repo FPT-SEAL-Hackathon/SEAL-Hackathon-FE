@@ -1738,7 +1738,8 @@ export function TeamApiPanel({
     const teamEvent = events.find(event => event.eventId === selectedTeam.eventId);
     const teamEventUnavailableMessage = registrationUnavailableMessage(teamEvent);
     const teamEventRegistrationOpen = !teamEventUnavailableMessage;
-    const registrationDeadlinePassed = hasRegistrationDeadlinePassed(teamEvent);
+    const registrationRestrictionApplies = canEditRoster;
+    const registrationDeadlinePassed = registrationRestrictionApplies && hasRegistrationDeadlinePassed(teamEvent);
     const activeMemberCount = selectedTeam.activeMemberCount ?? selectedTeam.members.filter(member => member.active).length;
     const minTeamSize = selectedTeam.minTeamSize ?? teamEvent?.minTeamSize ?? 0;
     const maxTeamSize = selectedTeam.maxTeamSize ?? teamEvent?.maxTeamSize ?? 0;
@@ -1757,7 +1758,7 @@ export function TeamApiPanel({
     const membersInfoComplete = selectedTeam.membersInfoComplete === true;
     const profileCheckReady = membersInfoComplete || hasBackendProfileIssue;
     const approvalIssues = Array.from(new Set([
-      ...(teamEventUnavailableMessage ? [teamEventUnavailableMessage] : []),
+      ...(registrationRestrictionApplies && teamEventUnavailableMessage ? [teamEventUnavailableMessage] : []),
       ...backendApprovalIssues,
     ]));
     const canRequestApproval = teamEventRegistrationOpen

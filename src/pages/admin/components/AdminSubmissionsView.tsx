@@ -1,10 +1,12 @@
+import { useState } from "react";
 import {
   AlertTriangle, BookOpen, CheckCircle, Eye, FileText, Filter,
-  Github, Loader, Shield, Star, Upload, X
+  Github, History, Loader, Shield, Star, Upload, X
 } from "lucide-react";
 import {
   Card, SectionHeader, COLORS, StatusBadge, Button, StatCard
 } from "@/components/shared/UIComponents";
+import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
 
 interface AdminViewProps {
   context: any;
@@ -36,6 +38,10 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
     submissionDisqualifying,
     handleSubmissionDisqualifyConfirm,
   } = context;
+  const [historyTarget, setHistoryTarget] = useState<any | null>(null);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   const submitted = adminSubmissions.filter((submission: any) =>
     (submission.submissionStatusName ?? "").toLowerCase().includes("submitted")
@@ -90,9 +96,24 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
     { label: "Submission Name", width: "15%", align: "left" },
     { label: "Status", width: "9%", align: "left" },
     { label: "Submitted", width: "15%", align: "left" },
-    { label: "Artifacts", width: "25%", align: "center" },
-    { label: "Action", width: "10%", align: "center" },
+    { label: "Artifacts", width: "21%", align: "center" },
+    { label: "Action", width: "14%", align: "center" },
   ] as const;
+
+  const loadSubmissionHistory = async (submission: any) => {
+    if (!submission?.submissionId) return;
+    setHistoryTarget(submission);
+    setSubmissionHistory([]);
+    setHistoryError("");
+    setHistoryLoading(true);
+    try {
+      setSubmissionHistory(await submissionService.getHistoryBySubmissionId(submission.submissionId));
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : "Failed to load submission history.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   return (
     <>
@@ -262,6 +283,15 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-center" style={{ verticalAlign: "middle" }}>
+                      <div className="flex flex-wrap justify-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<History size={13} />}
+                        onClick={() => loadSubmissionHistory(submission)}
+                      >
+                        History
+                      </Button>
                       <Button
                         variant="danger"
                         size="sm"
@@ -271,6 +301,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                       >
                         Disqualify
                       </Button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -279,6 +310,56 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
           </table>
         </div>
       </Card>
+
+      {historyTarget && (
+        <Card className="p-5 mt-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Submission History</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                {getSubmissionName(historyTarget)} - {getTeamName(historyTarget)}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" icon={<X size={13} />} onClick={() => setHistoryTarget(null)}>
+              Close
+            </Button>
+          </div>
+          {historyLoading ? (
+            <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Loading history...</div>
+          ) : historyError ? (
+            <div style={{ fontSize: 13, color: COLORS.error }}>{historyError}</div>
+          ) : submissionHistory.length === 0 ? (
+            <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No saved versions found.</div>
+          ) : (
+            <div className="space-y-3">
+              {submissionHistory.map(history => (
+                <div key={history.submissionHistoryId} className="rounded-lg p-4" style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: COLORS.textPrimary }}>
+                        {history.notes || "Untitled submission"}
+                      </div>
+                    </div>
+                    <StatusBadge status={(history.submissionStatusName || "submitted").toLowerCase()} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
+                    {[
+                      { label: "Repository", value: history.repositoryUrl },
+                      { label: "Demo", value: history.demoUrl },
+                      { label: "Report", value: history.reportUrl },
+                      { label: "Slides", value: history.slideUrl },
+                    ].map(item => (
+                      <div key={item.label} style={{ fontSize: 12, color: COLORS.textSecondary, wordBreak: "break-word" }}>
+                        <strong style={{ color: COLORS.textPrimary }}>{item.label}:</strong> {item.value || "-"}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {submissionDisqualifyTarget && (
         <Card className="p-5 mt-6" style={{ border: `1px solid ${COLORS.error}55` }}>
