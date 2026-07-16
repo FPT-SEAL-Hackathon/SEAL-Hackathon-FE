@@ -1,4 +1,5 @@
-import { getTeamStatusInfoForTeam, teamService, type TeamResponse } from "@/features/teams/api/teamService";
+import { displayTeamName, getTeamStatusInfoForTeam, isTeamRejected, teamService, type TeamResponse } from "@/features/teams/api/teamService";
+import { eventParticipantService } from "@/features/eventParticipants/api/eventParticipantService";
 
 export const USER_TEAMS_STORAGE_KEY = "seal_user_teams";
 
@@ -12,24 +13,45 @@ type DiscoverUserTeamsOptions = {
 
 export function userBelongsToTeam(team: TeamResponse, userId?: string) {
   if (!userId) return false;
-  return team.leaderUserId === userId
-    || team.members.some(member => member.userId === userId && member.active !== false);
+  const memberRecord = team.members.find(member => member.userId === userId);
+  if (memberRecord) return memberRecord.active !== false;
+  return team.leaderUserId === userId && team.members.length === 0;
 }
 
 export function isCurrentUserTeam(team: TeamResponse, userId?: string) {
-  return userBelongsToTeam(team, userId);
+  return userBelongsToTeam(team, userId) && !isTeamRejected(team);
+}
+
+function isRejectedParticipantStatus(value?: string | null) {
+  return value?.trim().replace(/[-\s]+/g, "_").toUpperCase() === "REJECTED";
+}
+
+function memberHasRejectedParticipantStatus(team: TeamResponse, userId: string) {
+  const member = team.members.find(item => item.userId === userId);
+  return isRejectedParticipantStatus(member?.participantStatus)
+    || isRejectedParticipantStatus(member?.participantStatusName);
 }
 
 async function verifyCurrentMembership(team: TeamResponse, userId: string, options: DiscoverUserTeamsOptions = {}) {
-  if (!userBelongsToTeam(team, userId)) return false;
-  if (options.activeOnly && getTeamStatusInfoForTeam(team).badge !== "active") return false;
+  if (!isCurrentUserTeam(team, userId)) return false;
+  if (memberHasRejectedParticipantStatus(team, userId)) return false;
+  const teamStatus = getTeamStatusInfoForTeam(team).badge;
+  if (options.activeOnly && teamStatus !== "active") return false;
 
   try {
     const detail = await teamService.getMemberDetail(team.teamId, userId);
-    return detail.userId === userId && detail.active !== false;
+    if (detail.userId !== userId || detail.active === false) return false;
+    if (isRejectedParticipantStatus(detail.participantStatus) || isRejectedParticipantStatus(detail.participantStatusName)) {
+      return false;
+    }
   } catch {
     return false;
   }
+
+  const participation = await eventParticipantService.getMyParticipation(team.eventId).catch(() => null);
+  if (participation?.participantStatus === "REJECTED" && teamStatus !== "forming") return false;
+
+  return true;
 }
 
 export function sortTeamsByNewest(teams: TeamResponse[]) {
@@ -48,10 +70,18 @@ function isTeamResponse(value: unknown): value is TeamResponse {
     && Array.isArray(team?.members);
 }
 
+function normalizeStoredTeam(team: TeamResponse): TeamResponse {
+  return {
+    ...team,
+    rawTeamName: team.rawTeamName ?? team.teamName,
+    teamName: displayTeamName(team.teamName),
+  };
+}
+
 export function mergeTeams(...teamLists: TeamResponse[][]) {
   const teamsById = new Map<string, TeamResponse>();
   teamLists.flat().forEach(team => {
-    if (team.teamId) teamsById.set(team.teamId, team);
+    if (team.teamId) teamsById.set(team.teamId, normalizeStoredTeam(team));
   });
   return sortTeamsByNewest(Array.from(teamsById.values()));
 }
@@ -63,6 +93,7 @@ export function getStoredUserTeams(userId?: string) {
     const teams = raw ? JSON.parse(raw) as unknown[] : [];
     return teams
       .filter(isTeamResponse)
+      .map(normalizeStoredTeam)
       .filter(team => isCurrentUserTeam(team, userId));
   } catch {
     return [];

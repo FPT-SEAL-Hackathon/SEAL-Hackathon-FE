@@ -27,6 +27,7 @@ import { useCategoryContext } from "../context/CategoryContext";
 import {
   eventParticipantService,
   type EventParticipantResponse,
+  type EventParticipantStatus,
 } from "@/features/eventParticipants/api/eventParticipantService";
 import { userService, type UserManagementUser } from "@/features/users/api/userService";
 
@@ -89,6 +90,7 @@ function teamResponseToEligibilityReview(
       universityName: "",
       userTypeName: "",
       accountStatusName: "",
+      participantStatusName: labelParticipantStatus(member.participantStatusName ?? member.participantStatus),
       joinedAt: member.joinedAt,
       active: member.active,
       profileComplete: true,
@@ -114,6 +116,7 @@ function mergeReviewAndEventTeams(
       teamStatusId: eventTeam?.teamStatusId ?? team.teamStatusId,
       teamStatusName: eventTeam?.teamStatusName ?? team.teamStatusName,
       activeMemberCount,
+      members: mergeTeamMemberParticipantStatuses(team.members, eventTeam),
     });
   });
 
@@ -123,6 +126,42 @@ function mergeReviewAndEventTeams(
   });
 
   return Array.from(mergedTeamsById.values());
+}
+
+function labelParticipantStatus(status?: EventParticipantStatus | string | null) {
+  const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
+  if (!value) return "";
+  if (value === "PENDING") return "Pending";
+  if (value === "ACTIVE") return "Active";
+  if (value === "REJECTED") return "Rejected";
+  if (value === "SUSPENDED") return "Suspended";
+  if (value === "TEMPORARY") return "Temporary";
+  if (value === "UNVERIFIED") return "Unverified";
+  return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function sameId(left?: string | null, right?: string | null) {
+  return Boolean(left && right && left.trim().toLowerCase() === right.trim().toLowerCase());
+}
+
+function mergeTeamMemberParticipantStatuses(
+  members: TeamEligibilityMemberResponse[],
+  eventTeam?: TeamResponse,
+) {
+  if (!eventTeam?.members?.length) return members;
+  const statusByUserId = new Map(
+    eventTeam.members
+      .filter(member => member.userId)
+      .map(member => [
+        member.userId.trim().toLowerCase(),
+        labelParticipantStatus(member.participantStatusName ?? member.participantStatus),
+      ]),
+  );
+
+  return members.map(member => {
+    const status = statusByUserId.get(member.userId.trim().toLowerCase());
+    return status ? { ...member, participantStatusName: status } : member;
+  });
 }
 
 export function EventTeamsSummaryCard({ eventId, event, onOpen }: { eventId: string; event?: EventResponse; onOpen: () => void }) {
@@ -248,6 +287,12 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       universityName: detail?.universityName || "",
       userTypeName: detail?.userTypeName || "",
       accountStatusName: detail?.accountStatusName || "",
+      participantStatusName: labelParticipantStatus(
+        detail?.participantStatusName
+          ?? detail?.participantStatus
+          ?? member.participantStatusName
+          ?? member.participantStatus,
+      ),
       joinedAt: member.joinedAt,
       active: member.active,
       profileComplete: hasProfile,
@@ -257,9 +302,35 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
 
   const participantBelongsToTeam = (participant: EventParticipantResponse, team: TeamEligibilityReviewResponse) => {
     if (participant.eventId && participant.eventId !== eventId) return false;
-    if (participant.categoryId && participant.categoryId !== team.categoryId) return false;
+    const participantUserId = participant.studentId || participant.user?.userId;
+    if (participantUserId && team.members.some(member => sameId(member.userId, participantUserId))) return true;
     if (participant.teamId) return participant.teamId === team.teamId;
     return participant.teamName?.trim().toLowerCase() === team.teamName.trim().toLowerCase();
+  };
+
+  const loadOrganizerParticipantsForEvent = async (categoryId: string) => {
+    const firstPage = await eventParticipantService.getOrganizerParticipants({
+      eventId,
+      categoryId,
+      page: 0,
+      size: 500,
+    });
+    if (firstPage.totalPages <= 1) return firstPage.content;
+
+    const remainingPages = await Promise.all(
+      Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+        eventParticipantService.getOrganizerParticipants({
+          eventId,
+          categoryId,
+          page: index + 1,
+          size: firstPage.size || 500,
+        }),
+      ),
+    );
+    return [
+      ...firstPage.content,
+      ...remainingPages.flatMap(page => page.content),
+    ];
   };
 
   const participantToEligibilityMember = (participant: EventParticipantResponse): TeamEligibilityMemberResponse => {
@@ -274,9 +345,10 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       externalStudentCode: participant.externalStudentCode || "",
       universityName: participant.universityName || "",
       userTypeName: "FPT Student",
-      accountStatusName: participant.participantStatus === "REJECTED" ? "Rejected" : "Active",
+      accountStatusName: "",
+      participantStatusName: labelParticipantStatus(participant.participantStatus),
       joinedAt: participant.appliedAt || participant.approvedAt || "",
-      active: participant.participantStatus !== "REJECTED",
+      active: true,
       profileComplete: hasProfile,
       issues: hasProfile ? [] : ["Member profile could not be loaded"],
     };
@@ -306,11 +378,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     const [latestTeam, eventTeams, participantPage, usersPage] = await Promise.all([
       teamService.getById(team.teamId),
       teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
-      eventParticipantService.getOrganizerParticipants({
-        eventId,
-        categoryId: team.categoryId,
-        size: 500,
-      }).catch(() => null),
+      loadOrganizerParticipantsForEvent(team.categoryId).catch(() => [] as EventParticipantResponse[]),
       userService.getUsers({
         teamName: team.teamName,
         size: 500,
@@ -331,11 +399,17 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       if (member.userId) mergedMembers.set(member.userId, member);
     });
 
-    const participants = participantPage?.content
+    const participants = participantPage
       .filter(participant => participantBelongsToTeam(participant, team))
       .filter(participant => participant.studentId) ?? [];
     participants.forEach(participant => {
-      if (!mergedMembers.has(participant.studentId)) {
+      const existingMember = mergedMembers.get(participant.studentId);
+      if (existingMember) {
+        mergedMembers.set(participant.studentId, {
+          ...existingMember,
+          participantStatusName: existingMember.participantStatusName || labelParticipantStatus(participant.participantStatus),
+        });
+      } else {
         mergedMembers.set(participant.studentId, participantToEligibilityMember(participant));
       }
     });
@@ -349,12 +423,8 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       }
     });
 
-    const existingMembers = new Map(Array.from(mergedMembers.values()).map(member => [member.userId, member]));
-    const missingMembers = Array.from(sourceMembersByUserId.values())
-      .filter(member => !existingMembers.has(member.userId));
-
     const fetchedMembers = await Promise.all(
-      missingMembers.map(async member => {
+      Array.from(sourceMembersByUserId.values()).map(async member => {
         const detail = await teamService.getMemberDetail(latestTeam.teamId, member.userId)
           .catch(() => userService.getUserById(member.userId)
             .then(userProfile => ({
@@ -369,6 +439,8 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
               universityName: userProfile.universityName ?? "",
               userTypeName: userProfile.roleName ?? userProfile.role,
               accountStatusName: userProfile.accountStatusName ?? userProfile.accountStatus,
+              participantStatus: undefined,
+              participantStatusName: undefined,
               joinedAt: member.joinedAt,
               active: member.active,
             }))
@@ -378,7 +450,13 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     );
 
     fetchedMembers.forEach(member => {
-      if (member.userId) mergedMembers.set(member.userId, member);
+      if (!member.userId) return;
+      const existingMember = mergedMembers.get(member.userId);
+      mergedMembers.set(member.userId, {
+        ...existingMember,
+        ...member,
+        participantStatusName: member.participantStatusName || existingMember?.participantStatusName,
+      });
     });
 
     const activeMemberCount = latestTeam.activeMemberCount ?? Array.from(mergedMembers.values())
@@ -740,13 +818,14 @@ function MemberDetailCard({ member }: { member: TeamEligibilityMemberResponse })
     ["University", member.universityName],
     ["User Type", member.userTypeName],
     ["Account Status", member.accountStatusName],
+    ["Participant Status", member.participantStatusName],
   ];
 
   return (
     <div className="rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
       <div className="flex items-center justify-between gap-2">
         <div style={{ fontSize: 14, fontWeight: 800, color: COLORS.textPrimary }}>{member.fullName || member.email || "Member"}</div>
-        <StatusBadge status={member.profileComplete ? "active" : "unverified"} />
+        <StatusBadge status={(member.participantStatusName || (member.profileComplete ? "active" : "unverified")).toLowerCase()} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
         {fields.map(([label, value]) => (
