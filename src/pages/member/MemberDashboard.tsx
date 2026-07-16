@@ -73,12 +73,32 @@ function isActiveTeamContext(team?: ActiveTeamContext | null) {
   return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "active";
 }
 
+function removeStoredActiveTeam(teamId?: string) {
+  try {
+    if (!teamId) {
+      localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+      return;
+    }
+    const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
+    const storedTeam = raw ? JSON.parse(raw) as ActiveTeamContext : null;
+    if (!storedTeam?.teamId || storedTeam.teamId === teamId) {
+      localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+    }
+  } catch {
+    localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+  }
+}
+
 function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
   try {
     const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
     if (!raw) return null;
     const team = JSON.parse(raw) as ActiveTeamContext;
     if (!team?.teamId) return null;
+    if (getTeamStatusInfo(team.teamStatusId, team.teamStatusName).badge === "rejected") {
+      removeStoredActiveTeam(team.teamId);
+      return null;
+    }
     const belongsToStoredTeam = !userId
       || team.userId === userId
       || team.leaderUserId === userId
@@ -553,6 +573,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
         if (selectedTeam) {
           localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(selectedTeam));
+        } else if (storedSubmissionTeam?.teamId) {
+          removeStoredActiveTeam(storedSubmissionTeam.teamId);
         }
       })
       .catch(() => {
@@ -565,6 +587,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 if (!isTeamActive(team.teamStatusId, team.teamStatusName)) {
                   setActiveTeamContext(null);
                   setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+                  removeStoredActiveTeam(team.teamId);
                   return;
                 }
                 const refreshedTeam = teamToActiveContext(team, user.userId);
@@ -597,6 +620,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           if (!isTeamActive(team.teamStatusId, team.teamStatusName)) {
             setActiveTeamContext(null);
             setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+            removeStoredActiveTeam(team.teamId);
             return;
           }
           const refreshedTeam = teamToActiveContext(team, user?.userId);
@@ -1323,12 +1347,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setEventActionMessage(prev => ({ ...prev, [eventId]: `Registration unavailable: ${unavailableReason}.` }));
       return;
     }
-    if (participantStatus !== "NOT_REGISTERED") {
+    if (participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED") {
       const message = participantStatus === "PENDING"
         ? "Registration already submitted. Waiting for organizer approval."
-        : participantStatus === "REJECTED"
-          ? "Your registration was rejected."
-          : "You are already registered for this event.";
+        : "You are already registered for this event.";
       setEventActionMessage(prev => ({ ...prev, [eventId]: message }));
       return;
     }
@@ -1491,7 +1513,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         {apiEvents.map(ev => {
           const participation = participations[ev.eventId];
           const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
-          const isRegistered = participantStatus !== "NOT_REGISTERED";
+          const blocksTeamRegistration = participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED";
           const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
           const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
           const unavailableReason = registrationUnavailableReason(ev);
@@ -1528,10 +1550,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 <div className="rounded-xl p-3 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Participation Status</div>
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                    {!isRegistered && "You have not registered for this event yet."}
+                    {participantStatus === "NOT_REGISTERED" && "You have not registered for this event yet."}
                     {isPendingParticipant && "Waiting for organizer approval. Team features and competition activities are locked for this event."}
                     {isActiveParticipant && "You are approved for this event. Team features and competition activities are available."}
-                    {isRegistered && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
+                    {isRejectedParticipant && "Your previous team registration was rejected. You can create or join another team for this event."}
+                    {blocksTeamRegistration && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
                   </div>
                   {isRejectedParticipant && (ev.rejectedReason || participation?.rejectedReason) && (
                     <div style={{ fontSize: 13, color: COLORS.error, marginTop: 6 }}>
@@ -1558,7 +1581,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   </>
                 ) : isPendingParticipant ? (
                   <Button variant="outline" size="sm" disabled icon={<Clock size={13} />}>Pending Approval</Button>
-                ) : isRegistered ? (
+                ) : blocksTeamRegistration ? (
                   <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>{statusLabel}</Button>
                 ) : unavailableReason ? (
                   <Button variant="ghost" size="sm" disabled>{unavailableReason}</Button>
