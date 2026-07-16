@@ -14,6 +14,7 @@ import {
   UserCheck,
   UserPlus,
   Users,
+  Crown,
   X,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/store/authStore";
@@ -50,6 +51,7 @@ type ActionKey =
   | "reject"
   | "memberDetail"
   | "remove"
+  | "transferLeader"
   | "register"
   | "withdraw"
   | "events"
@@ -59,7 +61,7 @@ type ActionKey =
 type RoleMode = "auto" | "member" | "leader";
 type TeamFlow = "create" | "join" | null;
 type TeamPanelMode = "current" | "other" | null;
-type LeaderActionPanel = "memberDetail" | "removeMember" | "joinRequests" | null;
+type LeaderActionPanel = "memberDetail" | "removeMember" | "joinRequests" | "transferLeadership" | null;
 
 function Field({
   label,
@@ -264,6 +266,28 @@ function displayValue(value?: string | null) {
   return value && value.trim() ? value : "-";
 }
 
+function formatStatusLabel(value?: string | null) {
+  const normalized = value?.trim();
+  if (!normalized) return "";
+  return normalized
+    .replace(/[_-]+/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function getMemberStatusLabel(member: TeamMemberResponse) {
+  return formatStatusLabel(member.participantStatusName ?? member.participantStatus)
+    || (member.active ? "Active" : "Inactive");
+}
+
+function getMemberStatusColor(status: string) {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "active" || normalized === "approved") return COLORS.success;
+  if (normalized === "suspended" || normalized === "rejected" || normalized === "inactive") return COLORS.error;
+  if (normalized === "pending" || normalized === "temporary" || normalized === "unverified") return COLORS.warning;
+  return COLORS.textSecondary;
+}
+
 function getEventLifecycleStatus(event?: EventResponse | null) {
   if (!event) return "";
   if (typeof event.eventStatus === "object") {
@@ -316,6 +340,7 @@ function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
     { label: "University", value: displayValue(detail.universityName) },
     { label: "User Type", value: displayValue(detail.userTypeName) },
     { label: "Account Status", value: displayValue(detail.accountStatusName) },
+    { label: "Participant Status", value: formatStatusLabel(detail.participantStatusName ?? detail.participantStatus) || "-" },
     { label: "Joined At", value: detail.joinedAt ? new Date(detail.joinedAt).toLocaleString() : "-" },
     { label: "Active", value: detail.active ? "Yes" : "No" },
   ];
@@ -388,17 +413,24 @@ export function TeamApiPanel({
   const [leaderActionPanel, setLeaderActionPanel] = useState<LeaderActionPanel>(null);
   const [selectedMemberDetailUserId, setSelectedMemberDetailUserId] = useState<string | null>(null);
   const [removeMemberName, setRemoveMemberName] = useState("");
+  const [removeMemberReason, setRemoveMemberReason] = useState("");
+  const [newLeaderUserId, setNewLeaderUserId] = useState("");
   const [joinTeamName, setJoinTeamName] = useState("");
   const [joinCategoryId, setJoinCategoryId] = useState("");
   const [joinRequestsLoaded, setJoinRequestsLoaded] = useState(false);
   const loadedMemberDetailsTeamIdRef = useRef<string | null>(null);
   const loadedCategoryIdRef = useRef<string | null>(null);
   const teamDiscoveryAttemptedRef = useRef(false);
+  const teamPanelModeRef = useRef<TeamPanelMode>(teamPanelMode);
   const currentUserId = user?.userId ?? "";
 
   const setField = (key: keyof typeof form, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
   };
+
+  useEffect(() => {
+    teamPanelModeRef.current = teamPanelMode;
+  }, [teamPanelMode]);
 
   const resolveMemberDetail = async (
     team: TeamResponse,
@@ -506,6 +538,7 @@ export function TeamApiPanel({
     setField("eventId", team.eventId);
     setField("categoryId", team.categoryId);
     setTeamFlow(null);
+    teamPanelModeRef.current = nextPanelMode;
     setTeamPanelMode(nextPanelMode);
   };
 
@@ -540,6 +573,7 @@ export function TeamApiPanel({
   };
 
   const startTeamFlow = (flow: Exclude<TeamFlow, null>, eventId = form.eventId) => {
+    teamPanelModeRef.current = "other";
     setSelectedTeam(null);
     setTeamPanelMode("other");
     setTeamFlow(flow);
@@ -552,9 +586,10 @@ export function TeamApiPanel({
   };
 
   const isLeader = useMemo(() => {
+    if (selectedTeam && currentUserId) return selectedTeam.leaderUserId === currentUserId;
     if (mode === "leader") return true;
     if (mode === "member") return false;
-    return !!selectedTeam && !!currentUserId && selectedTeam.leaderUserId === currentUserId;
+    return false;
   }, [mode, selectedTeam, currentUserId]);
 
   const canUseTeam = form.teamId.trim().length > 0;
@@ -598,12 +633,10 @@ export function TeamApiPanel({
 
   useEffect(() => {
     if (!initialEventId) return;
+    teamPanelModeRef.current = "other";
     setTeamPanelMode("other");
     setField("eventId", initialEventId);
-    const teamForEvent = userTeams.find(team => team.eventId === initialEventId);
-    if (teamForEvent) {
-      activateTeam(teamForEvent);
-    } else if (teamDiscoveryDone) {
+    if (teamDiscoveryDone) {
       setSelectedTeam(null);
       setTeamFlow(null);
     }
@@ -722,6 +755,8 @@ export function TeamApiPanel({
     setRequests([]);
     setJoinRequestsLoaded(false);
     setRemoveMemberName("");
+    setRemoveMemberReason("");
+    setNewLeaderUserId("");
     setSelectedMemberDetailUserId(null);
     setField("responseNote", "");
   }, [selectedTeam?.teamId]);
@@ -768,12 +803,14 @@ export function TeamApiPanel({
         return team;
       },
       (team: any) => {
+        if (requireCurrentMembership && teamPanelModeRef.current !== "current") return;
         activateTeam(team);
         setField("teamId", team.teamId);
         setField("eventId", team.eventId);
         setField("categoryId", team.categoryId);
+        setMessage({ tone: "success", text: "Team loaded successfully." });
       },
-      "Team loaded successfully.",
+      "",
     );
   };
 
@@ -826,6 +863,7 @@ export function TeamApiPanel({
             return;
           }
           if (teams[0]) {
+            if (teamPanelModeRef.current !== "current") return;
             activateTeam(teams[0], true, "current", teams);
             return;
           }
@@ -884,6 +922,7 @@ export function TeamApiPanel({
         if (selected) {
           setUserTeams(teams);
           saveStoredUserTeams(teams, currentUserId);
+          if (teamPanelModeRef.current !== "current") return;
           activateTeam(selected, true, "current", teams);
           return;
         }
@@ -949,7 +988,7 @@ export function TeamApiPanel({
     run(
       "create",
       async () => {
-        const team = await teamService.create({
+        const createdTeam = await teamService.create({
           eventId: form.eventId.trim(),
           categoryId: form.categoryId.trim(),
           teamName: form.teamName.trim(),
@@ -957,7 +996,7 @@ export function TeamApiPanel({
         await refreshAccessToken().catch(() => null);
         const currentUser = await getCurrentUser().catch(() => null);
         if (currentUser) setAuth(currentUser);
-        return team;
+        return teamService.getById(createdTeam.teamId).catch(() => createdTeam);
       },
       (team: any) => {
         teamDiscoveryAttemptedRef.current = true;
@@ -1050,7 +1089,7 @@ export function TeamApiPanel({
     );
   };
 
-  const removeMember = (userId = form.memberUserId.trim()) => {
+  const removeMember = (userId = form.memberUserId.trim(), reason?: string) => {
     if (!form.teamId.trim() || !userId) return;
     if (selectedTeam && getTeamStatusInfoForTeam(selectedTeam).badge !== "forming") {
       setMessage({ tone: "error", text: "The team roster is locked unless the team is forming." });
@@ -1066,7 +1105,7 @@ export function TeamApiPanel({
     run(
       "remove",
       async () => {
-        await teamService.removeMember(targetTeamId, userId);
+        await teamService.removeMember(targetTeamId, userId, reason);
         const refreshedTeam = await teamService.getById(targetTeamId).catch(error => {
           const parsedError = parseApiError(error);
           if (parsedError.status === 404) return null;
@@ -1086,8 +1125,10 @@ export function TeamApiPanel({
         }
         activateTeam(refreshedTeam);
         setTeams(prev => [refreshedTeam, ...prev.filter(team => team.teamId !== refreshedTeam.teamId)]);
+        setLeaderActionPanel(null);
       },
-      removingCurrentUser ? "Left team successfully." : "Member removed.",
+      removingCurrentUser ? "Leave team successfully." : "Member removed successfully.",
+      removingCurrentUser,
     );
   };
 
@@ -1158,8 +1199,13 @@ export function TeamApiPanel({
 
   const removeMemberByName = (team: TeamResponse) => {
     const selectedUserId = removeMemberName.trim();
+    const reason = removeMemberReason.trim();
     if (!selectedUserId) {
       setMessage({ tone: "error", text: "Select a member before removing." });
+      return;
+    }
+    if (!reason) {
+      setMessage({ tone: "error", text: "Enter a removal reason before removing this member." });
       return;
     }
 
@@ -1174,8 +1220,46 @@ export function TeamApiPanel({
       return;
     }
 
-    removeMember(target.userId);
+    removeMember(target.userId, reason);
     setRemoveMemberName("");
+    setRemoveMemberReason("");
+  };
+
+  const transferLeadership = (team: TeamResponse, targetUserIdOverride?: string) => {
+    const targetUserId = (targetUserIdOverride ?? newLeaderUserId).trim();
+    if (!targetUserId) {
+      setMessage({ tone: "error", text: "Select an active member before transferring leadership." });
+      return;
+    }
+    if (getTeamStatusInfoForTeam(team).badge !== "forming") {
+      setMessage({ tone: "error", text: "Team roster can only be changed while the team is forming." });
+      return;
+    }
+
+    const target = team.members.find(member => member.userId === targetUserId);
+    if (!target || target.active === false || target.userId === team.leaderUserId) {
+      setMessage({ tone: "error", text: "Leadership can only be transferred to an active member in this team." });
+      return;
+    }
+
+    run(
+      "transferLeader",
+      async () => {
+        const updatedTeam = await teamService.transferLeadership(team.teamId, target.userId);
+        await refreshAccessToken().catch(() => null);
+        const currentUser = await getCurrentUser().catch(() => null);
+        if (currentUser) setAuth(currentUser);
+        return updatedTeam;
+      },
+      updatedTeam => {
+        activateTeam(updatedTeam);
+        setTeams(prev => [updatedTeam, ...prev.filter(item => item.teamId !== updatedTeam.teamId)]);
+        setLeaderActionPanel(null);
+        setNewLeaderUserId("");
+      },
+      "Leadership transferred successfully.",
+      true,
+    );
   };
 
   const renderTeamEntryChoices = () => {
@@ -1189,6 +1273,7 @@ export function TeamApiPanel({
           <button
             type="button"
             onClick={() => {
+              teamPanelModeRef.current = "current";
               setTeamPanelMode("current");
               setTeamFlow(null);
               setMessage(null);
@@ -1208,6 +1293,7 @@ export function TeamApiPanel({
           <button
             type="button"
             onClick={() => {
+              teamPanelModeRef.current = "other";
               setTeamPanelMode("other");
               setSelectedTeam(null);
               setTeamFlow(null);
@@ -1320,6 +1406,7 @@ export function TeamApiPanel({
             size="md"
             icon={<Users size={14} />}
             onClick={() => {
+              teamPanelModeRef.current = "current";
               setTeamPanelMode("current");
               setTeamFlow(null);
               setMessage(null);
@@ -1333,6 +1420,7 @@ export function TeamApiPanel({
             size="md"
             icon={<PlusCircle size={14} />}
             onClick={() => {
+              teamPanelModeRef.current = "other";
               setTeamPanelMode("other");
               setSelectedTeam(null);
               setTeamFlow("create");
@@ -1652,21 +1740,19 @@ export function TeamApiPanel({
     const teamSizeEligible = hasTeamSizeRequirement
       ? computedTeamSizeEligible
       : selectedTeam.teamSizeEligible ?? computedTeamSizeEligible;
-    const membersInfoComplete = selectedTeam.membersInfoComplete ?? true;
-    const isRedundantApprovalIssue = (issue: string) => {
+    const backendApprovalIssues = selectedTeam.approvalIssues ?? [];
+    const hasBackendProfileIssue = backendApprovalIssues.some(issue => {
       const normalizedIssue = issue.trim().toLowerCase();
-      if (!membersInfoComplete && normalizedIssue.includes("incomplete profile")) return true;
-      if (!teamSizeEligible && normalizedIssue.includes("team size")) return true;
-      return false;
-    };
+      return normalizedIssue.includes("profile") || normalizedIssue.includes("member info");
+    });
+    const membersInfoComplete = selectedTeam.membersInfoComplete === true;
+    const profileCheckReady = membersInfoComplete || hasBackendProfileIssue;
     const approvalIssues = Array.from(new Set([
       ...(teamEventUnavailableMessage ? [teamEventUnavailableMessage] : []),
-      ...(teamSizeEligible ? [] : ["Team size is outside the event requirement."]),
-      ...(membersInfoComplete ? [] : ["Some member profiles are incomplete."]),
-      ...(selectedTeam.approvalIssues ?? []).filter(issue => !isRedundantApprovalIssue(issue)),
+      ...backendApprovalIssues,
     ]));
     const canRequestApproval = teamEventRegistrationOpen
-      && (selectedTeam.canRequestApproval ?? (teamSizeEligible && membersInfoComplete));
+      && (selectedTeam.canRequestApproval ?? (teamSizeEligible && profileCheckReady && membersInfoComplete));
     const canSubmitForApproval = isLeader && canEditRoster && canRequestApproval;
     const memberRequirementLabel = minTeamSize && maxTeamSize
       ? `${activeMemberCount}/${minTeamSize}-${maxTeamSize}`
@@ -1689,13 +1775,16 @@ export function TeamApiPanel({
         member: display.name,
         role: member.userId === selectedTeam.leaderUserId ? "Leader" : "Member",
         email: display.email,
-        active: member.active ? "Active" : "Inactive",
+        active: getMemberStatusLabel(member),
         joinedAt: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-",
         action: member.userId,
       };
     });
     const removableMembers = selectedTeam.members.filter(member =>
       member.userId !== user?.userId && member.userId !== selectedTeam.leaderUserId
+    );
+    const transferableMembers = selectedTeam.members.filter(member =>
+      member.active !== false && member.userId !== selectedTeam.leaderUserId
     );
     const renderCenteredModal = (title: string, onClose: () => void, content: ReactNode) => {
       if (typeof document === "undefined") return null;
@@ -1740,15 +1829,23 @@ export function TeamApiPanel({
             <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary }}>
               FINALIZE TEAM
             </div>
-            <StatusBadge status={canSubmitForApproval || canWithdrawApprovalRequest ? teamStatus.badge : "pending"} />
+            <StatusBadge status={teamStatus.badge} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textPrimary, marginTop: 8 }}>
             Members: {memberRequirementLabel}
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             {[
-              { ok: teamSizeEligible, label: teamSizeEligible ? "Size OK" : "Size Issue" },
-              { ok: membersInfoComplete, label: membersInfoComplete ? "Profiles OK" : "Profile Issue" },
+              {
+                label: teamSizeEligible ? "Size OK" : "Size Issue",
+                color: teamSizeEligible ? COLORS.success : COLORS.error,
+                background: teamSizeEligible ? `${COLORS.success}10` : `${COLORS.error}10`,
+              },
+              {
+                label: !profileCheckReady ? "Profiles Checking" : membersInfoComplete ? "Profiles OK" : "Profile Issue",
+                color: !profileCheckReady ? COLORS.warning : membersInfoComplete ? COLORS.success : COLORS.error,
+                background: !profileCheckReady ? `${COLORS.warning}10` : membersInfoComplete ? `${COLORS.success}10` : `${COLORS.error}10`,
+              },
             ].map(item => (
               <span
                 key={item.label}
@@ -1756,9 +1853,9 @@ export function TeamApiPanel({
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: item.ok ? COLORS.success : COLORS.error,
-                  background: item.ok ? `${COLORS.success}10` : `${COLORS.error}10`,
-                  border: `1px solid ${item.ok ? COLORS.success : COLORS.error}22`,
+                  color: item.color,
+                  background: item.background,
+                  border: `1px solid ${item.color}22`,
                 }}
               >
                 {item.label}
@@ -1854,12 +1951,79 @@ export function TeamApiPanel({
                 variant="danger"
                 size="md"
                 icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                disabled={!removeMemberName.trim() || loading.remove}
+                disabled={!removeMemberName.trim() || !removeMemberReason.trim() || loading.remove}
                 onClick={() => removeMemberByName(selectedTeam)}
               >
                 {loading.remove ? "Removing..." : "Remove Member"}
               </Button>
             </div>
+            <label className="block mt-4">
+              <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
+                REMOVAL REASON
+              </span>
+              <textarea
+                value={removeMemberReason}
+                onChange={event => setRemoveMemberReason(event.target.value)}
+                placeholder="Explain why this member is being removed..."
+                className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
+                rows={3}
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                disabled={loading.remove}
+              />
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+                This reason will be included in the notification sent to the removed member.
+              </div>
+            </label>
+          </div>
+        );
+      }
+
+      if (leaderActionPanel === "transferLeadership" && canEditRoster) {
+        return (
+          <div className="mt-5 rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary, marginBottom: 8 }}>Transfer Leadership</div>
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
+              Select an active member to become the new team leader.
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-end">
+              <label className="block">
+                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
+                  NEW LEADER
+                </span>
+                <select
+                  value={newLeaderUserId}
+                  onChange={event => setNewLeaderUserId(event.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                  disabled={transferableMembers.length === 0 || loading.transferLeader}
+                >
+                  <option value="" disabled hidden>Select an active member...</option>
+                  {transferableMembers.map(member => {
+                    const display = getMemberDisplay(member);
+                    const email = display.email !== "-" && display.email !== display.name ? ` - ${display.email}` : "";
+                    return (
+                      <option key={member.userId} value={member.userId}>
+                        {display.name}{email}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <Button
+                variant="primary"
+                size="md"
+                icon={loading.transferLeader ? <Loader size={14} className="animate-spin" /> : <Crown size={14} />}
+                disabled={!newLeaderUserId.trim() || loading.transferLeader}
+                onClick={() => transferLeadership(selectedTeam)}
+              >
+                {loading.transferLeader ? "Transferring..." : "Transfer"}
+              </Button>
+            </div>
+            {transferableMembers.length === 0 && (
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 10 }}>
+                There are no other active members available to receive leadership.
+              </div>
+            )}
           </div>
         );
       }
@@ -1986,18 +2150,30 @@ export function TeamApiPanel({
             <div className="flex flex-wrap items-center gap-3">
               <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>{selectedTeam.teamName}</div>
               {isLeader && canEditRoster && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
-                  disabled={loading.requests}
-                  onClick={() => {
-                    setLeaderActionPanel(current => current === "joinRequests" ? null : "joinRequests");
-                    if (leaderActionPanel !== "joinRequests") loadRequests(selectedTeam.teamId);
-                  }}
-                >
-                  {loading.requests ? "Loading..." : "Join Request"}
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={loading.requests ? <Loader size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                    disabled={loading.requests}
+                    onClick={() => {
+                      setLeaderActionPanel(current => current === "joinRequests" ? null : "joinRequests");
+                      if (leaderActionPanel !== "joinRequests") loadRequests(selectedTeam.teamId);
+                    }}
+                  >
+                    {loading.requests ? "Loading..." : "Join Request"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={loading.transferLeader ? <Loader size={14} className="animate-spin" /> : <Crown size={14} />}
+                    disabled={loading.transferLeader || transferableMembers.length === 0}
+                    onClick={() => setLeaderActionPanel(current => current === "transferLeadership" ? null : "transferLeadership")}
+                    title={transferableMembers.length === 0 ? "No active member is available to receive leadership." : "Transfer team leadership"}
+                  >
+                    Transfer Leader
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -2011,7 +2187,27 @@ export function TeamApiPanel({
               { key: "member", label: "Member" },
               { key: "role", label: "Role" },
               { key: "email", label: "Email" },
-              { key: "active", label: "Status" },
+              {
+                key: "active",
+                label: "Status",
+                render: (status) => {
+                  const color = getMemberStatusColor(String(status));
+                  return (
+                    <span
+                      className="inline-flex items-center rounded-full px-2.5 py-1"
+                      style={{
+                        color,
+                        background: `${color}10`,
+                        border: `1px solid ${color}24`,
+                        fontSize: 12,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {status}
+                    </span>
+                  );
+                },
+              },
               { key: "joinedAt", label: "Joined" },
               {
                 key: "action",
@@ -2047,9 +2243,12 @@ export function TeamApiPanel({
                           <Button
                             variant="danger"
                             size="sm"
-                            icon={loading.remove ? <Loader size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                            disabled={loading.remove}
-                            onClick={() => removeMember(memberUserId)}
+                            icon={<Trash2 size={13} />}
+                            onClick={() => {
+                              setRemoveMemberName(memberUserId);
+                              setRemoveMemberReason("");
+                              setLeaderActionPanel("removeMember");
+                            }}
                           >
                             Remove
                           </Button>
@@ -2095,6 +2294,117 @@ export function TeamApiPanel({
               </>,
             );
           })()}
+          {leaderActionPanel === "removeMember" && canEditRoster && renderCenteredModal(
+            "Remove Member",
+            () => setLeaderActionPanel(null),
+            <>
+              <div style={{ fontSize: 13, color: COLORS.textSecondary, marginBottom: 14 }}>
+                Select a member and enter the reason. The removed member will receive this reason by notification.
+              </div>
+              <label className="block">
+                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
+                  MEMBER
+                </span>
+                <select
+                  value={removeMemberName}
+                  onChange={event => setRemoveMemberName(event.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                  disabled={removableMembers.length === 0 || loading.remove}
+                >
+                  <option value="" disabled hidden>Select a member...</option>
+                  {removableMembers.map(member => {
+                    const display = getMemberDisplay(member);
+                    const email = display.email !== "-" && display.email !== display.name ? ` - ${display.email}` : "";
+                    return (
+                      <option key={member.userId} value={member.userId}>
+                        {display.name}{email}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label className="block mt-4">
+                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
+                  REMOVAL REASON
+                </span>
+                <textarea
+                  value={removeMemberReason}
+                  onChange={event => setRemoveMemberReason(event.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl outline-none resize-none"
+                  rows={4}
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                  disabled={loading.remove}
+                />
+              </label>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button
+                  variant="ghost"
+                  size="md"
+                  disabled={loading.remove}
+                  onClick={() => setLeaderActionPanel(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  size="md"
+                  icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  disabled={!removeMemberName.trim() || !removeMemberReason.trim() || loading.remove}
+                  onClick={() => removeMemberByName(selectedTeam)}
+                >
+                  {loading.remove ? "Removing..." : "Remove Member"}
+                </Button>
+              </div>
+            </>,
+          )}
+          {leaderActionPanel === "transferLeadership" && renderCenteredModal(
+            "Transfer Leadership",
+            () => setLeaderActionPanel(null),
+            <>
+              {transferableMembers.length === 0 && (
+                <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
+                  There are no other active members available to receive leadership.
+                </div>
+              )}
+              {transferableMembers.length > 0 && <div className="space-y-3">
+                {transferableMembers.map(member => {
+                  const display = getMemberDisplay(member);
+                  return (
+                    <div
+                      key={member.userId}
+                      className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 p-4 rounded-xl"
+                      style={{ background: "rgba(255,255,255,0.45)", border: `1px solid ${COLORS.border}` }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                          {display.name}
+                        </div>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                          Email: {display.email}
+                        </div>
+                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                          Joined: {member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-"}
+                        </div>
+                      </div>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        icon={loading.transferLeader ? <Loader size={13} className="animate-spin" /> : <Crown size={13} />}
+                        disabled={loading.transferLeader}
+                        onClick={() => {
+                          setNewLeaderUserId(member.userId);
+                          transferLeadership(selectedTeam, member.userId);
+                        }}
+                      >
+                        {loading.transferLeader ? "Transferring..." : "Transfer"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>}
+            </>,
+          )}
           {leaderActionPanel === "joinRequests" && renderCenteredModal(
             "Join Requests",
             () => setLeaderActionPanel(null),
