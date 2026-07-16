@@ -103,24 +103,28 @@ export function AdminReportsView({ context }: AdminViewProps) {
       }
 
       // 4. Completion rate = "% active teams đã nộp ít nhất 1 submission" (trong bất kỳ round nào của event)
-      // Vì 1 team có thể có nhiều submission (1 per round), ta dùng Set(teamId) để deduplicate.
-      // Filter out null/undefined teamId để tránh đếm thừa khi backend trả về data thiếu.
-      const teamsWithAnySubmission = new Set(
-        submissions.map((s: any) => s.teamId).filter(Boolean)
-      ).size;
-
       // Lấy danh sách teams của event để xác định mẫu số cố định
       const eventTeams = await teamService.getByEvent(selectedEventId).catch(() => []);
 
       // Mẫu số = các team đang ACTIVE (đã được duyệt tham gia event)
-      const activeTeamsCount = eventTeams.filter((t: any) => {
+      const activeTeams = eventTeams.filter((t: any) => {
         const status = (t.teamStatusName || t.statusName || "").toLowerCase();
         return status.includes("active") || status.includes("approved") || t.teamStatusId === "60000000-0000-0000-0000-000000000002";
-      }).length;
+      });
+      const totalTeams = activeTeams.length > 0 ? activeTeams.length : eventTeams.length;
 
-      const totalTeams = activeTeamsCount > 0 ? activeTeamsCount : eventTeams.length;
+      // Tử số: chỉ đếm active teams đã có ít nhất 1 submission
+      // Dùng Set(teamId) để deduplicate (1 team nộp nhiều round vẫn chỉ tính 1 lần)
+      // Chỉ tính active teamIds để tử số và mẫu số nhất quán → tránh vượt 100%
+      const activeTeamIds = new Set(
+        (activeTeams.length > 0 ? activeTeams : eventTeams).map((t: any) => t.teamId).filter(Boolean)
+      );
+      const teamsWithAnySubmission = new Set(
+        submissions.map((s: any) => s.teamId).filter((id: string) => id && activeTeamIds.has(id))
+      ).size;
+
       const completionRate = totalTeams > 0
-        ? Math.round((teamsWithAnySubmission / totalTeams) * 100)
+        ? Math.min(100, Math.round((teamsWithAnySubmission / totalTeams) * 100))
         : null;
 
       setStats({
