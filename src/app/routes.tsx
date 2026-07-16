@@ -18,17 +18,11 @@ import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
 import { ForbiddenPage } from "@/pages/ForbiddenPage";
-import { DevHub } from "@/pages/dev/DevHub";
+
 
 function RequireAuth() {
   const { isAuthenticated, role, user } = useAuth();
   const location = useLocation();
-  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
-
-  // In dev mode, allow access without real auth (roles are injected by DevRoute handleNavigate)
-  if (isDevMode && !isAuthenticated) {
-    return <Outlet />;
-  }
 
   if (!isAuthenticated || !role) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -45,11 +39,6 @@ function RequireAuth() {
 function RequireAuthOnly() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
-
-  if (isDevMode && !isAuthenticated) {
-    return <Outlet />;
-  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -58,44 +47,6 @@ function RequireAuthOnly() {
   return <Outlet />;
 }
 
-// ─── Dev Hub guard ──────────────────────────────────────────────────────────
-const DEV_ROLE_MAP: Record<string, string> = {
-  member: "ROLE_MEMBER",
-  leader: "ROLE_LEADER",
-  judge: "ROLE_INTERNAL_JUDGE",
-  mentor: "ROLE_MENTOR",
-  admin: "ROLE_ORGANIZER",
-};
-
-function DevRoute() {
-  const navigate = useNavigate();
-  const { setAuth } = useAuth();
-  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
-  if (!isDevMode) return <Navigate to="/login" replace />;
-
-  const handleNavigate = (roleName: string, page: string) => {
-    // Inject mock user so auth guards pass
-    const roleCode = DEV_ROLE_MAP[roleName] ?? "ROLE_MEMBER";
-    setAuth({
-      userId: "dev-user-id",
-      fullName: `Dev ${roleName.charAt(0).toUpperCase() + roleName.slice(1)}`,
-      email: "dev@seal.dev",
-      role: roleCode,
-      phone: "",
-      studentCode: "DEV001",
-      universityName: "FPT University",
-      accountStatus: "ACTIVE",
-    } as any);
-    navigate(`/${roleName}/${page}`);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("seal_dev_mode");
-    navigate("/", { replace: true });
-  };
-
-  return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
-}
 
 function getValidRedirectPath(role: Role, fromPath?: string): string {
   const defaultPath = getDefaultPath(role);
@@ -146,11 +97,7 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
       mode={mode}
       onBackToLanding={() => navigate("/", { replace: true })}
       onLogin={(loginPayload) => {
-        // Dev bypass shortcut
-        if (loginPayload === "__dev__") {
-          navigate("/dev", { replace: true });
-          return;
-        }
+
         if (typeof loginPayload === "string") {
           const nextRole = roleFromUser(loginPayload);
           navigate(from || getDefaultPath(nextRole), { replace: true });
@@ -264,7 +211,7 @@ export const router = createBrowserRouter([
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/403", element: <ForbiddenPage /> },
-  { path: "/dev", element: <DevRoute /> },
+
   {
     path: "/",
     element: <RequireAuthOnly />,
