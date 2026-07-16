@@ -10,6 +10,8 @@ function cleanUrlParams() {
   const currentUrl = new URL(window.location.href);
   currentUrl.searchParams.delete("code");
   currentUrl.searchParams.delete("error");
+  currentUrl.searchParams.delete("link_token");
+  currentUrl.searchParams.delete("email");
   const nextUrl = `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`;
   window.history.replaceState({}, document.title, nextUrl);
 }
@@ -33,7 +35,19 @@ export function OAuthSuccessPage() {
     const params = new URLSearchParams(location.search);
     const code = params.get("code")?.trim();
     const oauthError = params.get("error");
+    const linkToken = params.get("link_token")?.trim();
+    const linkEmail = params.get("email")?.trim();
     cleanUrlParams();
+
+    // Email này đã thuộc một tài khoản hiện có: backend KHÔNG tạo user mới mà
+    // phát linkingToken — chuyển sang trang xác minh để gắn Google vào đúng user.
+    if (linkToken) {
+      navigate("/link-google", {
+        replace: true,
+        state: { linkingToken: linkToken, email: linkEmail ?? "" },
+      });
+      return;
+    }
 
     if (oauthError) {
       setState("error");
