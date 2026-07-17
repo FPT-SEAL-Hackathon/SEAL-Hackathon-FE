@@ -351,6 +351,13 @@ export const teamService = {
       .then(unwrapArray),
   handleJoinRequest: (requestId: string, action: "APPROVED" | "REJECTED", responseNote?: string) =>
     api.put<JoinTeamRequestResponse>(`/api/v1/teams/requests/${requestId}`, { action, responseNote }),
+  // Người xin tự hủy request PENDING của chính mình.
+  cancelJoinRequest: (requestId: string) =>
+    api.delete<JoinTeamRequestResponse>(`/api/v1/teams/requests/${requestId}`),
+  // Các request PENDING của chính user hiện tại (mọi team) — để hiển thị trạng thái + nút hủy.
+  getMyPendingRequests: () =>
+    api.get<JoinTeamRequestResponse[] | BackendEnvelope<JoinTeamRequestResponse[]>>("/api/v1/teams/requests/mine")
+      .then(unwrapArray),
 
   // Members
   getMemberDetail: async (teamId: string, userId: string) =>
@@ -361,6 +368,9 @@ export const teamService = {
     api.delete(`/api/v1/teams/${teamId}/members/${userId}`, reason ? { reason } : undefined),
   transferLeadership: (teamId: string, newLeaderUserId: string) =>
     api.put<RawTeamResponse>(`/api/v1/teams/${teamId}/leader`, { newLeaderUserId }).then(normalizeTeamResponse),
+  // Leader giải tán team FORMING trong một thao tác (xóa team + request + membership).
+  disband: (teamId: string) =>
+    api.post<void>(`/api/v1/teams/${teamId}/disband`, {}),
 
   // Team-first event registration: leader đăng ký cả team, organizer duyệt theo team.
   registerEvent: (teamId: string) =>
