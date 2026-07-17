@@ -1154,7 +1154,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const selectedSubmissionRoundCanSubmit = selectedSubmissionRoundState.canSubmit
     && submissionEligibility.canSubmit
     && !submissionEligibility.loading;
-  const selectedSubmissionRoundLocked = !!selectedSubmissionRound && !submissionEligibility.canSubmit;
+  const selectedSubmissionRoundLocked = !!selectedSubmissionRound
+    && !submissionEligibility.loading
+    && !submissionEligibility.canSubmit;
 
   const renderSubmissionTeamSelector = () => (
     <Card className="p-4">
@@ -1335,7 +1337,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   };
 
   const renderRoundSubmissionNotice = () => {
-    if (!selectedSubmissionRound || selectedSubmissionRoundCanSubmit) return null;
+    if (!selectedSubmissionRound || selectedSubmissionRoundCanSubmit || submissionEligibility.loading) return null;
     const isExpired = selectedSubmissionRoundState.deadlinePassed;
     const isLockedByAdvancement = selectedSubmissionRoundState.canSubmit && !submissionEligibility.canSubmit;
 
