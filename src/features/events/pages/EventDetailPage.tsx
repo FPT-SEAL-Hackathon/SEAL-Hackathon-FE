@@ -1,10 +1,12 @@
-import { useEffect, useState, Children } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck } from "lucide-react";
 import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../shared/components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
 import { CategoriesTab } from "../components/category/CategoryTab";
+import { AssignMentorsTab } from "../components/category/AssignMentorsTab";
 import { RoundsTab } from "../components/round/RoundTab";
+import { AssignJudgesTab } from "../components/round/AssignJudgesTab";
 import { useEventCriteria } from "../hooks/useEventCriteria";
 import { EventResponse } from "../api/eventService";
 import { useCategories } from "../hooks/useCategories";
@@ -15,17 +17,19 @@ import { RoundProvider } from "../context/RoundContext";
 import { EventDetailHeader } from "../shared/components/EventDetailHeader";
 import { EventCriteriaProvider, useEventCriteriaContext } from "../context/EventCriteriaContext";
 
-type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams";
+type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "overview",    label: "Overview",    icon: <Calendar size={14} /> },
-  { key: "criteria",    label: "Criteria",    icon: <Star size={14} /> },
-  { key: "categories",  label: "Categories",  icon: <BookOpen size={14} /> },
-  { key: "rounds",      label: "Rounds",      icon: <GitBranch size={14} /> },
-  { key: "teams",       label: "Team Management", icon: <Users size={14} /> },
+  { key: "overview",        label: "Overview",        icon: <Calendar size={14} /> },
+  { key: "criteria",        label: "Criteria",        icon: <Star size={14} /> },
+  { key: "categories",      label: "Categories",      icon: <BookOpen size={14} /> },
+  { key: "rounds",          label: "Rounds",          icon: <GitBranch size={14} /> },
+  { key: "assign-judges",   label: "Assign Judges",   icon: <Shield size={14} /> },
+  { key: "assign-mentors",  label: "Assign Mentors",  icon: <UserCheck size={14} /> },
+  { key: "teams",           label: "Team Management", icon: <Users size={14} /> },
 ];
 
-export function EventDetailPage({ event, onBack }: { event: EventResponse; onBack: () => void }) {
+export function EventDetailPage({ event, onBack, onEdit }: { event: EventResponse; onBack: () => void; onEdit?: () => void }) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   // ── Shared state lifted here so all tabs can read/write ──────────────────
@@ -56,6 +60,7 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
               event={event}
               totalPrize={totalPrize}
               onBack={onBack}
+              onEdit={onEdit}
             />
             {/* Tab bar */}
             <div
@@ -89,6 +94,7 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
                 event={event} 
                 totalPrize={totalPrize}
                 onOpenTeamManagement={() => setActiveTab("teams")}
+                onEdit={onEdit}
               />
             )}
 
@@ -102,6 +108,14 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
         
             {activeTab === "rounds" && (
               <RoundsTab />
+            )}
+
+            {activeTab === "assign-judges" && (
+              <AssignJudgesTab />
+            )}
+
+            {activeTab === "assign-mentors" && (
+              <AssignMentorsTab />
             )}
           
             {activeTab === "teams" && (

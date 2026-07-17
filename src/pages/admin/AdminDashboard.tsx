@@ -996,6 +996,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
                   setSelectedEvent(null);
                   viewContext.onNavigate("events");
                 }}
+                onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
             />
           );
       case "event-participants": return <AdminEventParticipantsView />;

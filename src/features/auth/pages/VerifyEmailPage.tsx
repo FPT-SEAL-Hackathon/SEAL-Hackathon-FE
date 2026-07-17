@@ -3,6 +3,9 @@ import { useNavigate, useLocation } from "react-router";
 import { AlertCircle, CheckCircle, Loader, LogIn, MailCheck } from "lucide-react";
 import { verifyEmail } from "@/features/auth/api/authService";
 import { ApiError } from "@/lib/api/apiClient";
+import { useAuth } from "@/features/auth/store/authStore";
+import { normalizeRole, getRoleRouteSegment } from "@/auth/rbac/roles";
+import { DEFAULT_PAGE_BY_ROLE } from "@/auth/permissions/permissions";
 
 type VerificationState = "loading" | "success" | "invalid" | "expired" | "already-verified";
 
@@ -13,7 +16,7 @@ const STATE_COPY: Record<VerificationState, { title: string; message: string }> 
   },
   success: {
     title: "Email verified",
-    message: "Your email has been verified. Redirecting to login...",
+    message: "Your email has been verified. Redirecting to your dashboard...",
   },
   invalid: {
     title: "Invalid token",
@@ -57,6 +60,7 @@ export function VerifyEmailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const hasStarted = useRef(false);
+  const { setAuth } = useAuth();
 
   useEffect(() => {
     if (hasStarted.current) return;
@@ -73,10 +77,21 @@ export function VerifyEmailPage() {
     let redirectTimer: ReturnType<typeof setTimeout> | undefined;
 
     verifyEmail(token)
-      .then(() => {
+      .then((session) => {
+        // Cập nhật React auth state để app biết user đã đăng nhập
+        setAuth(session.user);
         setState("success");
+
+        // Redirect thẳng vào dashboard theo role sau 2 giây
         redirectTimer = setTimeout(() => {
-          navigate("/login", { replace: true });
+          const role = normalizeRole(session.user.role);
+          if (role) {
+            const segment = getRoleRouteSegment(role);
+            const page = DEFAULT_PAGE_BY_ROLE[role];
+            navigate(`/${segment}/${page}`, { replace: true });
+          } else {
+            navigate("/login", { replace: true });
+          }
         }, 2200);
       })
       .catch((error) => {
@@ -86,7 +101,7 @@ export function VerifyEmailPage() {
     return () => {
       if (redirectTimer) window.clearTimeout(redirectTimer);
     };
-  }, [location.search, navigate]);
+  }, [location.search, navigate, setAuth]);
 
   const copy = STATE_COPY[state];
   const isLoading = state === "loading";
@@ -141,3 +156,4 @@ export function VerifyEmailPage() {
     </main>
   );
 }
+

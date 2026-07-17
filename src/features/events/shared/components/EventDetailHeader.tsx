@@ -1,5 +1,5 @@
-import { ArrowLeft } from "lucide-react";
-import { StatusBadge, COLORS } from "@/components/shared/UIComponents";
+import { ArrowLeft, Edit } from "lucide-react";
+import { StatusBadge, COLORS, Button } from "@/components/shared/UIComponents";
 import { EventResponse } from "../../api/eventService";
 import { useCategoryContext } from "../../context/CategoryContext";
 
@@ -10,12 +10,14 @@ interface Props {
     currency: string;
   } | null;
   onBack: () => void;
+  onEdit?: () => void;
 }
 
 export function EventDetailHeader({
   event,
   totalPrize,
-  onBack
+  onBack,
+  onEdit,
 } : Props) {
   const { categories } = useCategoryContext();
 
@@ -40,4 +42,4 @@ export function EventDetailHeader({
         </div>
       </div>
     )
-}
+}
