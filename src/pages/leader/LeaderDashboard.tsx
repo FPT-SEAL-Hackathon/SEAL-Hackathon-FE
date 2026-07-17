@@ -40,6 +40,7 @@ import { rankingService } from "@/features/rankings/api/rankingService";
 import { eventService } from "@/features/events/api/eventService";
 import { discoverUserTeamsForEvents } from "@/features/teams/api/userTeamDiscovery";
 import type { Round } from "@/features/events/types/round";
+import type { RoundRankingDTO } from "@/features/rankings/api/rankingService";
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
 
@@ -50,6 +51,14 @@ type StoredTeam = {
   teamName?: string;
   leaderUserId?: string;
   teamStatusName?: string;
+};
+
+type SubmissionEligibility = {
+  loading: boolean;
+  canSubmit: boolean;
+  reason: string;
+  previousRoundName?: string;
+  previousRank?: RoundRankingDTO;
 };
 
 function getStoredTeam(): StoredTeam | null {
@@ -73,6 +82,15 @@ function isBeforeSubmissionDeadline(round?: Round) {
 
 function isOfficialSubmissionRound(round: Round) {
   return !round.isCalibrationRound;
+}
+
+function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
+  const selectedRound = rounds.find(round => round.roundId === selectedRoundId);
+  if (!selectedRound) return undefined;
+
+  return rounds
+    .filter(round => isOfficialSubmissionRound(round) && round.roundOrder < selectedRound.roundOrder)
+    .sort((a, b) => b.roundOrder - a.roundOrder)[0];
 }
 
 function display(value?: string | number | null) {
@@ -112,6 +130,11 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submissionFieldErrors, setSubmissionFieldErrors] = useState<SubmissionUrlErrors>({});
+  const [submissionEligibility, setSubmissionEligibility] = useState<SubmissionEligibility>({
+    loading: false,
+    canSubmit: true,
+    reason: "",
+  });
 
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
@@ -240,6 +263,68 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     void loadSubmissionHistory();
   }, [loadSubmissionHistory]);
 
+  useEffect(() => {
+    if (currentPage !== "submissions" || !activeTeam?.teamId || !activeTeam.categoryId || !submissionForm.roundId) {
+      setSubmissionEligibility({ loading: false, canSubmit: true, reason: "" });
+      return;
+    }
+
+    const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
+    const previousRound = getPreviousOfficialRound(submissionRounds, submissionForm.roundId);
+
+    if (!selectedRound || selectedRound.roundOrder <= 1 || !previousRound) {
+      setSubmissionEligibility({ loading: false, canSubmit: true, reason: "" });
+      return;
+    }
+
+    let cancelled = false;
+    setSubmissionEligibility({
+      loading: true,
+      canSubmit: false,
+      reason: `Checking advancement from ${previousRound.roundName}...`,
+      previousRoundName: previousRound.roundName,
+    });
+
+    rankingService.getRoundLeaderboard(previousRound.roundId, activeTeam.categoryId)
+      .then(rankings => {
+        if (cancelled) return;
+        const previousRank = rankings.find(rank => rank.teamId === activeTeam.teamId);
+        if (previousRank?.isAdvanced === true) {
+          setSubmissionEligibility({
+            loading: false,
+            canSubmit: true,
+            reason: `Advanced from ${previousRound.roundName}.`,
+            previousRoundName: previousRound.roundName,
+            previousRank,
+          });
+          return;
+        }
+
+        setSubmissionEligibility({
+          loading: false,
+          canSubmit: false,
+          reason: previousRank
+            ? `Your team did not advance from ${previousRound.roundName}, so this round is locked.`
+            : `No advancement result was found for your team in ${previousRound.roundName}.`,
+          previousRoundName: previousRound.roundName,
+          previousRank,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSubmissionEligibility({
+          loading: false,
+          canSubmit: false,
+          reason: `Advancement results for ${previousRound.roundName} are not available yet.`,
+          previousRoundName: previousRound.roundName,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTeam?.categoryId, activeTeam?.teamId, currentPage, submissionForm.roundId, submissionRounds]);
+
   const handleSubmit = async () => {
     if (!submissionForm.teamId || !submissionForm.roundId) {
       setSubmitError("Please select a round before submitting.");
@@ -256,6 +341,14 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
     if (!isBeforeSubmissionDeadline(selectedRound)) {
       setSubmitError("The submission deadline for this round has passed.");
+      return;
+    }
+    if (submissionEligibility.loading) {
+      setSubmitError("Please wait while we check your team's advancement status.");
+      return;
+    }
+    if (!submissionEligibility.canSubmit) {
+      setSubmitError(submissionEligibility.reason || "Your team is not eligible to submit this round.");
       return;
     }
     const urlErrors = validateSubmissionUrls(submissionForm);
@@ -401,6 +494,11 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderSubmissions = () => {
     const selectedRound = submissionRounds.find(item => item.roundId === submissionForm.roundId);
     const selectedRoundOpen = isBeforeSubmissionDeadline(selectedRound);
+    const selectedRoundLocked = !!selectedRound && !submissionEligibility.canSubmit;
+    const canSubmitSelectedRound = !!submissionForm.roundId
+      && selectedRoundOpen
+      && !submissionEligibility.loading
+      && submissionEligibility.canSubmit;
     const roundById = new Map(allSubmissionRounds.map(round => [round.roundId, round]));
 
     return (
@@ -442,9 +540,17 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
             {selectedRound ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={selectedRoundOpen ? "open" : "closed"} />
+                {selectedRound.roundOrder > 1 && (
+                  <StatusBadge status={submissionEligibility.loading ? "pending" : selectedRoundLocked ? "locked" : "advanced"} />
+                )}
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                   Deadline: {formatDate(selectedRound.submissionDeadline)}
                 </span>
+                {submissionEligibility.reason && (
+                  <span style={{ fontSize: 12, color: selectedRoundLocked ? COLORS.error : COLORS.success }}>
+                    {submissionEligibility.reason}
+                  </span>
+                )}
               </div>
             ) : (
               <div className="mt-2" style={{ fontSize: 12, color: COLORS.textSecondary }}>
@@ -476,7 +582,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
             size="md"
             icon={submitLoading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
             onClick={handleSubmit}
-            disabled={submitLoading || !submissionForm.roundId}
+            disabled={submitLoading || !canSubmitSelectedRound}
           >
             {submitLoading ? "Submitting..." : "Submit"}
           </Button>
@@ -543,11 +649,14 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
          if (cancelled) return;
          const teams = await discoverUserTeamsForEvents(events, user?.userId);
          if (cancelled) return;
-         setLeaderboardTeams(teams.map(t => ({
-            eventId: t.eventId,
-            eventName: t.eventName ?? events.find(e => e.eventId === t.eventId)?.eventName,
-            categoryId: t.categoryId,
-         })));
+         setLeaderboardTeams(teams.map(t => {
+            const discoveredTeam = t as TeamResponse & { eventName?: string };
+            return {
+              eventId: discoveredTeam.eventId,
+              eventName: discoveredTeam.eventName ?? events.find(e => e.eventId === discoveredTeam.eventId)?.eventName,
+              categoryId: discoveredTeam.categoryId,
+            };
+         }));
        } catch (e) {
          console.error(e);
        }
