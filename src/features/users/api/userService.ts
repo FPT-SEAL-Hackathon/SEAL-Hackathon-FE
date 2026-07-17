@@ -108,6 +108,12 @@ export interface UpdateUserRoleRequest {
   role: string;
 }
 
+export interface HardDeleteUserResponse {
+  success: boolean;
+  message: string;
+  deletedAccounts: number;
+}
+
 export interface PaginatedUsersResponse {
   content: UserManagementUser[];
   totalElements: number;
@@ -304,6 +310,15 @@ export const userService = {
 
   deleteUser: (userId: string) =>
     api.delete<void>(`/api/v1/users/${userId}`),
+
+  // Xóa CỨNG mọi tài khoản trùng email (dev tool, không thể hoàn tác).
+  // BE giữ dữ liệu tập thể (submission gán lại cho leader) và cho phép
+  // đăng ký lại bằng chính email này ngay lập tức.
+  hardDeleteUser: (email: string, reason?: string) => {
+    const query = new URLSearchParams({ email });
+    if (reason && reason.trim()) query.set("reason", reason.trim());
+    return api.delete<HardDeleteUserResponse>(`/api/v1/users/hard-delete?${query.toString()}`);
+  },
 };
 
 // ─── Self-service profile (any authenticated user) ────────────────────────────

@@ -513,6 +513,31 @@ export function AdminUsersView() {
     }
   };
 
+  // Xóa CỨNG không thể hoàn tác: bắt gõ lại email để xác nhận, tránh nhầm với Deactivate.
+  const hardDeleteUser = async (user: UserManagementUser) => {
+    if (!window.confirm(
+      `PERMANENTLY delete ALL accounts with email ${user.email}?\n\n` +
+      "This cannot be undone. Team submissions are kept (reassigned to the team leader) " +
+      "and the email can be reused for a new account immediately.",
+    )) return;
+    const typedEmail = window.prompt(`Type the email to confirm permanent deletion:`, "");
+    if (typedEmail === null) return;
+    if (typedEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      toast.error("Email does not match. Deletion cancelled.");
+      return;
+    }
+    setMutating(true);
+    try {
+      const result = await userService.hardDeleteUser(user.email);
+      toast.success(`User permanently deleted (${result.deletedAccounts} account(s)).`);
+      await loadUsers();
+    } catch (err) {
+      toast.error(parseApiError(err).message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
   return (
     <div className="h-full min-h-0 overflow-hidden flex flex-col gap-3">
       <div className="flex-shrink-0">
@@ -660,6 +685,9 @@ export function AdminUsersView() {
                       </Button>
                       <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
                         Deactivate
+                      </Button>
+                      <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => hardDeleteUser(user)}>
+                        Delete Forever
                       </Button>
                     </div>
                   </Td>
