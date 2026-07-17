@@ -6,6 +6,7 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [accountRemoved, setAccountRemoved] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -13,13 +14,21 @@ const LoginPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setAccountRemoved(false);
     setLoading(true);
 
     try {
       await login({ email, password });
       navigate("/dashboard");
     } catch (err) {
-      setError(err.message || "Failed to log in.");
+      // Tài khoản đã bị organizer gỡ khỏi hệ thống (BE trả 410 ACCOUNT_REMOVED):
+      // hiển thị hướng dẫn tạo tài khoản mới thay vì báo sai mật khẩu.
+      if (err?.code === "ACCOUNT_REMOVED" || err?.status === 410) {
+        setAccountRemoved(true);
+        setError(err.message || "This account has been removed. Please create a new account.");
+      } else {
+        setError(err.message || "Failed to log in.");
+      }
     } finally {
       setLoading(false);
     }
@@ -33,6 +42,13 @@ const LoginPage = () => {
         {error && (
           <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm">
             {error}
+            {accountRemoved && (
+              <div className="mt-2">
+                <Link to="/register" className="font-semibold text-blue-600 hover:underline">
+                  Create a new account →
+                </Link>
+              </div>
+            )}
           </div>
         )}
 

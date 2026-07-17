@@ -48,9 +48,13 @@ export interface UserManagementUser {
 
 export interface UserQueryParams {
   search?: string;
-  role?: string;
+  /** Multi-select: mảng mã canonical (FPT_STUDENT, ORGANIZER...) — OR trong nhóm. */
+  role?: string | string[];
   teamId?: string;
   teamName?: string;
+  /** Multi-select account status (ACTIVE, SUSPENDED...) — BE nhận param "status". */
+  status?: string | string[];
+  /** @deprecated dùng `status`; giữ để tương thích chỗ gọi cũ (BE nhận alias). */
   accountStatus?: string;
   joinedFrom?: string;
   joinedTo?: string;
@@ -58,6 +62,18 @@ export interface UserQueryParams {
   size?: number;
   sortBy?: string;
   sortDir?: "asc" | "desc";
+}
+
+export interface UserFacetOption {
+  code: string;
+  name: string;
+  count: number;
+}
+
+export interface UserFacetsResponse {
+  total: number;
+  roles: UserFacetOption[];
+  statuses: UserFacetOption[];
 }
 
 export interface CreateUserRequest {
@@ -90,6 +106,12 @@ export interface UpdateUserStatusRequest {
 
 export interface UpdateUserRoleRequest {
   role: string;
+}
+
+export interface HardDeleteUserResponse {
+  success: boolean;
+  message: string;
+  deletedAccounts: number;
 }
 
 export interface PaginatedUsersResponse {
@@ -221,13 +243,28 @@ function toQuery(params: UserQueryParams) {
   const allowedSortFields = new Set(["createdAt", "updatedAt", "fullName", "email", "role", "accountStatus"]);
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      if (key === "sortBy" && !allowedSortFields.has(String(value))) return;
-      query.set(key, String(value));
+    // Multi-select: mảng nối bằng dấu phẩy (OR trong nhóm) — theo chuẩn facet của dự án.
+    const serialized = Array.isArray(value) ? value.filter(Boolean).join(",") : value;
+    if (serialized !== undefined && serialized !== null && String(serialized).trim() !== "") {
+      if (key === "sortBy" && !allowedSortFields.has(String(serialized))) return;
+      query.set(key, String(serialized));
     }
   });
   if (!query.has("sortBy")) query.set("sortBy", "createdAt");
   if (!query.has("sortDir")) query.set("sortDir", "desc");
+  return query.toString();
+}
+
+function toFacetQuery(params: UserQueryParams) {
+  // Facets không cần page/sort — chỉ gửi các filter.
+  const { page, size, sortBy, sortDir, ...filters } = params;
+  const query = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    const serialized = Array.isArray(value) ? value.filter(Boolean).join(",") : value;
+    if (serialized !== undefined && serialized !== null && String(serialized).trim() !== "") {
+      query.set(key, String(serialized));
+    }
+  });
   return query.toString();
 }
 
@@ -242,6 +279,12 @@ export const userService = {
     return unwrapUsers(await api.get<BackendUser[] | BackendPage<BackendUser>>(
       `/api/v1/users${qs ? `?${qs}` : ""}`,
     ));
+  },
+
+  // Facet counts (drill-down) cho panel filter: count cạnh mỗi option + total preview.
+  getUserFacets: async (params: UserQueryParams = {}) => {
+    const qs = toFacetQuery(params);
+    return api.get<UserFacetsResponse>(`/api/v1/users/facets${qs ? `?${qs}` : ""}`);
   },
 
   getUserById: async (userId: string) =>
@@ -267,6 +310,15 @@ export const userService = {
 
   deleteUser: (userId: string) =>
     api.delete<void>(`/api/v1/users/${userId}`),
+
+  // Xóa CỨNG mọi tài khoản trùng email (dev tool, không thể hoàn tác).
+  // BE giữ dữ liệu tập thể (submission gán lại cho leader) và cho phép
+  // đăng ký lại bằng chính email này ngay lập tức.
+  hardDeleteUser: (email: string, reason?: string) => {
+    const query = new URLSearchParams({ email });
+    if (reason && reason.trim()) query.set("reason", reason.trim());
+    return api.delete<HardDeleteUserResponse>(`/api/v1/users/hard-delete?${query.toString()}`);
+  },
 };
 
 // ─── Self-service profile (any authenticated user) ────────────────────────────

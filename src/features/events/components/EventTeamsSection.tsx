@@ -164,6 +164,46 @@ function mergeTeamMemberParticipantStatuses(
   });
 }
 
+async function loadOrganizerParticipantsForEvent(eventId: string, categoryId?: string) {
+  const firstPage = await eventParticipantService.getOrganizerParticipants({
+    eventId,
+    categoryId,
+    page: 0,
+    size: 500,
+  });
+  if (firstPage.totalPages <= 1) return firstPage.content;
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      eventParticipantService.getOrganizerParticipants({
+        eventId,
+        categoryId,
+        page: index + 1,
+        size: firstPage.size || 500,
+      }),
+    ),
+  );
+  return [
+    ...firstPage.content,
+    ...remainingPages.flatMap(page => page.content),
+  ];
+}
+
+export async function getVisibleEventTeams(eventId: string, event?: EventResponse) {
+  const [reviewResult, eventTeamsResult] = await Promise.allSettled([
+    teamService.reviewEligibility(eventId),
+    teamService.getByEvent(eventId),
+  ]);
+  const reviewTeams = reviewResult.status === "fulfilled" ? reviewResult.value : [];
+  const eventTeams = eventTeamsResult.status === "fulfilled" ? eventTeamsResult.value : [];
+
+  if (reviewResult.status === "rejected" && eventTeamsResult.status === "rejected") {
+    throw reviewResult.reason ?? eventTeamsResult.reason;
+  }
+
+  return mergeReviewAndEventTeams(reviewTeams, eventTeams, event);
+}
+
 export function EventTeamsSummaryCard({ eventId, event, onOpen }: { eventId: string; event?: EventResponse; onOpen: () => void }) {
   const [summary, setSummary] = useState({ teams: 0, participants: 0 });
   const [loading, setLoading] = useState(true);
@@ -171,13 +211,9 @@ export function EventTeamsSummaryCard({ eventId, event, onOpen }: { eventId: str
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([
-      teamService.reviewEligibility(eventId),
-      teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
-    ])
-      .then(([teams, eventTeams]) => {
+    getVisibleEventTeams(eventId, event)
+      .then(visibleTeams => {
         if (cancelled) return;
-        const visibleTeams = mergeReviewAndEventTeams(teams, eventTeams, event);
         setSummary({
           teams: visibleTeams.length,
           participants: visibleTeams.reduce((total, team) => total + team.activeMemberCount, 0),
@@ -245,11 +281,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     setLoading(true);
     setError("");
     try {
-      const [data, eventTeams] = await Promise.all([
-        teamService.reviewEligibility(eventId),
-        teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
-      ]);
-      const enrichedTeams = mergeReviewAndEventTeams(data, eventTeams, event);
+      const enrichedTeams = await getVisibleEventTeams(eventId, event);
       const sorted = [...enrichedTeams].sort((left, right) => left.teamName.localeCompare(right.teamName));
       setTeams(sorted);
       setSelectedTeam(current => current
@@ -262,7 +294,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     } finally {
       setLoading(false);
     }
-  }, [eventId]);
+  }, [eventId, event]);
 
   useEffect(() => {
     void loadTeams();
@@ -306,31 +338,6 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     if (participantUserId && team.members.some(member => sameId(member.userId, participantUserId))) return true;
     if (participant.teamId) return participant.teamId === team.teamId;
     return participant.teamName?.trim().toLowerCase() === team.teamName.trim().toLowerCase();
-  };
-
-  const loadOrganizerParticipantsForEvent = async (categoryId: string) => {
-    const firstPage = await eventParticipantService.getOrganizerParticipants({
-      eventId,
-      categoryId,
-      page: 0,
-      size: 500,
-    });
-    if (firstPage.totalPages <= 1) return firstPage.content;
-
-    const remainingPages = await Promise.all(
-      Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
-        eventParticipantService.getOrganizerParticipants({
-          eventId,
-          categoryId,
-          page: index + 1,
-          size: firstPage.size || 500,
-        }),
-      ),
-    );
-    return [
-      ...firstPage.content,
-      ...remainingPages.flatMap(page => page.content),
-    ];
   };
 
   const participantToEligibilityMember = (participant: EventParticipantResponse): TeamEligibilityMemberResponse => {
@@ -378,7 +385,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     const [latestTeam, eventTeams, participantPage, usersPage] = await Promise.all([
       teamService.getById(team.teamId),
       teamService.getByEvent(eventId).catch(() => [] as TeamResponse[]),
-      loadOrganizerParticipantsForEvent(team.categoryId).catch(() => [] as EventParticipantResponse[]),
+      loadOrganizerParticipantsForEvent(eventId, team.categoryId).catch(() => [] as EventParticipantResponse[]),
       userService.getUsers({
         teamName: team.teamName,
         size: 500,
@@ -809,7 +816,7 @@ function TeamDetailDialog({
 }
 
 function MemberDetailCard({ member }: { member: TeamEligibilityMemberResponse }) {
-  const fields = [
+  const fields: Array<[string, string | undefined]> = [
     ["Full Name", member.fullName],
     ["Email", member.email],
     ["Phone", member.phone],

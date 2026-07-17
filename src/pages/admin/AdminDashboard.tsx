@@ -20,6 +20,7 @@ import { AdminDashboardView } from "./components/AdminDashboardView";
 import { AdminEventsView } from "./components/AdminEventsView";
 import { AdminEventParticipantsView } from "./components/AdminEventParticipantsView";
 import { AdminTeamApprovalView } from "./components/AdminTeamApprovalView";
+import { getVisibleEventTeams } from "@/features/events/components/EventTeamsSection";
 import { AdminCategoriesView } from "./components/AdminCategoriesView";
 import { AdminRoundsView } from "./components/AdminRoundsView";
 import { AdminCriteriaView } from "./components/AdminCriteriaView";
@@ -97,11 +98,6 @@ const auditLogs = [
   { id: 4, action: "New team registered", actor: "System", target: "QuantumLeap — AI Agents", timestamp: "2025-11-27 10:21:08", ip: "—" },
   { id: 5, action: "Round opened", actor: "Admin (You)", target: "SEAL Fall 2025 — Round 2 Finals", timestamp: "2025-11-25 09:00:00", ip: "10.0.0.5" },
   { id: 6, action: "Submission approved", actor: "Admin (You)", target: "AlphaCoders — Round 2 submission", timestamp: "2025-11-24 15:30:22", ip: "10.0.0.5" },
-];
-
-const broadcastHistory = [
-  { id: 1, title: "Finals round now open!", message: "Round 2 submissions are now accepted. Deadline is Dec 1.", audience: "All Teams", sent: "Nov 25, 2025 at 9:00 AM", status: "sent" },
-  { id: 2, title: "Round 1 results published", message: "Scores for Round 1 have been finalized and are now visible.", audience: "All Participants", sent: "Nov 23, 2025 at 3:00 PM", status: "sent" },
 ];
 
 const roleColors: Record<string, string> = {
@@ -213,6 +209,14 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [broadcastMessage, setBroadcastMessage] = useState("");
   const [broadcastAudience, setBroadcastAudience] = useState("All Teams");
   const [broadcastSent, setBroadcastSent] = useState(false);
+  const [apiBroadcastHistory, setApiBroadcastHistory] = useState<Array<{
+    id: string; title: string; message: string; audience: string; sent: string; status: string; recipientCount: number;
+  }>>(() => {
+    try {
+      const raw = localStorage.getItem("seal_admin_broadcast_history");
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
   const [notificationTargetMode, setNotificationTargetMode] = useState<"team" | "user">("team");
   const [notificationTeamId, setNotificationTeamId] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
@@ -255,19 +259,26 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   useEffect(() => {
     eventService.getAll()
-      .then(data => {
+      .then(async data => {
         setEventLoadError("");
-        const mapped = data.map(e => ({
+        const mapped = await Promise.all(data.map(async e => {
+          const visibleTeamCount = await getVisibleEventTeams(e.eventId, e)
+            .then(teams => teams.length)
+            .catch(() => 0);
+
+          return {
           ...e,
           //Field to display on UI
           id: e.eventId, 
           name: e.eventName,
           description: e.description ?? "—", 
           status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
-          teams: 0,
+          teams: visibleTeamCount,
+          visibleTeamCount,
           rounds: 0, 
           deadline: e.eventEndDate ?? "—", 
           prize: "—",
+          };
         }));
         setApiEvents(mapped as any);
       })
@@ -445,13 +456,43 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           eventId: selectedEventId ?? undefined,
         });
       }
+      // Append to history
+      const historyEntry = {
+        id: `${Date.now()}`,
+        title: broadcastTitle,
+        message: broadcastMessage,
+        audience: broadcastAudience,
+        sent: new Date().toLocaleString("en-US"),
+        status: "sent",
+        recipientCount: recipientIds.length,
+      };
+      setApiBroadcastHistory(prev => {
+        const next = [historyEntry, ...prev];
+        try { localStorage.setItem("seal_admin_broadcast_history", JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
       setBroadcastSent(true);
       setBroadcastTitle("");
       setBroadcastMessage("");
       setTimeout(() => setBroadcastSent(false), 3000);
-    } catch { /* ignore for demo */ }
-    setBroadcastSent(true);
-    setTimeout(() => setBroadcastSent(false), 3000);
+    } catch (err) {
+      // Still append to history as failed if broadcast threw
+      const historyEntry = {
+        id: `${Date.now()}`,
+        title: broadcastTitle,
+        message: broadcastMessage,
+        audience: broadcastAudience,
+        sent: new Date().toLocaleString("en-US"),
+        status: "failed",
+        recipientCount: 0,
+      };
+      setApiBroadcastHistory(prev => {
+        const next = [historyEntry, ...prev];
+        try { localStorage.setItem("seal_admin_broadcast_history", JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
+      setBroadcastSent(false);
+    }
   };
 
   const handleSendTargetedNotification = async () => {
@@ -761,7 +802,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     users,
     rankings,
     auditLogs,
-    broadcastHistory,
+    broadcastHistory: apiBroadcastHistory,
     roleColors,
     AWARD_TIER_OPTIONS,
     apiEvents,

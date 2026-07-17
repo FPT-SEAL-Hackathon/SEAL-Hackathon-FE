@@ -21,7 +21,7 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
-import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
@@ -73,12 +73,32 @@ function isActiveTeamContext(team?: ActiveTeamContext | null) {
   return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "active";
 }
 
+function removeStoredActiveTeam(teamId?: string) {
+  try {
+    if (!teamId) {
+      localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+      return;
+    }
+    const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
+    const storedTeam = raw ? JSON.parse(raw) as ActiveTeamContext : null;
+    if (!storedTeam?.teamId || storedTeam.teamId === teamId) {
+      localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+    }
+  } catch {
+    localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
+  }
+}
+
 function getStoredActiveTeam(userId?: string): ActiveTeamContext | null {
   try {
     const raw = localStorage.getItem(ACTIVE_TEAM_STORAGE_KEY);
     if (!raw) return null;
     const team = JSON.parse(raw) as ActiveTeamContext;
     if (!team?.teamId) return null;
+    if (getTeamStatusInfo(team.teamStatusId, team.teamStatusName).badge === "rejected") {
+      removeStoredActiveTeam(team.teamId);
+      return null;
+    }
     const belongsToStoredTeam = !userId
       || team.userId === userId
       || team.leaderUserId === userId
@@ -494,7 +514,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         .catch(() => { setApiLeaderboard([]); });
     }
   }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
@@ -505,6 +525,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [feedbackError, setFeedbackError] = useState("");
   const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
   const [certificateCategoryId, setCertificateCategoryId] = useState("all");
+  const [certificateSelectedEventId, setCertificateSelectedEventId] = useState("");
   const [certificateLoading, setCertificateLoading] = useState(false);
   const [certificateError, setCertificateError] = useState("");
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
@@ -552,6 +573,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
         if (selectedTeam) {
           localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(selectedTeam));
+        } else if (storedSubmissionTeam?.teamId) {
+          removeStoredActiveTeam(storedSubmissionTeam.teamId);
         }
       })
       .catch(() => {
@@ -564,6 +587,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 if (!isTeamActive(team.teamStatusId, team.teamStatusName)) {
                   setActiveTeamContext(null);
                   setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+                  removeStoredActiveTeam(team.teamId);
                   return;
                 }
                 const refreshedTeam = teamToActiveContext(team, user.userId);
@@ -596,6 +620,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           if (!isTeamActive(team.teamStatusId, team.teamStatusName)) {
             setActiveTeamContext(null);
             setSubmissionForm(prev => ({ ...prev, teamId: "" }));
+            removeStoredActiveTeam(team.teamId);
             return;
           }
           const refreshedTeam = teamToActiveContext(team, user?.userId);
@@ -610,34 +635,42 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
   }, [currentPage, submissionTeams.length, user?.userId]);
 
+  // Khi vào trang certificates, init event từ storedTeam hoặc apiEvents
   useEffect(() => {
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
+    // Nếu chưa chọn event, ưu tiên dùng eventId từ storedTeam
+    setCertificateSelectedEventId(prev => {
+      if (prev) return prev;
+      return storedTeam?.eventId ?? "";
+    });
+    setCertificateCategoryId("all");
+  }, [currentPage, user?.userId]);
 
-    if (!storedTeam?.eventId) {
+  // Load awards khi event được chọn
+  useEffect(() => {
+    if (currentPage !== "certificates") return;
+    if (!certificateSelectedEventId) {
       setCertificateAwards([]);
       setCertificateError("");
-      setCertificateCategoryId("all");
       return;
     }
 
+    const storedTeam = getStoredActiveTeam(user?.userId);
     let cancelled = false;
     setCertificateLoading(true);
     setCertificateError("");
-    awardService.getByEvent(storedTeam.eventId)
+    awardService.getByEvent(certificateSelectedEventId)
       .then(awards => {
         if (cancelled) return;
+        // Chỉ lọc theo teamId nếu có, không lọc cứng theo categoryId
         const visibleAwards = awards.filter((award: any) => (
-          (!storedTeam.teamId || award.teamId === storedTeam.teamId)
-          && (!storedTeam.categoryId || award.categoryId === storedTeam.categoryId)
+          (!storedTeam?.teamId || award.teamId === storedTeam.teamId)
           && award.isPublished
         ));
         setCertificateAwards(visibleAwards);
-        setCertificateCategoryId(prev => {
-          if (prev === "all" || visibleAwards.some((award: any) => award.categoryId === prev)) return prev;
-          return storedTeam.categoryId ?? "all";
-        });
+        setCertificateCategoryId("all");
       })
       .catch(error => {
         if (cancelled) return;
@@ -651,7 +684,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     return () => {
       cancelled = true;
     };
-  }, [currentPage, user?.userId]);
+  }, [currentPage, certificateSelectedEventId, user?.userId]);
 
   useEffect(() => {
     if (currentPage !== "submissions" || !activeTeamContext?.eventId) {
@@ -721,37 +754,30 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
     setSubmissionHistoryLoading(true);
     try {
-      const directResults = allSubmissionRounds.length > 0
+      const historyResults = allSubmissionRounds.length > 0
         ? await Promise.all(
           allSubmissionRounds.map(round =>
-            submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId)
-              .then(submission => submission)
-              .catch(() => null),
+            submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId)
+              .catch(() => []),
           ),
         )
         : [];
-      const eventResults = activeTeamContext?.eventId
-        ? await submissionService.getByEvent(activeTeamContext.eventId)
-          .then(submissions => submissions.filter(submission => submission.teamId === submissionForm.teamId))
-          .catch(() => [])
-        : [];
-      const uniqueSubmissions = new Map<string, SubmissionResponse>();
-      [...directResults, ...eventResults]
-        .filter((submission): submission is SubmissionResponse => Boolean(submission?.submissionId))
-        .forEach(submission => uniqueSubmissions.set(submission.submissionId, submission));
 
       setSubmissionHistory(
-        Array.from(uniqueSubmissions.values())
+        historyResults.flat()
           .sort((a, b) => {
-            const aTime = new Date(a.submittedAt || a.lastUpdatedAt || 0).getTime();
-            const bTime = new Date(b.submittedAt || b.lastUpdatedAt || 0).getTime();
+            const aVersion = a.versionNumber ?? 0;
+            const bVersion = b.versionNumber ?? 0;
+            if (a.roundId === b.roundId && aVersion !== bVersion) return bVersion - aVersion;
+            const aTime = new Date(a.snapshotCreatedAt || a.submittedAt || a.lastUpdatedAt || 0).getTime();
+            const bTime = new Date(b.snapshotCreatedAt || b.submittedAt || b.lastUpdatedAt || 0).getTime();
             return bTime - aTime;
           }),
       );
     } finally {
       setSubmissionHistoryLoading(false);
     }
-  }, [activeTeamContext?.eventId, allSubmissionRounds, currentPage, submissionForm.teamId]);
+  }, [allSubmissionRounds, currentPage, submissionForm.teamId]);
 
   useEffect(() => {
     void loadSubmissionHistory();
@@ -811,10 +837,13 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
     let cancelled = false;
     setSubmissionLookupLoading(true);
-    submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
-      .then(submission => {
+    submissionService.getHistoryByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
+      .then(history => {
         if (cancelled) return;
-        setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
+        setSubmissionHistory(prev => [
+          ...history,
+          ...prev.filter(item => item.roundId !== submissionForm.roundId),
+        ]);
       })
       .catch(() => {})
       .finally(() => {
@@ -885,8 +914,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         slideUrl: submissionForm.slideUrl.trim(),
         notes: submissionForm.submissionName.trim(),
       };
-      const saved = await submissionService.submit(payload);
-      setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
+      await submissionService.submit(payload);
+      await loadSubmissionHistory();
       setSubmissionStatus("Submission saved.");
     } catch (error) {
       const parsed = parseApiError(error);
@@ -915,7 +944,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         slideUrl: submission.slideUrl ?? "",
       }));
       setSubmissionFieldErrors({});
-      setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
+      await loadSubmissionHistory();
       setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
     } catch (error) {
       setSubmissionStatus(error instanceof Error ? error.message : "Could not load current submission.");
@@ -947,7 +976,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
   };
 
-  const handlePrepareSubmissionUpdate = (submission: SubmissionResponse) => {
+  const handlePrepareSubmissionUpdate = (submission: SubmissionHistoryResponse) => {
     const round = allSubmissionRounds.find(item => item.roundId === submission.roundId);
     if (!round || !isOfficialSubmissionRound(round)) {
       setSubmissionStatus("Only official competition rounds can be updated from Submission Center.");
@@ -1073,9 +1102,6 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={selectedSubmissionRoundOpen ? "open" : selectedSubmissionRoundState.deadlinePassed ? "closed" : roundStatusLabel(selectedSubmissionRound)} />
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                Submitting for: <strong>{selectedSubmissionRound.roundName}</strong>
-              </span>
-              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Status: <strong>{roundStatusLabel(selectedSubmissionRound)}</strong>
               </span>
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
@@ -1105,8 +1131,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary }}>Submission History</div>
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
               {selectedSubmissionRound
-                ? `Work submitted by ${activeTeamContext?.teamName ?? "this team"} for ${selectedSubmissionRound.roundName}`
-                : `Work submitted by ${activeTeamContext?.teamName ?? "this team"}`}
+                ? `Submitted work for ${selectedSubmissionRound.roundName}`
+                : "Submitted work"}
             </div>
           </div>
           <Button
@@ -1142,14 +1168,16 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
               return (
                 <div
-                  key={submission.submissionId}
+                  key={submission.submissionHistoryId}
                   className="rounded-lg p-4"
                   style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                     <div className="min-w-0">
-                      <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.textPrimary }}>
-                        {submission.notes || `Submission ${submission.submissionId.slice(0, 8)}`}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.textPrimary }}>
+                          {submission.notes || `Submission ${submission.submissionId.slice(0, 8)}`}
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2" style={{ fontSize: 12, color: COLORS.textSecondary }}>
                         <span className="inline-flex items-center gap-1">
@@ -1314,12 +1342,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setEventActionMessage(prev => ({ ...prev, [eventId]: `Registration unavailable: ${unavailableReason}.` }));
       return;
     }
-    if (participantStatus !== "NOT_REGISTERED") {
+    if (participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED") {
       const message = participantStatus === "PENDING"
         ? "Registration already submitted. Waiting for organizer approval."
-        : participantStatus === "REJECTED"
-          ? "Your registration was rejected."
-          : "You are already registered for this event.";
+        : "You are already registered for this event.";
       setEventActionMessage(prev => ({ ...prev, [eventId]: message }));
       return;
     }
@@ -1482,7 +1508,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         {apiEvents.map(ev => {
           const participation = participations[ev.eventId];
           const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
-          const isRegistered = participantStatus !== "NOT_REGISTERED";
+          const blocksTeamRegistration = participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED";
           const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
           const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
           const unavailableReason = registrationUnavailableReason(ev);
@@ -1519,10 +1545,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                 <div className="rounded-xl p-3 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Participation Status</div>
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                    {!isRegistered && "You have not registered for this event yet."}
+                    {participantStatus === "NOT_REGISTERED" && "You have not registered for this event yet."}
                     {isPendingParticipant && "Waiting for organizer approval. Team features and competition activities are locked for this event."}
                     {isActiveParticipant && "You are approved for this event. Team features and competition activities are available."}
-                    {isRegistered && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
+                    {isRejectedParticipant && "Your previous team registration was rejected. You can create or join another team for this event."}
+                    {blocksTeamRegistration && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
                   </div>
                   {isRejectedParticipant && (ev.rejectedReason || participation?.rejectedReason) && (
                     <div style={{ fontSize: 13, color: COLORS.error, marginTop: 6 }}>
@@ -1549,7 +1576,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   </>
                 ) : isPendingParticipant ? (
                   <Button variant="outline" size="sm" disabled icon={<Clock size={13} />}>Pending Approval</Button>
-                ) : isRegistered ? (
+                ) : blocksTeamRegistration ? (
                   <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>{statusLabel}</Button>
                 ) : unavailableReason ? (
                   <Button variant="ghost" size="sm" disabled>{unavailableReason}</Button>
@@ -1706,10 +1733,79 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 };
 
   const renderCertificates = () => {
-    if (!activeTeamContext?.eventId) {
-      return (
-        <>
-          <SectionHeader title="Certificates" subtitle="View and download certificates by event category" />
+    // Danh sách events mà user đang tham gia (ACTIVE)
+    const joinedEvents = apiEvents.filter(ev =>
+      normalizeParticipationStatus(participations[ev.eventId]?.participantStatus ?? ev.participantStatus) === "ACTIVE",
+    );
+
+    const selectedCertEvent = joinedEvents.find(ev => ev.eventId === certificateSelectedEventId)
+      ?? apiEvents.find(ev => ev.eventId === certificateSelectedEventId);
+
+    const categoryOptions = Array.from(
+      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
+    );
+    const filteredAwards = certificateCategoryId === "all"
+      ? certificateAwards
+      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
+
+    return (
+      <>
+        <SectionHeader
+          title="Certificates"
+          subtitle={selectedCertEvent ? `Certificates for ${activeTeamContext?.teamName ?? "your team"}` : "View and download your hackathon certificates"}
+        />
+
+        {/* Event selector */}
+        <Card className="p-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+                <Calendar size={14} /> Event
+              </span>
+              <select
+                value={certificateSelectedEventId}
+                onChange={e => {
+                  setCertificateSelectedEventId(e.target.value);
+                  setCertificateCategoryId("all");
+                }}
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                disabled={apiEvents.length === 0}
+              >
+                <option value="">Select an event...</option>
+                {joinedEvents.map(ev => (
+                  <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
+                ))}
+                {/* Hiển thị thêm các events khác nếu user chưa join */}
+                {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
+                  <option key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
+                    {ev.eventName} (not joined)
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+                <Target size={14} /> Category
+              </span>
+              <select
+                value={certificateCategoryId}
+                onChange={event => setCertificateCategoryId(event.target.value)}
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                disabled={certificateLoading || !certificateSelectedEventId}
+              >
+                <option value="all">All categories</option>
+                {categoryOptions.map(([categoryId, categoryName]) => (
+                  <option key={categoryId} value={categoryId}>{categoryName}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </Card>
+
+        {!certificateSelectedEventId && (
           <Card className="p-8">
             <div className="max-w-2xl">
               <div className="flex items-center gap-3 mb-4">
@@ -1720,9 +1816,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
                   <Award size={22} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>No active event team</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Select an event</div>
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
-                    Select or create a team first so certificates can be matched to your event and category.
+                    Choose an event above to view your certificates.
                   </div>
                 </div>
               </div>
@@ -1736,37 +1832,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               </div>
             </div>
           </Card>
-        </>
-      );
-    }
-
-    const categoryOptions = Array.from(
-      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
-    );
-    const filteredAwards = certificateCategoryId === "all"
-      ? certificateAwards
-      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
-
-    return (
-      <>
-        <SectionHeader
-          title="Certificates"
-          subtitle={`Certificates for ${activeTeamContext.teamName ?? "your team"}`}
-          action={
-            <select
-              value={certificateCategoryId}
-              onChange={event => setCertificateCategoryId(event.target.value)}
-              className="px-3 py-2 rounded-lg outline-none"
-              style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={certificateLoading || categoryOptions.length === 0}
-            >
-              <option value="all">All categories</option>
-              {categoryOptions.map(([categoryId, categoryName]) => (
-                <option key={categoryId} value={categoryId}>{categoryName}</option>
-              ))}
-            </select>
-          }
-        />
+        )}
 
         {certificateError && (
           <Card className="p-4">
@@ -2202,7 +2268,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             </div>
             <div className="flex flex-wrap items-center gap-3 mt-4">
               <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading || !submissionForm.roundId}>
-                {submissionLoading ? "Saving..." : selectedSubmissionRound ? `Submit for ${selectedSubmissionRound.roundName}` : "Select Round to Submit"}
+                {submissionLoading ? "Saving..." : "Submit"}
               </Button>
               <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading || !submissionForm.roundId}>
                 {submissionLookupLoading ? "Loading..." : selectedSubmissionRound ? `Load ${selectedSubmissionRound.roundName}` : "Load Current"}
