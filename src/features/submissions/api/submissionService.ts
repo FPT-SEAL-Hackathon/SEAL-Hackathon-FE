@@ -21,6 +21,14 @@ export interface SubmissionResponse {
   lastUpdatedAt: string;
   submittedByUserId: string;
   notes: string;
+  isScoreApproved?: boolean;
+  isSampleSubmission?: boolean;
+}
+
+export interface SubmissionHistoryResponse extends SubmissionResponse {
+  submissionHistoryId: string;
+  versionNumber: number;
+  snapshotCreatedAt: string;
 }
 
 export interface CreateSubmissionRequest {
@@ -73,6 +81,12 @@ export const submissionService = {
   getSubmissionByTeamAndRound: (teamId: string, roundId: string) =>
     api.get<SubmissionResponse>(`/api/v1/teams/${enc(teamId)}/rounds/${enc(roundId)}/submission`),
 
+  getHistoryByTeamAndRound: (teamId: string, roundId: string) =>
+    api.get<SubmissionHistoryResponse[]>(`/api/v1/teams/${enc(teamId)}/rounds/${enc(roundId)}/submission/history`),
+
+  getSubmissionHistoryByTeamAndRound: (teamId: string, roundId: string) =>
+    api.get<SubmissionHistoryResponse[]>(`/api/v1/teams/${enc(teamId)}/rounds/${enc(roundId)}/submission/history`),
+
   // Admin submission APIs
   getByRound: (roundId: string) =>
     api.get<SubmissionResponse[]>(`/api/v1/admin/rounds/${enc(roundId)}/submissions`),
@@ -97,6 +111,12 @@ export const submissionService = {
 
   disqualifySubmission: (submissionId: string, reason: string) =>
     api.post<SubmissionDisqualificationResponse>(`/api/v1/admin/submissions/${enc(submissionId)}/disqualify`, { reason }),
+
+  getHistoryBySubmissionId: (submissionId: string) =>
+    api.get<SubmissionHistoryResponse[]>(`/api/v1/admin/submissions/${enc(submissionId)}/history`),
+
+  getSubmissionHistoryBySubmissionId: (submissionId: string) =>
+    api.get<SubmissionHistoryResponse[]>(`/api/v1/admin/submissions/${enc(submissionId)}/history`),
 
   // Student Downloads. Blob methods include Bearer auth through apiClient.
   downloadProblem: (roundId: string, type?: ProblemDownloadType) =>

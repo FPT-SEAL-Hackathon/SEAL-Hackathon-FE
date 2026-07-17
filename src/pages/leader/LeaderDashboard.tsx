@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle,
   Eye,
@@ -27,7 +27,7 @@ import {
   Button,
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
-import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { submissionService, type SubmissionHistoryResponse, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
@@ -104,10 +104,11 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionRounds, setSubmissionRounds] = useState<Round[]>([]);
   const [allSubmissionRounds, setAllSubmissionRounds] = useState<Round[]>([]);
   const [submissionRoundsLoading, setSubmissionRoundsLoading] = useState(false);
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [activeSubmission, setActiveSubmission] = useState<SubmissionResponse | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submissionLoading, setSubmissionLoading] = useState(false);
+  const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [submissionFieldErrors, setSubmissionFieldErrors] = useState<SubmissionUrlErrors>({});
@@ -219,6 +220,26 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
   };
 
+  const loadSubmissionHistory = useCallback(async (teamIdArg = submissionForm.teamId, roundIdArg = submissionForm.roundId) => {
+    if (currentPage !== "submissions" || !teamIdArg || !roundIdArg) {
+      setSubmissionHistory([]);
+      return;
+    }
+
+    setSubmissionHistoryLoading(true);
+    try {
+      setSubmissionHistory(await submissionService.getHistoryByTeamAndRound(teamIdArg, roundIdArg));
+    } catch {
+      setSubmissionHistory([]);
+    } finally {
+      setSubmissionHistoryLoading(false);
+    }
+  }, [currentPage, submissionForm.roundId, submissionForm.teamId]);
+
+  useEffect(() => {
+    void loadSubmissionHistory();
+  }, [loadSubmissionHistory]);
+
   const handleSubmit = async () => {
     if (!submissionForm.teamId || !submissionForm.roundId) {
       setSubmitError("Please select a round before submitting.");
@@ -258,7 +279,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         notes: submissionForm.submissionName.trim(),
       });
       setActiveSubmission(saved);
-      setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
+      await loadSubmissionHistory(saved.teamId, saved.roundId);
       setSubmitMessage("Submission saved.");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Submission failed.");
@@ -288,7 +309,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       }));
       setSubmissionFieldErrors({});
       setActiveSubmission(submission);
-      setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
+      await loadSubmissionHistory(submission.teamId, submission.roundId);
       setSubmitMessage("Submission loaded.");
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : "Could not load submission.");
@@ -420,9 +441,6 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={selectedRoundOpen ? "open" : "closed"} />
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                  Submitting for: <strong>{selectedRound.roundName}</strong>
-                </span>
-                <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                   Deadline: {formatDate(selectedRound.submissionDeadline)}
                 </span>
               </div>
@@ -458,7 +476,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
             onClick={handleSubmit}
             disabled={submitLoading || !submissionForm.roundId}
           >
-            {submitLoading ? "Submitting..." : selectedRound ? `Submit for ${selectedRound.roundName}` : "Select Round to Submit"}
+            {submitLoading ? "Submitting..." : "Submit"}
           </Button>
           <Button
             variant="outline"
@@ -475,14 +493,32 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       </Card>
 
       <Card className="p-5">
-        <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Submission History</div>
-        {submissionHistory.length === 0 ? (
-          <EmptyLine text="No submissions loaded yet." />
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Submission History</div>
+            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+              {selectedRound ? `Submitted work for ${selectedRound.roundName}` : "Select a round to view submission history"}
+            </div>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={submissionHistoryLoading ? <Loader size={13} className="animate-spin" /> : <Search size={13} />}
+            onClick={() => loadSubmissionHistory()}
+            disabled={submissionHistoryLoading || !submissionForm.roundId}
+          >
+            {submissionHistoryLoading ? "Loading..." : "Refresh"}
+          </Button>
+        </div>
+        {submissionHistoryLoading ? (
+          <EmptyLine text="Loading submission history..." />
+        ) : submissionHistory.length === 0 ? (
+          <EmptyLine text={submissionForm.roundId ? "No saved versions for this round yet." : "Select a round to view submission history."} />
         ) : (
           <div className="space-y-3">
             {submissionHistory.map(submission => (
               <SubmissionCard
-                key={submission.submissionId}
+                key={submission.submissionHistoryId}
                 submission={submission}
                 roundName={roundById.get(submission.roundId)?.roundName}
                 onLoadFeedback={() => loadFeedback(submission.submissionId)}
@@ -908,13 +944,15 @@ function EmptyLine({ text }: { text: string }) {
   return <div style={{ fontSize: 14, color: COLORS.textSecondary }}>{text}</div>;
 }
 
-function SubmissionCard({ submission, roundName, onLoadFeedback }: { submission: SubmissionResponse; roundName?: string; onLoadFeedback: () => void }) {
+function SubmissionCard({ submission, roundName, onLoadFeedback }: { submission: SubmissionHistoryResponse; roundName?: string; onLoadFeedback: () => void }) {
   return (
     <div className="p-4 rounded-xl" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
         <div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-            {submission.notes || "Team submission"}
+          <div className="flex flex-wrap items-center gap-2">
+            <div style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+              {submission.notes || "Team submission"}
+            </div>
           </div>
           <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Round: {roundName ?? submission.roundId}</div>
           <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>Submitted: {formatDate(submission.submittedAt)}</div>

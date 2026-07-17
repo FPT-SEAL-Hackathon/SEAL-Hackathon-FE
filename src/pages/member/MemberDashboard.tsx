@@ -21,7 +21,7 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService } from "@/features/rankings/api/rankingService";
-import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
@@ -514,7 +514,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         .catch(() => { setApiLeaderboard([]); });
     }
   }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
-  const [submissionHistory, setSubmissionHistory] = useState<SubmissionResponse[]>([]);
+  const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
@@ -754,37 +754,30 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
     setSubmissionHistoryLoading(true);
     try {
-      const directResults = allSubmissionRounds.length > 0
+      const historyResults = allSubmissionRounds.length > 0
         ? await Promise.all(
           allSubmissionRounds.map(round =>
-            submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId)
-              .then(submission => submission)
-              .catch(() => null),
+            submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId)
+              .catch(() => []),
           ),
         )
         : [];
-      const eventResults = activeTeamContext?.eventId
-        ? await submissionService.getByEvent(activeTeamContext.eventId)
-          .then(submissions => submissions.filter(submission => submission.teamId === submissionForm.teamId))
-          .catch(() => [])
-        : [];
-      const uniqueSubmissions = new Map<string, SubmissionResponse>();
-      [...directResults, ...eventResults]
-        .filter((submission): submission is SubmissionResponse => Boolean(submission?.submissionId))
-        .forEach(submission => uniqueSubmissions.set(submission.submissionId, submission));
 
       setSubmissionHistory(
-        Array.from(uniqueSubmissions.values())
+        historyResults.flat()
           .sort((a, b) => {
-            const aTime = new Date(a.submittedAt || a.lastUpdatedAt || 0).getTime();
-            const bTime = new Date(b.submittedAt || b.lastUpdatedAt || 0).getTime();
+            const aVersion = a.versionNumber ?? 0;
+            const bVersion = b.versionNumber ?? 0;
+            if (a.roundId === b.roundId && aVersion !== bVersion) return bVersion - aVersion;
+            const aTime = new Date(a.snapshotCreatedAt || a.submittedAt || a.lastUpdatedAt || 0).getTime();
+            const bTime = new Date(b.snapshotCreatedAt || b.submittedAt || b.lastUpdatedAt || 0).getTime();
             return bTime - aTime;
           }),
       );
     } finally {
       setSubmissionHistoryLoading(false);
     }
-  }, [activeTeamContext?.eventId, allSubmissionRounds, currentPage, submissionForm.teamId]);
+  }, [allSubmissionRounds, currentPage, submissionForm.teamId]);
 
   useEffect(() => {
     void loadSubmissionHistory();
@@ -844,10 +837,13 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
     let cancelled = false;
     setSubmissionLookupLoading(true);
-    submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
-      .then(submission => {
+    submissionService.getHistoryByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
+      .then(history => {
         if (cancelled) return;
-        setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
+        setSubmissionHistory(prev => [
+          ...history,
+          ...prev.filter(item => item.roundId !== submissionForm.roundId),
+        ]);
       })
       .catch(() => {})
       .finally(() => {
@@ -918,8 +914,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         slideUrl: submissionForm.slideUrl.trim(),
         notes: submissionForm.submissionName.trim(),
       };
-      const saved = await submissionService.submit(payload);
-      setSubmissionHistory(prev => [saved, ...prev.filter(item => item.submissionId !== saved.submissionId)]);
+      await submissionService.submit(payload);
+      await loadSubmissionHistory();
       setSubmissionStatus("Submission saved.");
     } catch (error) {
       const parsed = parseApiError(error);
@@ -948,7 +944,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         slideUrl: submission.slideUrl ?? "",
       }));
       setSubmissionFieldErrors({});
-      setSubmissionHistory(prev => [submission, ...prev.filter(item => item.submissionId !== submission.submissionId)]);
+      await loadSubmissionHistory();
       setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
     } catch (error) {
       setSubmissionStatus(error instanceof Error ? error.message : "Could not load current submission.");
@@ -980,7 +976,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
   };
 
-  const handlePrepareSubmissionUpdate = (submission: SubmissionResponse) => {
+  const handlePrepareSubmissionUpdate = (submission: SubmissionHistoryResponse) => {
     const round = allSubmissionRounds.find(item => item.roundId === submission.roundId);
     if (!round || !isOfficialSubmissionRound(round)) {
       setSubmissionStatus("Only official competition rounds can be updated from Submission Center.");
@@ -1106,9 +1102,6 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={selectedSubmissionRoundOpen ? "open" : selectedSubmissionRoundState.deadlinePassed ? "closed" : roundStatusLabel(selectedSubmissionRound)} />
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                Submitting for: <strong>{selectedSubmissionRound.roundName}</strong>
-              </span>
-              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Status: <strong>{roundStatusLabel(selectedSubmissionRound)}</strong>
               </span>
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
@@ -1138,8 +1131,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             <div style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary }}>Submission History</div>
             <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
               {selectedSubmissionRound
-                ? `Work submitted by ${activeTeamContext?.teamName ?? "this team"} for ${selectedSubmissionRound.roundName}`
-                : `Work submitted by ${activeTeamContext?.teamName ?? "this team"}`}
+                ? `Submitted work for ${selectedSubmissionRound.roundName}`
+                : "Submitted work"}
             </div>
           </div>
           <Button
@@ -1175,14 +1168,16 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
               return (
                 <div
-                  key={submission.submissionId}
+                  key={submission.submissionHistoryId}
                   className="rounded-lg p-4"
                   style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
                     <div className="min-w-0">
-                      <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.textPrimary }}>
-                        {submission.notes || `Submission ${submission.submissionId.slice(0, 8)}`}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.textPrimary }}>
+                          {submission.notes || `Submission ${submission.submissionId.slice(0, 8)}`}
+                        </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2" style={{ fontSize: 12, color: COLORS.textSecondary }}>
                         <span className="inline-flex items-center gap-1">
@@ -2273,7 +2268,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             </div>
             <div className="flex flex-wrap items-center gap-3 mt-4">
               <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading || !submissionForm.roundId}>
-                {submissionLoading ? "Saving..." : selectedSubmissionRound ? `Submit for ${selectedSubmissionRound.roundName}` : "Select Round to Submit"}
+                {submissionLoading ? "Saving..." : "Submit"}
               </Button>
               <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading || !submissionForm.roundId}>
                 {submissionLookupLoading ? "Loading..." : selectedSubmissionRound ? `Load ${selectedSubmissionRound.roundName}` : "Load Current"}
