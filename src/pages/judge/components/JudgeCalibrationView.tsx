@@ -61,18 +61,26 @@ export function JudgeCalibrationView({
       .finally(() => setLoading(false));
   }, [selectedRoundId]);
 
-  // Derived filtered rounds
-  const filteredRounds = apiRounds.filter(r => {
+  const [fetchedRounds, setFetchedRounds] = useState<any[]>([]);
+
+  useEffect(() => {
     if (selectedCategoryId) {
-      return r.categoryId === selectedCategoryId;
+      import("@/features/judging/api/roundService").then(({ roundService }) => {
+        roundService.getByCategory(selectedCategoryId).then(setFetchedRounds).catch(console.error);
+      });
+    } else if (selectedEventId && categories.length > 0) {
+      import("@/features/judging/api/roundService").then(({ roundService }) => {
+        Promise.all(categories.map(c => roundService.getByCategory(c.categoryId)))
+          .then(results => setFetchedRounds(results.flat()))
+          .catch(console.error);
+      });
+    } else {
+      setFetchedRounds([]);
     }
-    if (selectedEventId) {
-      // If event selected but no category, show all rounds from categories in this event
-      const categoryIdsInEvent = new Set(categories.map(c => c.categoryId));
-      return categoryIdsInEvent.has(r.categoryId);
-    }
-    return true; // No filters, show all
-  });
+  }, [selectedCategoryId, selectedEventId, categories]);
+
+  // Derived filtered rounds
+  const filteredRounds = (selectedEventId || selectedCategoryId) ? fetchedRounds : apiRounds;
 
   const renderContent = () => {
     if (loading) {

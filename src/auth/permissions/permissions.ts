@@ -90,10 +90,10 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   // Mentor pages
   tracks: [...MENTOR_ROLES],
   teams: [...MENTOR_ROLES],
-  consultations: [...MENTOR_ROLES],
+  consultations: [...MENTOR_ROLES, ...LEADER_MEMBER_ROLES, ...STUDENT_ROLES],
   progress: [...MENTOR_ROLES],
   // Leader/Member pages
-  mentor: [...LEADER_MEMBER_ROLES],
+  mentor: [...LEADER_MEMBER_ROLES, ...STUDENT_ROLES],
 };
 
 export function hasRole(userRole: Role | null | undefined, role: Role): boolean {

@@ -2394,21 +2394,25 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   );
 
   const renderPage = () => {
-    switch (currentPage) {
-      case "dashboard": return renderDashboard();
-      case "team": return renderTeam();
-      case "events": return renderEvents();
-      case "leaderboard": return renderLeaderboard();
-      case "certificates": return renderCertificates();
-      case "submissions": return renderSubmissions();
-      case "feedback": return renderFeedback();
-      case "requests": return renderRequests();
-      case "notifications": return renderNotifications();
-      case "profile": return renderProfile();
-      case "mentor": return <MyMentor isLeader={false} onNavigate={onNavigate} />;
-      case "consultations": return <TeamConsultations isLeader={false} />;
-      default: return renderDashboard();
-    }
+    const isLeader = activeTeamContext?.leaderUserId === user?.userId;
+    return (
+      <>
+        <div style={{ display: currentPage === "team" ? "block" : "none" }}>
+          {renderTeam()}
+        </div>
+        {currentPage === "dashboard" && renderDashboard()}
+        {currentPage === "events" && renderEvents()}
+        {currentPage === "leaderboard" && renderLeaderboard()}
+        {currentPage === "certificates" && renderCertificates()}
+        {currentPage === "submissions" && renderSubmissions()}
+        {currentPage === "feedback" && renderFeedback()}
+        {currentPage === "requests" && renderRequests()}
+        {currentPage === "notifications" && renderNotifications()}
+        {currentPage === "profile" && renderProfile()}
+        {currentPage === "mentor" && <MyMentor isLeader={isLeader} onNavigate={onNavigate} teamId={activeTeamContext?.teamId} />}
+        {currentPage === "consultations" && <TeamConsultations isLeader={isLeader} onNavigate={onNavigate} />}
+      </>
+    );
   };
 
   return <div className="p-6 space-y-6">{renderPage()}</div>;
