@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Users, Upload, Star, CheckCircle, Download, RefreshCw, AlertCircle,
 } from "lucide-react";
@@ -10,6 +10,7 @@ import { eventParticipantService } from "@/features/eventParticipants/api/eventP
 import { submissionService } from "@/features/submissions/api/submissionService";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { categoryService } from "@/features/categories/api/categoryService";
+import { teamService } from "@/features/teams/api/teamService";
 
 interface AdminViewProps {
   context: any;
@@ -59,6 +60,12 @@ export function AdminReportsView({ context }: AdminViewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Use refs so loadReportData can read the latest values without triggering re-runs
+  const apiRankingsRef = useRef(apiRankings);
+  const apiCategoriesRef = useRef(apiCategories);
+  useEffect(() => { apiRankingsRef.current = apiRankings; }, [apiRankings]);
+  useEffect(() => { apiCategoriesRef.current = apiCategories; }, [apiCategories]);
+
   const loadReportData = useCallback(async () => {
     if (!selectedEventId) {
       setStats({ totalParticipants: 0, approvedParticipants: 0, totalSubmissions: 0, avgScore: null, completionRate: null });
@@ -82,10 +89,10 @@ export function AdminReportsView({ context }: AdminViewProps) {
       // 2. Submissions for this event
       const submissions = await submissionService.getByEvent(selectedEventId).catch(() => []);
 
-      // 3. Rankings for avg score
+      // 3. Rankings for avg score — read from ref to avoid re-triggering on context array change
       let avgScore: number | null = null;
-      const rankings = apiRankings?.length > 0
-        ? apiRankings
+      const rankings = (apiRankingsRef.current?.length ?? 0) > 0
+        ? apiRankingsRef.current
         : await rankingService.getEventRankings(selectedEventId).catch(() => []);
 
       if (rankings.length > 0) {
@@ -95,15 +102,29 @@ export function AdminReportsView({ context }: AdminViewProps) {
         }
       }
 
-      // 4. Completion rate = teams đã nộp submission / tổng teams eligible
-      // Mỗi team có 1 submission → count unique teamId trong submissions
-      const teamsWithSubmission = new Set(submissions.map((s: any) => s.teamId)).size;
-      // Tổng teams từ apiTeamEligibility (đã load trước), hoặc fallback count unique teamId
-      const totalTeams = (apiTeamEligibility?.length ?? 0) > 0
-        ? apiTeamEligibility.length
-        : new Set(allParticipants.map(p => (p as any).teamId).filter(Boolean)).size;
+      // 4. Completion rate = "% active teams đã nộp ít nhất 1 submission" (trong bất kỳ round nào của event)
+      // Lấy danh sách teams của event để xác định mẫu số cố định
+      const eventTeams = await teamService.getByEvent(selectedEventId).catch(() => []);
+
+      // Mẫu số = các team đang ACTIVE (đã được duyệt tham gia event)
+      const activeTeams = eventTeams.filter((t: any) => {
+        const status = (t.teamStatusName || t.statusName || "").toLowerCase();
+        return status.includes("active") || status.includes("approved") || t.teamStatusId === "60000000-0000-0000-0000-000000000002";
+      });
+      const totalTeams = activeTeams.length > 0 ? activeTeams.length : eventTeams.length;
+
+      // Tử số: chỉ đếm active teams đã có ít nhất 1 submission
+      // Dùng Set(teamId) để deduplicate (1 team nộp nhiều round vẫn chỉ tính 1 lần)
+      // Chỉ tính active teamIds để tử số và mẫu số nhất quán → tránh vượt 100%
+      const activeTeamIds = new Set(
+        (activeTeams.length > 0 ? activeTeams : eventTeams).map((t: any) => t.teamId).filter(Boolean)
+      );
+      const teamsWithAnySubmission = new Set(
+        submissions.map((s: any) => s.teamId).filter((id: string) => id && activeTeamIds.has(id))
+      ).size;
+
       const completionRate = totalTeams > 0
-        ? Math.round((teamsWithSubmission / totalTeams) * 100)
+        ? Math.min(100, Math.round((teamsWithAnySubmission / totalTeams) * 100))
         : null;
 
       setStats({
@@ -114,9 +135,9 @@ export function AdminReportsView({ context }: AdminViewProps) {
         completionRate,
       });
 
-      // 5. Category distribution — use apiCategories if available
-      const cats = apiCategories?.length > 0
-        ? apiCategories
+      // 5. Category distribution — read from ref to avoid re-triggering on context array change
+      const cats = (apiCategoriesRef.current?.length ?? 0) > 0
+        ? apiCategoriesRef.current
         : await categoryService.getByEvent(selectedEventId).catch(() => []);
 
       if (cats.length > 0) {
@@ -143,7 +164,7 @@ export function AdminReportsView({ context }: AdminViewProps) {
     } finally {
       setLoading(false);
     }
-  }, [selectedEventId, apiCategories, apiRankings]);
+  }, [selectedEventId]);  // Only re-run when event changes — apiRankings/apiCategories are read via refs
 
   useEffect(() => {
     loadReportData();

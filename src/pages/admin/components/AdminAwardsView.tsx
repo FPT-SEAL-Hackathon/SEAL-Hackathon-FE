@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
@@ -157,6 +158,8 @@ export function AdminAwardsView({ context }: AdminViewProps) {
   const manualAwardTeams = apiTeamEligibility.filter((team: any) => (
     !manualAwardForm.categoryId || team.categoryId === manualAwardForm.categoryId
   ));
+
+  const [selectedAward, setSelectedAward] = useState<any>(null);
 
   return (
     <>
@@ -434,7 +437,14 @@ export function AdminAwardsView({ context }: AdminViewProps) {
             </div>
           )}
           {apiAwards.map((award: any) => (
-            <div key={award.id} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
+            <div
+              key={award.id}
+              className="flex items-center gap-3 mb-3 p-3 rounded-xl cursor-pointer"
+              style={{ background: COLORS.bg, transition: "border 0.15s", border: "1px solid transparent" }}
+              onClick={() => setSelectedAward(award)}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.border = `1px solid ${COLORS.primary}40`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.border = "1px solid transparent"; }}
+            >
               <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: `${COLORS.primary}12`, color: COLORS.primary }}>
                 <Award size={18} />
               </span>
@@ -446,10 +456,97 @@ export function AdminAwardsView({ context }: AdminViewProps) {
                 <div style={{ fontSize: 11, color: COLORS.textPrimary, fontWeight: 700 }}>{award.awardTierName}</div>
                 <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{award.awardTitle}</div>
               </div>
+
             </div>
           ))}
         </Card>
       </div>
+
+      {/* Award Detail Modal */}
+      {selectedAward && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+          onClick={() => setSelectedAward(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl p-6 relative"
+            style={{
+              background: "var(--glass-bg)",
+              backdropFilter: "blur(32px) saturate(180%)",
+              border: "1px solid var(--glass-border)",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.25), 0 4px 16px rgba(244,121,32,0.12)",
+              animation: "awardDetailIn 0.22s ease",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <style>{`@keyframes awardDetailIn { from { opacity:0; transform:translateY(16px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+
+            {/* Header */}
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 46, height: 46, background: `${COLORS.primary}14`, color: COLORS.primary }}>
+                  <Trophy size={22} />
+                </span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 17, color: "var(--text-primary)", lineHeight: 1.2 }}>
+                    {selectedAward.awardTitle || selectedAward.awardTierName}
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{selectedAward.awardTierName}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedAward(null)}
+                className="rounded-xl p-1.5 transition-opacity hover:opacity-70"
+                style={{ background: COLORS.bg, color: COLORS.textSecondary, border: `1px solid ${COLORS.border}` }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Details grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { label: "Team", value: selectedAward.teamName },
+                { label: "Event", value: selectedAward.eventName },
+                { label: "Category", value: selectedAward.categoryName },
+                { label: "Rank", value: selectedAward.rankPosition ? `#${selectedAward.rankPosition}` : "—" },
+                { label: "Prize", value: selectedAward.prizeValue ? `${selectedAward.prizeValue} ${selectedAward.prizeCurrency ?? ""}`.trim() : "—" },
+                {
+                  label: "Granted At",
+                  value: selectedAward.awardedAt
+                    ? new Date(selectedAward.awardedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+                    : "—",
+                },
+              ] as { label: string; value: string }[]).map(item => (
+                <div key={item.label} className="rounded-xl p-3" style={{ background: COLORS.bg }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, letterSpacing: "0.08em", marginBottom: 3 }}>
+                    {item.label.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{item.value || "—"}</div>
+                </div>
+              ))}
+            </div>
+
+            {selectedAward.description && (
+              <div className="mt-3 rounded-xl p-3" style={{ background: COLORS.bg }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, letterSpacing: "0.08em", marginBottom: 3 }}>
+                  DESCRIPTION
+                </div>
+                <div style={{ fontSize: 13, color: COLORS.textPrimary, lineHeight: 1.6 }}>{selectedAward.description}</div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setSelectedAward(null)}
+              className="mt-5 w-full rounded-xl py-2.5 font-semibold text-sm transition-opacity hover:opacity-80"
+              style={{ background: `linear-gradient(135deg, ${COLORS.primary}, #FF9040)`, color: "white" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -41,7 +41,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
     }
     const evt = context.apiEvents.find((e: any) => (e.eventId || e.id) === context.selectedEventId);
     if (evt) setEventSearchText(evt.eventName || evt.name);
-    
+
     categoryService.getByEvent(context.selectedEventId).then(data => {
       setLocalCategories(data);
       if (data.length > 0) setLocalCategoryId(data[0].categoryId);
@@ -118,7 +118,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
         setLocalRankings(roundData);
       } else if (activeTab === "event") {
         await rankingService.publishEvent(context.selectedEventId, context.awardPatternCategoryId ?? "");
-        const eventData = await rankingService.getAdminEventRankings(context.selectedEventId);
+        const eventData = await rankingService.getEventRankings(context.selectedEventId);
         setLocalRankings(eventData);
       }
       context.setRankingsPublished(true);
@@ -267,12 +267,12 @@ export function AdminRankingsView({ context }: AdminViewProps) {
       <thead>
         <tr style={{ background: COLORS.bg }}>
           {[
-            t("adminRankings.rank"), 
-            t("adminRankings.team"), 
-            t("adminRankings.track"), 
-            t("adminRankings.total"), 
+            t("adminRankings.rank"),
+            t("adminRankings.team"),
+            t("adminRankings.track"),
+            t("adminRankings.total"),
             ...(activeTab === "round" ? ["ADVANCEMENT"] : []),
-            t("adminRankings.status"), 
+            t("adminRankings.status"),
             t("adminRankings.actions")
           ].map(h => (
             <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>{h.toUpperCase()}</th>
@@ -291,38 +291,39 @@ export function AdminRankingsView({ context }: AdminViewProps) {
           const rankNum = row.rankPosition ?? row.rank;
           const isPublishedStatus = row.isPublished ? "approved" : "draft";
           return (
-          <tr key={row.rank ?? i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-            <td className="px-4 py-3">
-              <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
-                {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
-              </span>
-            </td>
-            <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.teamName ?? row.teamId ?? row.team}</span></td>
-            <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track}</span></td>
-            <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span></td>
-            {activeTab === "round" && (
+            <tr key={row.rank ?? i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
               <td className="px-4 py-3">
-                 {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
-                 {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
-                 {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
+                  {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
+                </span>
               </td>
-            )}
-            <td className="px-4 py-3"><StatusBadge status={isPublishedStatus} /></td>
-            <td className="px-4 py-3">
-              <div className="flex gap-1">
-                <Button variant="ghost" size="sm" icon={<Eye size={13} />}>{t("common.view")}</Button>
-                {!disqualifiedTeams.includes(rankNum) ? (
-                  <Button variant="danger" size="sm" icon={<AlertTriangle size={12} />}
-                    onClick={() => setDisqualifyTarget({ id: rankNum, name: row.teamName ?? row.teamId ?? row.team })}>
-                    DQ
-                  </Button>
-                ) : (
-                  <span style={{ fontSize: 11, color: COLORS.error, fontWeight: 600 }}>DQ'd</span>
-                )}
-              </div>
-            </td>
-          </tr>
-        )})}
+              <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.teamName ?? row.teamId ?? row.team}</span></td>
+              <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track}</span></td>
+              <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span></td>
+              {activeTab === "round" && (
+                <td className="px-4 py-3">
+                  {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
+                  {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
+                  {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                </td>
+              )}
+              <td className="px-4 py-3"><StatusBadge status={isPublishedStatus} /></td>
+              <td className="px-4 py-3">
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="sm" icon={<Eye size={13} />}>{t("common.view")}</Button>
+                  {!disqualifiedTeams.includes(rankNum) ? (
+                    <Button variant="danger" size="sm" icon={<AlertTriangle size={12} />}
+                      onClick={() => setDisqualifyTarget({ id: rankNum, name: row.teamName ?? row.teamId ?? row.team })}>
+                      DQ
+                    </Button>
+                  ) : (
+                    <span style={{ fontSize: 11, color: COLORS.error, fontWeight: 600 }}>DQ'd</span>
+                  )}
+                </div>
+              </td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   );
@@ -361,19 +362,19 @@ export function AdminRankingsView({ context }: AdminViewProps) {
             <div className="flex items-center gap-2">
               {context.rankingsComputed && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Rankings computed!</span>}
               {context.rankingsPublished && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Approved!</span>}
-              <Button variant="secondary" size="sm" icon={isLoading ? <Loader size={14} className="animate-spin" /> : <Zap size={14} />} onClick={doCompute} disabled={isLoading || (activeTab === "round" && (!localRoundId || !localCategoryId))}>
-                {activeTab === "round" 
-                  ? (localRankings.length > 0 ? "Re-compute Round" : "Compute Round") 
+              <Button variant="secondary" size="sm" icon={isLoading ? <Loader size={14} className="animate-spin" /> : <Zap size={14} />} onClick={doCompute} disabled={isLoading || !context.selectedEventId || (activeTab === "round" && (!localRoundId || !localCategoryId))}>
+                {activeTab === "round"
+                  ? (localRankings.length > 0 ? "Re-compute Round" : "Compute Round")
                   : (localRankings.length > 0 ? "Re-compute Event" : "Compute Event")}
               </Button>
-              <Button variant="primary" size="sm" icon={isLoading ? <Loader size={14} className="animate-spin" /> : <Award size={14} />} onClick={doPublish} style={{ background: COLORS.success }} disabled={isLoading || (activeTab === "round" && (!localRoundId || !localCategoryId))}>
+              <Button variant="primary" size="sm" icon={isLoading ? <Loader size={14} className="animate-spin" /> : <Award size={14} />} onClick={doPublish} style={{ background: COLORS.success }} disabled={isLoading || !context.selectedEventId || (activeTab === "round" && (!localRoundId || !localCategoryId))}>
                 {activeTab === "round" ? "Approve Round" : "Approve Event"}
               </Button>
             </div>
           )
         }
       />
-      
+
       <Card className="mb-6" style={{ overflow: "visible", position: "relative", zIndex: 10 }}>
         <div className="p-4 flex flex-wrap items-end gap-4">
           <div className="flex-1 min-w-[200px] relative">
@@ -396,7 +397,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
               <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
             </div>
             {showEventDropdown && (
-              <div 
+              <div
                 className="absolute z-10 w-full mt-1 bg-white border rounded-xl shadow-lg max-h-60 overflow-y-auto"
                 style={{ borderColor: COLORS.border }}
               >
@@ -415,7 +416,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
                     >
                       {evt.eventName || evt.name}
                     </div>
-                ))}
+                  ))}
                 {context.apiEvents.filter((evt: any) => (evt.eventName || evt.name).toLowerCase().includes(eventSearchText.toLowerCase())).length === 0 && (
                   <div className="px-4 py-2 text-gray-500" style={{ fontSize: 14 }}>No events found</div>
                 )}

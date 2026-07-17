@@ -364,8 +364,8 @@ export const teamService = {
     normalizeMemberDetail(await api.get<RawTeamMemberDetailResponse | BackendEnvelope<RawTeamMemberDetailResponse>>(
       `/api/v1/teams/${teamId}/members/${userId}`,
     )),
-  removeMember: (teamId: string, userId: string) =>
-    api.delete(`/api/v1/teams/${teamId}/members/${userId}`),
+  removeMember: (teamId: string, userId: string, reason?: string) =>
+    api.delete(`/api/v1/teams/${teamId}/members/${userId}`, reason ? { reason } : undefined),
   transferLeadership: (teamId: string, newLeaderUserId: string) =>
     api.put<RawTeamResponse>(`/api/v1/teams/${teamId}/leader`, { newLeaderUserId }).then(normalizeTeamResponse),
   // Leader giải tán team FORMING trong một thao tác (xóa team + request + membership).
