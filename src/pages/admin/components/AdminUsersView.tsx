@@ -91,10 +91,6 @@ function isValidPhone(value: string) {
   return !value || /^[+()\d\s.-]{8,20}$/.test(value);
 }
 
-function dangerousStatus(accountStatus: string) {
-  return ["REJECTED", "SUSPENDED"].includes(accountStatus.toUpperCase());
-}
-
 function normalizeRoleValue(role?: string) {
   return (role ?? "").replace(/^ROLE_/, "").toUpperCase();
 }
@@ -469,36 +465,6 @@ export function AdminUsersView() {
     }
   };
 
-  const changeStatus = async (user: UserManagementUser, accountStatus: string) => {
-    if (!accountStatus || accountStatus === user.accountStatus) return;
-    if (dangerousStatus(accountStatus) && !window.confirm(`Change ${user.fullName} status to ${labelValue(accountStatus)}?`)) return;
-    setMutating(true);
-    try {
-      await userService.updateUserStatus(user.userId, { accountStatus });
-      toast.success("User status updated.");
-      await loadUsers();
-    } catch (err) {
-      toast.error(parseApiError(err).message);
-    } finally {
-      setMutating(false);
-    }
-  };
-
-  const changeRole = async (user: UserManagementUser, role: string) => {
-    if (!role || role === user.role) return;
-    if (!window.confirm(`Change ${user.fullName} role to ${labelValue(role)}?`)) return;
-    setMutating(true);
-    try {
-      await userService.updateUserRole(user.userId, { role });
-      toast.success("User role updated.");
-      await loadUsers();
-    } catch (err) {
-      toast.error(parseApiError(err).message);
-    } finally {
-      setMutating(false);
-    }
-  };
-
   const deleteUser = async (user: UserManagementUser) => {
     if (!window.confirm(`Deactivate ${user.fullName}?`)) return;
     setMutating(true);
@@ -644,32 +610,13 @@ export function AdminUsersView() {
                   </Td>
                   <Td>{studentCodeFor(user)}</Td>
                   <Td>{universityFor(user)}</Td>
-                  <Td>
-                    <select
-                      value={normalizeRoleValue(user.role)}
-                      disabled={mutating}
-                      onChange={event => changeRole(user, event.target.value)}
-                      className="px-2 py-1 rounded-xl outline-none"
-                      style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-                    >
-                      <option value={normalizeRoleValue(user.role)}>{labelValue(user.role)}</option>
-                      {ROLE_OPTIONS.filter(role => role.value !== normalizeRoleValue(user.role)).map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
-                    </select>
-                  </Td>
+                  {/* Role/Status chỉ hiển thị read-only: mọi thay đổi đi qua modal Edit
+                      (có Save + validation) để tránh đổi nhầm do click/scroll trong bảng. */}
+                  <Td>{labelValue(user.role)}</Td>
                   <Td>{teamLabelFor(user)}</Td>
                   <Td>
                     <div className="flex flex-col gap-2 items-start">
                       <StatusBadge status={normalizeBadgeValue(user.accountStatus)} />
-                      <select
-                        value={user.accountStatus}
-                        disabled={mutating}
-                        onChange={event => changeStatus(user, event.target.value)}
-                        className="px-2 py-1 rounded-xl outline-none"
-                        style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-                      >
-                        <option value={user.accountStatus}>{labelValue(user.accountStatusName ?? user.accountStatus)}</option>
-                        {STATUS_OPTIONS.filter(status => status.value !== user.accountStatus).map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-                      </select>
                       {user.emailVerified !== undefined && (
                         <span style={{ fontSize: 11, color: user.emailVerified ? COLORS.success : COLORS.warning }}>
                           {user.emailVerified ? "Email verified" : "Email not verified"}
