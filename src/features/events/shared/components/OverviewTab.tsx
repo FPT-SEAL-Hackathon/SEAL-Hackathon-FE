@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Star, Users, UserCheck } from "lucide-react";
-import { Card, COLORS } from "../../../../components/shared/UIComponents";
+import { BookOpen, Star, Users, UserCheck, Edit } from "lucide-react";
+import { Card, COLORS, Button } from "../../../../components/shared/UIComponents";
 import { Field, Input } from "../ui/shared";
 import type { EventResponse } from "../../api/eventService";
 import type { EventCriteria } from "../../types/eventCriteria";
@@ -13,9 +13,10 @@ interface Props {
   event: EventResponse;
   totalPrize: { amount: number; currency: string } | null;
   onOpenTeamManagement: () => void;
+  onEdit?: () => void;
 }
 
-export function OverviewTab({ event, totalPrize, onOpenTeamManagement }: Props) {
+export function OverviewTab({ event, totalPrize, onOpenTeamManagement, onEdit }: Props) {
   
   const { eventCriteria } = useEventCriteriaContext();
   const { categories, categoryMentors } = useCategoryContext();
@@ -100,6 +101,13 @@ export function OverviewTab({ event, totalPrize, onOpenTeamManagement }: Props) 
               </div>
             </Field>
           </div>
+          {onEdit && (
+            <div className="flex justify-end mt-4 pt-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <Button variant="primary" size="sm" icon={<Edit size={13} />} onClick={onEdit}>
+                Edit Event
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
 
