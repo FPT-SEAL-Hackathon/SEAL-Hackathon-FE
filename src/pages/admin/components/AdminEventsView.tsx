@@ -162,7 +162,12 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
           const visibleTeamCount = ev.visibleTeamCount ?? ev.teams ?? 0;
 
           return (
-          <Card key={ev.id} className="p-5">
+          <Card
+            key={ev.id}
+            className="p-5 cursor-pointer transition-all hover:-translate-y-0.5"
+            style={{ boxShadow: "none" }}
+            onClick={() => onViewEvent(ev)}
+          >
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-1">
@@ -171,12 +176,7 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
                 </div>
                 <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {visibleTeamCount ?? "..."} teams • {ev.roundCount ?? 0} rounds • Deadline: {ev.eventEndDate}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>
-                <Button variant="ghost" size="sm" icon={<Eye size={13} />} 
-                    onClick={() => onViewEvent(ev)}>View</Button>
-                <Button variant="ghost" size="sm" icon={<Edit size={13}/>} 
-                    onClick={() => setEventModal({open: true, edit: ev})}>Edit</Button>
+              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                 {ev.status === "upcoming" && <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Delete</Button>}
               </div>
             </div>
