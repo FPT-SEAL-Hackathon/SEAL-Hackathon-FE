@@ -231,7 +231,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                               icon={<XCircle size={14}/>}
                               onClick={() => setRejectingId(sub.submissionId)}
                               disabled={approvingId === sub.submissionId}
-                              style={{ color: COLORS.danger, borderColor: COLORS.danger }}
+                              style={{ color: COLORS.error, borderColor: COLORS.error }}
                               title="Reject and require re-score"
                             >
                               Reject
