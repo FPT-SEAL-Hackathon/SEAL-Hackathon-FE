@@ -494,7 +494,9 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
   const renderSubmissions = () => {
     const selectedRound = submissionRounds.find(item => item.roundId === submissionForm.roundId);
     const selectedRoundOpen = isBeforeSubmissionDeadline(selectedRound);
-    const selectedRoundLocked = !!selectedRound && !submissionEligibility.canSubmit;
+    const selectedRoundLocked = !!selectedRound
+      && !submissionEligibility.loading
+      && !submissionEligibility.canSubmit;
     const canSubmitSelectedRound = !!submissionForm.roundId
       && selectedRoundOpen
       && !submissionEligibility.loading
