@@ -42,6 +42,8 @@ export interface UserManagementUser {
   accountStatus: string;
   accountStatusName?: string | null;
   emailVerified?: boolean;
+  /** Soft-deleted (isDeleted=1) — hiển thị mờ, readonly, chỉ cho Delete Forever. */
+  deleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -58,6 +60,8 @@ export interface UserQueryParams {
   accountStatus?: string;
   joinedFrom?: string;
   joinedTo?: string;
+  /** Admin: trả về cả account soft-deleted (BE default false). */
+  includeDeleted?: boolean;
   page?: number;
   size?: number;
   sortBy?: string;
@@ -146,6 +150,7 @@ type BackendUser = {
   accountStatusName?: string;
   emailVerified?: boolean;
   isEmailVerified?: boolean;
+  deleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -187,6 +192,7 @@ function normalizeUser(raw: BackendUser): UserManagementUser {
     accountStatus: raw.accountStatus ?? raw.status ?? raw.accountStatusName ?? "UNKNOWN",
     accountStatusName: raw.accountStatusName ?? null,
     emailVerified: raw.emailVerified ?? raw.isEmailVerified,
+    deleted: raw.deleted ?? false,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
