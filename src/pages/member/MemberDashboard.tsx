@@ -570,7 +570,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
 
     setSubmissionTeamsLoading(true);
-    discoverUserTeamsForEvents(apiEvents, user.userId, { activeOnly: true })
+    discoverUserTeamsForEvents(apiEvents, user.userId)
       .then(results => {
         if (cancelled) return;
         const userTeams = results.map(team => teamToActiveContext(team, user.userId));
