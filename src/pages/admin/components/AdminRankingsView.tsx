@@ -272,8 +272,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
             t("adminRankings.track"),
             t("adminRankings.total"),
             ...(activeTab === "round" ? ["ADVANCEMENT"] : []),
-            t("adminRankings.status"),
-            t("adminRankings.actions")
+            t("adminRankings.status")
           ].map(h => (
             <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>{h.toUpperCase()}</th>
           ))}
@@ -282,7 +281,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
       <tbody>
         {rankingsData.length === 0 && (
           <tr>
-            <td colSpan={activeTab === "round" ? 7 : 6} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: 14 }}>
+            <td colSpan={activeTab === "round" ? 6 : 5} className="px-4 py-8 text-center text-gray-500" style={{ fontSize: 14 }}>
               No rankings data available. Click Compute to generate rankings.
             </td>
           </tr>
@@ -308,19 +307,6 @@ export function AdminRankingsView({ context }: AdminViewProps) {
                 </td>
               )}
               <td className="px-4 py-3"><StatusBadge status={isPublishedStatus} /></td>
-              <td className="px-4 py-3">
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" icon={<Eye size={13} />}>{t("common.view")}</Button>
-                  {!disqualifiedTeams.includes(rankNum) ? (
-                    <Button variant="danger" size="sm" icon={<AlertTriangle size={12} />}
-                      onClick={() => setDisqualifyTarget({ id: rankNum, name: row.teamName ?? row.teamId ?? row.team })}>
-                      DQ
-                    </Button>
-                  ) : (
-                    <span style={{ fontSize: 11, color: COLORS.error, fontWeight: 600 }}>DQ'd</span>
-                  )}
-                </div>
-              </td>
             </tr>
           )
         })}

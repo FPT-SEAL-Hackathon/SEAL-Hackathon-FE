@@ -57,6 +57,8 @@ export function StatusBadge({ status }: { status: string }) {
     winner:        { bg: "rgba(244,121,32,0.12)", color: "#c06010", label: "Winner",      border: "rgba(244,121,32,0.3)" },
     open:          { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Open",         border: "rgba(0,148,68,0.22)" },
     closed:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Closed",       border: "rgba(229,62,46,0.2)" },
+    advanced:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Advanced",     border: "rgba(0,148,68,0.22)" },
+    locked:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Locked",       border: "rgba(229,62,46,0.2)" },
     scoring:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Scoring",      border: "rgba(244,121,32,0.22)" },
     calibration:   { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Calibration",  border: "rgba(245,158,11,0.22)" },
     scheduled:     { bg: "rgba(244,121,32,0.08)", color: "#b25310", label: "Scheduled",   border: "rgba(244,121,32,0.18)" },

@@ -20,7 +20,7 @@ import { getRoundStatus } from "@/features/events/utils/roundUtils";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
-import { rankingService } from "@/features/rankings/api/rankingService";
+import { rankingService, type RoundRankingDTO } from "@/features/rankings/api/rankingService";
 import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
@@ -53,6 +53,14 @@ type ActiveTeamContext = {
   teamStatusName?: string;
   userId?: string;
   memberUserIds?: string[];
+};
+
+type SubmissionEligibility = {
+  loading: boolean;
+  canSubmit: boolean;
+  reason: string;
+  previousRoundName?: string;
+  previousRank?: RoundRankingDTO;
 };
 
 function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById>>, userId?: string): ActiveTeamContext {
@@ -343,6 +351,15 @@ function isOfficialSubmissionRound(round: Round) {
   return !round.isCalibrationRound;
 }
 
+function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
+  const selectedRound = rounds.find(round => round.roundId === selectedRoundId);
+  if (!selectedRound) return undefined;
+
+  return rounds
+    .filter(round => isOfficialSubmissionRound(round) && round.roundOrder < selectedRound.roundOrder)
+    .sort((a, b) => b.roundOrder - a.roundOrder)[0];
+}
+
 export function MemberDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { user } = useAuth();
   const submissionFormRef = useRef<HTMLDivElement | null>(null);
@@ -481,6 +498,11 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   const [submissionFieldErrors, setSubmissionFieldErrors] = useState<SubmissionUrlErrors>({});
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionLookupLoading, setSubmissionLookupLoading] = useState(false);
+  const [submissionEligibility, setSubmissionEligibility] = useState<SubmissionEligibility>({
+    loading: false,
+    canSubmit: true,
+    reason: "",
+  });
   useEffect(() => {
     if (currentPage !== "leaderboard") return;
     const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
@@ -548,7 +570,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     }
 
     setSubmissionTeamsLoading(true);
-    discoverUserTeamsForEvents(apiEvents, user.userId, { activeOnly: true })
+    discoverUserTeamsForEvents(apiEvents, user.userId)
       .then(results => {
         if (cancelled) return;
         const userTeams = results.map(team => teamToActiveContext(team, user.userId));
@@ -783,6 +805,68 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     void loadSubmissionHistory();
   }, [loadSubmissionHistory]);
 
+  useEffect(() => {
+    if (currentPage !== "submissions" || !activeTeamContext?.teamId || !activeTeamContext.categoryId || !submissionForm.roundId) {
+      setSubmissionEligibility({ loading: false, canSubmit: true, reason: "" });
+      return;
+    }
+
+    const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
+    const previousRound = getPreviousOfficialRound(submissionRounds, submissionForm.roundId);
+
+    if (!selectedRound || selectedRound.roundOrder <= 1 || !previousRound) {
+      setSubmissionEligibility({ loading: false, canSubmit: true, reason: "" });
+      return;
+    }
+
+    let cancelled = false;
+    setSubmissionEligibility({
+      loading: true,
+      canSubmit: false,
+      reason: `Checking advancement from ${previousRound.roundName}...`,
+      previousRoundName: previousRound.roundName,
+    });
+
+    rankingService.getRoundLeaderboard(previousRound.roundId, activeTeamContext.categoryId)
+      .then(rankings => {
+        if (cancelled) return;
+        const previousRank = rankings.find(rank => rank.teamId === activeTeamContext.teamId);
+        if (previousRank?.isAdvanced === true) {
+          setSubmissionEligibility({
+            loading: false,
+            canSubmit: true,
+            reason: `Advanced from ${previousRound.roundName}.`,
+            previousRoundName: previousRound.roundName,
+            previousRank,
+          });
+          return;
+        }
+
+        setSubmissionEligibility({
+          loading: false,
+          canSubmit: false,
+          reason: previousRank
+            ? `Your team did not advance from ${previousRound.roundName}, so this round is locked.`
+            : `No advancement result was found for your team in ${previousRound.roundName}.`,
+          previousRoundName: previousRound.roundName,
+          previousRank,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSubmissionEligibility({
+          loading: false,
+          canSubmit: false,
+          reason: `Advancement results for ${previousRound.roundName} are not available yet.`,
+          previousRoundName: previousRound.roundName,
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTeamContext?.categoryId, activeTeamContext?.teamId, currentPage, submissionForm.roundId, submissionRounds]);
+
   const loadRequests = useCallback(async () => {
     if (!activeTeamContext?.teamId) {
       setPendingRequests([]);
@@ -892,6 +976,14 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus(roundState.reason || "This round is not accepting submissions.");
       return;
     }
+    if (submissionEligibility.loading) {
+      setSubmissionStatus("Please wait while we check your team's advancement status.");
+      return;
+    }
+    if (!submissionEligibility.canSubmit) {
+      setSubmissionStatus(submissionEligibility.reason || "Your team is not eligible to submit this round.");
+      return;
+    }
     if (!submissionForm.submissionName.trim()) {
       setSubmissionStatus("Submission name is required.");
       return;
@@ -987,6 +1079,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       setSubmissionStatus(roundState.reason || "This round is not accepting submissions.");
       return;
     }
+    if (submission.roundId === submissionForm.roundId && !submissionEligibility.canSubmit) {
+      setSubmissionStatus(submissionEligibility.reason || "Your team is not eligible to update this round.");
+      return;
+    }
 
     setSubmissionForm(prev => ({
       ...prev,
@@ -1055,7 +1151,12 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   const selectedSubmissionRound = submissionRounds.find(item => item.roundId === submissionForm.roundId);
   const selectedSubmissionRoundState = getSubmissionRoundState(selectedSubmissionRound);
-  const selectedSubmissionRoundOpen = selectedSubmissionRoundState.canSubmit;
+  const selectedSubmissionRoundCanSubmit = selectedSubmissionRoundState.canSubmit
+    && submissionEligibility.canSubmit
+    && !submissionEligibility.loading;
+  const selectedSubmissionRoundLocked = !!selectedSubmissionRound
+    && !submissionEligibility.loading
+    && !submissionEligibility.canSubmit;
 
   const renderSubmissionTeamSelector = () => (
     <Card className="p-4">
@@ -1098,9 +1199,13 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
             ))}
           </select>
-          {selectedSubmissionRound && selectedSubmissionRoundState.canSubmit ? (
+          {selectedSubmissionRound ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <StatusBadge status={selectedSubmissionRoundOpen ? "open" : selectedSubmissionRoundState.deadlinePassed ? "closed" : roundStatusLabel(selectedSubmissionRound)} />
+              {selectedSubmissionRoundLocked ? (
+                <StatusBadge status="locked" />
+              ) : (
+                <StatusBadge status={submissionEligibility.loading ? "pending" : selectedSubmissionRoundState.canSubmit ? "open" : selectedSubmissionRoundState.deadlinePassed ? "closed" : roundStatusLabel(selectedSubmissionRound)} />
+              )}
               <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                 Status: <strong>{roundStatusLabel(selectedSubmissionRound)}</strong>
               </span>
@@ -1158,7 +1263,9 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
           <div className="space-y-3">
             {visibleSubmissionHistory.map(submission => {
               const round = roundById.get(submission.roundId);
-              const canUpdateSubmission = isSubmissionLeader && getSubmissionRoundState(round).canSubmit;
+              const canUpdateSubmission = isSubmissionLeader
+                && getSubmissionRoundState(round).canSubmit
+                && (submission.roundId !== submissionForm.roundId || selectedSubmissionRoundCanSubmit);
               const links = [
                 { label: "Repo", url: submission.repositoryUrl, icon: <Github size={13} /> },
                 { label: "Demo", url: submission.demoUrl, icon: <Globe size={13} /> },
@@ -1230,15 +1337,16 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   };
 
   const renderRoundSubmissionNotice = () => {
-    if (!selectedSubmissionRound || selectedSubmissionRoundState.canSubmit) return null;
+    if (!selectedSubmissionRound || selectedSubmissionRoundCanSubmit || submissionEligibility.loading) return null;
     const isExpired = selectedSubmissionRoundState.deadlinePassed;
+    const isLockedByAdvancement = selectedSubmissionRoundState.canSubmit && !submissionEligibility.canSubmit;
 
     return (
       <Card
         className="p-6"
         style={{
-          border: `2px solid ${isExpired ? COLORS.error : COLORS.warning}`,
-          background: isExpired ? "rgba(229,62,46,0.08)" : `${COLORS.warning}12`,
+          border: `2px solid ${isExpired || isLockedByAdvancement ? COLORS.error : COLORS.warning}`,
+          background: isExpired || isLockedByAdvancement ? "rgba(229,62,46,0.08)" : `${COLORS.warning}12`,
         }}
       >
         <div className="flex flex-col md:flex-row md:items-center gap-4">
@@ -1247,8 +1355,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
             style={{
               width: 52,
               height: 52,
-              background: isExpired ? "rgba(229,62,46,0.14)" : `${COLORS.warning}18`,
-              color: isExpired ? COLORS.error : COLORS.warning,
+              background: isExpired || isLockedByAdvancement ? "rgba(229,62,46,0.14)" : `${COLORS.warning}18`,
+              color: isExpired || isLockedByAdvancement ? COLORS.error : COLORS.warning,
             }}
           >
             <AlertCircle size={28} />
@@ -1258,20 +1366,18 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               style={{
                 fontSize: isExpired ? 24 : 20,
                 fontWeight: 900,
-                color: isExpired ? COLORS.error : COLORS.textPrimary,
+                color: isExpired || isLockedByAdvancement ? COLORS.error : COLORS.textPrimary,
               }}
             >
-              {isExpired ? "The submission deadline has passed" : "Round is not open for submissions"}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-              <span>Round: <strong>{selectedSubmissionRound.roundName}</strong></span>
-              <span>Status: <strong>{roundStatusLabel(selectedSubmissionRound)}</strong></span>
-              <span>Starts: {formatSubmissionDate(selectedSubmissionRound.startDate)}</span>
-              <span>Deadline: {formatSubmissionDate(selectedSubmissionRound.submissionDeadline)}</span>
+              {isExpired
+                ? "The submission deadline has passed"
+                : isLockedByAdvancement
+                  ? "Your team is not eligible for this round"
+                  : "Round is not open for submissions"}
             </div>
             {!isExpired && (
               <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 8, fontWeight: 700 }}>
-                {selectedSubmissionRoundState.reason}
+                {isLockedByAdvancement ? submissionEligibility.reason : selectedSubmissionRoundState.reason}
               </div>
             )}
           </div>
@@ -2229,7 +2335,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         <SectionHeader title="Submission Center" subtitle={`Submit or update work for ${activeTeamContext.teamName ?? "your team"}`} />
         {renderSubmissionTeamSelector()}
         {renderRoundSubmissionNotice()}
-        {selectedSubmissionRoundState.canSubmit && (
+        {selectedSubmissionRoundCanSubmit && (
         <div ref={submissionFormRef}>
           <Card className="p-5">
             <div className="grid md:grid-cols-2 gap-4">
@@ -2267,7 +2373,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-3 mt-4">
-              <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading || !submissionForm.roundId}>
+              <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading || !submissionForm.roundId || !selectedSubmissionRoundCanSubmit}>
                 {submissionLoading ? "Saving..." : "Submit"}
               </Button>
               <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading || !submissionForm.roundId}>

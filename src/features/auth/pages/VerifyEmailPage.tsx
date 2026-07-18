@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { AlertCircle, CheckCircle, Loader, LogIn, MailCheck } from "lucide-react";
 import { verifyEmail } from "@/features/auth/api/authService";
-import { ApiError } from "@/lib/api/apiClient";
 import { useAuth } from "@/features/auth/store/authStore";
+import { ApiError } from "@/lib/api/apiClient";
 import { normalizeRole, getRoleRouteSegment } from "@/auth/rbac/roles";
 import { DEFAULT_PAGE_BY_ROLE } from "@/auth/permissions/permissions";
 
@@ -59,8 +59,8 @@ export function VerifyEmailPage() {
   const [state, setState] = useState<VerificationState>("loading");
   const navigate = useNavigate();
   const location = useLocation();
-  const hasStarted = useRef(false);
   const { setAuth } = useAuth();
+  const hasStarted = useRef(false);
 
   useEffect(() => {
     if (hasStarted.current) return;
