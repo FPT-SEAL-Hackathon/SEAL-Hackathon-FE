@@ -44,6 +44,8 @@ interface LayoutProps {
   onRoleChange: () => void;
   children: React.ReactNode;
   userName?: string;
+  /** Called when "Mark all read" is triggered from the dropdown, so child pages can sync their own notification state */
+  onMarkAllRead?: () => void;
 }
 
 /** Reusable toggle row used inside the App Settings panel. */
@@ -80,7 +82,7 @@ function SettingsToggle({
   );
 }
 
-export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson" }: LayoutProps) {
+export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson", onMarkAllRead }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [hoveredNavKey, setHoveredNavKey] = useState<string | null>(null);
@@ -172,6 +174,8 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     notificationService.markAllAsRead().catch(() => {});
+    // Notify parent dashboard pages to re-sync their own notification state
+    onMarkAllRead?.();
   };
 
   const markNotificationRead = (id: string) => {
@@ -454,9 +458,10 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.95 }}
                     transition={{ duration: 0.18 }}
-                    className="absolute right-0 top-12 rounded-2xl z-50 overflow-hidden"
+                    className="absolute right-0 top-12 rounded-2xl z-50 flex flex-col"
                     style={{
-                      width: 320,
+                      width: 340,
+                      maxHeight: 480,
                       background: "var(--panel-surface)",
                       backdropFilter: "blur(32px) saturate(180%)",
                       WebkitBackdropFilter: "blur(32px) saturate(180%)",
@@ -464,45 +469,58 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                       boxShadow: "0 24px 64px rgba(180,100,20,0.18), inset 0 1px 0 rgba(255,255,255,1)",
                     }}
                   >
-                    <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
+                    {/* Header — fixed, never scrolls */}
+                    <div className="px-4 py-3.5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>Notifications</span>
-                      {notifCount > 0 && (
+                      <div className="flex items-center gap-3">
+                        {notifCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllNotificationsRead}
+                            style={{ fontSize: 11, color: accentColor, fontWeight: 700 }}
+                          >
+                            Mark all read
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={markAllNotificationsRead}
-                          style={{ fontSize: 11, color: accentColor, fontWeight: 700 }}
+                          onClick={() => { setNotifOpen(false); onNavigate("notifications"); }}
+                          style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}
                         >
-                          Mark all read
+                          See all
                         </button>
-                      )}
-                    </div>
-                    {notifications.length === 0 && (
-                      <div className="px-4 py-5" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                        No notifications yet.
                       </div>
-                    )}
-                    {notifications.map((n, i) => (
-                      <motion.div
-                        key={n.id}
-                        whileHover={{ background: "rgba(244,121,32,0.04)" }}
-                        className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
-                        onClick={() => markNotificationRead(n.id)}
-                        style={{
-                          borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
-                          background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
-                        }}
-                      >
-                        <span
-                          className="rounded-full"
-                          style={{ width: 7, height: 7, marginTop: 6, flexShrink: 0, background: n.read ? "var(--text-muted)" : accentColor }}
-                        />
-                        <div className="min-w-0">
-                          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 }}>{n.body}</div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
+                    </div>
+                    {/* Scrollable list */}
+                    <div className="overflow-y-auto flex-1" style={{ overscrollBehavior: "contain" }}>
+                      {notifications.length === 0 && (
+                        <div className="px-4 py-5" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                          No notifications yet.
                         </div>
-                      </motion.div>
-                    ))}
+                      )}
+                      {notifications.map((n, i) => (
+                        <motion.div
+                          key={n.id}
+                          whileHover={{ background: "rgba(244,121,32,0.04)" }}
+                          className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
+                          onClick={() => markNotificationRead(n.id)}
+                          style={{
+                            borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
+                            background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
+                          }}
+                        >
+                          <span
+                            className="rounded-full flex-shrink-0"
+                            style={{ width: 7, height: 7, marginTop: 6, background: n.read ? "var(--text-muted)" : accentColor }}
+                          />
+                          <div className="min-w-0">
+                            <div style={{ fontSize: 13, fontWeight: n.read ? 500 : 600, color: "var(--text-primary)" }}>{n.title}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.4, wordBreak: "break-word" }}>{n.body}</div>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>{n.time}</div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

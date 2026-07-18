@@ -17,6 +17,8 @@ import {
   Users,
   Crown,
   X,
+  MessageSquare,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/store/authStore";
 import { getCurrentUser, refreshAccessToken } from "@/features/auth/api/authService";
@@ -393,7 +395,7 @@ export function TeamApiPanel({
   mode?: RoleMode;
   onTeamLeft?: () => void;
   onNavigate?: (page: string) => void;
-  onTeamChange?: (team: TeamResponse) => void;
+  onTeamChange?: (team: TeamResponse | null) => void;
 }) {
   const { user, setAuth } = useAuth();
   const [form, setForm] = useState({
@@ -446,6 +448,10 @@ export function TeamApiPanel({
   const teamDiscoveryAttemptedRef = useRef(false);
   const teamPanelModeRef = useRef<TeamPanelMode>(teamPanelMode);
   const currentUserId = user?.userId ?? "";
+
+  useEffect(() => {
+    onTeamChange?.(selectedTeam);
+  }, [selectedTeam, onTeamChange]);
 
   const setField = (key: keyof typeof form, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -553,9 +559,6 @@ export function TeamApiPanel({
     }
     if (shouldPersist && userBelongsToTeam(team, currentUserId)) {
       saveActiveTeam(team, currentUserId);
-    }
-    if (userBelongsToTeam(team, currentUserId)) {
-      onTeamChange?.(team);
     }
     setField("teamId", team.teamId);
     setField("eventId", team.eventId);
@@ -2380,6 +2383,26 @@ export function TeamApiPanel({
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex flex-wrap items-center gap-3">
               <div style={{ fontWeight: 800, fontSize: 16, color: COLORS.textPrimary }}>{selectedTeam.teamName}</div>
+              {onNavigate && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<MessageSquare size={14} />}
+                    onClick={() => onNavigate("mentor")}
+                  >
+                    Mentoring Support
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    icon={<ClipboardList size={14} />}
+                    onClick={() => onNavigate("consultations")}
+                  >
+                    Consultation History
+                  </Button>
+                </>
+              )}
               {isLeader && canEditRoster && (
                 <>
                   <Button

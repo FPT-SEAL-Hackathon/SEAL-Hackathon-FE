@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { consultationService, MentorProfileResponse, CreateConsultationRequest } from "@/features/consultation/api/consultationService";
 import { SectionHeader, Card, Button, COLORS } from "@/components/shared/UIComponents";
-import { MessageSquare, Send, User, Mail, Briefcase } from "lucide-react";
+import { MessageSquare, Send, User, Mail, Briefcase, Target, CheckCircle, Circle, FileText } from "lucide-react";
+import { milestoneService } from "@/features/teams/api/milestoneService";
 
-export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) => void; isLeader: boolean }) {
+export function MyMentor({ onNavigate, isLeader, teamId }: { onNavigate?: (p: string) => void; isLeader: boolean; teamId?: string }) {
   const [mentors, setMentors] = useState<MentorProfileResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,9 +17,24 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
     priority: "MEDIUM",
   });
 
+  const [note, setNote] = useState<string>("");
+  const [milestones, setMilestones] = useState<any[]>([]);
+
   useEffect(() => {
     loadMentors();
-  }, []);
+    if (teamId) {
+      consultationService.getMyTeamMentorNotes(teamId)
+        .then(res => {
+          if (res && res.length > 0) {
+            setNote(res.map(n => n.note).filter(Boolean).join("\n\n---\n\n"));
+          } else {
+            setNote("");
+          }
+        })
+        .catch(e => console.error(e));
+      milestoneService.getByTeam(teamId).then(res => setMilestones(res)).catch(e => console.error(e));
+    }
+  }, [teamId]);
 
   const loadMentors = async () => {
     setLoading(true);
@@ -35,8 +51,15 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
     setLoading(false);
   };
 
-  const openCreateForm = (mentor: MentorProfileResponse) => {
+  const openCreateForm = (mentor: MentorProfileResponse, initialTitle?: string, initialDescription?: string) => {
     setSelectedMentor(mentor);
+    if (initialTitle || initialDescription) {
+      setCreateForm(prev => ({
+        ...prev,
+        title: initialTitle || "",
+        description: initialDescription || ""
+      }));
+    }
     setShowCreateForm(true);
   };
 
@@ -101,7 +124,11 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
 
   return (
     <>
-      <SectionHeader title="My Experts" subtitle="Your assigned experts for consultation and guidance" />
+      <SectionHeader 
+        title="Mentoring Support" 
+        subtitle="Your assigned experts for consultation and guidance" 
+        action={<Button variant="outline" size="sm" onClick={() => onNavigate?.("team")}>Back to Team</Button>}
+      />
       <div className="space-y-6">
         {mentors.map(mentor => (
           <div key={mentor.mentorId} className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -157,6 +184,102 @@ export function MyMentor({ onNavigate, isLeader }: { onNavigate?: (p: string) =>
             </Card>
           </div>
         ))}
+
+        {teamId && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+            <Card className="p-6 flex flex-col" style={{ borderColor: COLORS.border, borderWidth: 1 }}>
+              <div className="flex items-center gap-2 mb-6">
+                <Target size={20} style={{ color: COLORS.primary }} />
+                <h3 style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>Team Milestones</h3>
+              </div>
+              <div className="flex-1 space-y-4">
+                {milestones.length === 0 ? (
+                  <div className="text-sm italic py-4 text-center border border-dashed rounded-lg" style={{ color: COLORS.textSecondary, borderColor: COLORS.border }}>
+                    No milestones assigned by mentor yet.
+                  </div>
+                ) : (
+                  milestones.map((m: any) => (
+                    <div 
+                      key={m.milestoneId} 
+                      className={`flex items-start gap-3 p-3 rounded-xl ${isLeader ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                      style={{ background: "rgba(244,121,32,0.03)", border: `1px solid rgba(244,121,32,0.08)`, transition: 'all 0.2s' }}
+                      onClick={async () => {
+                        if (!isLeader) return;
+                        try {
+                          await milestoneService.toggle(teamId, m.milestoneId);
+                          setMilestones(prev => prev.map((item: any) => 
+                            item.milestoneId === m.milestoneId ? { ...item, isDone: !item.isDone } : item
+                          ));
+                        } catch (e) {
+                          console.error("Failed to toggle milestone", e);
+                        }
+                      }}
+                    >
+                      {m.isDone ? (
+                        <CheckCircle size={18} style={{ color: COLORS.success }} className="mt-0.5 flex-shrink-0" />
+                      ) : (
+                        <Circle size={18} style={{ color: COLORS.textSecondary }} className="mt-0.5 flex-shrink-0" />
+                      )}
+                      <div>
+                        <div style={{ 
+                          fontSize: 14, 
+                          fontWeight: 500, 
+                          color: m.isDone ? COLORS.textSecondary : COLORS.textPrimary,
+                          textDecoration: m.isDone ? "line-through" : "none" 
+                        }}>
+                          {m.label}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+                {isLeader && milestones.length > 0 && (
+                  <div className="pt-4 border-t" style={{ borderColor: COLORS.border }}>
+                    <Button 
+                      variant="primary" 
+                      size="sm" 
+                      className="w-full justify-center" 
+                      icon={<MessageSquare size={14} />}
+                      onClick={() => {
+                        const total = milestones.length;
+                        const done = milestones.filter((m: any) => m.isDone).length;
+                        const title = `Milestone Progress Report (${done}/${total})`;
+                        const desc = `Hello mentor,\n\nWe would like to report our milestone progress:\n\n` +
+                          milestones.map((m: any) => `- [${m.isDone ? 'x' : ' '}] ${m.label}`).join('\n') +
+                          `\n\nPlease let us know your feedback!`;
+                        if (mentors.length > 0) {
+                          openCreateForm(mentors[0], title, desc);
+                        } else {
+                          onNavigate?.("consultations");
+                        }
+                      }}
+                    >
+                      Send Progress to Mentor
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            <Card className="p-6 flex flex-col" style={{ borderColor: COLORS.border, borderWidth: 1 }}>
+              <div className="flex items-center gap-2 mb-6">
+                <FileText size={20} style={{ color: COLORS.primary }} />
+                <h3 style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>Mentor's Note</h3>
+              </div>
+              <div className="flex-1 rounded-xl p-5" style={{ background: "rgba(244,121,32,0.03)", border: `1px solid rgba(244,121,32,0.08)` }}>
+                {note ? (
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: COLORS.textPrimary }}>
+                    {note}
+                  </div>
+                ) : (
+                  <div className="text-sm italic text-center py-8" style={{ color: COLORS.textSecondary }}>
+                    Mentor hasn't left any note yet.
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </>
   );

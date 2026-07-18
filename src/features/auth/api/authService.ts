@@ -115,8 +115,12 @@ export async function refreshAccessToken(): Promise<TokenResponse> {
   return response;
 }
 
-export async function verifyEmail(token: string): Promise<string> {
-  return api.get<string>(`/auth/verify-email?token=${encodeURIComponent(token)}`, false);
+export async function verifyEmail(token: string): Promise<LoginResponse> {
+  const res = await api.get<LoginResponse & { user: RawUserResponse }>(
+    `/auth/verify-email?token=${encodeURIComponent(token)}`,
+    false,
+  );
+  return storeSession(res);
 }
 
 // ─── Google OAuth ────────────────────────────────────────────────────────────

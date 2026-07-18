@@ -152,6 +152,8 @@ function MainLayout() {
     navigate("/login", { replace: true, state: null });
   };
 
+  const [markAllReadKey, setMarkAllReadKey] = useState(0);
+
   return (
     <Layout
       role={role}
@@ -159,13 +161,14 @@ function MainLayout() {
       onNavigate={handlePageNavigate}
       onRoleChange={handleLogout}
       userName={user?.fullName ?? "User"}
+      onMarkAllRead={() => setMarkAllReadKey(k => k + 1)}
     >
-      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} navKey={navKey} />
+      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} navKey={navKey} markAllReadKey={markAllReadKey} />
     </Layout>
   );
 }
 
-function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role; currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number }) {
+function DashboardByRole({ role, currentPage, onNavigate, navKey, markAllReadKey }: { role: Role; currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number; markAllReadKey?: number }) {
   if (role === ROLES.EXPERT) {
     const mentorPages = ["dashboard", "categories", "tracks", "teams", "consultations", "progress", "schedule"];
     if (mentorPages.includes(currentPage)) {
@@ -174,7 +177,7 @@ function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role
     return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
   }
   if (isStudent(role)) {
-    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} markAllReadKey={markAllReadKey} />;
   }
   if (isJudge(role)) {
     return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
@@ -186,7 +189,7 @@ function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role
     return <MentorDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   if (role === ROLES.LEADER || role === ROLES.MEMBER) {
-    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} markAllReadKey={markAllReadKey} />;
   }
   return null;
 }

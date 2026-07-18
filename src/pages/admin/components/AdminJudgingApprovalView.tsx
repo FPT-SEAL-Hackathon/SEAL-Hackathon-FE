@@ -41,9 +41,10 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
             const judgesSet = new Set<string>();
             
             (batchData || []).forEach((score: any) => {
+              if (score.isCalibration) return;
               if (!scoresMap[score.submissionId]) scoresMap[score.submissionId] = {};
               if (!scoresMap[score.submissionId][score.judgeName]) scoresMap[score.submissionId][score.judgeName] = 0;
-              scoresMap[score.submissionId][score.judgeName] += score.scoreValue || 0;
+              scoresMap[score.submissionId][score.judgeName] += (score.scoreValue * (score.criterionWeight || 1)) || 0;
               judgesSet.add(score.judgeName);
             });
             
@@ -146,7 +147,8 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
               {submissions.map((sub: any) => {
                 const subScores = batchScores[sub.submissionId] || {};
                 const scoresArray = Object.values(subScores);
-                const avgScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0) / scoresArray.length).toFixed(1) : "-";
+                const isDisqualified = sub.submissionStatusName?.toLowerCase() === 'disqualified';
+                const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
                 
                 return (
                   <tr 
@@ -175,7 +177,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                         <td key={idx} className="p-4 text-center">
                           {score !== undefined ? (
                             <span className={`inline-block px-3 py-1 rounded-md font-bold text-sm ${bgColor} ${textColor}`}>
-                              {score}
+                              {Number(score).toFixed(2)}
                             </span>
                           ) : (
                             <span className="text-gray-300">-</span>
@@ -185,7 +187,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                     })}
                     
                     <td className="p-4 text-center font-bold text-primary text-lg">
-                      {avgScore}
+                      {totalScore}
                     </td>
 
                     <td className="p-4 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>
@@ -229,7 +231,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                               icon={<XCircle size={14}/>}
                               onClick={() => setRejectingId(sub.submissionId)}
                               disabled={approvingId === sub.submissionId}
-                              style={{ color: COLORS.danger, borderColor: COLORS.danger }}
+                              style={{ color: COLORS.error, borderColor: COLORS.error }}
                               title="Reject and require re-score"
                             >
                               Reject

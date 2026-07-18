@@ -734,37 +734,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                     })()}
                   </div>
 
-                  {(hofGroups[activeHof]?.specialAwards?.length ?? 0) > 0 && (
-                    <div className="mt-10 max-w-4xl mx-auto">
-                      <div className="flex items-center justify-center gap-2 mb-4">
-                        <Star size={15} style={{ color: "#F47920" }} />
-                        <div className="text-sm font-semibold" style={{ color: "#F47920" }}>Special Awards</div>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        {hofGroups[activeHof].specialAwards.map((award: any) => {
-                          const initials = award.teamName.split(" ").map((w: any) => w[0]).join("").slice(0, 2).toUpperCase();
-                          return (
-                            <motion.div
-                              key={award.entryKey}
-                              initial={{ opacity: 0, y: 16 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="glass rounded-2xl border border-orange-400/25 p-4 flex items-center gap-4"
-                            >
-                              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                                style={{ background: "linear-gradient(135deg, #F47920, #FFD700)" }}>
-                                {initials}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs text-muted-foreground mb-0.5">{award.awardTierName}</div>
-                                <div className="text-sm font-semibold truncate">{award.awardTitle}</div>
-                                <div className="text-xs text-muted-foreground truncate">{award.teamName}</div>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+
                 </motion.div>
               </AnimatePresence>
             </>
@@ -777,10 +747,10 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
-              { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", sub: "from API", color: "#FF8C2A" },
-              { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
-              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", sub: "from API", color: "#0EA5E9" },
+              { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", color: "#F47920" },
+              { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", color: "#FF8C2A" },
+              { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", color: "#7C3AED" },
+              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", color: "#0EA5E9" },
             ].map((s, i) => (
               <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
@@ -788,7 +758,6 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                 <s.icon size={28} className="mx-auto mb-3" style={{ color: s.color }} />
                 <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
                 <div style={{ fontWeight: 600, fontSize: "0.9rem" }} className="mt-0.5">{s.label}</div>
-                {s.sub && <div className="text-xs text-muted-foreground">{s.sub}</div>}
               </motion.div>
             ))}
           </div>
