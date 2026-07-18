@@ -15,6 +15,7 @@ import { eventService } from "@/features/events/api/eventService";
 import { milestoneService, type MilestoneResponse } from "@/features/teams/api/milestoneService";
 import { meService } from "@/features/users/api/userService";
 import { saveUser } from "@/lib/api/apiClient";
+import { consultationService } from "@/features/consultation/api/consultationService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -168,9 +169,33 @@ export function MentorDashboard({
   const selectedTeam = teamsInSelectedCategory.find((t) => t.teamId === selectedTeamId) ?? null;
 
   // ─── Save note ─────────────────────────────────────────────────────────────
-  const saveNote = () => {
-    setNoteSaved(true);
-    setTimeout(() => setNoteSaved(false), 2000);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteLoading, setNoteLoading] = useState(false);
+
+  useEffect(() => {
+    if (selectedTeamId) {
+      setNoteLoading(true);
+      consultationService.getTeamNote(selectedTeamId)
+        .then(res => setNoteText(res.note || ""))
+        .catch(err => console.error("Failed to load note", err))
+        .finally(() => setNoteLoading(false));
+    } else {
+      setNoteText("");
+    }
+  }, [selectedTeamId]);
+
+  const saveNote = async () => {
+    if (!selectedTeamId) return;
+    setNoteSaving(true);
+    try {
+      await consultationService.updateTeamNote(selectedTeamId, noteText);
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 2000);
+    } catch (err) {
+      console.error("Failed to save note", err);
+    } finally {
+      setNoteSaving(false);
+    }
   };
 
   // ─── Milestone helpers (API-backed) ──────────────────────────────────────────
@@ -626,8 +651,8 @@ export function MentorDashboard({
                       placeholder="Add consultation notes, observations, and recommendations..."
                     />
                     <div className="flex items-center gap-3 mt-3">
-                      <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={saveNote}>
-                        Save Notes
+                      <Button variant="primary" size="sm" icon={noteSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} onClick={saveNote} disabled={noteSaving || noteLoading}>
+                        {noteSaving ? "Saving..." : "Save Notes"}
                       </Button>
                       {noteSaved && (
                         <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Saved!</span>

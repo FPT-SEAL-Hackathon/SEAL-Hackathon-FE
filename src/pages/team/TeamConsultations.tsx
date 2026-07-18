@@ -3,7 +3,7 @@ import { consultationService, ConsultationRequestResponse, ConsultationMessageRe
 import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
 import { MessageSquare, Send, ArrowLeft, XCircle } from "lucide-react";
 
-export function TeamConsultations({ isLeader }: { isLeader: boolean }) {
+export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean; onNavigate?: (p: string) => void }) {
   const [requests, setRequests] = useState<ConsultationRequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ConsultationRequestResponse | null>(null);
@@ -137,7 +137,11 @@ export function TeamConsultations({ isLeader }: { isLeader: boolean }) {
 
   return (
     <>
-      <SectionHeader title="Consultation Requests" subtitle="Your team's consultation history with the mentor" />
+      <SectionHeader 
+        title="Consultation Requests" 
+        subtitle="Your team's consultation history with the mentor" 
+        action={<Button variant="outline" size="sm" onClick={() => onNavigate?.("team")}>Back to Team</Button>}
+      />
       <div className="space-y-4">
         {loading ? <div>Loading requests...</div> : requests.length === 0 ? <div>No requests found.</div> : requests.map(req => (
           <div key={req.id} onClick={() => openRequestDetail(req)}>

@@ -30,6 +30,9 @@ const glassSurface: React.CSSProperties = {
 
 // Status Badge
 export function StatusBadge({ status }: { status: string }) {
+  if (!status) return null;
+  const normalizedStatus = status.toLowerCase();
+  
   const configs: Record<string, { bg: string; color: string; label: string; border: string }> = {
     forming:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Forming", border: "rgba(244,121,32,0.22)" },
     active:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Active",       border: "rgba(0,148,68,0.22)" },
@@ -42,7 +45,10 @@ export function StatusBadge({ status }: { status: string }) {
     submitted:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Submitted",    border: "rgba(244,121,32,0.22)" },
     approved:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Approved",     border: "rgba(0,148,68,0.22)" },
     rejected:      { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Rejected",     border: "rgba(229,62,46,0.2)" },
+    cancelled:     { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Cancelled",    border: "rgba(100,70,30,0.14)" },
     in_progress:   { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "In Progress",  border: "rgba(244,121,32,0.22)" },
+    accepted:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Accepted",     border: "rgba(0,148,68,0.22)" },
+    resolved:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Resolved",     border: "rgba(0,148,68,0.22)" },
     completed:     { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Completed",    border: "rgba(0,148,68,0.22)" },
     draft:         { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Draft",        border: "rgba(100,70,30,0.14)" },
     disqualified:  { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Disqualified", border: "rgba(229,62,46,0.2)" },
@@ -57,8 +63,24 @@ export function StatusBadge({ status }: { status: string }) {
     calibration:   { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Calibration",  border: "rgba(245,158,11,0.22)" },
     scheduled:     { bg: "rgba(244,121,32,0.08)", color: "#b25310", label: "Scheduled",   border: "rgba(244,121,32,0.18)" },
     upcoming:      { bg: "rgba(0,148,68,0.08)",  color: "#007535", label: "Upcoming",     border: "rgba(0,148,68,0.18)" },
+    published:     { bg: "rgba(0,148,68,0.08)",  color: "#007535", label: "Published",    border: "rgba(0,148,68,0.18)" },
+    ongoing:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Ongoing",      border: "rgba(244,121,32,0.22)" },
+    late:          { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Late",         border: "rgba(229,62,46,0.2)" },
+    evaluated:     { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Evaluated",    border: "rgba(0,148,68,0.22)" },
+    urgent:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Urgent",       border: "rgba(229,62,46,0.2)" },
+    high:          { bg: "rgba(244,121,32,0.12)", color: "#c06010", label: "High",        border: "rgba(244,121,32,0.3)" },
+    medium:        { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Medium",       border: "rgba(245,158,11,0.22)" },
+    low:           { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Low",          border: "rgba(0,148,68,0.22)" },
+    not_registered:{ bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Not Registered", border: "rgba(100,70,30,0.14)" },
+    locked:        { bg: "rgba(107,114,128,0.1)", color: "#4b5563", label: "Locked",      border: "rgba(107,114,128,0.2)" },
   };
-  const cfg = configs[status] || { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: status, border: "rgba(100,70,30,0.14)" };
+  
+  const formatLabel = (s: string) => {
+    if (!s) return "";
+    return s.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  };
+
+  const cfg = configs[normalizedStatus] || { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: formatLabel(status), border: "rgba(100,70,30,0.14)" };
   return (
     <span
       className="inline-flex items-center px-2.5 py-0.5 rounded-full"
