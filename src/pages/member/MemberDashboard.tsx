@@ -526,7 +526,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     reason: "",
   });
   useEffect(() => {
-    if (currentPage !== "leaderboard") return;
+    if (currentPage !== "team") return;
     const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
     if (!targetEventId) return;
 
@@ -540,7 +540,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
 
   useEffect(() => {
-    if (currentPage !== "leaderboard") return;
+    if (currentPage !== "team") return;
     const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
     if (!targetEventId) return;
 
@@ -1158,7 +1158,12 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     setSubmissionFieldErrors({});
   };
 
-  const handleTeamChange = useCallback((team: TeamResponse) => {
+  const handleTeamChange = useCallback((team: TeamResponse | null) => {
+    if (!team) {
+      setActiveTeamContext(null);
+      removeStoredActiveTeam();
+      return;
+    }
     const nextTeam = teamToActiveContext(team, user?.userId);
     setActiveTeamContext(nextTeam);
     setSubmissionTeams(prev => [nextTeam, ...prev.filter(item => item.teamId !== nextTeam.teamId)]);
@@ -1611,7 +1616,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   );
 
   const renderTeam = () => (
-    <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
+    <div className="flex flex-col gap-6">
+      <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
+      {activeTeamContext?.teamId && renderLeaderboard()}
+    </div>
   );
 
   const renderEvents = () => (
@@ -2530,7 +2538,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </div>
         {currentPage === "dashboard" && renderDashboard()}
         {currentPage === "events" && renderEvents()}
-        {currentPage === "leaderboard" && renderLeaderboard()}
         {currentPage === "certificates" && renderCertificates()}
         {currentPage === "submissions" && renderSubmissions()}
         {currentPage === "feedback" && renderFeedback()}
