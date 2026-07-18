@@ -78,18 +78,32 @@ export function JudgeHistoryView({
     setSelectedCategoryId(""); // Reset category when event changes
   }, [selectedEventId]);
 
+  const [fetchedRounds, setFetchedRounds] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (selectedCategoryId) {
+      // Fetch rounds for specific category
+      import("@/features/judging/api/roundService").then(({ roundService }) => {
+        roundService.getByCategory(selectedCategoryId).then(setFetchedRounds).catch(console.error);
+      });
+    } else if (selectedEventId && categories.length > 0) {
+      // Fetch rounds for all categories in the event
+      import("@/features/judging/api/roundService").then(({ roundService }) => {
+        Promise.all(categories.map(c => roundService.getByCategory(c.categoryId)))
+          .then(results => setFetchedRounds(results.flat()))
+          .catch(console.error);
+      });
+    } else {
+      setFetchedRounds([]);
+    }
+  }, [selectedCategoryId, selectedEventId, categories]);
+
   const filteredRounds = useMemo(() => {
-    return apiRounds.filter(r => {
-      if (selectedCategoryId) {
-        return r.categoryId === selectedCategoryId;
-      }
-      if (selectedEventId) {
-        const categoryIdsInEvent = new Set(categories.map(c => c.categoryId));
-        return categoryIdsInEvent.has(r.categoryId);
-      }
-      return true; 
-    });
-  }, [apiRounds, selectedCategoryId, selectedEventId, categories]);
+    if (selectedEventId || selectedCategoryId) {
+      return fetchedRounds;
+    }
+    return apiRounds;
+  }, [apiRounds, fetchedRounds, selectedEventId, selectedCategoryId]);
 
   useEffect(() => {
     if (filteredRounds.length > 0) {

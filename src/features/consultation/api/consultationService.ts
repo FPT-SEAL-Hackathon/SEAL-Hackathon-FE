@@ -67,6 +67,13 @@ export interface MessageRequest {
   attachmentUrl?: string;
 }
 
+export interface TeamMentorNoteResponse {
+  teamId: string;
+  mentorId: string;
+  note: string;
+  updatedAt?: string;
+}
+
 export interface AssignedCategoryResponse {
   categoryId: string;
   categoryName: string;
@@ -191,9 +198,18 @@ export const consultationService = {
     request<BackendConsultationRequestResponse>(`/api/v1/expert/consultation-requests/${requestId}/resolve`, { method: "PUT" })
       .then(normalizeConsultationRequest),
 
+  getTeamNote: (teamId: string): Promise<TeamMentorNoteResponse> =>
+    request(`/api/v1/expert/teams/${teamId}/note`, { method: "GET" }),
+    
+  updateTeamNote: (teamId: string, note: string): Promise<TeamMentorNoteResponse> =>
+    request(`/api/v1/expert/teams/${teamId}/note`, { method: "PUT", body: JSON.stringify({ note }) }),
+
   // Team
+  getMyTeamMentorNotes: (teamId: string): Promise<TeamMentorNoteResponse[]> =>
+    request(`/api/v1/teams/${teamId}/mentor-notes`, { method: "GET" }),
+
   getMyMentor: (): Promise<MentorProfileResponse[]> =>
-    request<BackendMentorProfileResponse[]>(`/api/v1/teams/my-expert`, { method: "GET" })
+    request<BackendMentorProfileResponse[]>(`/api/v1/teams/my-experts`, { method: "GET" })
       .then(items => items.map(normalizeMentorProfile)),
 
   createRequest: (data: CreateConsultationRequest): Promise<ConsultationRequestResponse> =>

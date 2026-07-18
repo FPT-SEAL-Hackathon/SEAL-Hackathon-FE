@@ -254,6 +254,8 @@ export function AdminUsersView() {
     teamName: filters.teamName || undefined,
     joinedFrom: filters.joinedFrom || undefined,
     joinedTo: filters.joinedTo || undefined,
+    // Admin xem cả account soft-deleted (hiển thị mờ, readonly, chỉ cho Delete Forever).
+    includeDeleted: true,
   });
 
   const loadUsers = async () => {
@@ -465,12 +467,18 @@ export function AdminUsersView() {
     }
   };
 
+  // Suspend (reversible): BE chỉ đổi status sang Suspended — account vẫn nằm
+  // trong danh sách, kích hoạt lại bằng Edit → Status → Active.
   const deleteUser = async (user: UserManagementUser) => {
-    if (!window.confirm(`Deactivate ${user.fullName}?`)) return;
+    if (!window.confirm(
+      `Suspend ${user.fullName}?\n\n` +
+      "The account stays in this list and can be reactivated anytime " +
+      "via Edit → Status → Active.",
+    )) return;
     setMutating(true);
     try {
       await userService.deleteUser(user.userId);
-      toast.success("User deactivated.");
+      toast.success("User suspended. Reactivate via Edit → Status → Active.");
       await loadUsers();
     } catch (err) {
       toast.error(parseApiError(err).message);
@@ -479,11 +487,45 @@ export function AdminUsersView() {
     }
   };
 
-  // Xóa CỨNG không thể hoàn tác: bắt gõ lại email để xác nhận, tránh nhầm với Deactivate.
+  // Mở khóa account Suspended: đổi status về Active qua endpoint sẵn có.
+  const reactivateUser = async (user: UserManagementUser) => {
+    if (!window.confirm(`Reactivate ${user.fullName}? The account will be able to log in again.`)) return;
+    setMutating(true);
+    try {
+      await userService.updateUserStatus(user.userId, { accountStatus: "ACTIVE" });
+      toast.success("User reactivated.");
+      await loadUsers();
+    } catch (err) {
+      toast.error(parseApiError(err).message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  // Xóa CỨNG không thể hoàn tác: BE xóa MỌI account trùng email (kể cả account
+  // sống khi bấm từ dòng Deleted), nên phải liệt kê đầy đủ danh sách sẽ bị xóa
+  // trước khi confirm + bắt gõ lại email.
   const hardDeleteUser = async (user: UserManagementUser) => {
+    let affectedSummary = "";
+    try {
+      const page = await userService.getUsers({ search: user.email, includeDeleted: true, size: 50 });
+      const sameEmail = page.content.filter(
+        item => item.email.trim().toLowerCase() === user.email.trim().toLowerCase(),
+      );
+      if (sameEmail.length > 0) {
+        affectedSummary =
+          `\n\nThis will remove ${sameEmail.length} account(s):\n` +
+          sameEmail
+            .map(item => `- ${item.fullName} (${labelValue(item.role)}, ${item.deleted ? "Deleted" : labelValue(item.accountStatusName ?? item.accountStatus)})`)
+            .join("\n");
+      }
+    } catch {
+      // Không chặn thao tác nếu preview lỗi — dialog vẫn cảnh báo "ALL accounts".
+    }
     if (!window.confirm(
-      `PERMANENTLY delete ALL accounts with email ${user.email}?\n\n` +
-      "This cannot be undone. Team submissions are kept (reassigned to the team leader) " +
+      `PERMANENTLY delete ALL accounts with email ${user.email}?` +
+      affectedSummary +
+      "\n\nThis cannot be undone. Team submissions are kept (reassigned to the team leader) " +
       "and the email can be reused for a new account immediately.",
     )) return;
     const typedEmail = window.prompt(`Type the email to confirm permanent deletion:`, "");
@@ -498,7 +540,15 @@ export function AdminUsersView() {
       toast.success(`User permanently deleted (${result.deletedAccounts} account(s)).`);
       await loadUsers();
     } catch (err) {
-      toast.error(parseApiError(err).message);
+      const parsed = parseApiError(err);
+      // Retry sau timeout/mất mạng: lần trước có thể đã xóa xong → 404 nghĩa là
+      // "không còn account nào" chứ không phải thao tác thất bại.
+      if (parsed.status === 404) {
+        toast.success("Account already removed.");
+        await loadUsers();
+      } else {
+        toast.error(parsed.message);
+      }
     } finally {
       setMutating(false);
     }
@@ -601,8 +651,20 @@ export function AdminUsersView() {
                   </td>
                 </tr>
               )}
-              {!loading && users.map((user, index) => (
-                <tr key={user.userId} style={{ borderBottom: index < users.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+              {!loading && users.map((user, index) => {
+                // Suspended: readonly, chỉ Reactivate + Delete Forever.
+                // Deleted (isDeleted=1, gồm cả xác account đã merge): readonly
+                // tuyệt đối, KHÔNG restore — chỉ Delete Forever để dọn hẳn.
+                const isRemoved = user.deleted === true;
+                const isSuspended = !isRemoved && normalizeBadgeValue(user.accountStatus) === "suspended";
+                return (
+                <tr
+                  key={user.userId}
+                  style={{
+                    borderBottom: index < users.length - 1 ? `1px solid ${COLORS.border}` : "none",
+                    opacity: isRemoved ? 0.45 : isSuspended ? 0.6 : 1,
+                  }}
+                >
                   <Td>
                     <div style={{ fontWeight: 700, color: COLORS.textPrimary }}>{user.fullName}</div>
                     <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{user.email}</div>
@@ -617,7 +679,12 @@ export function AdminUsersView() {
                   <Td>
                     <div className="flex flex-col gap-2 items-start">
                       <StatusBadge status={normalizeBadgeValue(user.accountStatus)} />
-                      {user.emailVerified !== undefined && (
+                      {isRemoved && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.error }}>
+                          Deleted
+                        </span>
+                      )}
+                      {!isRemoved && user.emailVerified !== undefined && (
                         <span style={{ fontSize: 11, color: user.emailVerified ? COLORS.success : COLORS.warning }}>
                           {user.emailVerified ? "Email verified" : "Email not verified"}
                         </span>
@@ -627,19 +694,29 @@ export function AdminUsersView() {
                   <Td>{formatDate(user.createdAt)}</Td>
                   <Td>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => openEdit(user)}>
-                        Edit
-                      </Button>
-                      <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
-                        Deactivate
-                      </Button>
+                      {!isRemoved && !isSuspended && (
+                        <>
+                          <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => openEdit(user)}>
+                            Edit
+                          </Button>
+                          <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
+                            Suspend
+                          </Button>
+                        </>
+                      )}
+                      {isSuspended && (
+                        <Button variant="primary" size="sm" icon={<RefreshCw size={12} />} disabled={mutating} onClick={() => reactivateUser(user)}>
+                          Reactivate
+                        </Button>
+                      )}
                       <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => hardDeleteUser(user)}>
                         Delete Forever
                       </Button>
                     </div>
                   </Td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

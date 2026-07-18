@@ -97,7 +97,7 @@ function display(value?: string | number | null) {
   return value === undefined || value === null || value === "" ? "-" : value;
 }
 
-export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
+export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { currentPage: string; onNavigate: (p: string) => void; markAllReadKey?: number }) {
   const { user } = useAuth();
   const [activeTeam, setActiveTeam] = useState<TeamResponse | null>(null);
   const [teamId, setTeamId] = useState("");
@@ -167,7 +167,7 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
       .catch(() => {});
   }, [user?.userId]);
 
-  useEffect(() => {
+  const fetchNotifications = () => {
     notificationService.getMyNotifications()
       .then(page => {
         setNotifications((page?.content ?? []).map((notification: any) => ({
@@ -179,7 +179,28 @@ export function LeaderDashboard({ currentPage, onNavigate }: { currentPage: stri
         })));
       })
       .catch(() => {});
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchNotifications();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-fetch when navigating to notification page
+  useEffect(() => {
+    if (currentPage === "notifications") {
+      fetchNotifications();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
+  // Re-fetch when mark-all-read is triggered from the Layout dropdown
+  useEffect(() => {
+    if (markAllReadKey && markAllReadKey > 0) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    }
+  }, [markAllReadKey]);
 
   useEffect(() => {
     if (currentPage !== "submissions" || !activeTeam?.categoryId) {
