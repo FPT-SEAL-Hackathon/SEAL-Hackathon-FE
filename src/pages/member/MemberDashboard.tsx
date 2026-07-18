@@ -504,7 +504,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     reason: "",
   });
   useEffect(() => {
-    if (currentPage !== "leaderboard") return;
+    if (currentPage !== "team") return;
     const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
     if (!targetEventId) return;
 
@@ -518,7 +518,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
 
   useEffect(() => {
-    if (currentPage !== "leaderboard") return;
+    if (currentPage !== "team") return;
     const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
     if (!targetEventId) return;
 
@@ -1136,7 +1136,12 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
     setSubmissionFieldErrors({});
   };
 
-  const handleTeamChange = useCallback((team: TeamResponse) => {
+  const handleTeamChange = useCallback((team: TeamResponse | null) => {
+    if (!team) {
+      setActiveTeamContext(null);
+      removeStoredActiveTeam();
+      return;
+    }
     const nextTeam = teamToActiveContext(team, user?.userId);
     setActiveTeamContext(nextTeam);
     setSubmissionTeams(prev => [nextTeam, ...prev.filter(item => item.teamId !== nextTeam.teamId)]);
@@ -1589,7 +1594,10 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   );
 
   const renderTeam = () => (
-    <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
+    <div className="flex flex-col gap-6">
+      <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
+      {activeTeamContext?.teamId && renderLeaderboard()}
+    </div>
   );
 
   const renderEvents = () => (
@@ -2500,6 +2508,7 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
   );
 
   const renderPage = () => {
+<<<<<<< Updated upstream
     switch (currentPage) {
       case "dashboard": return renderDashboard();
       case "team": return renderTeam();
@@ -2515,6 +2524,26 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
       case "consultations": return <TeamConsultations isLeader={false} />;
       default: return renderDashboard();
     }
+=======
+    const isLeader = activeTeamContext?.leaderUserId === user?.userId;
+    return (
+      <>
+        <div style={{ display: currentPage === "team" ? "block" : "none" }}>
+          {renderTeam()}
+        </div>
+        {currentPage === "dashboard" && renderDashboard()}
+        {currentPage === "events" && renderEvents()}
+        {currentPage === "certificates" && renderCertificates()}
+        {currentPage === "submissions" && renderSubmissions()}
+        {currentPage === "feedback" && renderFeedback()}
+        {currentPage === "requests" && renderRequests()}
+        {currentPage === "notifications" && renderNotifications()}
+        {currentPage === "profile" && renderProfile()}
+        {currentPage === "mentor" && <MyMentor isLeader={isLeader} onNavigate={onNavigate} teamId={activeTeamContext?.teamId} />}
+        {currentPage === "consultations" && <TeamConsultations isLeader={isLeader} onNavigate={onNavigate} />}
+      </>
+    );
+>>>>>>> Stashed changes
   };
 
   return <div className="p-6 space-y-6">{renderPage()}</div>;
