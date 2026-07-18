@@ -72,7 +72,6 @@ export function StatusBadge({ status }: { status: string }) {
     medium:        { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Medium",       border: "rgba(245,158,11,0.22)" },
     low:           { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Low",          border: "rgba(0,148,68,0.22)" },
     not_registered:{ bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Not Registered", border: "rgba(100,70,30,0.14)" },
-    locked:        { bg: "rgba(107,114,128,0.1)", color: "#4b5563", label: "Locked",      border: "rgba(107,114,128,0.2)" },
   };
   
   const formatLabel = (s: string) => {

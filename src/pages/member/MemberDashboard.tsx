@@ -360,7 +360,7 @@ function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
     .sort((a, b) => b.roundOrder - a.roundOrder)[0];
 }
 
-export function MemberDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
+export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { currentPage: string; onNavigate: (p: string) => void; markAllReadKey?: number }) {
   const { user } = useAuth();
   const submissionFormRef = useRef<HTMLDivElement | null>(null);
   const displayName = user?.fullName || user?.email || "Member";
@@ -448,7 +448,8 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
 
   // ── Notifications ────────────────────────────────────────────────────────────
   const [notifs, setNotifs] = useState<MemberNotification[]>([]);
-  useEffect(() => {
+
+  const fetchNotifs = () => {
     notificationService.getMyNotifications()
       .then(page => {
         if (page?.content?.length) {
@@ -466,7 +467,28 @@ export function MemberDashboard({ currentPage, onNavigate }: { currentPage: stri
         }
       })
       .catch(() => { });
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchNotifs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Re-fetch when navigating to notification page
+  useEffect(() => {
+    if (currentPage === "notifications") {
+      fetchNotifs();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
+  // Sync when mark-all-read is triggered from the Layout dropdown
+  useEffect(() => {
+    if (markAllReadKey && markAllReadKey > 0) {
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })));
+    }
+  }, [markAllReadKey]);
 
   const [profileForm, setProfileForm] = useState({
     fullName: user?.fullName ?? "",
