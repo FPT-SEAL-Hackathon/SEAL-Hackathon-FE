@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { consultationService, ConsultationRequestResponse, ConsultationMessageResponse, ConsultationPriority } from "@/features/consultation/api/consultationService";
 import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
 import { MessageSquare, Send, ArrowLeft, XCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { useAuth } from "@/features/auth/store/authStore";
 
 const PRIORITY_OPTIONS: { label: string; value: ConsultationPriority | "" }[] = [
   { label: "All Priorities", value: "" },
@@ -40,7 +41,168 @@ const selectStyle: React.CSSProperties = {
   minWidth: 140,
 };
 
-export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean; onNavigate?: (p: string) => void }) {
+import { milestoneService, type MilestoneResponse } from "@/features/teams/api/milestoneService";
+import { MentorProfileResponse } from "@/features/consultation/api/consultationService";
+import { Target, FileText, Circle, CheckCircle, PlusCircle, Loader, Users } from "lucide-react";
+
+// ─── Milestone panel ───────────────────────────────────────────────────────────
+function MilestonePanel({ requestId, onToggle }: { requestId: string; onToggle?: () => void }) {
+  const [milestones, setMilestones] = useState<MilestoneResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    milestoneService.getByTeam(requestId)
+      .then(setMilestones)
+      .catch(() => setMilestones([]))
+      .finally(() => setLoading(false));
+  }, [requestId]);
+
+  const doneCount = milestones.filter(m => m.isDone).length;
+
+  const handleToggle = async (milestoneId: string) => {
+    try {
+      const updated = await milestoneService.toggle(requestId, milestoneId);
+      setMilestones(prev => prev.map(m => m.milestoneId === milestoneId ? updated : m));
+      onToggle?.();
+    } catch (e: any) {
+      console.error("Failed to toggle milestone", e);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Target size={14} style={{ color: COLORS.primary }} />
+          <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>Milestones</span>
+        </div>
+        <span style={{ fontSize: 11, fontWeight: 600, color: milestones.length > 0 && doneCount === milestones.length ? COLORS.success : COLORS.primary }}>
+          {doneCount}/{milestones.length} done
+        </span>
+      </div>
+      <div className="w-full rounded-full mb-3" style={{ height: 4, background: `${COLORS.border}60` }}>
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: milestones.length ? `${(doneCount / milestones.length) * 100}%` : "0%", background: COLORS.success }}
+        />
+      </div>
+      <div className="space-y-1.5">
+        {loading ? (
+          <div className="flex items-center gap-2" style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+            <Loader size={12} className="animate-spin" /> Loading...
+          </div>
+        ) : milestones.length === 0 ? (
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>No milestones yet.</div>
+        ) : milestones.map(m => (
+          <div
+            key={m.milestoneId}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors cursor-pointer hover:bg-gray-50"
+            style={{ background: m.isDone ? `${COLORS.success}08` : COLORS.bg, border: `1px solid ${m.isDone ? COLORS.success + "40" : COLORS.border}` }}
+            onClick={() => handleToggle(m.milestoneId)}
+          >
+            <div style={{ flexShrink: 0, lineHeight: 0 }}>
+              {m.isDone
+                ? <CheckCircle size={15} style={{ color: COLORS.success }} />
+                : <Circle size={15} style={{ color: COLORS.border }} />
+              }
+            </div>
+            <span className="flex-1 break-words min-w-0" style={{
+              fontSize: 13, color: m.isDone ? COLORS.textSecondary : COLORS.textPrimary,
+              textDecoration: m.isDone ? "line-through" : "none"
+            }}>
+              {m.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mentor Notes Panel (Team view - read only) ────────────────────────────────
+function MentorNotesPanel({ requestId }: { requestId: string }) {
+  const [notes, setNotes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    consultationService.getMyTeamMentorNotes(requestId)
+      .then(res => setNotes(res.filter(n => n.note?.trim())))
+      .catch(() => setNotes([]))
+      .finally(() => setLoading(false));
+  }, [requestId]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <FileText size={14} style={{ color: COLORS.primary }} />
+        <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>Expert Notes</span>
+      </div>
+      <div className="space-y-3">
+        {loading ? (
+          <div className="flex items-center gap-2" style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+            <Loader size={12} className="animate-spin" /> Loading...
+          </div>
+        ) : notes.length === 0 ? (
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>No notes added yet.</div>
+        ) : notes.map((n, i) => (
+          <div key={i} className="p-3 rounded-lg border" style={{ borderColor: COLORS.border, background: COLORS.bg }}>
+            <div style={{ fontSize: 13, color: COLORS.textPrimary, whiteSpace: "pre-wrap" }}>{n.note}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Mentors in Room Panel ──────────────────────────────────────────────────
+function MentorsInRoomPanel({ categoryId }: { categoryId: string }) {
+  const [mentors, setMentors] = useState<MentorProfileResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    consultationService.getMentorsOfCategory(categoryId)
+      .then(setMentors)
+      .catch(() => setMentors([]))
+      .finally(() => setLoading(false));
+  }, [categoryId]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Users size={14} style={{ color: COLORS.primary }} />
+        <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>Mentors in Room</span>
+        <span style={{ fontSize: 11, background: `${COLORS.primary}20`, color: COLORS.primary, padding: "2px 6px", borderRadius: 10, fontWeight: 700 }}>
+          {mentors.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {loading ? (
+          <div className="flex items-center gap-2" style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+            <Loader size={12} className="animate-spin" /> Loading...
+          </div>
+        ) : mentors.length === 0 ? (
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>No mentors assigned.</div>
+        ) : mentors.map((m, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: COLORS.primary, fontSize: 10, fontWeight: 700 }}>
+              {(m.fullName || "M")[0].toUpperCase()}
+            </div>
+            <div className="flex-1 truncate">
+              <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }} className="truncate">{m.fullName}</div>
+              {m.email && <div style={{ fontSize: 11, color: COLORS.textSecondary }} className="truncate">{m.email}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLeader: boolean; onNavigate?: (p: string) => void; hideHeader?: boolean }) {
+  const { user } = useAuth();
   const [requests, setRequests] = useState<ConsultationRequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ConsultationRequestResponse | null>(null);
@@ -76,7 +238,7 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return requests.filter(r => {
-      if (q && !r.title.toLowerCase().includes(q) && !r.mentorName.toLowerCase().includes(q)) return false;
+      if (q && !r.title.toLowerCase().includes(q)) return false;
       if (filterPriority && r.priority !== filterPriority) return false;
       if (filterCategory && r.categoryId !== filterCategory) return false;
       if (filterStatus && r.status !== filterStatus) return false;
@@ -91,6 +253,14 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
     setSelectedRequest(req);
     try {
       const msgs = await consultationService.getMessages(req.id);
+      setMessages(msgs);
+    } catch (e) { console.error(e); }
+  };
+
+  const reloadMessages = async () => {
+    if (!selectedRequest) return;
+    try {
+      const msgs = await consultationService.getMessages(selectedRequest.id);
       setMessages(msgs);
     } catch (e) { console.error(e); }
   };
@@ -126,8 +296,7 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
           <div className="flex-1">
             <div style={{ fontWeight: 700, fontSize: 18, color: COLORS.textPrimary }}>{selectedRequest.title}</div>
             <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-              Mentor: {selectedRequest.mentorName}
-              {" • "}
+
               <span style={{ fontWeight: 600, color: PRIORITY_COLORS[selectedRequest.priority] }}>
                 {selectedRequest.priority}
               </span>
@@ -138,14 +307,15 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
         </div>
 
         <div className="flex gap-4 flex-1 min-h-0">
-          <div className="flex-1 flex flex-col bg-white rounded-xl border" style={{ borderColor: COLORS.border }}>
+          {/* Chat Panel */}
+          <div className="w-2/3 flex flex-col bg-white rounded-xl border" style={{ borderColor: COLORS.border, minWidth: 0 }}>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               <div className="p-4 rounded-xl mb-6" style={{ background: `${COLORS.primary}10` }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>Description</div>
                 <div style={{ fontSize: 14, marginTop: 8 }}>{selectedRequest.description}</div>
               </div>
               {messages.map((m, i) => {
-                const isMentor = m.senderId === selectedRequest.mentorId;
+                const isMentor = m.senderId !== user?.userId;
                 return (
                   <div key={i} className={`flex flex-col ${isMentor ? "items-start" : "items-end"}`}>
                     <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>
@@ -180,16 +350,29 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
             )}
           </div>
 
-          {isLeader && selectedRequest.status === "PENDING" && (
-            <div className="w-64">
-              <Card className="p-4">
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Actions</div>
+          {/* Right Sidebar */}
+          <div className="w-1/3 flex flex-col gap-4 overflow-y-auto min-w-0 pr-1 pb-4">
+            {isLeader && selectedRequest.status === "PENDING" && (
+              <Card className="p-4 flex-shrink-0">
+                <div style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary, marginBottom: 12 }}>Actions</div>
                 <Button className="w-full justify-center text-red-600 border-red-200 hover:bg-red-50" variant="outline" size="sm" icon={<XCircle size={14} />} onClick={cancelRequest}>
                   Cancel Request
                 </Button>
               </Card>
-            </div>
-          )}
+            )}
+            
+            <Card className="p-4 flex-shrink-0">
+              <MentorsInRoomPanel categoryId={selectedRequest.categoryId} />
+            </Card>
+
+            <Card className="p-4 flex-shrink-0">
+              <MilestonePanel requestId={selectedRequest.id} onToggle={reloadMessages} />
+            </Card>
+
+            <Card className="p-4 flex-shrink-0">
+              <MentorNotesPanel requestId={selectedRequest.id} />
+            </Card>
+          </div>
         </div>
       </div>
     );
@@ -198,11 +381,13 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
   // ── List view ──────────────────────────────────────────────
   return (
     <>
-      <SectionHeader
-        title="Consultation Requests"
-        subtitle="Your team's consultation history with the mentor"
-        action={<Button variant="outline" size="sm" onClick={() => onNavigate?.("team")}>Back to Team</Button>}
-      />
+      {!hideHeader && (
+        <SectionHeader
+          title="Consultation Requests"
+          subtitle="Your team's consultation history with the mentor"
+          action={<Button variant="outline" size="sm" onClick={() => onNavigate?.("team")}>Back to Team</Button>}
+        />
+      )}
 
       {/* Search & Filters */}
       <div className="flex flex-wrap gap-3 mb-5 items-center">
@@ -213,7 +398,7 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by title or mentor name..."
+            placeholder="Search by title..."
             style={{
               width: "100%",
               paddingLeft: 36,
@@ -294,7 +479,7 @@ export function TeamConsultations({ isLeader, onNavigate }: { isLeader: boolean;
                 <div className="flex-1 min-w-0">
                   <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }} className="truncate">{req.title}</div>
                   <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }} className="flex flex-wrap gap-x-3 gap-y-1">
-                    <span>Mentor: <b>{req.mentorName}</b></span>
+
                     <span style={{ color: PRIORITY_COLORS[req.priority], fontWeight: 600 }}>{req.priority}</span>
                     <span>{req.categoryName} · {req.eventName}</span>
                     <span>{new Date(req.createdAt).toLocaleDateString()}</span>

@@ -2385,20 +2385,12 @@ export function TeamApiPanel({
               {onNavigate && (
                 <>
                   <Button
-                    variant="outline"
+                    variant="primary"
                     size="sm"
                     icon={<MessageSquare size={14} />}
                     onClick={() => onNavigate("mentor")}
                   >
                     Mentoring Support
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    icon={<ClipboardList size={14} />}
-                    onClick={() => onNavigate("consultations")}
-                  >
-                    Consultation History
                   </Button>
                 </>
               )}
