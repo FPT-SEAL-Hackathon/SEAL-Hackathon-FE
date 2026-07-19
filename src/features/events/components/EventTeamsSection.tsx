@@ -10,6 +10,8 @@ import {
   Users,
   X,
   XCircle,
+  Search,
+  Filter,
 } from "lucide-react";
 import { Button, Card, COLORS, StatusBadge } from "@/components/shared/UIComponents";
 import {
@@ -276,6 +278,16 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const { categories } = useCategoryContext();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  const filteredTeams = teams.filter(team => {
+    const matchesSearch = !searchQuery.trim() || team.teamName?.toLowerCase().includes(searchQuery.trim().toLowerCase());
+    const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName).badge;
+    const matchesStatus = statusFilter === "ALL" || status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const loadTeams = useCallback(async () => {
     setLoading(true);
@@ -593,15 +605,47 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
           </div>
         )}
 
-        {!loading && teams.length === 0 && (
+        {teams.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search team by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-xl outline-none"
+                style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              />
+            </div>
+            <div className="relative min-w-[160px]">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-10 pr-8 py-2 rounded-xl outline-none appearance-none"
+                style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="pending_approval">Pending</option>
+                <option value="active">Approved (Active)</option>
+                <option value="rejected">Rejected</option>
+                <option value="suspended">Disqualified</option>
+                <option value="default">Forming</option>
+              </select>
+            </div>
+          </div>
+        )}
+
+        {!loading && filteredTeams.length === 0 && (
           <div className="rounded-xl p-6 text-center" style={{ border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary }}>
             <Users size={28} className="mx-auto mb-2" />
-            No teams found for this event.
+            {teams.length === 0 ? "No teams found for this event." : "No teams match your search or filter."}
           </div>
         )}
 
         <div className="space-y-2">
-          {teams.map(team => {
+          {filteredTeams.map(team => {
             const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
             const isActive = status.badge === "active";
             return (

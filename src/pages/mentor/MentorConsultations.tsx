@@ -10,8 +10,10 @@ import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/s
 import {
   MessageSquare, Send, CheckCircle, XCircle,
   PlayCircle, ArrowLeft, Search, SlidersHorizontal, X,
-  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader,
+  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users
 } from "lucide-react";
+import { useAuth } from "@/features/auth/store/authStore";
+import { MentorProfileResponse } from "@/features/consultation/api/consultationService";
 
 type RequestAction = "ACCEPT" | "REJECT" | "IN_PROGRESS" | "RESOLVE";
 
@@ -68,27 +70,37 @@ const selectStyle: React.CSSProperties = {
 };
 
 // ─── Milestone panel ───────────────────────────────────────────────────────────
-function MilestonePanel({ teamId }: { teamId: string }) {
+function MilestonePanel({ requestId, onToggle }: { requestId: string; onToggle?: () => void }) {
   const [milestones, setMilestones] = useState<MilestoneResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [newText, setNewText] = useState("");
 
   useEffect(() => {
     setLoading(true);
-    milestoneService.getByTeam(teamId)
+    milestoneService.getByTeam(requestId)
       .then(setMilestones)
       .catch(() => setMilestones([]))
       .finally(() => setLoading(false));
-  }, [teamId]);
+  }, [requestId]);
 
   const addMilestone = async () => {
     const label = newText.trim();
     if (!label) return;
     try {
-      const created = await milestoneService.create(teamId, label);
+      const created = await milestoneService.create(requestId, label);
       setMilestones(prev => [...prev, created]);
       setNewText("");
     } catch (e) { console.error(e); }
+  };
+
+  const handleToggle = async (milestoneId: string) => {
+    try {
+      const updated = await milestoneService.toggle(requestId, milestoneId);
+      setMilestones(prev => prev.map(m => m.milestoneId === milestoneId ? updated : m));
+      onToggle?.();
+    } catch (e: any) {
+      console.error("Failed to toggle milestone", e);
+    }
   };
 
   const doneCount = milestones.filter(m => m.isDone).length;
@@ -123,7 +135,8 @@ function MilestonePanel({ teamId }: { teamId: string }) {
         ) : milestones.map(m => (
           <div
             key={m.milestoneId}
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 group transition-colors"
+            onClick={() => handleToggle(m.milestoneId)}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 group transition-colors cursor-pointer hover:bg-gray-50"
             style={{ background: m.isDone ? `${COLORS.success}08` : COLORS.bg, border: `1px solid ${m.isDone ? COLORS.success + "40" : COLORS.border}` }}
           >
             <div style={{ flexShrink: 0, lineHeight: 0 }}>
@@ -161,7 +174,7 @@ function MilestonePanel({ teamId }: { teamId: string }) {
 }
 
 // ─── Note panel ────────────────────────────────────────────────────────────────
-function NotePanel({ teamId }: { teamId: string }) {
+function NotePanel({ requestId }: { requestId: string }) {
   const [noteText, setNoteText] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -169,16 +182,16 @@ function NotePanel({ teamId }: { teamId: string }) {
 
   useEffect(() => {
     setLoading(true);
-    consultationService.getTeamNote(teamId)
+    consultationService.getTeamNote(requestId)
       .then(res => setNoteText(res.note || ""))
       .catch(() => setNoteText(""))
       .finally(() => setLoading(false));
-  }, [teamId]);
+  }, [requestId]);
 
   const saveNote = async () => {
     setSaving(true);
     try {
-      await consultationService.updateTeamNote(teamId, noteText);
+      await consultationService.updateTeamNote(requestId, noteText);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) { console.error(e); }
@@ -215,8 +228,54 @@ function NotePanel({ teamId }: { teamId: string }) {
   );
 }
 
+// ─── Mentors in Room Panel ──────────────────────────────────────────────────
+function MentorsInRoomPanel({ categoryId }: { categoryId: string }) {
+  const [mentors, setMentors] = useState<MentorProfileResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    consultationService.getMentorsOfCategory(categoryId)
+      .then(setMentors)
+      .catch(() => setMentors([]))
+      .finally(() => setLoading(false));
+  }, [categoryId]);
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Users size={14} style={{ color: COLORS.primary }} />
+        <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>Mentors in Room</span>
+        <span style={{ fontSize: 11, background: `${COLORS.primary}20`, color: COLORS.primary, padding: "2px 6px", borderRadius: 10, fontWeight: 700 }}>
+          {mentors.length}
+        </span>
+      </div>
+      <div className="space-y-2">
+        {loading ? (
+          <div className="flex items-center gap-2" style={{ color: COLORS.textSecondary, fontSize: 12 }}>
+            <Loader size={12} className="animate-spin" /> Loading...
+          </div>
+        ) : mentors.length === 0 ? (
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>No mentors assigned.</div>
+        ) : mentors.map((m, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center text-white" style={{ background: COLORS.primary, fontSize: 10, fontWeight: 700 }}>
+              {(m.fullName || "M")[0].toUpperCase()}
+            </div>
+            <div className="flex-1 truncate">
+              <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }} className="truncate">{m.fullName}</div>
+              {m.email && <div style={{ fontSize: 11, color: COLORS.textSecondary }} className="truncate">{m.email}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ────────────────────────────────────────────────────────────
 export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: (p: string) => void }) {
+  const { user } = useAuth();
   const [requests, setRequests] = useState<ConsultationRequestResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<ConsultationRequestResponse | null>(null);
@@ -307,6 +366,14 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
     }
   };
 
+  const reloadMessages = async () => {
+    if (!selectedRequest) return;
+    try {
+      const msgs = await consultationService.getMessages(selectedRequest.id);
+      setMessages(msgs);
+    } catch (e) { console.error(e); }
+  };
+
   const sendMessage = async () => {
     const content = messageInput.trim();
     if (!content || !selectedRequest) return;
@@ -348,7 +415,7 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
               </div>
 
               {messages.map((m, i) => {
-                const isMe = m.senderId === selectedRequest.mentorId;
+                const isMe = m.senderId === user?.userId;
                 return (
                   <div key={m.id || i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                     <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>
@@ -425,14 +492,18 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
               </div>
             </Card>
 
+            <Card className="p-4 flex-shrink-0">
+              <MentorsInRoomPanel categoryId={selectedRequest.categoryId} />
+            </Card>
+
             {/* Milestones */}
             <Card className="p-4 flex-shrink-0">
-              <MilestonePanel teamId={selectedRequest.teamId} />
+              <MilestonePanel requestId={selectedRequest.id} onToggle={reloadMessages} />
             </Card>
 
             {/* Note */}
             <Card className="p-4 flex-shrink-0">
-              <NotePanel teamId={selectedRequest.teamId} />
+              <NotePanel requestId={selectedRequest.id} />
             </Card>
           </div>
         </div>

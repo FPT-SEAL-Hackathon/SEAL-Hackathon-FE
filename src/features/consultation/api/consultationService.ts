@@ -24,10 +24,7 @@ export interface ConsultationRequestResponse {
   categoryName: string;
   teamId: string;
   teamName: string;
-  mentorId: string;
-  expertId?: string;
-  mentorName: string;
-  expertName?: string;
+
   createdByUserId: string;
   createdByName: string;
   title: string;
@@ -58,8 +55,7 @@ export interface CreateConsultationRequest {
   description: string;
   priority: ConsultationPriority;
   attachmentUrl?: string;
-  mentorId?: string;
-  expertId?: string;
+
 }
 
 export interface MessageRequest {
@@ -68,7 +64,7 @@ export interface MessageRequest {
 }
 
 export interface TeamMentorNoteResponse {
-  teamId: string;
+  requestId: string;
   mentorId: string;
   note: string;
   updatedAt?: string;
@@ -95,10 +91,7 @@ type BackendMentorProfileResponse = Partial<MentorProfileResponse> & {
   expertId?: string;
 };
 
-type BackendConsultationRequestResponse = Partial<ConsultationRequestResponse> & {
-  expertId?: string;
-  expertName?: string;
-};
+type BackendConsultationRequestResponse = Partial<ConsultationRequestResponse>;
 
 function normalizeMentorProfile(item: BackendMentorProfileResponse): MentorProfileResponse {
   const mentorId = item.mentorId ?? item.expertId ?? "";
@@ -114,8 +107,6 @@ function normalizeMentorProfile(item: BackendMentorProfileResponse): MentorProfi
 }
 
 function normalizeConsultationRequest(item: BackendConsultationRequestResponse): ConsultationRequestResponse {
-  const mentorId = item.mentorId ?? item.expertId ?? "";
-  const mentorName = item.mentorName ?? item.expertName ?? "";
   return {
     ...item,
     id: item.id ?? "",
@@ -125,10 +116,6 @@ function normalizeConsultationRequest(item: BackendConsultationRequestResponse):
     categoryName: item.categoryName ?? "",
     teamId: item.teamId ?? "",
     teamName: item.teamName ?? "",
-    mentorId,
-    expertId: item.expertId ?? mentorId,
-    mentorName,
-    expertName: item.expertName ?? mentorName,
     createdByUserId: item.createdByUserId ?? "",
     createdByName: item.createdByName ?? "",
     title: item.title ?? "",
@@ -147,13 +134,7 @@ function normalizePage<TIn, TOut>(page: Page<TIn>, normalize: (item: TIn) => TOu
   };
 }
 
-function toExpertRequest(data: CreateConsultationRequest) {
-  const { mentorId, expertId, ...rest } = data;
-  return {
-    ...rest,
-    expertId: expertId ?? mentorId,
-  };
-}
+
 
 export const consultationService = {
   // Coordinator
@@ -198,22 +179,22 @@ export const consultationService = {
     request<BackendConsultationRequestResponse>(`/api/v1/expert/consultation-requests/${requestId}/resolve`, { method: "PUT" })
       .then(normalizeConsultationRequest),
 
-  getTeamNote: (teamId: string): Promise<TeamMentorNoteResponse> =>
-    request(`/api/v1/expert/teams/${teamId}/note`, { method: "GET" }),
+  getTeamNote: (requestId: string): Promise<TeamMentorNoteResponse> =>
+    request(`/api/v1/expert/consultation-requests/${requestId}/note`, { method: "GET" }),
     
-  updateTeamNote: (teamId: string, note: string): Promise<TeamMentorNoteResponse> =>
-    request(`/api/v1/expert/teams/${teamId}/note`, { method: "PUT", body: JSON.stringify({ note }) }),
+  updateTeamNote: (requestId: string, note: string): Promise<TeamMentorNoteResponse> =>
+    request(`/api/v1/expert/consultation-requests/${requestId}/note`, { method: "PUT", body: JSON.stringify({ note }) }),
 
   // Team
-  getMyTeamMentorNotes: (teamId: string): Promise<TeamMentorNoteResponse[]> =>
-    request(`/api/v1/teams/${teamId}/mentor-notes`, { method: "GET" }),
+  getMyTeamMentorNotes: (requestId: string): Promise<TeamMentorNoteResponse[]> =>
+    request(`/api/v1/consultation-requests/${requestId}/mentor-notes`, { method: "GET" }),
 
   getMyMentor: (): Promise<MentorProfileResponse[]> =>
     request<BackendMentorProfileResponse[]>(`/api/v1/teams/my-experts`, { method: "GET" })
       .then(items => items.map(normalizeMentorProfile)),
 
   createRequest: (data: CreateConsultationRequest): Promise<ConsultationRequestResponse> =>
-    request<BackendConsultationRequestResponse>(`/api/v1/consultation-requests`, { method: "POST", body: JSON.stringify(toExpertRequest(data)) })
+    request<BackendConsultationRequestResponse>(`/api/v1/consultation-requests`, { method: "POST", body: JSON.stringify(data) })
       .then(normalizeConsultationRequest),
 
   getMyTeamRequests: (params?: { status?: string; page?: number; size?: number }): Promise<Page<ConsultationRequestResponse>> => {
