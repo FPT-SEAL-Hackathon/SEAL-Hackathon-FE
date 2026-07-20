@@ -148,7 +148,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                 const subScores = batchScores[sub.submissionId] || {};
                 const scoresArray = Object.values(subScores);
                 const isDisqualified = sub.submissionStatusName?.toLowerCase() === 'disqualified';
-                const avgScore = isDisqualified ? "0.0" : (scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0) / scoresArray.length).toFixed(1) : "-");
+                const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
                 
                 return (
                   <tr 
@@ -177,7 +177,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                         <td key={idx} className="p-4 text-center">
                           {score !== undefined ? (
                             <span className={`inline-block px-3 py-1 rounded-md font-bold text-sm ${bgColor} ${textColor}`}>
-                              {score}
+                              {Number(score).toFixed(2)}
                             </span>
                           ) : (
                             <span className="text-gray-300">-</span>
@@ -187,7 +187,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                     })}
                     
                     <td className="p-4 text-center font-bold text-primary text-lg">
-                      {avgScore}
+                      {totalScore}
                     </td>
 
                     <td className="p-4 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>
