@@ -124,7 +124,14 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        const errorMessages = Object.entries(err.fieldErrors)
+          .map(([field, msg]) => `• ${msg}`)
+          .join("\n");
+        setError(err.message + "\n" + errorMessages);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Save failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -135,7 +142,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      >
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full rounded-2xl overflow-hidden"
           style={{ maxWidth: 620, background: COLORS.bg, boxShadow: "0 24px 64px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -151,7 +158,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
           <div className="p-6 space-y-4">
             {error && (
-              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
+              <div className="px-4 py-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
                 {error}
               </div>
             )}
