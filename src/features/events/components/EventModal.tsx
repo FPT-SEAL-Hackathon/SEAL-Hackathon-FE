@@ -124,7 +124,14 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        const errorMessages = Object.entries(err.fieldErrors)
+          .map(([field, msg]) => `• ${msg}`)
+          .join("\n");
+        setError(err.message + "\n" + errorMessages);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Save failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -151,7 +158,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
           <div className="p-6 space-y-4">
             {error && (
-              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
+              <div className="px-4 py-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
                 {error}
               </div>
             )}
