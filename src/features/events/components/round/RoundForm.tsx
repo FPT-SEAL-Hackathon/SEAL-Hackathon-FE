@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Save, CheckCircle } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
-import { Field, Input, Textarea, Select } from "../../shared/ui/shared";
+import { Field, Input, Textarea, Select, DateTimePickerField } from "../../shared/ui/shared";
 import { RoundRequest } from "../../types/round";
 import { ROUND_STATUSES } from "../../constants/roundStatus";
 import { EventResponse } from "../../api/eventService";
@@ -31,7 +31,67 @@ export function RoundForm({
     categoryId
 }: Props) {
   const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
   const set = (key: keyof typeof form, value: unknown) => setForm(p => ({ ...p, [key]: value }));
+
+  const handleSave = async () => {
+    setError("");
+    if (!form.roundName) return;
+
+    if (form.startDate && form.endDate && form.startDate >= form.endDate) {
+      setError("End Date must be strictly after Start Date.");
+      return;
+    }
+
+    if (event?.eventStartDate && form.startDate) {
+      if (form.startDate.substring(0, 10) < event.eventStartDate) {
+        setError(`Round Start Date must be on or after Event Start Date (${event.eventStartDate}).`);
+        return;
+      }
+    }
+
+    if (event?.eventEndDate && form.endDate) {
+      if (form.endDate.substring(0, 10) > event.eventEndDate) {
+        setError(`Round End Date must be on or before Event End Date (${event.eventEndDate}).`);
+        return;
+      }
+    }
+    
+    if (form.submissionDeadline) {
+      if (form.startDate && form.submissionDeadline < form.startDate) {
+        setError("Submission Deadline must be after or equal to Start Date.");
+        return;
+      }
+      if (form.endDate && form.submissionDeadline > form.endDate) {
+        setError("Submission Deadline must be before or equal to End Date.");
+        return;
+      }
+    }
+    
+    if (form.judgingDeadline) {
+      if (form.submissionDeadline && form.judgingDeadline < form.submissionDeadline) {
+        setError("Judging Deadline must be after or equal to Submission Deadline.");
+        return;
+      } else if (form.startDate && form.judgingDeadline < form.startDate) {
+        setError("Judging Deadline must be after or equal to Start Date.");
+        return;
+      }
+      if (form.endDate && form.judgingDeadline > form.endDate) {
+        setError("Judging Deadline must be before or equal to End Date.");
+        return;
+      }
+    }
+
+    try {
+      const payload = { ...form };
+      if (!payload.roundStatusId) {
+        delete payload.roundStatusId;
+      }
+      await onSave(payload);
+    } catch (err: any) {
+      setError(err?.message || "Save failed.");
+    }
+  };
 
   // Prepare data for timeline preview
   let previewRounds = allRounds || [];
@@ -43,6 +103,7 @@ export function RoundForm({
           roundName: form.roundName || "Editing Round...",
           description: form.description || "",
           roundOrder: form.roundOrder || 0,
+          roundStatusId: form.roundStatusId || "",
           roundStatusName: "Draft",
           isCalibrationRound: form.isCalibrationRound || false,
           startDate: form.startDate,
@@ -58,6 +119,11 @@ export function RoundForm({
 
   return (
     <Card className="p-5 mb-3" style={{ border: `1px solid ${COLORS.primary}30` }}>
+      {error && (
+        <div className="px-4 py-3 mb-4 rounded-xl text-sm whitespace-pre-wrap" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
+          {error}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Round Name">
           <Input value={form.roundName} onChange={v => set("roundName", v)} placeholder="e.g. Qualifying Round" />
@@ -67,7 +133,7 @@ export function RoundForm({
         </Field>
         <Field label="Status">
           <Select 
-              value={form.roundStatusId} 
+              value={form.roundStatusId || ""} 
               onChange={v => set("roundStatusId", v)}
             >
             {ROUND_STATUSES.map(status => (
@@ -90,16 +156,36 @@ export function RoundForm({
           />
         </Field>
         <Field label="Start Date">
-          <Input type="datetime-local" value={form.startDate ?? ""} onChange={v => set("startDate", v)} />
+          <DateTimePickerField 
+            value={form.startDate ?? ""} 
+            onChange={v => set("startDate", v)} 
+            minDateTime={event?.eventStartDate}
+            maxDateTime={event?.eventEndDate}
+          />
         </Field>
         <Field label="End Date">
-          <Input type="datetime-local" value={form.endDate ?? ""} onChange={v => set("endDate", v)} />
+          <DateTimePickerField 
+            value={form.endDate ?? ""} 
+            onChange={v => set("endDate", v)} 
+            minDateTime={event?.eventStartDate}
+            maxDateTime={event?.eventEndDate}
+          />
         </Field>
         <Field label="Submission Deadline">
-          <Input type="datetime-local" value={form.submissionDeadline ?? ""} onChange={v => set("submissionDeadline", v)} />
+          <DateTimePickerField 
+            value={form.submissionDeadline ?? ""} 
+            onChange={v => set("submissionDeadline", v)} 
+            minDateTime={form.startDate || event?.eventStartDate}
+            maxDateTime={form.endDate || event?.eventEndDate}
+          />
         </Field>
         <Field label="Judging Deadline">
-          <Input type="datetime-local" value={form.judgingDeadline ?? ""} onChange={v => set("judgingDeadline", v)} />
+          <DateTimePickerField 
+            value={form.judgingDeadline ?? ""} 
+            onChange={v => set("judgingDeadline", v)} 
+            minDateTime={form.submissionDeadline || form.startDate || event?.eventStartDate}
+            maxDateTime={form.endDate || event?.eventEndDate}
+          />
         </Field>
         <div className="md:col-span-2">
           <Field label="Description">
@@ -139,7 +225,7 @@ export function RoundForm({
       )}
 
       <div className="flex gap-2 mt-4">
-        <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={() => onSave(form)} disabled={!form.roundName}>
+        <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={handleSave} disabled={!form.roundName}>
           Save Round
         </Button>
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>

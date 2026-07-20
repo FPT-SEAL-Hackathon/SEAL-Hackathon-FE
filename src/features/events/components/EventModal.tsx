@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { eventService, type EventResponse, type CreateEventRequest } from "@/features/events/api/eventService";
 import { ApiError } from "@/lib/api/apiClient";
 import { COLORS } from "@/components/shared/UIComponents";
+import { DatePickerField, DateTimePickerField } from "../shared/ui/shared";
 
 interface Props {
   event?: EventResponse | null;
@@ -104,6 +105,23 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
   const handleSave = async () => {
     if (!form.eventName.trim()) { setError("Event name is required."); return; }
+    
+    if (form.registrationStart && form.registrationEnd && form.registrationStart >= form.registrationEnd) {
+      setError("Registration End time must be after Registration Start time.");
+      return;
+    }
+    if (form.eventStartDate && form.eventEndDate && form.eventStartDate > form.eventEndDate) {
+      setError("Event End Date must be after or equal to Event Start Date.");
+      return;
+    }
+    if (form.registrationEnd && form.eventStartDate) {
+      const regEndDate = form.registrationEnd.substring(0, 10);
+      if (regEndDate > form.eventStartDate) {
+        setError("Registration End date must be on or before Event Start Date.");
+        return;
+      }
+    }
+
     setLoading(true); setError("");
     try {
       const payload: CreateEventRequest = {
@@ -189,19 +207,33 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Registration Start">
-                <Input type="datetime-local" value={form.registrationStart} onChange={v => set("registrationStart", v)} />
+                <DateTimePickerField
+                  value={form.registrationStart}
+                  onChange={v => set("registrationStart", v)}
+                  minDateTime={!isEdit ? new Date() : undefined}
+                />
               </Field>
               <Field label="Registration End">
-                <Input type="datetime-local" value={form.registrationEnd} onChange={v => set("registrationEnd", v)} />
+                <DateTimePickerField
+                  value={form.registrationEnd}
+                  onChange={v => set("registrationEnd", v)}
+                />
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Event Start Date">
-                <Input type="date" value={form.eventStartDate} onChange={v => set("eventStartDate", v)} />
+                <DatePickerField
+                  value={form.eventStartDate}
+                  onChange={v => set("eventStartDate", v)}
+                  minDate={!isEdit ? new Date() : undefined}
+                />
               </Field>
               <Field label="Event End Date">
-                <Input type="date" value={form.eventEndDate} onChange={v => set("eventEndDate", v)} />
+                <DatePickerField
+                  value={form.eventEndDate}
+                  onChange={v => set("eventEndDate", v)}
+                />
               </Field>
             </div>
 

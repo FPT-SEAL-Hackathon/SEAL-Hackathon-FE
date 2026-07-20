@@ -6,6 +6,9 @@ import type { EventCriteria } from "../../types/eventCriteria";
 import { ImportEventCriteriaRequest, RoundCriteria, UpdateRoundCriterionRequest } from "../../types/round";
 import { RoundCriterionRow } from "../../components/round/RoundCriteriaRow";
 
+export * from "./DatePickerField";
+export * from "./DateTimePickerField";
+
 // ── Form primitives ────────────────────────────────────────────────────────
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {

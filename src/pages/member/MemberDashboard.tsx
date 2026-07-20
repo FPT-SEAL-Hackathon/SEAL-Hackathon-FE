@@ -372,7 +372,7 @@ function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadl
   return {
     roundId: round.roundId,
     roundName: round.roundName,
-    deadline: round.submissionDeadline,
+    deadline: round.submissionDeadline || undefined,
     canSubmit: roundState.canSubmit,
     status: deadlineTime !== null && deadlineTime < now ? "closed" : roundState.hasStarted ? "upcoming" : "scheduled",
   };

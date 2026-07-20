@@ -567,7 +567,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   <StatusBadge status={submissionEligibility.loading ? "pending" : selectedRoundLocked ? "locked" : "advanced"} />
                 )}
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                  Deadline: {formatDate(selectedRound.submissionDeadline)}
+                  Deadline: {formatDate(selectedRound.submissionDeadline || undefined)}
                 </span>
                 {submissionEligibility.reason && (
                   <span style={{ fontSize: 12, color: selectedRoundLocked ? COLORS.error : COLORS.success }}>
