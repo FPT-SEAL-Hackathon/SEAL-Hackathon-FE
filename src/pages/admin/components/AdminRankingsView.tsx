@@ -117,7 +117,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
         const roundData = await rankingService.getRoundRankings(localRoundId, localCategoryId);
         setLocalRankings(roundData);
       } else if (activeTab === "event") {
-        await rankingService.publishEvent(context.selectedEventId, context.awardPatternCategoryId ?? "");
+        await rankingService.publishEvent(context.selectedEventId);
         const eventData = await rankingService.getEventRankings(context.selectedEventId);
         setLocalRankings(eventData);
       }
@@ -292,11 +292,19 @@ export function AdminRankingsView({ context }: AdminViewProps) {
           return (
             <tr key={row.rank ?? i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
               <td className="px-4 py-3">
-                <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
-                  {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
+                {rankNum > 0 ? (
+                  <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
+                    {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary }}>-</span>
+                )}
+              </td>
+              <td className="px-4 py-3">
+                <span style={{ fontWeight: 600, fontSize: 14, color: rankNum > 0 ? COLORS.textPrimary : COLORS.textSecondary }}>
+                  {row.teamName ?? row.teamId ?? row.team}
                 </span>
               </td>
-              <td className="px-4 py-3"><span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{row.teamName ?? row.teamId ?? row.team}</span></td>
               <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track}</span></td>
               <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span></td>
               {activeTab === "round" && (
@@ -394,7 +402,8 @@ export function AdminRankingsView({ context }: AdminViewProps) {
                       key={evt.eventId || evt.id}
                       className="px-4 py-2 cursor-pointer hover:bg-gray-50"
                       style={{ fontSize: 14 }}
-                      onClick={() => {
+                      onMouseDown={(e) => {
+                        e.preventDefault(); // Ngăn input bị mất focus trước khi click
                         context.setSelectedEventId(evt.eventId || evt.id);
                         setEventSearchText(evt.eventName || evt.name);
                         setShowEventDropdown(false);

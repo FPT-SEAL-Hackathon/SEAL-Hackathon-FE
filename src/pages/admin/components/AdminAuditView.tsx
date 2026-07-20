@@ -19,9 +19,10 @@ interface AdminViewProps {
 export function AdminAuditView({ context }: AdminViewProps) {
   const {
     t,
-    selectedEventId,
+    selectedEventId: globalSelectedEventId,
   } = context;
 
+  const [localEventId, setLocalEventId] = useState(globalSelectedEventId);
   const [localLogs, setLocalLogs] = useState<EvaluationAuditLogDTO[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -32,23 +33,27 @@ export function AdminAuditView({ context }: AdminViewProps) {
   const [showEventDropdown, setShowEventDropdown] = useState(false);
 
   useEffect(() => {
-    if (!context.selectedEventId) {
+    setLocalEventId(globalSelectedEventId);
+  }, [globalSelectedEventId]);
+
+  useEffect(() => {
+    if (!localEventId) {
       setEventSearchText("");
       return;
     }
-    const evt = context.apiEvents?.find((e: any) => (e.eventId || e.id) === context.selectedEventId);
+    const evt = context.apiEvents?.find((e: any) => (e.eventId || e.id) === localEventId);
     if (evt) setEventSearchText(evt.eventName || evt.name);
-  }, [context.selectedEventId, context.apiEvents]);
+  }, [localEventId, context.apiEvents]);
 
   useEffect(() => {
     const fetchLogs = async () => {
-      if (!selectedEventId) {
+      if (!localEventId) {
         setLocalLogs([]);
         return;
       }
       setIsLoading(true);
       try {
-        const res = await judgingService.getAuditLogs(selectedEventId);
+        const res = await judgingService.getAuditLogs(localEventId);
         setLocalLogs(res);
       } catch (err) {
         console.error("Failed to fetch audit logs", err);
@@ -57,21 +62,9 @@ export function AdminAuditView({ context }: AdminViewProps) {
       }
     };
     fetchLogs();
-  }, [selectedEventId]);
+  }, [localEventId]);
 
   const uniqueActions = ["ALL", ...Array.from(new Set(localLogs.map(l => l.actionType)))];
-
-  const filteredLogs = localLogs.filter(log => {
-    const matchesAction = actionFilter === "ALL" || log.actionType === actionFilter;
-    const q = searchTerm.toLowerCase();
-    const matchesSearch = !searchTerm || 
-      (log.reason && log.reason.toLowerCase().includes(q)) ||
-      (log.actorUserId && log.actorUserId.toLowerCase().includes(q)) ||
-      (log.submissionId && log.submissionId.toLowerCase().includes(q)) ||
-      (log.teamId && log.teamId.toLowerCase().includes(q)) ||
-      (log.judgingId && log.judgingId.toLowerCase().includes(q));
-    return matchesAction && matchesSearch;
-  });
 
   const getUserName = (id?: string) => {
     if (!id) return null;
@@ -84,6 +77,24 @@ export function AdminAuditView({ context }: AdminViewProps) {
     const team = context.apiTeamEligibility?.find((t: any) => t.teamId === id);
     return team?.teamName || null;
   };
+
+  const filteredLogs = localLogs.filter(log => {
+    const matchesAction = actionFilter === "ALL" || log.actionType === actionFilter;
+    const q = searchTerm.toLowerCase();
+    
+    const actorName = getUserName(log.actorUserId) || "";
+    const teamName = getTeamName(log.teamId) || "";
+
+    const matchesSearch = !searchTerm || 
+      (log.reason && log.reason.toLowerCase().includes(q)) ||
+      (log.actorUserId && log.actorUserId.toLowerCase().includes(q)) ||
+      (actorName.toLowerCase().includes(q)) ||
+      (log.submissionId && log.submissionId.toLowerCase().includes(q)) ||
+      (log.teamId && log.teamId.toLowerCase().includes(q)) ||
+      (teamName.toLowerCase().includes(q)) ||
+      (log.judgingId && log.judgingId.toLowerCase().includes(q));
+    return matchesAction && matchesSearch;
+  });
 
   return (
     <>
@@ -102,7 +113,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
                 onChange={e => {
                   setEventSearchText(e.target.value);
                   setShowEventDropdown(true);
-                  if (e.target.value === "") context.setSelectedEventId("");
+                  if (e.target.value === "") setLocalEventId("");
                 }}
                 onFocus={() => setShowEventDropdown(true)}
                 onBlur={() => setTimeout(() => setShowEventDropdown(false), 200)}
@@ -123,8 +134,9 @@ export function AdminAuditView({ context }: AdminViewProps) {
                       key={evt.eventId || evt.id}
                       className="px-4 py-2 cursor-pointer hover:bg-gray-50"
                       style={{ fontSize: 14 }}
-                      onClick={() => {
-                        context.setSelectedEventId(evt.eventId || evt.id);
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setLocalEventId(evt.eventId || evt.id);
                         setEventSearchText(evt.eventName || evt.name);
                         setShowEventDropdown(false);
                       }}
@@ -145,7 +157,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input 
                 type="text" 
-                placeholder="Reason, User ID, Team ID..." 
+                placeholder="Reason, User Name, User ID, Team ID..." 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border rounded-xl focus:ring-2 focus:ring-primary outline-none transition-all"
@@ -230,7 +242,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
                 )}) : (
                   <tr>
                     <td colSpan={6} className="text-center py-8 text-gray-500">
-                      {!selectedEventId ? "Please select an event to view audit logs." : "No logs found matching criteria."}
+                      {!localEventId ? "Please select an event to view audit logs." : "No logs found matching criteria."}
                     </td>
                   </tr>
                 )}

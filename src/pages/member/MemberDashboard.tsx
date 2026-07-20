@@ -1819,11 +1819,16 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {(row.rankPosition ?? row.rank) <= 3 ? (
-                          <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][(row.rankPosition ?? row.rank) - 1]}</span>
-                        ) : (
-                          <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{row.rankPosition ?? row.rank}</span>
-                        )}
+                        {(() => {
+                          const rank = row.rankPosition ?? row.rank;
+                          if (!rank || rank <= 0) {
+                            return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
+                          }
+                          if (rank <= 3) {
+                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
+                          }
+                          return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
+                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-3">
