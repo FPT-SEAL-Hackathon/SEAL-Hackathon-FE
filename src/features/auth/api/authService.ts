@@ -39,6 +39,9 @@ export interface UserResponse {
   fptStudentCode?: string;
   externalStudentCode?: string;
   universityName?: string;
+  bio?: string;
+  github?: string;
+  portfolio?: string;
   createdAt: string;
 }
 
@@ -57,6 +60,9 @@ type RawUserResponse = UserResponse & {
   userType?: string;
   userTypeName?: string;
   studentCode?: string;
+  bio?: string;
+  github?: string;
+  portfolio?: string;
 };
 
 function normalizeAuthUser(raw: RawUserResponse): UserResponse {
@@ -73,6 +79,9 @@ function normalizeAuthUser(raw: RawUserResponse): UserResponse {
     fptStudentCode: raw.fptStudentCode ?? (role === "FPT_STUDENT" ? raw.studentCode : undefined),
     externalStudentCode: raw.externalStudentCode ?? (role === "EXTERNAL_STUDENT" ? raw.studentCode : undefined),
     universityName: raw.universityName,
+    bio: raw.bio,
+    github: raw.github,
+    portfolio: raw.portfolio,
     createdAt: raw.createdAt,
   };
 }
@@ -213,6 +222,24 @@ export interface CompleteProfileRequest {
 
 export async function completeProfile(data: CompleteProfileRequest): Promise<UserResponse> {
   const res = await api.put<RawUserResponse>("/api/v1/users/me/complete-profile", data);
+  const normalized = normalizeAuthUser(res);
+  saveUser(normalized);
+  return normalized;
+}
+
+export interface UpdateProfileRequest {
+  fullName: string;
+  phone?: string;
+  universityName?: string;
+  fptStudentCode?: string;
+  externalStudentCode?: string;
+  bio?: string;
+  github?: string;
+  portfolio?: string;
+}
+
+export async function updateProfile(data: UpdateProfileRequest): Promise<UserResponse> {
+  const res = await api.put<RawUserResponse>("/api/v1/users/me/profile", data);
   const normalized = normalizeAuthUser(res);
   saveUser(normalized);
   return normalized;

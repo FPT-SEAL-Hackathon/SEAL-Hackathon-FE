@@ -5,13 +5,14 @@ import {
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2
+  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
   ProgressBar, DataTable, Button, AvatarGroup, TimelineItem
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
+import { updateProfile } from "@/features/auth/api/authService";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { roundService } from "@/features/events/service/roundService";
@@ -361,7 +362,7 @@ function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
 }
 
 export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { currentPage: string; onNavigate: (p: string) => void; markAllReadKey?: number }) {
-  const { user } = useAuth();
+  const { user, setAuth } = useAuth();
   const submissionFormRef = useRef<HTMLDivElement | null>(null);
   const displayName = user?.fullName || user?.email || "Member";
   const userInitials = getInitials(displayName);
@@ -495,10 +496,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     studentId: studentCode ?? "",
     email: user?.email ?? "",
     phone: user?.phone ?? "",
-    github: "", portfolio: "",
-    bio: "", major: "",
+    github: user?.github ?? "", portfolio: user?.portfolio ?? "",
+    bio: user?.bio ?? "", major: "",
   });
+  const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const isFpt = user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT";
+      const isExternal = user?.role === "EXTERNAL_STUDENT" || user?.role === "ROLE_EXTERNAL_STUDENT";
+      
+      const updatedUser = await updateProfile({
+        fullName: profileForm.fullName.trim(),
+        phone: profileForm.phone.trim() || undefined,
+        fptStudentCode: isFpt ? profileForm.studentId.trim() || undefined : undefined,
+        externalStudentCode: isExternal ? profileForm.studentId.trim() || undefined : undefined,
+        universityName: isExternal ? user?.universityName : undefined,
+        bio: profileForm.bio.trim() || undefined,
+        github: profileForm.github.trim() || undefined,
+        portfolio: profileForm.portfolio.trim() || undefined,
+      });
+      
+      setAuth(updatedUser); // Update context and local storage via setAuth
+      
+      setProfileSaved(true);
+      toast.success("Profile saved successfully");
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Failed to save profile");
+      toast.error("Failed to save profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.userId));
   const [submissionTeams, setSubmissionTeams] = useState<ActiveTeamContext[]>([]);
   const [submissionTeamsLoading, setSubmissionTeamsLoading] = useState(false);
@@ -2506,10 +2540,17 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               />
             </div>
             <div className="flex items-center gap-3 mt-4">
-              <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000); }}>
-                Save Changes
+              <Button 
+                variant="primary" 
+                size="md" 
+                icon={profileSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />} 
+                onClick={handleSaveProfile}
+                disabled={profileSaving}
+              >
+                {profileSaving ? "Saving..." : "Save Changes"}
               </Button>
               {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Profile saved!</span>}
+              {profileError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{profileError}</span>}
             </div>
           </Card>
 
