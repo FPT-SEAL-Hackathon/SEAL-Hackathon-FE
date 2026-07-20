@@ -11,9 +11,7 @@ import { useAuth } from "@/features/auth/store/authStore";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { teamService, type TeamResponse } from "@/features/teams/api/teamService";
 import { eventService } from "@/features/events/api/eventService";
-import { meService } from "@/features/users/api/userService";
-import { saveUser } from "@/lib/api/apiClient";
-import { consultationService } from "@/features/consultation/api/consultationService";
+import { MyProfileSection } from "@/features/users/components/MyProfileSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,18 +45,6 @@ export function MentorDashboard({
   // ─ Teams page state ────────────────────────────────────────────────────────
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
-
-  // ─ Profile state ──────────────────────────────────────────────────────────
-  const [profileForm, setProfileForm] = useState({
-    name: user?.fullName ?? "Mentor",
-    email: user?.email ?? "",
-    expertise: "",
-    institution: user?.universityName ?? "",
-    bio: "",
-  });
-  const [profileSaving, setProfileSaving] = useState(false);
-  const [profileSaved, setProfileSaved] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
 
   // ─── Fetch assigned categories ─────────────────────────────────────────────
   useEffect(() => {
@@ -160,30 +146,6 @@ export function MentorDashboard({
   const selectedTeam = teamsInSelectedCategory.find((t) => t.teamId === selectedTeamId) ?? null;
 
   // (Milestone and note logic moved to MentorConsultations detail view)
-
-  // ─── Profile save ────────────────────────────────────────────────────────────
-  const saveProfile = async () => {
-    setProfileSaving(true);
-    setProfileError(null);
-    try {
-      const updatedData = await meService.updateMe({
-        fullName: profileForm.name.trim(),
-        phone: profileForm.institution ? undefined : undefined, // phone not in form yet
-        universityName: profileForm.institution.trim() || undefined,
-      });
-      if (user) {
-        const mergedUser = { ...user, ...updatedData };
-        setAuth(mergedUser);
-        saveUser(mergedUser);
-      }
-      setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 2500);
-    } catch (err) {
-      setProfileError(err instanceof Error ? err.message : "Failed to save profile.");
-    } finally {
-      setProfileSaving(false);
-    }
-  };
 
   // ─── Loading / Error states ────────────────────────────────────────────────
   const renderLoading = () => (
@@ -490,135 +452,12 @@ export function MentorDashboard({
   };
 
   // ─── Render: Profile ───────────────────────────────────────────────────────
+  // Form ho so dung chung: load/save qua API /api/v1/me that
+  // (form cu thieu phone, co field Bio/Expertise khong ton tai o BE).
   const renderProfile = () => (
     <>
-      <SectionHeader title="Expert Profile" subtitle="Manage your profile and expert settings" />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="p-5 text-center col-span-1">
-          <div
-            className="mx-auto flex items-center justify-center rounded-full text-white mb-4"
-            style={{
-              width: 72,
-              height: 72,
-              background: `linear-gradient(135deg, ${COLORS.success}, ${COLORS.secondary})`,
-              fontSize: 22,
-              fontWeight: 700,
-            }}
-          >
-            {profileForm.name
-              .split(" ")
-              .slice(0, 2)
-              .map((w) => w[0])
-              .join("")
-              .toUpperCase() || "M"}
-          </div>
-          <div style={{ fontWeight: 700, fontSize: 17, color: COLORS.textPrimary }}>
-            {profileForm.name}
-          </div>
-          <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-            Expert • {categories.length} categor{categories.length !== 1 ? "ies" : "y"}
-          </div>
-          <div className="mt-4 space-y-2 text-left">
-            {[
-              { label: "Categories", value: categories.map((c) => c.categoryName).join(", ") || "None" },
-              { label: "Teams", value: `${totalTeams} assigned` },
-              { label: "Institution", value: profileForm.institution || "-" },
-              { label: "Email", value: profileForm.email || "-" },
-            ].map((item) => (
-              <div key={item.label}>
-                <div style={{ fontSize: 11, color: COLORS.textSecondary, fontWeight: 600 }}>
-                  {item.label.toUpperCase()}
-                </div>
-                <div style={{ fontSize: 13, color: COLORS.textPrimary }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <div className="col-span-2">
-          <Card className="p-5">
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>
-              Profile Settings
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: "Full Name", key: "name" },
-                { label: "Email", key: "email" },
-                { label: "Expertise", key: "expertise" },
-                { label: "Institution", key: "institution" },
-              ].map((field) => (
-                <div key={field.key}>
-                  <label
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: COLORS.textSecondary,
-                      display: "block",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {field.label}
-                  </label>
-                  <input
-                    value={profileForm[field.key as keyof typeof profileForm]}
-                    onChange={(e) =>
-                      setProfileForm((p) => ({ ...p, [field.key]: e.target.value }))
-                    }
-                    className="w-full px-3 py-2 rounded-xl outline-none"
-                    style={{
-                      fontSize: 14,
-                      border: `1px solid ${COLORS.border}`,
-                      background: COLORS.bg,
-                      color: COLORS.textPrimary,
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="mt-4">
-              <label
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: COLORS.textSecondary,
-                  display: "block",
-                  marginBottom: 4,
-                }}
-              >
-                Bio
-              </label>
-              <textarea
-                value={profileForm.bio}
-                onChange={(e) => setProfileForm((p) => ({ ...p, bio: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 rounded-xl outline-none resize-none"
-                style={{
-                  fontSize: 14,
-                  border: `1px solid ${COLORS.border}`,
-                  background: COLORS.bg,
-                  color: COLORS.textPrimary,
-                }}
-              />
-            </div>
-            <Button
-              variant="primary"
-              size="md"
-              icon={profileSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-              className="mt-4"
-              onClick={saveProfile}
-              disabled={profileSaving}
-            >
-              {profileSaving ? "Saving..." : "Save Profile"}
-            </Button>
-            {profileSaved && (
-              <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600, marginTop: 8, display: "block" }}>✓ Profile saved!</span>
-            )}
-            {profileError && (
-              <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 500, marginTop: 8, display: "block" }}>{profileError}</span>
-            )}
-          </Card>
-        </div>
-      </div>
+      <SectionHeader title="Expert Profile" subtitle="Update your personal information" />
+      <MyProfileSection />
     </>
   );
 

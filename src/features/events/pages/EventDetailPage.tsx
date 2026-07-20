@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy } from "lucide-react";
+import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy, Clock } from "lucide-react";
 import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../shared/components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
@@ -18,11 +18,13 @@ import { CategoryProvider } from "../context/CategoryContext";
 import { RoundProvider } from "../context/RoundContext";
 import { EventDetailHeader } from "../shared/components/EventDetailHeader";
 import { EventCriteriaProvider, useEventCriteriaContext } from "../context/EventCriteriaContext";
+import { ScheduleTab } from "../components/timeline/ScheduleTab";
 
-type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors" | "judging-approval" | "leaderboards";
+type TabKey = "overview" | "schedule" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors" | "judging-approval" | "leaderboards";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "overview",        label: "Overview",        icon: <Calendar size={14} /> },
+  { key: "schedule",        label: "Schedule",        icon: <Clock size={14} /> },
   { key: "criteria",        label: "Criteria",        icon: <Star size={14} /> },
   { key: "categories",      label: "Categories",      icon: <BookOpen size={14} /> },
   { key: "rounds",          label: "Rounds",          icon: <GitBranch size={14} /> },
@@ -102,6 +104,10 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
               />
             )}
 
+            {activeTab === "schedule" && (
+              <ScheduleTab event={event} />
+            )}
+
             {activeTab === "criteria" && (
               <CriteriaTab />
             )}
@@ -111,7 +117,7 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             )}
         
             {activeTab === "rounds" && (
-              <RoundsTab />
+              <RoundsTab event={event} />
             )}
 
             {activeTab === "assign-judges" && (

@@ -9,9 +9,13 @@ import { useRoundContext } from "../../context/RoundContext";
 import { Round, RoundCriteria, RoundJudge } from "../../types/round";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
+import { EventResponse } from "../../api/eventService";
 
+interface Props {
+  event: EventResponse;
+}
 
-export function RoundsTab() {
+export function RoundsTab({ event }: Props) {
 
   const [showAddRound, setShowAddRound] = useState<string | null>(null); // categoryId
   const { categories } = useCategoryContext();
@@ -116,6 +120,10 @@ export function RoundsTab() {
                     setShowAddRound(null);
                 }}
                 onCancel={() => setShowAddRound(null)}
+                event={event}
+                categories={categories}
+                allRounds={Object.values(roundsByCategory).flat()}
+                categoryId={cat.categoryId}
               />
             )}
             
