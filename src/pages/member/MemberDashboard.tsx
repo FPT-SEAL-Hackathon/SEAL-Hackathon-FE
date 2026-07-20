@@ -29,11 +29,8 @@ import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestRespo
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
-import {
-  eventParticipantService,
-  type EventParticipantResponse,
-  type EventParticipantStatus,
-} from "@/features/eventParticipants/api/eventParticipantService";
+import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
+import { MemberAppealsView } from "./components/MemberAppealsView";
 
 
 
@@ -609,7 +606,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
   useEffect(() => {
-    if (currentPage !== "submissions") return;
     if (!user?.userId || apiEvents.length === 0) {
       setSubmissionTeams([]);
       return;
@@ -687,10 +683,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     return () => {
       cancelled = true;
     };
-  }, [apiEvents, currentPage, user?.userId]);
+  }, [apiEvents, user?.userId]);
 
   useEffect(() => {
-    if (currentPage !== "submissions") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     if (storedTeam?.teamId && isActiveTeamContext(storedTeam) && submissionTeams.length === 0) {
       teamService.getById(storedTeam.teamId)
@@ -711,7 +706,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           // Submission API remains the source of truth if refreshing the team fails.
         });
     }
-  }, [currentPage, submissionTeams.length, user?.userId]);
+  }, [submissionTeams.length, user?.userId]);
 
   // Khi vào trang certificates, init event từ storedTeam hoặc apiEvents
   useEffect(() => {
@@ -2590,6 +2585,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         {currentPage === "requests" && renderRequests()}
         {currentPage === "notifications" && renderNotifications()}
         {currentPage === "profile" && renderProfile()}
+        {currentPage === "appeals" && <MemberAppealsView activeTeamContext={activeTeamContext} />}
         {currentPage === "mentor" && <MyMentor isLeader={isLeader} onNavigate={onNavigate} teamId={activeTeamContext?.teamId} />}
         {currentPage === "consultations" && <TeamConsultations isLeader={isLeader} onNavigate={onNavigate} />}
       </>

@@ -14,6 +14,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Award", label: "Certificates", key: "certificates" },
+    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXTERNAL_STUDENT]: [
@@ -22,6 +23,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Award", label: "Certificates", key: "certificates" },
+    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.INTERNAL_JUDGE]: [
@@ -44,6 +46,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },
     { icon: "Users", label: "User Management", key: "users" },
     { icon: "BarChart2", label: "Research & Analytics", key: "reports" },
+    { icon: "AlertCircle", label: "Appeals Management", key: "appeals" },
     { icon: "Award", label: "Awards", key: "awards" },
     { icon: "Bell", label: "Notifications Broadcast", key: "notifications" },
     { icon: "Shield", label: "Audit Logs", key: "audit" },
@@ -65,6 +68,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Eye", label: "Judge Feedback", key: "feedback" },
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
+    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.MEMBER]: [
@@ -74,6 +78,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "ClipboardList", label: "Consultation History", key: "consultations" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
+    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXPERT]: [

@@ -9,7 +9,7 @@ import {
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
   UserCheck, FolderOpen, UserPlus,
-  Target, TrendingUp, MessageSquare, User, Wrench
+  Target, TrendingUp, MessageSquare, User, Wrench, AlertCircle
 } from "lucide-react";
 import { COLORS } from "@/components/shared/UIComponents";
 
@@ -125,7 +125,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     GitBranch, Clock, Award, Zap, BookOpen,
     LogOut, Search, ChevronDown,
     UserCheck, FolderOpen, UserPlus,
-    Target, TrendingUp, MessageSquare, User, Wrench,
+    Target, TrendingUp, MessageSquare, User, Wrench, AlertCircle
   };
 
   // ── Notifications ─────────────────────────────────────────────────────────
