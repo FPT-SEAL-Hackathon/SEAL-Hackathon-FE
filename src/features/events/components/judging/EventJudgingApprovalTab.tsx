@@ -39,7 +39,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     if (categoryRounds.length > 0 && !localRoundId) {
       setLocalRoundId(categoryRounds[0].roundId);
     }
-  }, [categoryRounds]);
+  }, [categoryRounds, localRoundId]);
 
   const fetchSubmissions = async () => {
     if (!localRoundId) {
@@ -109,6 +109,23 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     }
   };
 
+  const bulkApprove = async () => {
+    const unapproved = submissions.filter(s => !s.isScoreApproved);
+    if (unapproved.length === 0) return;
+    
+    setIsLoading(true);
+    try {
+      await Promise.all(unapproved.map(s => 
+        api.post(`/api/v1/admin/submissions/${s.submissionId}/approve`, { approve: true })
+      ));
+      fetchSubmissions();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const rejectScore = async (submissionId: string) => {
     if (!rejectReason.trim()) return;
     setApprovingId(submissionId);
@@ -163,17 +180,32 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
           <div className="flex-1 min-w-[200px]">
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
             <select
-              className="w-full px-3 py-2 border rounded-xl outline-none"
+              className={`w-full px-3 py-2 border rounded-xl outline-none transition-colors ${categoryRounds.length === 0 ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'bg-white hover:border-primary'}`}
               style={{ borderColor: COLORS.border }}
               value={localRoundId}
               onChange={e => setLocalRoundId(e.target.value)}
               disabled={!localCategoryId || categoryRounds.length === 0}
             >
-              <option value="">Select a Round</option>
+              <option value="">
+                {!localCategoryId 
+                  ? "Select Category First" 
+                  : (categoryRounds.length === 0 ? "No Rounds in Category" : "Select a Round")}
+              </option>
               {categoryRounds.map(r => (
-                <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
+                <option key={r.roundId} value={r.roundId} className="text-black">{r.roundName}</option>
               ))}
             </select>
+          </div>
+          
+          <div className="flex-1 flex justify-end items-end min-w-[200px]">
+            <Button
+              variant="primary"
+              disabled={isLoading || !localRoundId || submissions.filter(s => !s.isScoreApproved).length === 0}
+              onClick={bulkApprove}
+              icon={<CheckCircle size={16} />}
+            >
+              Approve All
+            </Button>
           </div>
         </div>
       </Card>

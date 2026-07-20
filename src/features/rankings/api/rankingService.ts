@@ -12,6 +12,7 @@ export interface RoundRankingDTO {
   isAdvanced: boolean;
   computedAt: string;
   isPublished?: boolean;
+  isApproved?: boolean;
 }
 
 export interface EventRankingDTO {
@@ -23,6 +24,7 @@ export interface EventRankingDTO {
   rankPosition: number;
   computedAt: string;
   isPublished?: boolean;
+  isApproved?: boolean;
 }
 
 export const rankingService = {
@@ -45,6 +47,10 @@ export const rankingService = {
     api.post<void>(`/api/v1/admin/events/${eventId}/publish-rankings${categoryId ? '?categoryId=' + categoryId : ''}`, {}),
   publishCategory: (categoryId: string) =>
     api.post<void>(`/api/v1/admin/categories/${categoryId}/publish-rankings`, {}),
+  approveRound: (roundId: string, categoryId: string) =>
+    api.post<void>(`/api/v1/admin/rounds/${roundId}/approve-rankings?categoryId=${categoryId}`, {}),
+  approveCategory: (categoryId: string) =>
+    api.post<void>(`/api/v1/admin/categories/${categoryId}/approve-rankings`, {}),
   // Admin get existing rankings
   getRoundRankings: (roundId: string, categoryId: string) =>
     api.get<RoundRankingDTO[]>(`/api/v1/admin/rounds/${roundId}/rankings?categoryId=${categoryId}`),

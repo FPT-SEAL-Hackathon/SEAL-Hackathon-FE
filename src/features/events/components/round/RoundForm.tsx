@@ -47,9 +47,13 @@ export function RoundForm({
           isCalibrationRound: form.isCalibrationRound || false,
           startDate: form.startDate,
           endDate: form.endDate,
-          submissionDeadline: form.submissionDeadline || null,
-          judgingDeadline: form.judgingDeadline || null,
-          advancementTopN: form.advancementTopN || null,
+          submissionDeadline: form.submissionDeadline || "",
+          judgingDeadline: form.judgingDeadline || "",
+          advancementTopN: form.advancementTopN || 0,
+          // @ts-ignore
+          appealStartTime: form.appealStartTime || undefined,
+          // @ts-ignore
+          appealEndTime: form.appealEndTime || undefined,
       };
       
       // Filter out this round if we are editing an existing one (it would be in allRounds with same ID, but initial doesn't have ID so we can't easily filter by ID here. Wait, initial is RoundRequest, we'd need roundId to filter. If it's an edit, we might show it twice. To fix, let's just assume we only pass preview data on Add Round for now, or filter by roundName if needed. Wait, RoundRequest doesn't have roundId. We can pass roundId as a prop if we want to replace it, but for simplicity let's just append it. Actually if it's Edit, `RoundCard` handles it. `RoundForm` is used only for Add Round right now! Let's verify this.)
@@ -100,6 +104,12 @@ export function RoundForm({
         </Field>
         <Field label="Judging Deadline">
           <Input type="datetime-local" value={form.judgingDeadline ?? ""} onChange={v => set("judgingDeadline", v)} />
+        </Field>
+        <Field label="Appeal Start Time">
+          <Input type="datetime-local" value={form.appealStartTime ?? ""} onChange={v => set("appealStartTime", v)} />
+        </Field>
+        <Field label="Appeal End Time">
+          <Input type="datetime-local" value={form.appealEndTime ?? ""} onChange={v => set("appealEndTime", v)} />
         </Field>
         <div className="md:col-span-2">
           <Field label="Description">

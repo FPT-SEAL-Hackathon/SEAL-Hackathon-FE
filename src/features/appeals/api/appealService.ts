@@ -10,6 +10,7 @@ export interface Appeal {
   categoryName: string;
   title: string;
   reason: string;
+  appealType: 'SCORE_REVIEW' | 'RULE_VIOLATION' | 'TECHNICAL_ISSUE';
   status: 'PENDING' | 'RESOLVED' | 'REJECTED';
   resolutionNote?: string;
   resolvedBy?: string;
@@ -26,6 +27,7 @@ export interface CreateAppealRequest {
   teamId: string;
   title: string;
   reason: string;
+  appealType: 'SCORE_REVIEW' | 'RULE_VIOLATION' | 'TECHNICAL_ISSUE';
 }
 
 export interface ResolveAppealRequest {
