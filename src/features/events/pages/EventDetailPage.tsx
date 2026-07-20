@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck } from "lucide-react";
+import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy } from "lucide-react";
 import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../shared/components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
@@ -12,12 +12,14 @@ import { EventResponse } from "../api/eventService";
 import { useCategories } from "../hooks/useCategories";
 import { useRounds } from "../hooks/useRounds";
 import { EventTeamsSection } from "../components/EventTeamsSection";
+import { EventJudgingApprovalTab } from "../components/judging/EventJudgingApprovalTab";
+import { EventLeaderboardsTab } from "../components/judging/EventLeaderboardsTab";
 import { CategoryProvider } from "../context/CategoryContext";
 import { RoundProvider } from "../context/RoundContext";
 import { EventDetailHeader } from "../shared/components/EventDetailHeader";
 import { EventCriteriaProvider, useEventCriteriaContext } from "../context/EventCriteriaContext";
 
-type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors";
+type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors" | "judging-approval" | "leaderboards";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "overview",        label: "Overview",        icon: <Calendar size={14} /> },
@@ -27,6 +29,8 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "assign-judges",   label: "Assign Judges",   icon: <Shield size={14} /> },
   { key: "assign-mentors",  label: "Assign Mentors",  icon: <UserCheck size={14} /> },
   { key: "teams",           label: "Team Management", icon: <Users size={14} /> },
+  { key: "judging-approval",label: "Judging Approval", icon: <CheckCircle size={14} /> },
+  { key: "leaderboards",    label: "Leaderboards",    icon: <Trophy size={14} /> },
 ];
 
 export function EventDetailPage({ event, onBack, onEdit }: { event: EventResponse; onBack: () => void; onEdit?: () => void }) {
@@ -121,6 +125,14 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             {activeTab === "teams" && (
               <EventTeamsSection eventId={event.eventId} event={event} />
             )}       
+            
+            {activeTab === "judging-approval" && (
+              <EventJudgingApprovalTab eventId={event.eventId} />
+            )}
+
+            {activeTab === "leaderboards" && (
+              <EventLeaderboardsTab eventId={event.eventId} />
+            )}
           </RoundProvider>
         </CategoryProvider>
       </EventCriteriaProvider> 

@@ -79,6 +79,8 @@ export const judgingService = {
     api.post<{ message: string }>("/api/v1/judging", scores),
   updateScores: (updates: UpdateScoreSubmissionDTO[]) =>
     api.patch<{ message: string }>("/api/v1/judging", updates),
+  deleteScores: (submissionId: string, reason?: string) =>
+    api.delete<{ message: string }>(`/api/v1/judging/submission/${submissionId}${reason ? `?reason=${encodeURIComponent(reason)}` : ""}`),
   getBySubmission: (submissionId: string) =>
     api.get<JudgingDTO[]>(`/api/v1/judging/submission/${submissionId}`),
   getByJudge: (judgeUserId: string) =>
