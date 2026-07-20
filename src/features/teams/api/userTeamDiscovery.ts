@@ -126,14 +126,11 @@ export async function discoverUserTeamsForEvents(events: EventLike[], userId?: s
   ));
   if (eventIds.length === 0) return cachedTeams;
 
-  const results = await Promise.all(
-    eventIds.map(eventId => teamService.getByEvent(eventId).catch(() => [] as TeamResponse[])),
-  );
-
+  const myTeams = await teamService.getMyTeams().catch(() => [] as TeamResponse[]);
   const candidatesById = new Map<string, TeamResponse>();
-  results
-    .flat()
-    .filter(team => isCurrentUserTeam(team, userId))
+
+  myTeams
+    .filter(team => eventIds.includes(team.eventId))
     .filter(team => !options.activeOnly || getTeamStatusInfoForTeam(team).badge === "active")
     .forEach(team => {
       if (team.teamId) candidatesById.set(team.teamId, team);

@@ -340,6 +340,9 @@ export const teamService = {
   getByEvent: (eventId: string) =>
     api.get<RawTeamResponse[] | BackendEnvelope<RawTeamResponse[]>>(`/api/v1/events/${eventId}/teams`)
       .then(response => unwrapArray(response).map(normalizeTeamResponse)),
+  getMyTeams: () =>
+    api.get<RawTeamResponse[] | BackendEnvelope<RawTeamResponse[]>>("/api/v1/teams/mine")
+      .then(response => unwrapArray(response).map(normalizeTeamResponse)),
   create: (data: { eventId: string; categoryId: string; teamName: string }) =>
     api.post<RawTeamResponse>("/api/v1/teams", data).then(normalizeTeamResponse),
 
