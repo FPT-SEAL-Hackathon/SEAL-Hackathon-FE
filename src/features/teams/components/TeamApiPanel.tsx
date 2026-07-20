@@ -385,6 +385,8 @@ function getStoredActiveTeam(currentUserId?: string): { teamId: string } | null 
 export function TeamApiPanel({
   initialEventId = "",
   initialTeamId = "",
+  initialTeamShouldPersist = true,
+  isVisible = true,
   mode = "auto",
   onTeamLeft,
   onNavigate,
@@ -392,6 +394,8 @@ export function TeamApiPanel({
 }: {
   initialEventId?: string;
   initialTeamId?: string;
+  initialTeamShouldPersist?: boolean;
+  isVisible?: boolean;
   mode?: RoleMode;
   onTeamLeft?: () => void;
   onNavigate?: (page: string) => void;
@@ -452,6 +456,12 @@ export function TeamApiPanel({
   useEffect(() => {
     onTeamChange?.(selectedTeam);
   }, [selectedTeam, onTeamChange]);
+
+  useEffect(() => {
+    if (isVisible) {
+      setDismissedExpiredTeamId(null);
+    }
+  }, [isVisible]);
 
   const setField = (key: keyof typeof form, value: string) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -668,6 +678,28 @@ export function TeamApiPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEventId]);
+
+  useEffect(() => {
+    if (!initialTeamId || loading.getById) return;
+    teamPanelModeRef.current = "current";
+    setTeamPanelMode("current");
+    setTeamFlow(null);
+    setField("teamId", initialTeamId);
+    run(
+      "getById",
+      () => teamService.getById(initialTeamId),
+      team => {
+        if (!userBelongsToTeam(team, currentUserId)) {
+          setMessage({ tone: "error", text: "You are not a member of this team." });
+          return;
+        }
+        activateTeam(team, initialTeamShouldPersist, "current", mergeTeams(userTeams, [team]));
+        setMessage({ tone: "success", text: "Team loaded successfully." });
+      },
+      "",
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTeamId]);
 
   useEffect(() => {
     run(
