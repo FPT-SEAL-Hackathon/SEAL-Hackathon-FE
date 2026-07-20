@@ -26,6 +26,7 @@ import {
   StatusBadge,
   Button,
 } from "@/components/shared/UIComponents";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/features/auth/store/authStore";
 import { MyProfileSection } from "@/features/users/components/MyProfileSection";
 import { submissionService, type SubmissionHistoryResponse, type SubmissionResponse } from "@/features/submissions/api/submissionService";
@@ -546,20 +547,27 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="block">
             <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Round</span>
-            <select
-            value={submissionForm.roundId}
-            onChange={event => setSubmissionForm(prev => ({ ...prev, roundId: event.target.value }))}
-            className="w-full px-3 py-2 rounded-xl outline-none mt-1"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            disabled={submissionRoundsLoading}
-          >
-              <option value="" disabled hidden>Select a round...</option>
-              {submissionRoundsLoading && <option value="">Loading rounds...</option>}
-              {!submissionRoundsLoading && submissionRounds.length === 0 && <option value="">No official rounds available</option>}
-              {submissionRounds.map(round => (
-                <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
-              ))}
-            </select>
+            <Select
+              value={submissionForm.roundId}
+              onValueChange={value => setSubmissionForm(prev => ({ ...prev, roundId: value }))}
+              disabled={submissionRoundsLoading}
+            >
+              <SelectTrigger
+                className="w-full px-3 py-2 rounded-xl outline-none mt-1"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : submissionRounds.length === 0 ? "No official rounds available" : "Select a round..."} />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                {submissionRoundsLoading && <div className="p-2 text-sm text-center text-muted-foreground">Loading rounds...</div>}
+                {!submissionRoundsLoading && submissionRounds.length === 0 && <div className="p-2 text-sm text-center text-muted-foreground">No official rounds available</div>}
+                {submissionRounds.map(round => (
+                  <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
+                    {round.roundName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {selectedRound ? (
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusBadge status={selectedRoundOpen ? "open" : "closed"} />
@@ -731,42 +739,58 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           <SectionHeader title="Team Rankings" subtitle={leaderboardRoundId === "event" ? "Event leaderboard rankings" : `Round Rankings`} />
           <div className="flex items-center gap-2">
             {leaderboardTeams.length > 0 && (
-              <select
-                value={currentEventId}
-                onChange={(e) => { setLeaderboardEventId(e.target.value); setLeaderboardRoundId("event"); }}
-                className="px-3 py-1.5 rounded-md"
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${COLORS.border}`,
-                  color: COLORS.textPrimary,
-                  outline: "none",
-                  fontSize: 13
-                }}
+              <Select
+                value={currentEventId || "none"}
+                onValueChange={(value) => { setLeaderboardEventId(value === "none" ? "" : value); setLeaderboardRoundId("event"); }}
               >
-                <option value="">Select Event</option>
-                {leaderboardTeams.map(ev => (
-                  <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="px-3 py-1.5 rounded-md outline-none"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.textPrimary,
+                    fontSize: 13,
+                    width: "180px",
+                  }}
+                >
+                  <SelectValue placeholder="Select Event" />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select Event</SelectItem>
+                  {leaderboardTeams.map(ev => (
+                    <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>
+                      {ev.eventName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
             {leaderboardRounds.length > 0 && (
-              <select
+              <Select
                 value={leaderboardRoundId}
-                onChange={(e) => setLeaderboardRoundId(e.target.value)}
-                className="px-3 py-1.5 rounded-md"
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${COLORS.border}`,
-                  color: COLORS.textPrimary,
-                  outline: "none",
-                  fontSize: 13
-                }}
+                onValueChange={(value) => setLeaderboardRoundId(value)}
               >
-                <option value="event">Event Ranking</option>
-                {leaderboardRounds.map(r => (
-                  <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="px-3 py-1.5 rounded-md outline-none"
+                  style={{
+                    background: COLORS.bg,
+                    border: `1px solid ${COLORS.border}`,
+                    color: COLORS.textPrimary,
+                    fontSize: 13,
+                    width: "180px",
+                  }}
+                >
+                  <SelectValue placeholder="Event Ranking" />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="event" style={{ color: COLORS.textPrimary }}>Event Ranking</SelectItem>
+                  {leaderboardRounds.map(r => (
+                    <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>
+                      {r.roundName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
         </div>

@@ -176,7 +176,6 @@ export function MemberAppealsView({ activeTeamContext }: { activeTeamContext: an
                 <h4 className="font-bold text-lg">{appeal.title}</h4>
                 <StatusBadge 
                   status={appeal.status.toLowerCase()} 
-                  label={appeal.status} 
                 />
               </div>
               <p className="text-gray-600 text-sm whitespace-pre-wrap">{appeal.reason}</p>

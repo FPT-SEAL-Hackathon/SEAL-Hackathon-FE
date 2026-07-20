@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api/apiClient";
 import { CheckCircle, XCircle, Eye, Loader, CheckSquare } from "lucide-react";
@@ -144,36 +145,35 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
         <div className="flex gap-4 flex-wrap">
           <div className="flex-1 min-w-[200px]">
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-            <select
-              className="w-full px-3 py-2 border rounded-xl outline-none"
-              style={{ borderColor: COLORS.border }}
-              value={localCategoryId}
-              onChange={e => {
-                setLocalCategoryId(e.target.value);
+            <Select value={localCategoryId || "none"} onValueChange={value => {
+                setLocalCategoryId((value === "none" ? "" : value));
                 setLocalRoundId(""); // reset round
-              }}
-            >
-              <option value="">Select a Category</option>
+              }} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select a Category</SelectItem>
               {categories.map(c => (
-                <option key={c.categoryId} value={c.categoryId}>{c.categoryName}</option>
+                <SelectItem key={c.categoryId} value={c.categoryId} style={{ color: COLORS.textPrimary }}>{c.categoryName}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
           </div>
 
           <div className="flex-1 min-w-[200px]">
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
-            <select
-              className="w-full px-3 py-2 border rounded-xl outline-none"
-              style={{ borderColor: COLORS.border }}
-              value={localRoundId}
-              onChange={e => setLocalRoundId(e.target.value)}
-              disabled={!localCategoryId || categoryRounds.length === 0}
-            >
-              <option value="">Select a Round</option>
+            <Select value={localRoundId || "none"} onValueChange={value => setLocalRoundId((value === "none" ? "" : value))} disabled={!localCategoryId || categoryRounds.length === 0}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select a Round</SelectItem>
               {categoryRounds.map(r => (
-                <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
+                <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
           </div>
         </div>
       </Card>
