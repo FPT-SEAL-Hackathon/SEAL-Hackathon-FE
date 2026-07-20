@@ -1,6 +1,15 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Calendar, Trophy, Users, Clock, Bell, CheckCircle,
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
@@ -44,7 +53,9 @@ const EVENTS_RELOAD_MIN_INTERVAL_MS = 15_000;
 type ActiveTeamContext = {
   teamId: string;
   eventId?: string;
+  eventName?: string;
   categoryId?: string;
+  categoryName?: string;
   teamName?: string;
   leaderUserId?: string;
   teamStatusId?: string;
@@ -1214,47 +1225,78 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     && !submissionEligibility.loading
     && !submissionEligibility.canSubmit;
 
-  const renderSubmissionTeamSelector = () => (
-    <Card className="p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-        <label className="block">
-          <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
-            <Users size={14} /> Team
-          </span>
-          <select
-            value={submissionForm.teamId}
-            onChange={event => selectSubmissionTeam(event.target.value)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            disabled={submissionTeamsLoading || submissionTeams.length === 0}
-          >
-            {submissionTeamsLoading && <option value="">Loading your teams...</option>}
-            {!submissionTeamsLoading && submissionTeams.length === 0 && <option value="">No teams available</option>}
-            {submissionTeams.map(team => (
-              <option key={team.teamId} value={team.teamId}>
-                {team.teamName ?? team.teamId}
-              </option>
-            ))}
-          </select>
-        </label>
+  const renderSubmissionTeamSelector = () => {
+    const groupedTeams = submissionTeams.reduce((acc, team) => {
+      const evName = team.eventName || "Other Events";
+      if (!acc[evName]) acc[evName] = [];
+      acc[evName].push(team);
+      return acc;
+    }, {} as Record<string, ActiveTeamContext[]>);
+
+    return (
+      <Card className="p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+          <label className="block">
+            <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+              <Users size={14} /> Team
+            </span>
+            <Select
+              value={submissionForm.teamId}
+              onValueChange={value => selectSubmissionTeam(value)}
+              disabled={submissionTeamsLoading || submissionTeams.length === 0}
+            >
+              <SelectTrigger
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder={submissionTeamsLoading ? "Loading your teams..." : "Select a team..."} />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                {!submissionTeamsLoading && submissionTeams.length === 0 && (
+                  <div className="p-2 text-sm text-center text-muted-foreground">No teams available</div>
+                )}
+                {Object.entries(groupedTeams).map(([evName, teams]) => (
+                  <SelectGroup key={evName}>
+                    <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    {teams.map(team => {
+                      const categoryInfo = team.categoryName ? ` - ${team.categoryName}` : "";
+                      return (
+                        <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>
+                          {team.teamName ?? team.teamId}{categoryInfo}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
         <label className="block">
           <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
             <Clock size={14} /> Round
           </span>
-          <select
+          <Select
             value={submissionForm.roundId}
-            onChange={event => selectSubmissionRound(event.target.value)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            onValueChange={value => selectSubmissionRound(value)}
             disabled={submissionRoundsLoading}
           >
-            <option value="" disabled hidden>Select a round...</option>
-            {submissionRoundsLoading && <option value="">Loading rounds...</option>}
-            {!submissionRoundsLoading && submissionRounds.length === 0 && <option value="">No official rounds available</option>}
-            {submissionRounds.map(round => (
-              <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
-            ))}
-          </select>
+            <SelectTrigger
+              className="w-full px-3 py-2 rounded-lg outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : "Select a round..."} />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              {!submissionRoundsLoading && submissionRounds.length === 0 && (
+                <div className="p-2 text-sm text-center text-muted-foreground">No official rounds available</div>
+              )}
+              {submissionRounds.map(round => (
+                <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
+                  {round.roundName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {selectedSubmissionRound ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {selectedSubmissionRoundLocked ? (
@@ -1276,7 +1318,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </label>
       </div>
     </Card>
-  );
+    );
+  };
 
   const renderSubmissionHistory = () => {
     const roundById = new Map(allSubmissionRounds.map(round => [round.roundId, round]));

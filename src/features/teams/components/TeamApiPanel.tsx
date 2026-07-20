@@ -20,6 +20,15 @@ import {
   MessageSquare,
   ClipboardList,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/features/auth/store/authStore";
 import { getCurrentUser, refreshAccessToken } from "@/features/auth/api/authService";
 import { Button, Card, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
@@ -1449,6 +1458,13 @@ export function TeamApiPanel({
     const currentUserTeams = userTeams.filter(team => userBelongsToTeam(team, currentUserId));
     const selectedPickerTeamId = form.teamId || selectedTeam?.teamId || "";
 
+    const groupedTeams = currentUserTeams.reduce((acc, team) => {
+      const evName = getEventName(team.eventId) || "Other Events";
+      if (!acc[evName]) acc[evName] = [];
+      acc[evName].push(team);
+      return acc;
+    }, {} as Record<string, typeof currentUserTeams>);
+
     return (
       <Card className={isCompact ? "p-3" : "p-5"}>
         {!isCompact && (
@@ -1478,25 +1494,30 @@ export function TeamApiPanel({
         ) : (
           <div className={isCompact ? "" : "mt-5"}>
             <label className="block">
-              <select
+              <Select
                 value={selectedPickerTeamId}
-                onChange={event => loadTeam(event.target.value, true)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                onValueChange={value => loadTeam(value, true)}
                 disabled={loading.getById}
               >
-                {!selectedPickerTeamId && (
-                  <option value="" disabled hidden>Select a team...</option>
-                )}
-                {currentUserTeams.map(team => {
-                  const eventName = getEventName(team.eventId);
-                  return (
-                    <option key={team.teamId} value={team.teamId}>
-                      {team.teamName} - {eventName}
-                    </option>
-                  );
-                })}
-              </select>
+                <SelectTrigger
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="Select a team..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  {Object.entries(groupedTeams).map(([evName, teams]) => (
+                    <SelectGroup key={evName}>
+                      <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                      {teams.map(team => (
+                        <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>
+                          {team.teamName}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
         )}
