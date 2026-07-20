@@ -135,7 +135,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      >
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full rounded-2xl overflow-hidden"
           style={{ maxWidth: 620, background: COLORS.bg, boxShadow: "0 24px 64px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
