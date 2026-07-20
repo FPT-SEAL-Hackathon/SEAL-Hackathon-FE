@@ -72,6 +72,15 @@ type SubmissionEligibility = {
   previousRank?: RoundRankingDTO;
 };
 
+type DashboardTeamDeadline = {
+  teamId: string;
+  roundId?: string;
+  roundName?: string;
+  deadline?: string;
+  canSubmit: boolean;
+  status: "upcoming" | "closed" | "scheduled" | "unavailable";
+};
+
 function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById>>, userId?: string): ActiveTeamContext {
   return {
     teamId: team.teamId,
@@ -265,17 +274,6 @@ type MemberNotification = {
   read: boolean;
 };
 
-type MemberTeamMember = {
-  id: string;
-  name: string;
-  role: string;
-  avatar: string;
-  skills: string[];
-  tasks: number;
-  completed: number;
-  email: string;
-};
-
 const getInitials = (name?: string) =>
   (name ?? "")
     .split(" ")
@@ -360,6 +358,37 @@ function isOfficialSubmissionRound(round: Round) {
   return !round.isCalibrationRound;
 }
 
+function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadline, "teamId"> {
+  const officialRounds = rounds
+    .filter(round => isOfficialSubmissionRound(round) && round.submissionDeadline)
+    .sort((a, b) => {
+      const aTime = parseDateTime(a.submissionDeadline) ?? Number.MAX_SAFE_INTEGER;
+      const bTime = parseDateTime(b.submissionDeadline) ?? Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    });
+
+  const now = Date.now();
+  const upcomingRound = officialRounds.find(round => {
+    const deadlineTime = parseDateTime(round.submissionDeadline);
+    return deadlineTime !== null && deadlineTime >= now;
+  });
+  const round = upcomingRound ?? officialRounds[officialRounds.length - 1];
+
+  if (!round) {
+    return { canSubmit: false, status: "unavailable" };
+  }
+
+  const deadlineTime = parseDateTime(round.submissionDeadline);
+  const roundState = getSubmissionRoundState(round);
+  return {
+    roundId: round.roundId,
+    roundName: round.roundName,
+    deadline: round.submissionDeadline,
+    canSubmit: roundState.canSubmit,
+    status: deadlineTime !== null && deadlineTime < now ? "closed" : roundState.hasStarted ? "upcoming" : "scheduled",
+  };
+}
+
 function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
   const selectedRound = rounds.find(round => round.roundId === selectedRoundId);
   if (!selectedRound) return undefined;
@@ -384,11 +413,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [eventActionMessage, setEventActionMessage] = useState<Record<string, string>>({});
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
   const [teamInitialEventId, setTeamInitialEventId] = useState("");
+  const [teamInitialTeamId, setTeamInitialTeamId] = useState("");
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [leaderboardEventId, setLeaderboardEventId] = useState<string>("");
   const [leaderboardRoundId, setLeaderboardRoundId] = useState("event");
   const [leaderboardRounds, setLeaderboardRounds] = useState<Round[]>([]);
-  const [teamMembers] = useState<MemberTeamMember[]>([]);
+  const [dashboardTeams, setDashboardTeams] = useState<TeamResponse[]>([]);
+  const [dashboardDeadlines, setDashboardDeadlines] = useState<Record<string, DashboardTeamDeadline>>({});
+  const [dashboardDeadlinesLoading, setDashboardDeadlinesLoading] = useState(false);
   const eventsRequestInFlightRef = useRef(false);
   const lastEventsLoadAtRef = useRef(0);
   const loadEvents = useCallback(() => {
@@ -619,6 +651,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   useEffect(() => {
     if (!user?.userId || apiEvents.length === 0) {
       setSubmissionTeams([]);
+      setDashboardTeams([]);
       return;
     }
 
@@ -638,6 +671,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         if (cancelled) return;
         const userTeams = results.map(team => teamToActiveContext(team, user.userId));
 
+        setDashboardTeams(results);
         setSubmissionTeams(userTeams);
 
         const selectedTeam = (storedSubmissionTeam?.teamId
@@ -665,6 +699,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       .catch(() => {
         if (!cancelled) {
           setSubmissionTeams([]);
+          setDashboardTeams([]);
           if (storedSubmissionTeam?.teamId) {
             teamService.getById(storedSubmissionTeam.teamId)
               .then(team => {
@@ -676,6 +711,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   return;
                 }
                 const refreshedTeam = teamToActiveContext(team, user.userId);
+                setDashboardTeams([team]);
                 setSubmissionTeams([refreshedTeam]);
                 setActiveTeamContext(refreshedTeam);
                 setSubmissionForm(prev => ({ ...prev, teamId: refreshedTeam.teamId }));
@@ -697,6 +733,37 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [apiEvents, user?.userId]);
 
   useEffect(() => {
+    if (dashboardTeams.length === 0) {
+      setDashboardDeadlines({});
+      return;
+    }
+
+    let cancelled = false;
+    setDashboardDeadlinesLoading(true);
+    Promise.all(
+      dashboardTeams.map(async team => {
+        if (!team.categoryId) {
+          return [team.teamId, { teamId: team.teamId, canSubmit: false, status: "unavailable" } satisfies DashboardTeamDeadline] as const;
+        }
+
+        const rounds = await roundService.getByCategory(team.categoryId).catch(() => [] as Round[]);
+        return [team.teamId, { teamId: team.teamId, ...getDashboardDeadlineForRounds(rounds) } satisfies DashboardTeamDeadline] as const;
+      }),
+    )
+      .then(entries => {
+        if (cancelled) return;
+        setDashboardDeadlines(Object.fromEntries(entries));
+      })
+      .finally(() => {
+        if (!cancelled) setDashboardDeadlinesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardTeams]);
+
+  useEffect(() => {
     const storedTeam = getStoredActiveTeam(user?.userId);
     if (storedTeam?.teamId && isActiveTeamContext(storedTeam) && submissionTeams.length === 0) {
       teamService.getById(storedTeam.teamId)
@@ -710,6 +777,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           const refreshedTeam = teamToActiveContext(team, user?.userId);
           setActiveTeamContext(refreshedTeam);
           setSubmissionTeams([refreshedTeam]);
+          setDashboardTeams([team]);
           setSubmissionForm(prev => ({ ...prev, teamId: refreshedTeam.teamId }));
           localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(refreshedTeam));
         })
@@ -1629,6 +1697,33 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     return fallback || "Registration failed.";
   };
 
+  const openDashboardSubmission = (team: TeamResponse, deadline?: DashboardTeamDeadline) => {
+    const nextTeam = teamToActiveContext(team, user?.userId);
+    setActiveTeamContext(nextTeam);
+    setSubmissionForm(prev => ({
+      ...prev,
+      teamId: nextTeam.teamId,
+      roundId: deadline?.roundId ?? prev.roundId,
+    }));
+    localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
+    if (deadline?.roundId) {
+      setStoredSubmissionRound(nextTeam.teamId, deadline.roundId);
+    }
+    onNavigate("submissions");
+  };
+
+  const openDashboardTeam = (team: TeamResponse) => {
+    setTeamInitialEventId("");
+    setTeamInitialTeamId(team.teamId);
+    onNavigate("team");
+  };
+
+  const handleDashboardTeamKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, team: TeamResponse) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openDashboardTeam(team);
+  };
+
   const renderDashboard = () => (
     <>
       <SectionHeader
@@ -1641,20 +1736,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         <StatCard title="Team Score" value="N/A" icon={<Star size={22} />} color={COLORS.accent} />
         <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5 col-span-1">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Team Status</span>
-            <StatusBadge status={teamMembers.length > 0 ? "active" : "pending"} />
           </div>
-          {teamMembers.length > 0 ? (
-            <>
-              <div className="mb-3">
-                <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>My Team</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{teamMembers.length} members</div>
-              </div>
-              <AvatarGroup names={teamMembers.map(m => m.name)} max={5} />
-            </>
+          {submissionTeamsLoading ? (
+            <div className="rounded-xl p-4 flex items-center gap-2" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+              <Loader size={14} className="animate-spin" />
+              Loading team status...
+            </div>
+          ) : dashboardTeams.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {dashboardTeams.map(team => {
+                const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName ?? team.statusName ?? team.status);
+                return (
+                  <div
+                    key={team.teamId}
+                    role="button"
+                    tabIndex={0}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 transition-colors"
+                    style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, cursor: "pointer" }}
+                    onClick={() => openDashboardTeam(team)}
+                    onKeyDown={event => handleDashboardTeamKeyDown(event, team)}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {team.teamName || "Unnamed team"}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {team.activeMemberCount ?? team.members.length} members
+                      </div>
+                    </div>
+                    <StatusBadge status={status.badge} />
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
               No team data is available for your account yet.
@@ -1663,25 +1781,59 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </Card>
 
         <Card className="p-5 col-span-1">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertCircle size={18} style={{ color: COLORS.error }} />
-            <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Upcoming Deadline</span>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} style={{ color: COLORS.error }} />
+              <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Upcoming Deadline</span>
+            </div>
+            {dashboardDeadlinesLoading && <Loader size={14} className="animate-spin" style={{ color: COLORS.textSecondary }} />}
           </div>
-          <div className="rounded-xl p-4 mb-4" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30` }}>
-            <div style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{apiEvents[0]?.eventName ?? "No active event"}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary, margin: "8px 0" }}>{apiEvents[0]?.registrationEnd ? "Deadline available" : "N/A"}</div>
-            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {apiEvents[0]?.registrationEnd || "No deadline data"}</div>
-          </div>
-          <Button variant="primary" size="sm" className="mt-4 w-full" icon={<ExternalLink size={14} />} onClick={() => onNavigate("submissions")}>
-            Open Submission
-          </Button>
-        </Card>
-
-        <Card className="p-5 col-span-1">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Recent Activity</div>
-          <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
-            No recent activity is available.
-          </div>
+          {dashboardTeams.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {dashboardTeams.map(team => {
+                const deadline = dashboardDeadlines[team.teamId];
+                const eventName = apiEvents.find(event => event.eventId === team.eventId)?.eventName ?? "Unknown event";
+                return (
+                  <div
+                    key={team.teamId}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3"
+                    style={{ background: `${COLORS.error}08`, border: `1px solid ${COLORS.error}20` }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {eventName}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {deadline?.roundName ?? "No official round"}
+                      </div>
+                    </div>
+                    <div className="text-right" style={{ flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: deadline?.status === "closed" ? COLORS.error : COLORS.textPrimary }}>
+                        {deadline?.deadline ? formatSubmissionDate(deadline.deadline) : "No deadline"}
+                      </div>
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <StatusBadge status={deadline?.status ?? "unavailable"} />
+                        {deadline?.canSubmit && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={<ExternalLink size={13} />}
+                            onClick={() => openDashboardSubmission(team, deadline)}
+                          >
+                            Submit
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
+          ) : (
+            <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+              No deadline data is available for your teams yet.
+            </div>
+          )}
         </Card>
       </div>
     </>
@@ -1689,7 +1841,17 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
   const renderTeam = () => (
     <div className="flex flex-col gap-6">
-      <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
+      <TeamApiPanel
+        initialEventId={teamInitialEventId}
+        initialTeamId={teamInitialTeamId}
+        initialTeamShouldPersist={!teamInitialTeamId}
+        isVisible={currentPage === "team"}
+        onNavigate={onNavigate}
+        onTeamChange={team => {
+          if (teamInitialTeamId && team?.teamId === teamInitialTeamId) return;
+          handleTeamChange(team);
+        }}
+      />
       {activeTeamContext?.teamId && renderLeaderboard()}
     </div>
   );
