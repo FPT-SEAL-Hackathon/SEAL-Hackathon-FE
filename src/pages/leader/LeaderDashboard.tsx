@@ -27,6 +27,7 @@ import {
   Button,
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
+import { MyProfileSection } from "@/features/users/components/MyProfileSection";
 import { submissionService, type SubmissionHistoryResponse, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
@@ -141,7 +142,6 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [feedbackError, setFeedbackError] = useState("");
 
   const [notifications, setNotifications] = useState<Array<{ id: string; title: string; body: string; time: string; read: boolean }>>([]);
-  const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
     const stored = getStoredTeam();
@@ -793,11 +793,16 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          {(row.rankPosition ?? row.rank) <= 3 ? (
-                            <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][(row.rankPosition ?? row.rank) - 1]}</span>
-                          ) : (
-                            <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{row.rankPosition ?? row.rank}</span>
-                          )}
+                        {(() => {
+                          const rank = row.rankPosition ?? row.rank;
+                          if (!rank || rank <= 0) {
+                            return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
+                          }
+                          if (rank <= 3) {
+                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
+                          }
+                          return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
+                        })()}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -907,24 +912,10 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     </>
   );
 
+  // Form hồ sơ dùng chung: load/save qua API /api/v1/me thật (nút Save cũ chỉ
+  // set state local nên logout/login là mất — bug đã sửa).
   const renderProfile = () => (
-    <>
-      <SectionHeader title="My Profile" subtitle="Account information from current session" />
-      <Card className="p-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <InfoPill label="Full Name" value={user?.fullName} />
-          <InfoPill label="Email" value={user?.email} />
-          <InfoPill label="Phone" value={user?.phone} />
-          <InfoPill label="Student Code" value={user?.fptStudentCode} />
-        </div>
-        <div className="mt-4">
-          <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000); }}>
-            Save Changes
-          </Button>
-          {profileSaved && <span className="ml-3" style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>Profile saved locally.</span>}
-        </div>
-      </Card>
-    </>
+    <MyProfileSection title="My Profile" subtitle="Update your personal information" />
   );
 
   const renderSettings = () => (

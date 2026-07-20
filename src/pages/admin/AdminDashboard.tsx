@@ -33,6 +33,7 @@ import { AdminReportsView } from "./components/AdminReportsView";
 import { AdminDataExportView } from "./components/AdminDataExportView";
 import { AdminNotificationsView } from "./components/AdminNotificationsView";
 import { AdminDirectNotificationView } from "./components/AdminDirectNotificationView";
+import { AdminAppealsView } from "./components/AdminAppealsView";
 import { AdminAuditView } from "./components/AdminAuditView";
 import { AdminProfileView } from "./components/AdminProfileView";
 import { AdminSettingsView } from "./components/AdminSettingsView";
@@ -1018,6 +1019,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "audit": return <AdminAuditView context={viewContext} />;
       case "awards": return <AdminAwardsView context={viewContext} />;
       case "award-patterns": return <AdminAwardPatternsView context={viewContext} />;
+      case "appeals": return <AdminAppealsView />;
       case "settings": return <AdminSettingsView context={viewContext} />;
       case "profile": return <AdminProfileView context={viewContext} />;
       default: return <AdminDashboardView context={viewContext} />;

@@ -4,7 +4,7 @@ import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingS
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { useAuth } from "@/features/auth/store/authStore";
-import { Loader2, Search, Edit3, ArrowUpDown } from "lucide-react";
+import { CheckCircle, Clock, ChevronDown, Check, X, Search, Filter, Loader2, Edit3, ArrowUpDown, Trash2 } from "lucide-react";
 
 export function JudgeHistoryView({
   apiRounds,
@@ -127,6 +127,23 @@ export function JudgeHistoryView({
   useEffect(() => {
     fetchScores();
   }, [user?.userId]);
+
+  const handleDelete = async (submissionId: string) => {
+    const reason = window.prompt("Please provide a reason for deleting your scores:");
+    if (reason === null) return; // User cancelled
+    
+    try {
+      setLoading(true);
+      await judgingService.deleteScores(submissionId, reason);
+      // Reload scores
+      fetchScores();
+    } catch (error) {
+      console.error("Failed to delete scores", error);
+      alert("Failed to delete scores. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Aggregate scores by submission
   const historyData = useMemo(() => {
@@ -438,32 +455,42 @@ export function JudgeHistoryView({
                       </td>
                       <td className="px-4 py-4 text-xs text-gray-500">{row.date}</td>
                       <td className="px-4 py-4 text-center">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          icon={<Edit3 size={14} />} 
-                          onClick={() => {
-                            if (onSelectSubmission && onNavigate) {
-                              onSelectSubmission({
-                                id: row.id,
-                                team: row.teamId,
-                                title: row.title,
-                                track: "—",
-                                status: "completed",
-                                score: row.total,
-                                round: row.roundName,
-                                github: row.originalSub.repositoryUrl ?? "",
-                                demo: row.originalSub.demoUrl ?? "",
-                                slide: row.originalSub.slideUrl ?? "",
-                                report: row.originalSub.reportUrl ?? "",
-                                raw: row.originalSub
-                              });
-                              onNavigate("scoring");
-                            }
-                          }}
-                        >
-                          Edit
-                        </Button>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            icon={<Edit3 size={14} />} 
+                            onClick={() => {
+                              if (onSelectSubmission && onNavigate) {
+                                onSelectSubmission({
+                                  id: row.id,
+                                  team: row.teamId,
+                                  title: row.title,
+                                  track: "—",
+                                  status: "completed",
+                                  score: row.total,
+                                  round: row.roundName,
+                                  github: row.originalSub.repositoryUrl ?? "",
+                                  demo: row.originalSub.demoUrl ?? "",
+                                  slide: row.originalSub.slideUrl ?? "",
+                                  report: row.originalSub.reportUrl ?? "",
+                                  raw: row.originalSub
+                                });
+                                onNavigate("scoring");
+                              }
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            icon={<Trash2 size={14} />} 
+                            style={{ borderColor: COLORS.error, color: COLORS.error }}
+                            onClick={() => handleDelete(row.id)}
+                            title="Delete Scores"
+                          />
+                        </div>
                       </td>
                     </tr>
                   );
