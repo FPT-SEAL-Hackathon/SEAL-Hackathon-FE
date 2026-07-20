@@ -16,6 +16,7 @@ export type PageKey =
   | "calibration"
   | "history"
   | "feedback"
+  | "appeals"
   | "requests"
   | "categories"
   | "criteria"
@@ -70,6 +71,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   calibration: [...JUDGE_ROLES],
   history: [...JUDGE_ROLES],
   feedback: [...LEADER_ROLES],
+  appeals: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES, ...ORGANIZER_ROLES],
   requests: [...LEADER_ROLES],
   categories: [...ORGANIZER_ROLES, ...MENTOR_ROLES],
   criteria: [...ORGANIZER_ROLES],
