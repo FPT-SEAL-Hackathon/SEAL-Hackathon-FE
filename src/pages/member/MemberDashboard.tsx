@@ -40,6 +40,7 @@ import { awardService, type AwardResponse } from "@/features/awards/api/awardSer
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
+import { ScoreDetailsModal } from "@/features/events/components/judging/ScoreDetailsModal";
 
 
 
@@ -649,6 +650,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [handlingRequestId, setHandlingRequestId] = useState<string | null>(null);
+  const [viewResultsTarget, setViewResultsTarget] = useState<{ submissionId: string, roundId: string } | null>(null);
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -1489,6 +1491,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
                       <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<Eye size={13} />}
+                        onClick={() => setViewResultsTarget({ submissionId: submission.submissionId, roundId: submission.roundId })}
+                      >
+                        View Results
+                      </Button>
+                      <Button
                         variant={canUpdateSubmission ? "outline" : "ghost"}
                         size="sm"
                         icon={<Edit size={13} />}
@@ -1859,6 +1869,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     </>
   );
 
+  const handleTeamPanelChange = useCallback((team: TeamResponse | null) => {
+    if (teamInitialTeamId && team?.teamId === teamInitialTeamId) return;
+    handleTeamChange(team);
+  }, [teamInitialTeamId, handleTeamChange]);
+
   const renderTeam = () => (
     <div className="flex flex-col gap-6">
       <TeamApiPanel
@@ -1867,10 +1882,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         initialTeamShouldPersist={!teamInitialTeamId}
         isVisible={currentPage === "team"}
         onNavigate={onNavigate}
-        onTeamChange={team => {
-          if (teamInitialTeamId && team?.teamId === teamInitialTeamId) return;
-          handleTeamChange(team);
-        }}
+        onTeamChange={handleTeamPanelChange}
       />
       {activeTeamContext?.teamId && renderLeaderboard()}
     </div>
@@ -2880,6 +2892,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </div>
         )}
         {renderSubmissionHistory()}
+        {viewResultsTarget && (
+          <ScoreDetailsModal
+            submissionId={viewResultsTarget.submissionId}
+            roundId={viewResultsTarget.roundId}
+            studentMode={true}
+            onClose={() => setViewResultsTarget(null)}
+          />
+        )}
       </>
     );
   };

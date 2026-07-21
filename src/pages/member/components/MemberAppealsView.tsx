@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, SectionHeader, Button, StatusBadge } from "@/components/shared/UIComponents";
 import { appealService, type Appeal } from "@/features/appeals/api/appealService";
+import { parseApiError } from "@/lib/api/apiClient";
 import { eventService } from "@/features/events/api/eventService";
 import { categoryService } from "@/features/categories/api/categoryService";
 import { Loader, MessageSquare, PlusCircle, Info } from "lucide-react";
@@ -77,9 +78,10 @@ export function MemberAppealsView({ activeTeamContext }: { activeTeamContext: an
       setIsFormOpen(false);
       setForm({ title: "", reason: "", appealType: "SCORE_REVIEW" });
       loadAppeals();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error?.response?.data?.message || "Failed to submit appeal");
+      const parsedError = parseApiError(error);
+      toast.error(parsedError.message || "Failed to submit appeal");
     } finally {
       setSubmitting(false);
     }
