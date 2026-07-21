@@ -38,7 +38,14 @@ export function RoundForm({
     setError("");
     if (!form.roundName) return;
 
-    if (form.startDate && form.endDate && form.startDate >= form.endDate) {
+    const getTime = (d: string | null | undefined) => d ? new Date(d).getTime() : null;
+    
+    const sTime = getTime(form.startDate);
+    const eTime = getTime(form.endDate);
+    const subTime = getTime(form.submissionDeadline);
+    const jdgTime = getTime(form.judgingDeadline);
+
+    if (sTime && eTime && sTime >= eTime) {
       setError("End Date must be strictly after Start Date.");
       return;
     }
@@ -57,29 +64,29 @@ export function RoundForm({
       }
     }
     
-    if (form.submissionDeadline) {
-      if (form.startDate && form.submissionDeadline < form.startDate) {
-        setError("Submission Deadline must be after or equal to Start Date.");
-        return;
-      }
-      if (form.endDate && form.submissionDeadline > form.endDate) {
-        setError("Submission Deadline must be before or equal to End Date.");
-        return;
-      }
+    if (sTime && subTime && subTime < sTime) {
+      setError("Submission Deadline must be after or equal to Start Date.");
+      return;
     }
     
-    if (form.judgingDeadline) {
-      if (form.submissionDeadline && form.judgingDeadline < form.submissionDeadline) {
-        setError("Judging Deadline must be after or equal to Submission Deadline.");
-        return;
-      } else if (form.startDate && form.judgingDeadline < form.startDate) {
-        setError("Judging Deadline must be after or equal to Start Date.");
-        return;
-      }
-      if (form.endDate && form.judgingDeadline > form.endDate) {
-        setError("Judging Deadline must be before or equal to End Date.");
-        return;
-      }
+    if (subTime && jdgTime && jdgTime < subTime) {
+      setError("Judging Deadline must be after or equal to Submission Deadline.");
+      return;
+    }
+    
+    if (jdgTime && eTime && eTime < jdgTime) {
+      setError("End Date must be after or equal to Judging Deadline.");
+      return;
+    }
+    
+    // Cross checks if some dates are missing
+    if (!subTime && sTime && jdgTime && jdgTime < sTime) {
+      setError("Judging Deadline must be after or equal to Start Date.");
+      return;
+    }
+    if (!jdgTime && eTime && subTime && eTime < subTime) {
+      setError("End Date must be after or equal to Submission Deadline.");
+      return;
     }
 
     try {

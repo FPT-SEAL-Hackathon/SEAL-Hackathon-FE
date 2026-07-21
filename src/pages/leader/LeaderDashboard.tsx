@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   CheckCircle,
   Eye,
@@ -107,6 +107,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [leaderboardRounds, setLeaderboardRounds] = useState<Round[]>([]);
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [leaderboardTeams, setLeaderboardTeams] = useState<any[]>([]);
+  const leaderboardTeamsRef = useRef<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [handlingId, setHandlingId] = useState<string | null>(null);
@@ -672,7 +673,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
          if (cancelled) return;
          const teams = await discoverUserTeamsForEvents(events, user?.userId);
          if (cancelled) return;
-         setLeaderboardTeams(teams.map(t => {
+          setLeaderboardTeams(teams.map(t => {
             const discoveredTeam = t as TeamResponse & { eventName?: string };
             return {
               eventId: discoveredTeam.eventId,
@@ -689,25 +690,29 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [currentPage, user?.userId]);
 
   useEffect(() => {
-     if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
-     const targetEventId = leaderboardEventId || activeTeam?.eventId;
-     if (!targetEventId) return;
-
-     const team = leaderboardTeams.find(t => t.eventId === targetEventId);
-     const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
-     if (!targetCategoryId) return;
-
-     roundService.getByCategory(targetCategoryId)
-       .then(setLeaderboardRounds)
-       .catch(() => setLeaderboardRounds([]));
-  }, [currentPage, leaderboardEventId, activeTeam?.eventId, activeTeam?.categoryId, leaderboardTeams]);
+    leaderboardTeamsRef.current = leaderboardTeams;
+  }, [leaderboardTeams]);
 
   useEffect(() => {
      if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
      const targetEventId = leaderboardEventId || activeTeam?.eventId;
      if (!targetEventId) return;
 
-     const team = leaderboardTeams.find(t => t.eventId === targetEventId);
+     const team = leaderboardTeamsRef.current.find(t => t.eventId === targetEventId);
+     const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
+     if (!targetCategoryId) return;
+
+     roundService.getByCategory(targetCategoryId)
+       .then(setLeaderboardRounds)
+       .catch(() => setLeaderboardRounds([]));
+  }, [currentPage, leaderboardEventId, activeTeam?.eventId, activeTeam?.categoryId]);
+
+  useEffect(() => {
+     if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
+     const targetEventId = leaderboardEventId || activeTeam?.eventId;
+     if (!targetEventId) return;
+
+     const team = leaderboardTeamsRef.current.find(t => t.eventId === targetEventId);
      const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
      if (!targetCategoryId) return;
 
@@ -720,7 +725,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             .then(setApiLeaderboard)
             .catch(() => setApiLeaderboard([]));
      }
-  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeam?.eventId, activeTeam?.categoryId, leaderboardTeams]);
+  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeam?.eventId, activeTeam?.categoryId]);
 
   const renderRankings = () => {
     const currentEventId = leaderboardEventId || activeTeam?.eventId || "";
