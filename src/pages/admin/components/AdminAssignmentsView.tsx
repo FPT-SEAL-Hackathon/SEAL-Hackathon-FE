@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { PlusCircle, Loader, User, Mail, Trash2 } from "lucide-react";
 import { SectionHeader, Card, Button, COLORS } from "@/components/shared/UIComponents";
@@ -75,17 +76,17 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
         subtitle={t("admin.judgeAssignmentsSubtitle") || "Manage judges assigned to rounds"} 
         action={
           <div className="flex items-center gap-3">
-            <select
-              className="px-3 py-2 rounded-xl outline-none text-sm font-medium cursor-pointer"
-              style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              value={selectedEventId || ""}
-              onChange={(e) => context.setSelectedEventId(e.target.value)}
-            >
-              <option value="" disabled>Select an Event</option>
+            <Select value={selectedEventId || "" || "none"} onValueChange={(value) => context.setSelectedEventId((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select an Event</SelectItem>
               {context.apiEvents?.map((evt: any) => (
-                <option key={evt.eventId} value={evt.eventId}>{evt.eventName}</option>
+                <SelectItem key={evt.eventId} value={evt.eventId} style={{ color: COLORS.textPrimary }}>{evt.eventName}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
             <Button 
               variant="primary" 
               size="sm" 

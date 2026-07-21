@@ -1,6 +1,15 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Calendar, Trophy, Users, Clock, Bell, CheckCircle,
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
@@ -44,7 +53,9 @@ const EVENTS_RELOAD_MIN_INTERVAL_MS = 15_000;
 type ActiveTeamContext = {
   teamId: string;
   eventId?: string;
+  eventName?: string;
   categoryId?: string;
+  categoryName?: string;
   teamName?: string;
   leaderUserId?: string;
   teamStatusId?: string;
@@ -171,6 +182,9 @@ type MemberEvent = {
   rejectedReason?: string | null;
   appliedAt?: string | null;
   approvedAt?: string | null;
+  bannerImageUrl?: string;
+  minTeamSize?: number;
+  maxTeamSize?: number;
 };
 
 type EventCardParticipationStatus = UserParticipationStatus;
@@ -219,6 +233,9 @@ function mapEvent(event: EventResponse): MemberEvent {
     tracks: "N/A",
     prizePool: "N/A",
     participantStatus,
+    bannerImageUrl: event.bannerImageUrl,
+    minTeamSize: event.minTeamSize,
+    maxTeamSize: event.maxTeamSize,
   };
 }
 
@@ -403,6 +420,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
   const [teamInitialEventId, setTeamInitialEventId] = useState("");
   const [teamInitialTeamId, setTeamInitialTeamId] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
+  const [eventStatusFilter, setEventStatusFilter] = useState("all");
+  const [eventStartDateFilter, setEventStartDateFilter] = useState("");
+  const [eventEndDateFilter, setEventEndDateFilter] = useState("");
+  const [viewingEventDetail, setViewingEventDetail] = useState<MemberEvent | null>(null);
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [leaderboardEventId, setLeaderboardEventId] = useState<string>("");
   const [leaderboardRoundId, setLeaderboardRoundId] = useState("event");
@@ -1282,47 +1304,78 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     && !submissionEligibility.loading
     && !submissionEligibility.canSubmit;
 
-  const renderSubmissionTeamSelector = () => (
-    <Card className="p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-        <label className="block">
-          <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
-            <Users size={14} /> Team
-          </span>
-          <select
-            value={submissionForm.teamId}
-            onChange={event => selectSubmissionTeam(event.target.value)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            disabled={submissionTeamsLoading || submissionTeams.length === 0}
-          >
-            {submissionTeamsLoading && <option value="">Loading your teams...</option>}
-            {!submissionTeamsLoading && submissionTeams.length === 0 && <option value="">No teams available</option>}
-            {submissionTeams.map(team => (
-              <option key={team.teamId} value={team.teamId}>
-                {team.teamName ?? team.teamId}
-              </option>
-            ))}
-          </select>
-        </label>
+  const renderSubmissionTeamSelector = () => {
+    const groupedTeams = submissionTeams.reduce((acc, team) => {
+      const evName = team.eventName || "Other Events";
+      if (!acc[evName]) acc[evName] = [];
+      acc[evName].push(team);
+      return acc;
+    }, {} as Record<string, ActiveTeamContext[]>);
+
+    return (
+      <Card className="p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+          <label className="block">
+            <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+              <Users size={14} /> Team
+            </span>
+            <Select
+              value={submissionForm.teamId}
+              onValueChange={value => selectSubmissionTeam(value)}
+              disabled={submissionTeamsLoading || submissionTeams.length === 0}
+            >
+              <SelectTrigger
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder={submissionTeamsLoading ? "Loading your teams..." : "Select a team..."} />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                {!submissionTeamsLoading && submissionTeams.length === 0 && (
+                  <div className="p-2 text-sm text-center text-muted-foreground">No teams available</div>
+                )}
+                {Object.entries(groupedTeams).map(([evName, teams]) => (
+                  <SelectGroup key={evName}>
+                    <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    {teams.map(team => {
+                      const categoryInfo = team.categoryName ? ` - ${team.categoryName}` : "";
+                      return (
+                        <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>
+                          {team.teamName ?? team.teamId}{categoryInfo}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
         <label className="block">
           <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
             <Clock size={14} /> Round
           </span>
-          <select
+          <Select
             value={submissionForm.roundId}
-            onChange={event => selectSubmissionRound(event.target.value)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            onValueChange={value => selectSubmissionRound(value)}
             disabled={submissionRoundsLoading}
           >
-            <option value="" disabled hidden>Select a round...</option>
-            {submissionRoundsLoading && <option value="">Loading rounds...</option>}
-            {!submissionRoundsLoading && submissionRounds.length === 0 && <option value="">No official rounds available</option>}
-            {submissionRounds.map(round => (
-              <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
-            ))}
-          </select>
+            <SelectTrigger
+              className="w-full px-3 py-2 rounded-lg outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : "Select a round..."} />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              {!submissionRoundsLoading && submissionRounds.length === 0 && (
+                <div className="p-2 text-sm text-center text-muted-foreground">No official rounds available</div>
+              )}
+              {submissionRounds.map(round => (
+                <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
+                  {round.roundName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {selectedSubmissionRound ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {selectedSubmissionRoundLocked ? (
@@ -1344,7 +1397,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </label>
       </div>
     </Card>
-  );
+    );
+  };
 
   const renderSubmissionHistory = () => {
     const roundById = new Map(allSubmissionRounds.map(round => [round.roundId, round]));
@@ -1813,127 +1867,282 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     </div>
   );
 
-  const renderEvents = () => (
-    <>
-      <SectionHeader title="Browse Events" subtitle="Discover and register for hackathon events" />
-      {eventsError && (
-        <Card className="p-4">
-          <div className="flex items-center gap-2" style={{ color: COLORS.error, fontSize: 13, fontWeight: 600 }}>
-            <AlertCircle size={15} />
-            {eventsError}
+  const renderEvents = () => {
+    if (viewingEventDetail) {
+      const ev = viewingEventDetail;
+      const participation = participations[ev.eventId];
+      const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
+      const blocksTeamRegistration = participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED";
+      const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
+      const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+      const unavailableReason = registrationUnavailableReason(ev);
+      const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
+      const isPendingParticipant = participantStatus === "PENDING";
+      const isRejectedParticipant = participantStatus === "REJECTED";
+
+      return (
+        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setViewingEventDetail(null)}>
+              Back to Events
+            </Button>
           </div>
-        </Card>
-      )}
-      {apiEvents.length === 0 && (
-        <Card className="p-5">
-          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>
-            {eventsError ? "Events could not be loaded." : "No events are available."}
-          </div>
-        </Card>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {apiEvents.map(ev => {
-          const participation = participations[ev.eventId];
-          const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
-          const blocksTeamRegistration = participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED";
-          const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
-          const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
-          const unavailableReason = registrationUnavailableReason(ev);
-          const isSelected = selectedEventDetailId === ev.eventId;
-          const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
-          const isPendingParticipant = participantStatus === "PENDING";
-          const isRejectedParticipant = participantStatus === "REJECTED";
-          return (
-            <Card key={ev.eventId} className="p-5">
-              <div className="flex items-start justify-between mb-3">
+          <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            {ev.bannerImageUrl ? (
+              <img src={ev.bannerImageUrl} alt={ev.eventName} className="w-full h-72 object-cover" />
+            ) : (
+              <div className="w-full h-72 flex flex-col items-center justify-center" style={{ background: `${COLORS.primary}10` }}>
+                <Calendar size={64} style={{ color: COLORS.primary, marginBottom: 16, opacity: 0.5 }} />
+                <span style={{ color: COLORS.textSecondary, fontWeight: 600 }}>No Banner Image</span>
+              </div>
+            )}
+            <div className="p-8">
+              <div className="flex justify-between items-start mb-6">
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{ev.eventName}</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{ev.description}</div>
+                  <h1 className="text-3xl font-bold mb-3" style={{ color: COLORS.textPrimary }}>{ev.eventName}</h1>
+                  <p className="text-base leading-relaxed" style={{ color: COLORS.textSecondary }}>{ev.description}</p>
                 </div>
                 <StatusBadge status={lifecycleStatus.toLowerCase()} />
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {[
-                  { label: "Event Status", value: lifecycleStatus, icon: <Info size={13} /> },
-                  { label: "Deadline", value: ev.registrationEnd || "N/A", icon: <Calendar size={13} /> },
-                  { label: "Location", value: ev.location || "N/A", icon: <MapPin size={13} /> },
-                  { label: "Participation", value: statusLabel, icon: <Award size={13} /> },
-                ].map(info => (
-                  <div key={info.label} className="flex items-center gap-2">
-                    <span style={{ color: COLORS.textSecondary }}>{info.icon}</span>
-                    <div>
-                      <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{info.label}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{info.value}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {isSelected && (
-                <div className="rounded-xl p-3 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Participation Status</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                    {participantStatus === "NOT_REGISTERED" && "You have not registered for this event yet."}
-                    {isPendingParticipant && "Waiting for organizer approval. Team features and competition activities are locked for this event."}
-                    {isActiveParticipant && "You are approved for this event. Team features and competition activities are available."}
-                    {isRejectedParticipant && "Your previous team registration was rejected. You can create or join another team for this event."}
-                    {blocksTeamRegistration && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
-                  </div>
-                  {isRejectedParticipant && (ev.rejectedReason || participation?.rejectedReason) && (
-                    <div style={{ fontSize: 13, color: COLORS.error, marginTop: 6 }}>
-                      Reason: {ev.rejectedReason || participation?.rejectedReason}
-                    </div>
-                  )}
-                  {!isActiveParticipant && (
-                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 8 }}>
-                      Competition-only features are hidden until this event participation is approved.
-                    </div>
-                  )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Registration Start</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.registrationStart ? new Date(ev.registrationStart).toLocaleDateString() : "N/A"}</div>
                 </div>
-              )}
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Registration End</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.registrationEnd ? new Date(ev.registrationEnd).toLocaleDateString() : "N/A"}</div>
+                </div>
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Event Start</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.eventStartDate ? new Date(ev.eventStartDate).toLocaleDateString() : "N/A"}</div>
+                </div>
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Event End</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.eventEndDate ? new Date(ev.eventEndDate).toLocaleDateString() : "N/A"}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="p-4 rounded-xl flex items-center gap-4" style={{ border: `1px solid ${COLORS.border}` }}>
+                  <div className="w-12 h-12 flex items-center justify-center rounded-full" style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}>
+                    <MapPin size={24} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Location</div>
+                    <div className="text-base font-bold" style={{ color: COLORS.textPrimary }}>{ev.location || "TBA"}</div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl flex items-center gap-4" style={{ border: `1px solid ${COLORS.border}` }}>
+                  <div className="w-12 h-12 flex items-center justify-center rounded-full" style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}>
+                    <Users size={24} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Team Size</div>
+                    <div className="text-base font-bold" style={{ color: COLORS.textPrimary }}>{ev.minTeamSize} - {ev.maxTeamSize} members</div>
+                  </div>
+                </div>
+              </div>
+
               {eventActionMessage[ev.eventId] && (
-                <div className="rounded-xl px-3 py-2 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
+                <div className="rounded-xl px-4 py-3 mb-6" style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, fontSize: 14, fontWeight: 500 }}>
                   {eventActionMessage[ev.eventId]}
                 </div>
               )}
-              <div className="flex gap-2">
-                {isActiveParticipant ? (
-                  <>
-                    <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>Joined</Button>
-                    <Button variant="primary" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(ev.eventId)}>Enter Event</Button>
-                  </>
-                ) : isPendingParticipant ? (
-                  <Button variant="outline" size="sm" disabled icon={<Clock size={13} />}>Pending Approval</Button>
-                ) : blocksTeamRegistration ? (
-                  <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>{statusLabel}</Button>
-                ) : unavailableReason ? (
-                  <Button variant="ghost" size="sm" disabled>{unavailableReason}</Button>
-                ) : (
-                  // Team-first: đăng ký sự kiện theo team — tạo/join team trước,
-                  // leader đăng ký cả team ở tab My Team.
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<PlusCircle size={13} />}
-                    onClick={() => {
-                      setEventActionMessage(prev => ({
-                        ...prev,
-                        [ev.eventId]: "Event registration is per team: create or join a team, then the team leader registers the team in the My Team tab.",
-                      }));
-                      setTeamInitialEventId(ev.eventId);
-                      onNavigate("team");
-                    }}
-                  >
-                    Create/Join Team to Register
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(isSelected ? null : ev.eventId)}>Details</Button>
+
+              <div className="pt-6 flex justify-between items-center" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Your Status:</span>
+                  <StatusBadge status={participantStatus.toLowerCase()} />
+                </div>
+                <div className="flex gap-3">
+                  {isActiveParticipant ? (
+                    <>
+                      <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined</Button>
+                      <Button variant="primary" size="md" icon={<ExternalLink size={16} />} onClick={() => setSelectedEventDetailId(ev.eventId)}>Enter Event Dashboard</Button>
+                    </>
+                  ) : isPendingParticipant ? (
+                    <Button variant="outline" size="md" disabled icon={<Clock size={16} />}>Pending Approval</Button>
+                  ) : blocksTeamRegistration ? (
+                    <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>{statusLabel}</Button>
+                  ) : unavailableReason ? (
+                    <Button variant="ghost" size="md" disabled>{unavailableReason}</Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={<PlusCircle size={16} />}
+                      onClick={() => {
+                        setEventActionMessage(prev => ({
+                          ...prev,
+                          [ev.eventId]: "Event registration is per team: create or join a team, then the team leader registers the team in the My Team tab.",
+                        }));
+                        setTeamInitialEventId(ev.eventId);
+                        onNavigate("team");
+                      }}
+                    >
+                      Create/Join Team to Register
+                    </Button>
+                  )}
+                </div>
               </div>
-            </Card>
-          );
-        })}
-      </div>
-    </>
-  );
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const filteredEvents = apiEvents.filter(ev => {
+      const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+      if (eventStatusFilter && eventStatusFilter !== "all" && lifecycleStatus !== eventStatusFilter.toUpperCase()) return false;
+      if (eventSearch && !ev.eventName.toLowerCase().includes(eventSearch.toLowerCase())) return false;
+      if (eventStartDateFilter && ev.eventStartDate && new Date(ev.eventStartDate) < new Date(eventStartDateFilter)) return false;
+      if (eventEndDateFilter && ev.eventEndDate && new Date(ev.eventEndDate) > new Date(eventEndDateFilter)) return false;
+      return true;
+    });
+
+    return (
+      <>
+        <SectionHeader title="Browse Events" subtitle="Discover and register for hackathon events" />
+        
+        {/* Search & Filters */}
+        <div className="flex flex-wrap gap-4 mb-2">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl text-sm outline-none"
+              style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+            />
+            {eventSearch && (
+              <button onClick={() => setEventSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+          <Select value={eventStatusFilter} onValueChange={setEventStatusFilter}>
+            <SelectTrigger className="w-[160px] h-9 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)" }}>
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="PUBLISHED">Published</SelectItem>
+              <SelectItem value="UPCOMING">Upcoming</SelectItem>
+              <SelectItem value="ONGOING">Ongoing</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={eventStartDateFilter}
+                onChange={(e) => setEventStartDateFilter(e.target.value)}
+                className="pl-9 pr-3 py-1.5 rounded-xl text-sm outline-none"
+                style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+                title="Start Date"
+              />
+            </div>
+            <span style={{ color: COLORS.textSecondary, fontWeight: 500 }}>-</span>
+            <div className="relative">
+              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={eventEndDateFilter}
+                onChange={(e) => setEventEndDateFilter(e.target.value)}
+                className="pl-9 pr-3 py-1.5 rounded-xl text-sm outline-none"
+                style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+                title="End Date"
+              />
+            </div>
+          </div>
+        </div>
+
+        {eventsError && (
+          <Card className="p-4">
+            <div className="flex items-center gap-2" style={{ color: COLORS.error, fontSize: 13, fontWeight: 600 }}>
+              <AlertCircle size={15} />
+              {eventsError}
+            </div>
+          </Card>
+        )}
+        {filteredEvents.length === 0 && (
+          <Card className="p-10 text-center">
+            <Calendar size={48} className="mx-auto mb-4" style={{ color: COLORS.border }} />
+            <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary }}>No events found</div>
+            <div style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 4 }}>
+              {apiEvents.length === 0 
+                ? (eventsError ? "Events could not be loaded." : "No events are currently available.")
+                : "Try adjusting your search or filters."}
+            </div>
+          </Card>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredEvents.map(ev => {
+            const participation = participations[ev.eventId];
+            const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
+            const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
+            const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+
+            return (
+              <Card 
+                key={ev.eventId} 
+                className="overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md"
+                onClick={() => setViewingEventDetail(ev)}
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
+                {/* Banner section */}
+                <div className="relative h-32 w-full" style={{ background: `${COLORS.primary}15` }}>
+                  {ev.bannerImageUrl ? (
+                    <img src={ev.bannerImageUrl} alt={ev.eventName} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Calendar size={32} style={{ color: COLORS.primary, opacity: 0.5 }} />
+                    </div>
+                  )}
+                  <div className="absolute top-3 right-3">
+                    <StatusBadge status={lifecycleStatus.toLowerCase()} />
+                  </div>
+                </div>
+
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="mb-3 flex-1">
+                    <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary, marginBottom: 4 }} className="line-clamp-1">{ev.eventName}</div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="line-clamp-2">{ev.description || "No description available."}</div>
+                  </div>
+                  <div className="flex flex-col gap-2 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={14} style={{ color: COLORS.textSecondary }} />
+                      <span style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 500 }}>
+                        {ev.eventStartDate ? new Date(ev.eventStartDate).toLocaleDateString() : "TBA"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Award size={14} style={{ color: COLORS.textSecondary }} />
+                      <span style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 500 }}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="pt-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.primary }} className="flex items-center gap-1 group-hover:gap-2 transition-all">
+                      View Details <ChevronRight size={14} />
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
 
   const renderLeaderboard = () => {
     const leaderboardEvents = apiEvents.filter(ev => submissionTeams.some(t => t.eventId === ev.eventId));
@@ -1947,42 +2156,58 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           action={
             <div className="flex items-center gap-2">
               {leaderboardEvents.length > 0 && (
-                <select
-                  value={currentEventId}
-                  onChange={(e) => { setLeaderboardEventId(e.target.value); setLeaderboardRoundId("event"); }}
-                  className="px-3 py-1.5 rounded-md"
-                  style={{
-                    background: COLORS.bg,
-                    border: `1px solid ${COLORS.border}`,
-                    color: COLORS.textPrimary,
-                    outline: "none",
-                    fontSize: 13
-                  }}
+                <Select
+                  value={currentEventId || "none"}
+                  onValueChange={(value) => { setLeaderboardEventId(value === "none" ? "" : value); setLeaderboardRoundId("event"); }}
                 >
-                  <option value="">Select Event</option>
-                  {leaderboardEvents.map(ev => (
-                    <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    className="px-3 py-1.5 rounded-md outline-none"
+                    style={{
+                      background: COLORS.bg,
+                      border: `1px solid ${COLORS.border}`,
+                      color: COLORS.textPrimary,
+                      fontSize: 13,
+                      width: "180px",
+                    }}
+                  >
+                    <SelectValue placeholder="Select Event" />
+                  </SelectTrigger>
+                  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select Event</SelectItem>
+                    {leaderboardEvents.map(ev => (
+                      <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>
+                        {ev.eventName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
               {leaderboardRounds.length > 0 && (
-                <select
+                <Select
                   value={leaderboardRoundId}
-                  onChange={(e) => setLeaderboardRoundId(e.target.value)}
-                  className="px-3 py-1.5 rounded-md"
-                  style={{
-                    background: COLORS.bg,
-                    border: `1px solid ${COLORS.border}`,
-                    color: COLORS.textPrimary,
-                    outline: "none",
-                    fontSize: 13
-                  }}
+                  onValueChange={(value) => setLeaderboardRoundId(value)}
                 >
-                  <option value="event">Event Ranking</option>
-                  {leaderboardRounds.map(r => (
-                    <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    className="px-3 py-1.5 rounded-md outline-none"
+                    style={{
+                      background: COLORS.bg,
+                      border: `1px solid ${COLORS.border}`,
+                      color: COLORS.textPrimary,
+                      fontSize: 13,
+                      width: "180px",
+                    }}
+                  >
+                    <SelectValue placeholder="Event Ranking" />
+                  </SelectTrigger>
+                  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                    <SelectItem value="event" style={{ color: COLORS.textPrimary }}>Event Ranking</SelectItem>
+                    {leaderboardRounds.map(r => (
+                      <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>
+                        {r.roundName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           }
@@ -2094,45 +2319,60 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
                 <Calendar size={14} /> Event
               </span>
-              <select
-                value={certificateSelectedEventId}
-                onChange={e => {
-                  setCertificateSelectedEventId(e.target.value);
+              <Select
+                value={certificateSelectedEventId || "none"}
+                onValueChange={value => {
+                  setCertificateSelectedEventId(value === "none" ? "" : value);
                   setCertificateCategoryId("all");
                 }}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 disabled={apiEvents.length === 0}
               >
-                <option value="">Select an event...</option>
-                {joinedEvents.map(ev => (
-                  <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
-                ))}
-                {/* Hiển thị thêm các events khác nếu user chưa join */}
-                {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
-                  <option key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
-                    {ev.eventName} (not joined)
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="w-full px-3 py-2 rounded-lg outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="Select an event..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select an event...</SelectItem>
+                  {joinedEvents.map(ev => (
+                    <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>
+                      {ev.eventName}
+                    </SelectItem>
+                  ))}
+                  {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
+                    <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
+                      {ev.eventName} (not joined)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
 
             <label className="block">
               <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
                 <Target size={14} /> Category
               </span>
-              <select
+              <Select
                 value={certificateCategoryId}
-                onChange={event => setCertificateCategoryId(event.target.value)}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                onValueChange={value => setCertificateCategoryId(value)}
                 disabled={certificateLoading || !certificateSelectedEventId}
               >
-                <option value="all">All categories</option>
-                {categoryOptions.map(([categoryId, categoryName]) => (
-                  <option key={categoryId} value={categoryId}>{categoryName}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="w-full px-3 py-2 rounded-lg outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="all" style={{ color: COLORS.textPrimary }}>All categories</SelectItem>
+                  {categoryOptions.map(([categoryId, categoryName]) => (
+                    <SelectItem key={categoryId} value={categoryId} style={{ color: COLORS.textPrimary }}>
+                      {categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
         </Card>

@@ -1,6 +1,7 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Card, SectionHeader, StatusBadge, Button, DataTable } from "@/components/shared/UIComponents";
+import { Card, SectionHeader, StatusBadge, Button, DataTable, COLORS } from "@/components/shared/UIComponents";
 import { appealService, type Appeal } from "@/features/appeals/api/appealService";
 import { Loader, MessageSquare, Check, X } from "lucide-react";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
@@ -73,15 +74,16 @@ export function AdminAppealsView() {
         title="Appeals Management" 
         subtitle="Review and resolve team complaints regarding scores or issues."
         action={
-          <select 
-            value={selectedEventId}
-            onChange={(e) => setSelectedEventId(e.target.value)}
-            className="p-2 border rounded text-sm bg-white outline-none focus:border-primary"
-          >
-            {events.map(ev => (
-              <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
+          <Select value={selectedEventId || "none"} onValueChange={(value) => setSelectedEventId((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {events.map(ev => (
+              <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>{ev.eventName}</SelectItem>
             ))}
-          </select>
+  </SelectContent>
+</Select>
         }
       />
 

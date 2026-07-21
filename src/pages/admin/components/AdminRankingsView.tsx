@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
@@ -422,33 +423,31 @@ export function AdminRankingsView({ context }: AdminViewProps) {
             <>
               <div className="flex-1 min-w-[200px]">
                 <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-                <select
-                  value={localCategoryId}
-                  onChange={e => setLocalCategoryId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
-                  disabled={!context.selectedEventId || localCategories.length === 0}
-                >
-                  <option value="">{localCategories.length === 0 ? "No categories" : "Select Category..."}</option>
+                <Select value={localCategoryId || "none"} onValueChange={value => setLocalCategoryId((value === "none" ? "" : value))} disabled={!context.selectedEventId || localCategories.length === 0}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>{localCategories.length === 0 ? "No categories" : "Select Category..."}</SelectItem>
                   {localCategories.map(cat => (
-                    <option key={cat.categoryId} value={cat.categoryId}>{cat.categoryName}</option>
+                    <SelectItem key={cat.categoryId} value={cat.categoryId} style={{ color: COLORS.textPrimary }}>{cat.categoryName}</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
               </div>
               <div className="flex-1 min-w-[200px]">
                 <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
-                <select
-                  value={localRoundId}
-                  onChange={e => setLocalRoundId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
-                  disabled={!localCategoryId || localRounds.length === 0}
-                >
-                  <option value="">{localRounds.length === 0 ? "All Rounds / No rounds" : "Select Round..."}</option>
+                <Select value={localRoundId || "none"} onValueChange={value => setLocalRoundId((value === "none" ? "" : value))} disabled={!localCategoryId || localRounds.length === 0}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>{localRounds.length === 0 ? "All Rounds / No rounds" : "Select Round..."}</SelectItem>
                   {localRounds.map(rnd => (
-                    <option key={rnd.roundId} value={rnd.roundId}>Round {rnd.roundOrder}: {rnd.roundName}</option>
+                    <SelectItem key={rnd.roundId} value={rnd.roundId} style={{ color: COLORS.textPrimary }}>Round {rnd.roundOrder}: {rnd.roundName}</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
               </div>
             </>
           )}

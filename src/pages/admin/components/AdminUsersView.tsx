@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
@@ -723,14 +724,14 @@ export function AdminUsersView() {
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Rows</span>
-            <select
-              value={String(filters.size ?? 10)}
-              onChange={event => setFilter("size", Number(event.target.value))}
-              className="px-2 py-1 rounded-xl outline-none"
-              style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-            >
-              {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
+            <Select value={String(filters.size ?? 10) || "none"} onValueChange={value => setFilter("size", Number((value === "none" ? "" : value)))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {PAGE_SIZE_OPTIONS.map(size => <SelectItem key={size} value={String(size)} style={{ color: COLORS.textPrimary }}>{size}</SelectItem>)}
+  </SelectContent>
+</Select>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" disabled={(filters.page ?? 0) <= 0 || loading} onClick={() => setFilter("page", Math.max((filters.page ?? 0) - 1, 0))}>
@@ -981,14 +982,14 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   return (
     <label className="block">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13 }}
-      >
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
     </label>
   );
 }
@@ -1014,14 +1015,14 @@ function FormSelect({ label, value, onChange, error, children }: { label: string
   return (
     <label className="block">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ border: `1px solid ${error ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13 }}
-      >
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
       {error && <span style={{ display: "block", marginTop: 5, color: COLORS.error, fontSize: 12 }}>{error}</span>}
     </label>
   );

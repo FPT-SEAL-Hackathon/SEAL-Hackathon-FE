@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { X, Calendar, MapPin, Users, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -197,11 +198,14 @@ export function EventModal({ event, onClose, onSaved }: Props) {
                 <Input value={form.location} onChange={v => set("location", v)} placeholder="FPT University, Hanoi" />
               </Field>
               <Field label="Status">
-                <select value={form.eventStatusId} onChange={e => set("eventStatusId", e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                <Select value={form.eventStatusId || "none"} onValueChange={value => set("eventStatusId", (value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value} style={{ color: COLORS.textPrimary }}>{s.label}</SelectItem>)}
+  </SelectContent>
+</Select>
               </Field>
             </div>
 
