@@ -909,6 +909,15 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     };
   }, [activeTeamContext?.categoryId, currentPage]);
 
+  useEffect(() => {
+    if (currentPage === "submissions" && submissionForm.teamId && activeTeamContext?.teamId !== submissionForm.teamId) {
+      const matchedTeam = submissionTeams.find(t => t.teamId === submissionForm.teamId);
+      if (matchedTeam) {
+        setActiveTeamContext(matchedTeam);
+      }
+    }
+  }, [currentPage, submissionForm.teamId, submissionTeams, activeTeamContext?.teamId]);
+
   const loadSubmissionHistory = useCallback(async () => {
     if (currentPage !== "submissions" || !submissionForm.teamId) {
       setSubmissionHistory([]);
@@ -1320,7 +1329,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <Users size={14} /> Team
             </span>
             <Select
-              value={submissionForm.teamId}
+              value={activeTeamContext?.teamId || submissionForm.teamId || "none"}
               onValueChange={value => selectSubmissionTeam(value)}
               disabled={submissionTeamsLoading || submissionTeams.length === 0}
             >
