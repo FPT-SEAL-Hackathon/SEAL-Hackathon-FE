@@ -462,9 +462,14 @@ export function TeamApiPanel({
   const teamPanelModeRef = useRef<TeamPanelMode>(teamPanelMode);
   const currentUserId = user?.userId ?? "";
 
+  const onTeamChangeRef = useRef(onTeamChange);
   useEffect(() => {
-    onTeamChange?.(selectedTeam);
-  }, [selectedTeam, onTeamChange]);
+    onTeamChangeRef.current = onTeamChange;
+  }, [onTeamChange]);
+
+  useEffect(() => {
+    onTeamChangeRef.current?.(selectedTeam);
+  }, [selectedTeam]);
 
   useEffect(() => {
     if (isVisible) {

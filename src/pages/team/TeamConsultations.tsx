@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { consultationService, ConsultationRequestResponse, ConsultationMessageResponse, ConsultationPriority } from "@/features/consultation/api/consultationService";
 import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Send, ArrowLeft, XCircle, Search, SlidersHorizontal, X } from "lucide-react";
+import { MessageSquare, Send, ArrowLeft, XCircle, Search, SlidersHorizontal, X, BrainCircuit } from "lucide-react";
 import { useAuth } from "@/features/auth/store/authStore";
 
 const PRIORITY_OPTIONS: { label: string; value: ConsultationPriority | "none" }[] = [
@@ -316,17 +316,21 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
                 <div style={{ fontSize: 14, marginTop: 8 }}>{selectedRequest.description}</div>
               </div>
               {messages.map((m, i) => {
-                const isMentor = m.senderId !== user?.userId;
+                const isAi = m.content?.startsWith("[AI Mentor]") || m.senderName === "null" || !m.senderId;
+                const isMentor = !isAi && m.senderId !== user?.userId;
+                const isMe = !isAi && !isMentor;
                 return (
-                  <div key={i} className={`flex flex-col ${isMentor ? "items-start" : "items-end"}`}>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>
-                      {m.senderName} {isMentor ? "(Mentor)" : ""} • {new Date(m.createdAt).toLocaleString()}
+                  <div key={i} className={`flex flex-col ${!isMe ? "items-start" : "items-end"}`}>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
+                      {isAi && <BrainCircuit size={12} style={{ color: COLORS.primary }} />}
+                      {isAi ? "AI Mentor" : m.senderName} {isMentor ? "(Mentor)" : ""} • {new Date(m.createdAt).toLocaleString()}
                     </div>
-                    <div className="px-4 py-2 rounded-2xl max-w-[80%] break-words" style={{
-                      background: isMentor ? COLORS.bg : COLORS.primary,
-                      color: isMentor ? COLORS.textPrimary : "#fff",
+                    <div className="px-4 py-2 rounded-2xl max-w-[80%] break-words whitespace-pre-wrap" style={{
+                      background: isAi ? `${COLORS.primary}15` : (isMentor ? COLORS.bg : COLORS.primary),
+                      color: !isMe && !isAi ? COLORS.textPrimary : (isAi ? COLORS.textPrimary : "#fff"),
+                      border: isAi ? `1px solid ${COLORS.primary}40` : (isMentor ? `1px solid ${COLORS.border}` : "none"),
                     }}>
-                      {m.content}
+                      {m.content?.replace("[AI Mentor]: ", "")}
                     </div>
                   </div>
                 );
