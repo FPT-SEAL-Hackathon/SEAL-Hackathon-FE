@@ -179,9 +179,6 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                       ))}
                     </SelectContent>
                   </Select>
-                  ))}
-  </SelectContent>
-</Select>
               </div>
             )}
           </div>
