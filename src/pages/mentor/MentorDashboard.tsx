@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  MessageSquare, Users, Award, BookOpen, Loader, ChevronRight, AlertCircle, Target, Save
+  MessageSquare, Users, Award, BookOpen, Loader, ChevronRight, AlertCircle, Target, Save,
+  Search, X, CalendarDays, User
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
   Button,
@@ -45,6 +47,9 @@ export function MentorDashboard({
   // ─ Teams page state ────────────────────────────────────────────────────────
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [filterEventId, setFilterEventId] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("");
 
   // ─── Fetch assigned categories ─────────────────────────────────────────────
   useEffect(() => {
@@ -135,15 +140,30 @@ export function MentorDashboard({
 
   // ─── Derived data ──────────────────────────────────────────────────────────
 
-  const teamsInSelectedCategory = allTeams.filter(
-    (t) => t.categoryId === selectedCategoryId
-  );
+  const filteredTeams = allTeams.filter((t) => {
+    // Only include teams in categories the mentor is actually assigned to
+    if (!categories.some((c) => c.categoryId === t.categoryId)) return false;
+
+    if (filterEventId && t.eventId !== filterEventId) return false;
+    if (filterCategoryId && t.categoryId !== filterCategoryId) return false;
+    if (teamSearch) {
+      const s = teamSearch.toLowerCase();
+      if (!t.teamName.toLowerCase().includes(s)) return false;
+    }
+    return true;
+  });
 
   const totalTeams = allTeams.filter((t) =>
     categories.some((c) => c.categoryId === t.categoryId)
   ).length;
 
-  const selectedTeam = teamsInSelectedCategory.find((t) => t.teamId === selectedTeamId) ?? null;
+  const selectedTeam = filteredTeams.find((t) => t.teamId === selectedTeamId) ?? null;
+
+  const eventOptions = Array.from(new Set(categories.map((c) => c.eventId))).map((eid) => {
+    return categories.find((c) => c.eventId === eid)!;
+  });
+
+  const categoryOptions = categories.filter((c) => !filterEventId || c.eventId === filterEventId);
 
   // (Milestone and note logic moved to MentorConsultations detail view)
 
@@ -262,88 +282,152 @@ export function MentorDashboard({
     if (loading) return renderLoading();
     if (error) return renderError();
 
-    const activeCat = categories.find((c) => c.categoryId === selectedCategoryId);
-
     return (
-      <>
+      <div className="flex flex-col h-[calc(100vh-120px)]">
         <SectionHeader
-          title="Category Teams"
-          subtitle={activeCat ? `Teams in "${activeCat.categoryName}" — ${activeCat.eventName}` : "Select a category"}
+          title="My Teams"
+          subtitle="Manage and view information of teams you are mentoring"
         />
 
-        {/* Category selector (if mentor has multiple categories) */}
-        {categories.length > 1 && (
-          <Card className="p-4">
-            <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 8 }}>
-              FILTER BY CATEGORY
+        <div className="flex gap-5 flex-1 min-h-0 mt-2">
+          {/* Left panel: Filters & List */}
+          <div className="w-1/3 flex flex-col gap-4 min-w-[320px]">
+            {/* Filters */}
+            <div className="flex flex-col gap-3 shrink-0">
+              <div className="relative">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search teams..."
+                  value={teamSearch}
+                  onChange={(e) => setTeamSearch(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 rounded-xl text-sm outline-none"
+                  style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+                />
+                {teamSearch && (
+                  <button onClick={() => setTeamSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Select value={filterEventId || "none"} onValueChange={(v) => { setFilterEventId(v === "none" ? "" : v); setFilterCategoryId(""); }}>
+                    <SelectTrigger className="w-full text-sm h-9 rounded-xl outline-none bg-[var(--surface-input,#f9f6f1)]" style={{ border: `1px solid ${COLORS.border}` }}>
+                      <SelectValue placeholder="All Events" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="none">All Events</SelectItem>
+                      {eventOptions.map(c => <SelectItem key={c.eventId} value={c.eventId}>{c.eventName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Select value={filterCategoryId || "none"} onValueChange={(v) => setFilterCategoryId(v === "none" ? "" : v)}>
+                    <SelectTrigger className="w-full text-sm h-9 rounded-xl outline-none bg-[var(--surface-input,#f9f6f1)]" style={{ border: `1px solid ${COLORS.border}` }}>
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="none">All Categories</SelectItem>
+                      {categoryOptions.map(c => <SelectItem key={c.categoryId} value={c.categoryId}>{c.categoryName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat.categoryId}
-                  onClick={() => {
-                    setSelectedCategoryId(cat.categoryId);
-                    setSelectedTeamId(null);
-                  }}
-                  className="px-3 py-1.5 rounded-xl text-sm transition-all"
-                  style={{
-                    background: selectedCategoryId === cat.categoryId ? `${COLORS.success}15` : COLORS.bg,
-                    border: `1px solid ${selectedCategoryId === cat.categoryId ? COLORS.success : COLORS.border}`,
-                    color: selectedCategoryId === cat.categoryId ? COLORS.success : COLORS.textSecondary,
-                    fontWeight: selectedCategoryId === cat.categoryId ? 600 : 400,
-                  }}
-                >
-                  {cat.categoryName}
-                  <span
-                    className="ml-1.5 px-1.5 py-0.5 rounded-full text-xs"
+
+            {/* List */}
+            <div className="flex-1 overflow-y-auto pr-1 pb-4 flex flex-col gap-3">
+              {filteredTeams.length === 0 ? (
+                <div className="text-center py-10" style={{ color: COLORS.textSecondary, fontSize: 13 }}>
+                  No teams found.
+                </div>
+              ) : (
+                filteredTeams.map((team) => (
+                  <button
+                    key={team.teamId}
+                    onClick={() => setSelectedTeamId(team.teamId)}
+                    className="text-left rounded-2xl p-4 transition-all w-full flex flex-col"
                     style={{
-                      background: selectedCategoryId === cat.categoryId ? `${COLORS.success}20` : `${COLORS.border}40`,
+                      background: selectedTeamId === team.teamId ? `${COLORS.success}10` : COLORS.card,
+                      border: `1px solid ${selectedTeamId === team.teamId ? COLORS.success : COLORS.border}`,
                     }}
                   >
-                    {cat.teamCount}
-                  </span>
-                </button>
-              ))}
+                    <div className="flex items-center justify-between mb-1 w-full">
+                      <span className="truncate pr-2" style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+                        {team.teamName}
+                      </span>
+                      <StatusBadge status="active" />
+                    </div>
+                    <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                      {categories.find(c => c.categoryId === team.categoryId)?.categoryName}
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
-          </Card>
-        )}
-
-        {teamsInSelectedCategory.length === 0 ? (
-          <Card className="p-8 text-center">
-            <Users size={36} style={{ color: COLORS.border, margin: "0 auto 12px" }} />
-            <div style={{ fontSize: 15, color: COLORS.textSecondary }}>
-              {selectedCategoryId
-                ? "No teams in this category yet."
-                : "Select a category to view teams."}
-            </div>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {teamsInSelectedCategory.map((team) => (
-              <button
-                key={team.teamId}
-                onClick={() => setSelectedTeamId(team.teamId)}
-                className="text-left rounded-2xl p-4 transition-all"
-                style={{
-                  background: selectedTeamId === team.teamId ? `${COLORS.success}10` : COLORS.card,
-                  border: `1px solid ${selectedTeamId === team.teamId ? COLORS.success : COLORS.border}`,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-                    {team.teamName}
-                  </span>
-                  <StatusBadge status="active" />
-                </div>
-                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
-                  {team.members.length} member{team.members.length !== 1 ? "s" : ""}
-                </div>
-              </button>
-            ))}
           </div>
-        )}
-      </>
+
+          {/* Right panel: Details */}
+          <div className="w-2/3 flex flex-col min-h-0">
+            {selectedTeam ? (
+              <Card className="h-full flex flex-col overflow-hidden">
+                <div className="p-6 shrink-0" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                  <div className="flex justify-between items-start mb-2">
+                    <h2 style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{selectedTeam.teamName}</h2>
+                    <StatusBadge status={selectedTeam.teamStatusName as any || "active"} />
+                  </div>
+                  <div className="flex flex-wrap gap-4 mt-4">
+                    <div className="flex items-center gap-1.5" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                      <BookOpen size={14} />
+                      <span>{categories.find(c => c.categoryId === selectedTeam.categoryId)?.categoryName}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                      <CalendarDays size={14} />
+                      <span>Created {new Date(selectedTeam.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                      <Users size={14} />
+                      <span>{selectedTeam.members.length} members</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="p-6 overflow-y-auto flex-1 bg-[var(--surface-input,#f9f6f1)]">
+                  <h3 className="mb-4" style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>Team Members</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedTeam.members.map((m, idx) => (
+                      <div key={m.userId} className="flex items-center gap-3 p-3 rounded-xl bg-white" style={{ border: `1px solid ${COLORS.border}` }}>
+                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ background: COLORS.primary, fontWeight: 700 }}>
+                          <User size={16} />
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                          <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>
+                            Member {idx + 1} {m.userId === selectedTeam.leaderUserId && "(Leader)"}
+                          </div>
+                          <div className="truncate mt-0.5" style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                            Joined: {new Date(m.joinedAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Card>
+            ) : (
+              <Card className="h-full flex items-center justify-center flex-col p-8 text-center bg-gray-50/50">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
+                  <Users size={28} />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary, marginBottom: 8 }}>No Team Selected</div>
+                <div style={{ fontSize: 14, color: COLORS.textSecondary, maxWidth: 300 }}>
+                  Select a team from the list to view their detailed information and members.
+                </div>
+              </Card>
+            )}
+          </div>
+        </div>
+      </div>
     );
   };
 

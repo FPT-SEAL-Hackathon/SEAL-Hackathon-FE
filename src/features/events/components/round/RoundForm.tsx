@@ -44,16 +44,17 @@ export function RoundForm({
           description: form.description || "",
           roundOrder: form.roundOrder || 0,
           roundStatusName: "Draft",
+          roundStatusId: "draft-temp-id",
           isCalibrationRound: form.isCalibrationRound || false,
           startDate: form.startDate,
           endDate: form.endDate,
           submissionDeadline: form.submissionDeadline || "",
           judgingDeadline: form.judgingDeadline || "",
           advancementTopN: form.advancementTopN || 0,
-          // @ts-ignore
-          appealStartTime: form.appealStartTime || undefined,
-          // @ts-ignore
-          appealEndTime: form.appealEndTime || undefined,
+            // @ts-ignore
+            appealStartTime: form.appealStartTime || undefined,
+            // @ts-ignore
+            appealEndTime: form.appealEndTime || undefined,
       };
       
       // Filter out this round if we are editing an existing one (it would be in allRounds with same ID, but initial doesn't have ID so we can't easily filter by ID here. Wait, initial is RoundRequest, we'd need roundId to filter. If it's an edit, we might show it twice. To fix, let's just assume we only pass preview data on Add Round for now, or filter by roundName if needed. Wait, RoundRequest doesn't have roundId. We can pass roundId as a prop if we want to replace it, but for simplicity let's just append it. Actually if it's Edit, `RoundCard` handles it. `RoundForm` is used only for Add Round right now! Let's verify this.)

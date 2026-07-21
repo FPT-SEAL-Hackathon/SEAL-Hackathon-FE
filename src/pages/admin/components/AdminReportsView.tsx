@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Users, Upload, Star, CheckCircle, Download, RefreshCw, AlertCircle,
@@ -235,19 +236,19 @@ export function AdminReportsView({ context }: AdminViewProps) {
           <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>
             Event
           </span>
-          <select
-            value={selectedEventId ?? ""}
-            onChange={e => setSelectedEventId(e.target.value || null)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-          >
-            <option value="">Select an event...</option>
+          <Select value={(selectedEventId  ?? "") || "none"} onValueChange={value => setSelectedEventId((value === "none" ? "" : value) || null)} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select an event...</SelectItem>
             {(apiEvents ?? []).map((ev: any) => (
-              <option key={ev.eventId ?? ev.id} value={ev.eventId ?? ev.id}>
+              <SelectItem key={ev.eventId ?? ev.id} value={ev.eventId ?? ev.id} style={{ color: COLORS.textPrimary }}>
                 {ev.eventName ?? ev.name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+  </SelectContent>
+</Select>
         </label>
       </Card>
 

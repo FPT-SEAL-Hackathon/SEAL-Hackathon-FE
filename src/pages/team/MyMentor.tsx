@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { consultationService, MentorProfileResponse, CreateConsultationRequest } from "@/features/consultation/api/consultationService";
 import { SectionHeader, Card, Button, COLORS } from "@/components/shared/UIComponents";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TeamConsultations } from "./TeamConsultations";
 import { MessageSquare, Send, User, Mail, Briefcase } from "lucide-react";
 
@@ -99,12 +100,20 @@ export function MyMentor({ onNavigate, isLeader, teamId }: { onNavigate?: (p: st
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Priority</label>
-                  <select value={createForm.priority} onChange={e => setCreateForm({...createForm, priority: e.target.value as any})} className="w-full px-3 py-2 border rounded-xl">
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="URGENT">Urgent</option>
-                  </select>
+                  <Select
+                    value={createForm.priority}
+                    onValueChange={value => setCreateForm({ ...createForm, priority: value as any })}
+                  >
+                    <SelectTrigger className="w-full px-3 py-2 border rounded-xl outline-none" style={{ background: COLORS.bg, borderColor: COLORS.border }}>
+                      <SelectValue placeholder="Select Priority" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="LOW" style={{ color: COLORS.textPrimary }}>Low</SelectItem>
+                      <SelectItem value="MEDIUM" style={{ color: COLORS.textPrimary }}>Medium</SelectItem>
+                      <SelectItem value="HIGH" style={{ color: COLORS.textPrimary }}>High</SelectItem>
+                      <SelectItem value="URGENT" style={{ color: COLORS.textPrimary }}>Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Description</label>
