@@ -541,7 +541,7 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
                     type="text"
                     value={teachAiQuestion}
                     onChange={e => setTeachAiQuestion(e.target.value)}
-                    placeholder="e.g. Làm sao để nộp bài? ..."
+                    placeholder="e.g. How to submit my assignment? ..."
                     className="w-full px-3 py-2 rounded-xl outline-none"
                     style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
                   />
