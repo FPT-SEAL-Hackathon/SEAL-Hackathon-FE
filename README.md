@@ -33,6 +33,8 @@ Make sure you have the following installed on your machine:
    Create a `.env` file in the root of this project and configure the required environment variables. Based on the configuration, you **must** provide the API URL:
    ```env
    VITE_API_URL=http://localhost:8080/api/v1
+   VITE_CLOUDINARY_CLOUD_NAME=your_cloud_name
+   VITE_CLOUDINARY_UPLOAD_PRESET=your_upload_preset_name
    ```
 
 3. **Start the development server:**
