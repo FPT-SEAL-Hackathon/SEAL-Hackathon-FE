@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Bell, Send,
 } from "lucide-react";
@@ -43,17 +44,17 @@ export function AdminNotificationsView({ context }: AdminViewProps) {
           <div className="space-y-4">
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{t("broadcast.audience")}</label>
-              <select
-                value={broadcastAudience}
-                onChange={e => setBroadcastAudience(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option>All Teams</option>
-                <option>All Judges</option>
-                <option>All Mentors</option>
-                <option>All Participants</option>
-              </select>
+              <Select value={broadcastAudience || "none"} onValueChange={value => setBroadcastAudience((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Teams</SelectItem>
+                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Judges</SelectItem>
+                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Mentors</SelectItem>
+                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Participants</SelectItem>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{t("broadcast.titleLabel")}</label>

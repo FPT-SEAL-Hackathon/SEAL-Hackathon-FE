@@ -20,6 +20,15 @@ import {
   MessageSquare,
   ClipboardList,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAuth } from "@/features/auth/store/authStore";
 import { getCurrentUser, refreshAccessToken } from "@/features/auth/api/authService";
 import { Button, Card, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
@@ -1481,6 +1490,13 @@ export function TeamApiPanel({
     const currentUserTeams = userTeams.filter(team => userBelongsToTeam(team, currentUserId));
     const selectedPickerTeamId = form.teamId || selectedTeam?.teamId || "";
 
+    const groupedTeams = currentUserTeams.reduce((acc, team) => {
+      const evName = getEventName(team.eventId) || "Other Events";
+      if (!acc[evName]) acc[evName] = [];
+      acc[evName].push(team);
+      return acc;
+    }, {} as Record<string, typeof currentUserTeams>);
+
     return (
       <Card className={isCompact ? "p-3" : "p-5"}>
         {!isCompact && (
@@ -1510,25 +1526,30 @@ export function TeamApiPanel({
         ) : (
           <div className={isCompact ? "" : "mt-5"}>
             <label className="block">
-              <select
+              <Select
                 value={selectedPickerTeamId}
-                onChange={event => loadTeam(event.target.value, true)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                onValueChange={value => loadTeam(value, true)}
                 disabled={loading.getById}
               >
-                {!selectedPickerTeamId && (
-                  <option value="" disabled hidden>Select a team...</option>
-                )}
-                {currentUserTeams.map(team => {
-                  const eventName = getEventName(team.eventId);
-                  return (
-                    <option key={team.teamId} value={team.teamId}>
-                      {team.teamName} - {eventName}
-                    </option>
-                  );
-                })}
-              </select>
+                <SelectTrigger
+                  className="w-full px-3 py-2.5 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="Select a team..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  {Object.entries(groupedTeams).map(([evName, teams]) => (
+                    <SelectGroup key={evName}>
+                      <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                      {teams.map(team => (
+                        <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>
+                          {team.teamName}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
         )}
@@ -1691,34 +1712,34 @@ export function TeamApiPanel({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
-                <select
-                  value={form.eventId}
-                  onChange={event => setField("eventId", event.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  {loading.events && <option value="">Loading events...</option>}
+                <Select value={form.eventId || "none"} onValueChange={value => setField("eventId", (value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {loading.events && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Loading events...</SelectItem>}
                   {!loading.events && approvedEvents.length === 0 && (
-                    <option value="">No open events available</option>
+                    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No open events available</SelectItem>
                   )}
                   {approvedEvents.map(event => (
-                    <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
+                    <SelectItem key={event.eventId} value={event.eventId} style={{ color: COLORS.textPrimary }}>{event.eventName}</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</span>
-                <select
-                  value={form.categoryId}
-                  onChange={event => setField("categoryId", event.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  {categories.length === 0 && <option value="">No categories found</option>}
+                <Select value={form.categoryId || "none"} onValueChange={value => setField("categoryId", (value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {categories.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No categories found</SelectItem>}
                   {categories.map((category: any) => (
-                    <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                    <SelectItem key={category.categoryId} value={category.categoryId} style={{ color: COLORS.textPrimary }}>{category.categoryName}</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <Field label="TEAM NAME" value={form.teamName} onChange={value => setField("teamName", value)} placeholder="Enter team name" />
             </div>
@@ -1747,43 +1768,43 @@ export function TeamApiPanel({
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-4 items-end">
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
-                <select
-                  value={form.eventId}
-                  onChange={event => {
-                    setField("eventId", event.target.value);
+                <Select value={form.eventId || "none"} onValueChange={value => {
+                    setField("eventId", (value === "none" ? "" : value));
                     setJoinCategoryId("");
                     setJoinTeamName("");
                     setTeams([]);
                     setTeamSearchEventId("");
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  {loading.events && <option value="">Loading events...</option>}
+                  }} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {loading.events && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Loading events...</SelectItem>}
                   {!loading.events && approvedEvents.length === 0 && (
-                    <option value="">No open events available</option>
+                    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No open events available</SelectItem>
                   )}
                   {approvedEvents.map(event => (
-                    <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
+                    <SelectItem key={event.eventId} value={event.eventId} style={{ color: COLORS.textPrimary }}>{event.eventName}</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <label className="block">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</span>
-                <select
-                  value={joinCategoryId}
-                  onChange={event => {
-                    setJoinCategoryId(event.target.value);
+                <Select value={joinCategoryId || "none"} onValueChange={value => {
+                    setJoinCategoryId((value === "none" ? "" : value));
                     setJoinTeamName("");
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  <option value="">All categories</option>
+                  }} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All categories</SelectItem>
                   {categories.map((category: any) => (
-                    <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                    <SelectItem key={category.categoryId} value={category.categoryId} style={{ color: COLORS.textPrimary }}>{category.categoryName}</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <Button
                 variant="outline"
@@ -2194,24 +2215,23 @@ export function TeamApiPanel({
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
                   MEMBER
                 </span>
-                <select
-                  value={removeMemberName}
-                  onChange={event => setRemoveMemberName(event.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  disabled={removableMembers.length === 0 || loading.remove}
-                >
-                  <option value="" disabled hidden>Select a member...</option>
+                <Select value={removeMemberName || "none"} onValueChange={value => setRemoveMemberName((value === "none" ? "" : value))} disabled={removableMembers.length === 0 || loading.remove}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select a member...</SelectItem>
                   {removableMembers.map(member => {
                     const display = getMemberDisplay(member);
                     const email = display.email !== "-" && display.email !== display.name ? ` - ${display.email}` : "";
                     return (
-                      <option key={member.userId} value={member.userId}>
+                      <SelectItem key={member.userId} value={member.userId} style={{ color: COLORS.textPrimary }}>
                         {display.name}{email}
-                      </option>
+                      </SelectItem>
                     );
                   })}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <Button
                 variant="danger"
@@ -2256,24 +2276,23 @@ export function TeamApiPanel({
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
                   NEW LEADER
                 </span>
-                <select
-                  value={newLeaderUserId}
-                  onChange={event => setNewLeaderUserId(event.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  disabled={transferableMembers.length === 0 || loading.transferLeader}
-                >
-                  <option value="" disabled hidden>Select an active member...</option>
+                <Select value={newLeaderUserId || "none"} onValueChange={value => setNewLeaderUserId((value === "none" ? "" : value))} disabled={transferableMembers.length === 0 || loading.transferLeader}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select an active member...</SelectItem>
                   {transferableMembers.map(member => {
                     const display = getMemberDisplay(member);
                     const email = display.email !== "-" && display.email !== display.name ? ` - ${display.email}` : "";
                     return (
-                      <option key={member.userId} value={member.userId}>
+                      <SelectItem key={member.userId} value={member.userId} style={{ color: COLORS.textPrimary }}>
                         {display.name}{email}
-                      </option>
+                      </SelectItem>
                     );
                   })}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <Button
                 variant="primary"
@@ -2601,24 +2620,23 @@ export function TeamApiPanel({
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
                   MEMBER
                 </span>
-                <select
-                  value={removeMemberName}
-                  onChange={event => setRemoveMemberName(event.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  disabled={removableMembers.length === 0 || loading.remove}
-                >
-                  <option value="" disabled hidden>Select a member...</option>
+                <Select value={removeMemberName || "none"} onValueChange={value => setRemoveMemberName((value === "none" ? "" : value))} disabled={removableMembers.length === 0 || loading.remove}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select a member...</SelectItem>
                   {removableMembers.map(member => {
                     const display = getMemberDisplay(member);
                     const email = display.email !== "-" && display.email !== display.name ? ` - ${display.email}` : "";
                     return (
-                      <option key={member.userId} value={member.userId}>
+                      <SelectItem key={member.userId} value={member.userId} style={{ color: COLORS.textPrimary }}>
                         {display.name}{email}
-                      </option>
+                      </SelectItem>
                     );
                   })}
-                </select>
+  </SelectContent>
+</Select>
               </label>
               <label className="block mt-4">
                 <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>
@@ -2998,34 +3016,34 @@ export function TeamApiPanel({
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_160px] gap-4">
             <label className="block">
               <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</span>
-              <select
-                value={approvedEvents.some(event => event.eventId === form.eventId) ? form.eventId : ""}
-                onChange={event => setField("eventId", event.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {loading.events && <option value="">Loading events...</option>}
+              <Select value={approvedEvents.some(event => event.eventId === form.eventId) ? form.eventId : "none"} onValueChange={value => setField("eventId", (value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {loading.events && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Loading events...</SelectItem>}
                 {!loading.events && approvedEvents.length === 0 && (
-                  <option value="">No open events available</option>
+                  <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No open events available</SelectItem>
                 )}
                 {approvedEvents.map(event => (
-                  <option key={event.eventId} value={event.eventId}>{event.eventName}</option>
+                  <SelectItem key={event.eventId} value={event.eventId} style={{ color: COLORS.textPrimary }}>{event.eventName}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </label>
             <label className="block">
               <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</span>
-              <select
-                value={form.categoryId}
-                onChange={event => setField("categoryId", event.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {categories.length === 0 && <option value="">No categories found</option>}
+              <Select value={form.categoryId || "none"} onValueChange={value => setField("categoryId", (value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {categories.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No categories found</SelectItem>}
                 {categories.map(category => (
-                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                  <SelectItem key={category.categoryId} value={category.categoryId} style={{ color: COLORS.textPrimary }}>{category.categoryName}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </label>
             <Field label="TEAM NAME" value={form.teamName} onChange={value => setField("teamName", value)} placeholder="Team name" />
             <div className="flex items-end">

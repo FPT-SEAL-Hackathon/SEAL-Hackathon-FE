@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { consultationService, ConsultationRequestResponse, ConsultationMessageResponse, ConsultationPriority } from "@/features/consultation/api/consultationService";
 import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageSquare, Send, ArrowLeft, XCircle, Search, SlidersHorizontal, X } from "lucide-react";
 import { useAuth } from "@/features/auth/store/authStore";
 
-const PRIORITY_OPTIONS: { label: string; value: ConsultationPriority | "" }[] = [
-  { label: "All Priorities", value: "" },
+const PRIORITY_OPTIONS: { label: string; value: ConsultationPriority | "none" }[] = [
+  { label: "All Priorities", value: "none" },
   { label: "🔴 Urgent", value: "URGENT" },
   { label: "🟠 High", value: "HIGH" },
   { label: "🟡 Medium", value: "MEDIUM" },
@@ -20,7 +21,7 @@ const PRIORITY_COLORS: Record<ConsultationPriority, string> = {
 };
 
 const STATUS_OPTIONS = [
-  { label: "All Statuses", value: "" },
+  { label: "All Statuses", value: "none" },
   { label: "Pending", value: "PENDING" },
   { label: "Accepted", value: "ACCEPTED" },
   { label: "In Progress", value: "IN_PROGRESS" },
@@ -232,7 +233,7 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
   const categoryOptions = useMemo(() => {
     const map = new Map<string, string>();
     requests.forEach(r => { if (r.categoryId) map.set(r.categoryId, `${r.eventName} — ${r.categoryName}`); });
-    return [{ id: "", label: "All Categories" }, ...Array.from(map.entries()).map(([id, label]) => ({ id, label }))];
+    return [{ id: "none", label: "All Categories" }, ...Array.from(map.entries()).map(([id, label]) => ({ id, label }))];
   }, [requests]);
 
   const filtered = useMemo(() => {
@@ -392,7 +393,7 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
       {/* Search & Filters */}
       <div className="flex flex-wrap gap-3 mb-5 items-center">
         {/* Search */}
-        <div className="relative flex-1" style={{ minWidth: 220 }}>
+        <div className="relative w-72" style={{ minWidth: 220 }}>
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: COLORS.textSecondary }} />
           <input
             type="text"
@@ -423,20 +424,39 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
         {/* Priority filter */}
         <div className="flex items-center gap-1.5">
           <SlidersHorizontal size={13} style={{ color: COLORS.textSecondary }} />
-          <select value={filterPriority} onChange={e => setFilterPriority(e.target.value as ConsultationPriority | "")} style={selectStyle}>
-            {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          <Select value={filterPriority || "none"} onValueChange={value => setFilterPriority(value === "none" ? "" : value as ConsultationPriority | "")}>
+            <SelectTrigger style={selectStyle} className="outline-none">
+              <SelectValue placeholder="All Priorities" />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              {PRIORITY_OPTIONS.map(o => <SelectItem key={o.value} value={o.value} style={{ color: COLORS.textPrimary }}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Category / Event filter */}
-        <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} style={selectStyle}>
-          {categoryOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-        </select>
+        <div className="w-[200px]">
+          <Select value={filterCategory || "none"} onValueChange={value => setFilterCategory(value === "none" ? "" : value)}>
+            <SelectTrigger style={selectStyle} className="outline-none">
+              <SelectValue placeholder="All Categories" />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              {categoryOptions.map(o => <SelectItem key={o.id} value={o.id} style={{ color: COLORS.textPrimary }}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Status filter */}
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
-          {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+        <div className="w-[180px]">
+          <Select value={filterStatus || "none"} onValueChange={value => setFilterStatus(value === "none" ? "" : value)}>
+            <SelectTrigger style={selectStyle} className="outline-none">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              {STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={o.value} style={{ color: COLORS.textPrimary }}>{o.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Clear filters */}
         {hasFilters && (

@@ -131,10 +131,10 @@ export function AssignJudgesTab() {
               <div key={catId}>
                 <button
                   onClick={() => toggleCategory(catId)}
-                  className="w-full flex items-center gap-2 p-2 rounded-xl transition-all"
+                  className="w-full flex items-center gap-2 p-3 rounded-xl transition-all"
                   style={{
-                    background: selectedCategoryId === catId ? `${COLORS.primary}08` : "transparent",
-                    border: `1px solid ${selectedCategoryId === catId ? COLORS.border : "transparent"}`,
+                    background: selectedCategoryId === catId ? `${COLORS.primary}08` : COLORS.bg,
+                    border: `1px solid ${selectedCategoryId === catId ? COLORS.primary : COLORS.border}`,
                     outline: "none",
                   }}
                 >
@@ -142,10 +142,10 @@ export function AssignJudgesTab() {
                     ? <ChevronDown size={14} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />
                     : <ChevronRight size={14} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />
                   }
-                  <span style={{ fontWeight: 600, fontSize: 13, color: COLORS.textPrimary, flex: 1, textAlign: "left" }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: selectedCategoryId === catId ? COLORS.primary : COLORS.textPrimary, flex: 1, textAlign: "left" }}>
                     {categoryNameMap[catId] ?? catId.slice(0, 8) + "…"}
                   </span>
-                  <span style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
                     {rounds.length} round{rounds.length !== 1 ? "s" : ""}
                   </span>
                 </button>
@@ -156,18 +156,18 @@ export function AssignJudgesTab() {
                     <button
                       key={round.roundId}
                       onClick={() => selectRound(catId, round.roundId)}
-                      className="w-full text-left pl-7 pr-3 py-2 rounded-xl transition-all"
+                      className="w-full text-left pl-10 pr-3 py-2 rounded-xl transition-all"
                       style={{
-                        background: isActive ? `${COLORS.primary}12` : "transparent",
-                        border: `1px solid ${isActive ? COLORS.primary : "transparent"}`,
+                        background: isActive ? `${COLORS.primary}12` : COLORS.bg,
+                        border: `1px solid ${isActive ? COLORS.primary : COLORS.border}`,
                         outline: "none",
-                        marginTop: 2,
+                        marginTop: 6,
                       }}
                     >
                       <div style={{ fontWeight: 600, fontSize: 13, color: isActive ? COLORS.primary : COLORS.textPrimary }}>
                         {round.roundName}
                       </div>
-                      <div style={{ fontSize: 11, color: COLORS.textSecondary }}>
+                      <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 2 }}>
                         Order #{round.roundOrder} • {(roundJudges[round.roundId] ?? []).length} judge{(roundJudges[round.roundId] ?? []).length !== 1 ? "s" : ""}
                       </div>
                     </button>

@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -620,19 +621,19 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
             </div>
             <div className="relative min-w-[160px]">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full pl-10 pr-8 py-2 rounded-xl outline-none appearance-none"
-                style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="pending_approval">Pending</option>
-                <option value="active">Approved (Active)</option>
-                <option value="rejected">Rejected</option>
-                <option value="suspended">Disqualified</option>
-                <option value="default">Forming</option>
-              </select>
+              <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
+                <SelectItem value="pending_approval" style={{ color: COLORS.textPrimary }}>Pending</SelectItem>
+                <SelectItem value="active" style={{ color: COLORS.textPrimary }}>Approved (Active)</SelectItem>
+                <SelectItem value="rejected" style={{ color: COLORS.textPrimary }}>Rejected</SelectItem>
+                <SelectItem value="suspended" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
+                <SelectItem value="default" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
+  </SelectContent>
+</Select>
             </div>
           </div>
         )}

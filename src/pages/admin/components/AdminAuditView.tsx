@@ -1,9 +1,10 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
   Settings, PlusCircle, Edit, Trash2, Save, CheckCircle,
   TrendingUp, Clock, Activity, Download, Send, Search, Filter,
-  Eye, ToggleLeft, ToggleRight, ChevronDown, X, Zap, Award, Loader, Database
+  Eye, ToggleLeft, ToggleRight, X, Zap, Award, Loader, Database
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -170,17 +171,19 @@ export function AdminAuditView({ context }: AdminViewProps) {
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ACTION</label>
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
-              <select 
-                value={actionFilter}
-                onChange={e => setActionFilter(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border rounded-xl appearance-none focus:ring-2 focus:ring-primary outline-none transition-all"
-                style={{ fontSize: 14, borderColor: COLORS.border, background: "white" }}
-              >
-                {uniqueActions.map(action => (
-                  <option key={action} value={action}>{action === "ALL" ? "All Actions" : action}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+              <Select value={actionFilter || "none"} onValueChange={value => setActionFilter((value === "none" ? "" : value))}>
+                <SelectTrigger
+                  className="w-full py-2 pl-10 pr-3 rounded-xl outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  {uniqueActions.map(action => (
+                    <SelectItem key={action} value={action} style={{ color: COLORS.textPrimary }}>{action === "ALL" ? "All Actions" : action}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
