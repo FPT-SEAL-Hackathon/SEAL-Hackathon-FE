@@ -195,9 +195,6 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                   ))}
                 </SelectContent>
               </Select>
-              ))}
-  </SelectContent>
-</Select>
           </div>
           
           <div className="flex-1 flex justify-end items-end min-w-[200px]">
