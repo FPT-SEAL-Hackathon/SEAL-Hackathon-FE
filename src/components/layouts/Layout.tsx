@@ -134,39 +134,72 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   useEffect(() => {
     let cancelled = false;
-    notificationService.getMyNotifications(0, 10)
-      .then(page => {
-        if (cancelled) return;
-        setNotifications(page.content.map(item => ({
-          id: item.notificationId,
-          title: item.title,
-          body: item.body,
-          time: formatNotificationTime(item.createdAt),
-          read: item.read,
-        })));
-      })
-      .catch(() => {
-        if (!cancelled) setNotifications([]);
+    let stream: EventSource | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout>;
+
+    const loadNotifications = () => {
+      notificationService.getMyNotifications(0, 10)
+        .then(page => {
+          if (cancelled) return;
+          setNotifications(page.content.map(item => ({
+            id: item.notificationId,
+            title: item.title,
+            body: item.body,
+            time: formatNotificationTime(item.createdAt),
+            read: item.read,
+          })));
+        })
+        .catch(() => {
+          if (!cancelled) setNotifications([]);
+        });
+    };
+
+    const connectStream = () => {
+      if (cancelled) return;
+      if (stream) {
+        stream.close();
+      }
+      
+      stream = notificationService.createStream();
+      if (!stream) return;
+
+      stream.addEventListener("message", event => {
+        try {
+          const item = JSON.parse(event.data);
+          setNotifications(prev => [{
+            id: item.notificationId ?? item.id,
+            title: item.title ?? "Notification",
+            body: item.body ?? "",
+            time: formatNotificationTime(item.createdAt ?? item.sentAt),
+            read: Boolean(item.read ?? item.isRead),
+          }, ...prev].slice(0, 10));
+        } catch {
+          // Ignore malformed SSE payloads.
+        }
       });
 
-    const stream = notificationService.createStream();
-    stream?.addEventListener("message", event => {
-      try {
-        const item = JSON.parse(event.data);
-        setNotifications(prev => [{
-          id: item.notificationId ?? item.id,
-          title: item.title ?? "Notification",
-          body: item.body ?? "",
-          time: formatNotificationTime(item.createdAt ?? item.sentAt),
-          read: Boolean(item.read ?? item.isRead),
-        }, ...prev].slice(0, 10));
-      } catch {
-        // Ignore malformed SSE payloads.
-      }
-    });
+      stream.addEventListener("error", () => {
+        if (stream?.readyState === EventSource.CLOSED) {
+          // Trigger a dummy API call to refresh the token if it expired, then reconnect
+          notificationService.getUnreadCount()
+            .then(() => {
+              if (cancelled) return;
+              clearTimeout(retryTimeout);
+              retryTimeout = setTimeout(connectStream, 2000);
+            })
+            .catch(() => {
+              // If completely unauthenticated, stop retrying aggressively
+            });
+        }
+      });
+    };
+
+    loadNotifications();
+    connectStream();
 
     return () => {
       cancelled = true;
+      clearTimeout(retryTimeout);
       stream?.close();
     };
   }, []);

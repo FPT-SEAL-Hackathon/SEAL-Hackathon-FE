@@ -10,8 +10,9 @@ import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/s
 import {
   MessageSquare, Send, CheckCircle, XCircle,
   PlayCircle, ArrowLeft, Search, SlidersHorizontal, X,
-  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users
+  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users, BrainCircuit
 } from "lucide-react";
+import { aiService } from "@/features/ai/api/aiService";
 import { useAuth } from "@/features/auth/store/authStore";
 import { MentorProfileResponse } from "@/features/consultation/api/consultationService";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -284,6 +285,9 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
   const [messageInput, setMessageInput] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectInput, setShowRejectInput] = useState(false);
+  const [teachAiModal, setTeachAiModal] = useState<{ open: boolean, standardAnswer: string }>({ open: false, standardAnswer: "" });
+  const [teachAiQuestion, setTeachAiQuestion] = useState("");
+  const [teachingAi, setTeachingAi] = useState(false);
 
   // ── Filters ─────────────────────────────────────────────────
   const [search, setSearch] = useState("");
@@ -416,17 +420,31 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
               </div>
 
               {messages.map((m, i) => {
-                const isMe = m.senderId === user?.userId;
+                const isAi = m.content?.startsWith("[AI Mentor]") || m.senderName === "null" || !m.senderId;
+                const isMe = !isAi && m.senderId === user?.userId;
                 return (
                   <div key={m.id || i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }}>
-                      {m.senderName} · {new Date(m.createdAt).toLocaleString()}
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
+                      {isAi && <BrainCircuit size={12} style={{ color: COLORS.primary }} />}
+                      {isAi ? "AI Mentor" : m.senderName || "System"} · {new Date(m.createdAt).toLocaleString()}
                     </div>
-                    <div className="px-4 py-2 rounded-2xl max-w-[80%] break-words" style={{
-                      background: isMe ? COLORS.primary : COLORS.bg,
-                      color: isMe ? "#fff" : COLORS.textPrimary,
-                    }}>
-                      {m.content}
+                    <div className={`flex items-center gap-2 max-w-[80%] ${isMe ? "flex-row-reverse" : ""}`}>
+                      <div className="px-4 py-2 rounded-2xl break-words whitespace-pre-wrap" style={{
+                        background: isAi ? `${COLORS.primary}15` : (isMe ? COLORS.primary : COLORS.bg),
+                        color: isMe && !isAi ? "#fff" : COLORS.textPrimary,
+                        border: isAi ? `1px solid ${COLORS.primary}40` : (isMe ? "none" : `1px solid ${COLORS.border}`)
+                      }}>
+                        {m.content?.replace("[AI Mentor]: ", "")}
+                      </div>
+                      {isMe && !isAi && (
+                        <button 
+                          onClick={() => setTeachAiModal({ open: true, standardAnswer: m.content })}
+                          className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-primary transition-colors flex-shrink-0"
+                          title="Save as AI Knowledge"
+                        >
+                          <BrainCircuit size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -508,6 +526,59 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
             </Card>
           </div>
         </div>
+
+        {teachAiModal.open && selectedRequest && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}>
+            <div className="w-full max-w-md bg-white rounded-2xl overflow-hidden shadow-2xl">
+              <div className="px-5 py-4 flex justify-between items-center" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                <h3 className="font-bold flex items-center gap-2" style={{ color: COLORS.textPrimary }}><BrainCircuit size={18} style={{color: COLORS.primary}}/> Teach AI Mentor</h3>
+                <button onClick={() => setTeachAiModal({open: false, standardAnswer: ""})}><X size={18}/></button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-sm font-bold block mb-1" style={{color: COLORS.textSecondary}}>If a student asks something like:</label>
+                  <input 
+                    type="text"
+                    value={teachAiQuestion}
+                    onChange={e => setTeachAiQuestion(e.target.value)}
+                    placeholder="e.g. How to submit my assignment? ..."
+                    className="w-full px-3 py-2 rounded-xl outline-none"
+                    style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-bold block mb-1" style={{color: COLORS.textSecondary}}>AI should answer exactly this:</label>
+                  <div className="p-3 rounded-xl text-sm" style={{background: `${COLORS.primary}10`, color: COLORS.textPrimary}}>
+                    {teachAiModal.standardAnswer}
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-4 flex justify-end gap-2" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <Button variant="outline" size="sm" onClick={() => setTeachAiModal({open: false, standardAnswer: ""})}>Cancel</Button>
+                <Button variant="primary" size="sm" icon={teachingAi ? <Loader size={14} className="animate-spin"/> : <BrainCircuit size={14}/>} 
+                  onClick={async () => {
+                    if(!teachAiQuestion.trim()) return;
+                    setTeachingAi(true);
+                    try {
+                      await aiService.createKnowledge({
+                        eventId: selectedRequest.eventId,
+                        categoryId: selectedRequest.categoryId,
+                        questionPattern: teachAiQuestion,
+                        standardAnswer: teachAiModal.standardAnswer
+                      });
+                      setTeachAiModal({open: false, standardAnswer: ""});
+                      setTeachAiQuestion("");
+                      alert("AI has learned this response!");
+                    } catch(e) {
+                      alert("Failed to teach AI.");
+                    } finally { setTeachingAi(false); }
+                  }}>
+                  Save to AI Memory
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
