@@ -41,6 +41,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   [ROLES.ORGANIZER]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
     { icon: "Calendar", label: "Event Management", key: "events" },
+    { icon: "GitBranch", label: "Repository Integrations", key: "repository-integrations" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "FileText", label: "Submissions", key: "submissions" },
     { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },

@@ -89,6 +89,13 @@ export function RoundForm({
       return;
     }
 
+    const aStart = getTime(form.appealStartTime);
+    const aEnd = getTime(form.appealEndTime);
+    if (aStart && aEnd && aStart >= aEnd) {
+      setError("Appeal Start Time must be strictly before Appeal End Time.");
+      return;
+    }
+
     try {
       const payload = { ...form };
       if (!payload.roundStatusId) {
@@ -112,7 +119,6 @@ export function RoundForm({
           roundOrder: form.roundOrder || 0,
           roundStatusId: form.roundStatusId || "",
           roundStatusName: "Draft",
-          roundStatusId: "draft-temp-id",
           isCalibrationRound: form.isCalibrationRound || false,
           startDate: form.startDate,
           endDate: form.endDate,
@@ -172,14 +178,16 @@ export function RoundForm({
             value={form.startDate ?? ""} 
             onChange={v => set("startDate", v)} 
             minDateTime={event?.eventStartDate}
-            maxDateTime={event?.eventEndDate}
+            maxDateTime={form.endDate || event?.eventEndDate}
+            strictMax={!!form.endDate}
           />
         </Field>
         <Field label="End Date">
           <DateTimePickerField 
             value={form.endDate ?? ""} 
             onChange={v => set("endDate", v)} 
-            minDateTime={event?.eventStartDate}
+            minDateTime={form.judgingDeadline || form.submissionDeadline || form.startDate || event?.eventStartDate}
+            strictMin={!form.judgingDeadline && !form.submissionDeadline && !!form.startDate}
             maxDateTime={event?.eventEndDate}
           />
         </Field>
@@ -188,7 +196,7 @@ export function RoundForm({
             value={form.submissionDeadline ?? ""} 
             onChange={v => set("submissionDeadline", v)} 
             minDateTime={form.startDate || event?.eventStartDate}
-            maxDateTime={form.endDate || event?.eventEndDate}
+            maxDateTime={form.judgingDeadline || form.endDate || event?.eventEndDate}
           />
         </Field>
         <Field label="Judging Deadline">
@@ -200,10 +208,22 @@ export function RoundForm({
           />
         </Field>
         <Field label="Appeal Start Time">
-          <Input type="datetime-local" value={form.appealStartTime ?? ""} onChange={v => set("appealStartTime", v)} />
+          <DateTimePickerField 
+            value={form.appealStartTime ?? ""} 
+            onChange={v => set("appealStartTime", v)} 
+            minDateTime={event?.eventStartDate}
+            maxDateTime={form.appealEndTime || event?.eventEndDate}
+            strictMax={!!form.appealEndTime}
+          />
         </Field>
         <Field label="Appeal End Time">
-          <Input type="datetime-local" value={form.appealEndTime ?? ""} onChange={v => set("appealEndTime", v)} />
+          <DateTimePickerField 
+            value={form.appealEndTime ?? ""} 
+            onChange={v => set("appealEndTime", v)} 
+            minDateTime={form.appealStartTime || event?.eventStartDate}
+            strictMin={!!form.appealStartTime}
+            maxDateTime={event?.eventEndDate}
+          />
         </Field>
         <div className="md:col-span-2">
           <Field label="Description">

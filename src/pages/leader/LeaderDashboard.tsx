@@ -27,7 +27,7 @@ import {
   Button,
 } from "@/components/shared/UIComponents";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "@/features/auth/store/authStore";
+import { SubmissionRepositoryField } from "@/features/submissions/components/SubmissionRepositoryField";
 import { MyProfileSection } from "@/features/users/components/MyProfileSection";
 import { submissionService, type SubmissionHistoryResponse, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
@@ -591,10 +591,14 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             )}
           </label>
           <TextField label="Submission Name" value={submissionForm.submissionName} onChange={value => setSubmissionForm(prev => ({ ...prev, submissionName: value }))} icon={<FileText size={14} />} />
-          <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => {
-            setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }));
-            setSubmissionFieldErrors(prev => ({ ...prev, repositoryUrl: undefined }));
-          }} icon={<Github size={14} />} error={submissionFieldErrors.repositoryUrl} />
+          <SubmissionRepositoryField
+            value={submissionForm.repositoryUrl}
+            onChange={value => {
+              setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }));
+              setSubmissionFieldErrors(prev => ({ ...prev, repositoryUrl: undefined }));
+            }}
+            error={submissionFieldErrors.repositoryUrl}
+          />
           <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => {
             setSubmissionForm(prev => ({ ...prev, demoUrl: value }));
             setSubmissionFieldErrors(prev => ({ ...prev, demoUrl: undefined }));

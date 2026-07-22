@@ -12,11 +12,13 @@ interface Props {
   onChange: (value: string) => void;
   minDateTime?: Date | string;
   maxDateTime?: Date | string;
+  strictMin?: boolean;
+  strictMax?: boolean;
   placeholder?: string;
   disabled?: boolean;
 }
 
-export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime, placeholder = "Pick date & time", disabled }: Props) {
+export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime, strictMin, strictMax, placeholder = "Pick date & time", disabled }: Props) {
   const [open, setOpen] = React.useState(false);
   const [draftValue, setDraftValue] = React.useState<Date | undefined>(undefined);
   const [clampedMessage, setClampedMessage] = React.useState<string | null>(null);
@@ -34,12 +36,29 @@ export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime,
   };
 
   const parseBoundary = (b: string | Date) => {
-    if (b instanceof Date) return b;
+    if (b instanceof Date) return new Date(b);
     return b.length === 10 ? parse(b, "yyyy-MM-dd", new Date()) : parse(b.substring(0, 16), "yyyy-MM-dd'T'HH:mm", new Date());
   };
 
-  const minBoundaryDate = minDateTime ? parseBoundary(minDateTime) : undefined;
-  const maxBoundaryDate = maxDateTime ? parseBoundary(maxDateTime) : undefined;
+  const normalizeToMinute = (date: Date) => {
+    const normalized = new Date(date);
+    normalized.setSeconds(0, 0);
+    return normalized;
+  };
+
+  const minBoundaryDate = React.useMemo(() => {
+    if (!minDateTime) return undefined;
+    const d = normalizeToMinute(parseBoundary(minDateTime));
+    if (strictMin) d.setMinutes(d.getMinutes() + 1);
+    return d;
+  }, [minDateTime, strictMin]);
+
+  const maxBoundaryDate = React.useMemo(() => {
+    if (!maxDateTime) return undefined;
+    const d = normalizeToMinute(parseBoundary(maxDateTime));
+    if (strictMax) d.setMinutes(d.getMinutes() - 1);
+    return d;
+  }, [maxDateTime, strictMax]);
 
   let minDay = minBoundaryDate ? new Date(minBoundaryDate) : undefined;
   if (minDay) minDay.setHours(0, 0, 0, 0);
