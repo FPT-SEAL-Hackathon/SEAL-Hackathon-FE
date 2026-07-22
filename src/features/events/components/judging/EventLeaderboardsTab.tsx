@@ -5,6 +5,7 @@ import { Trophy, CheckCircle, Loader, Calendar, BookOpen, AlertTriangle } from "
 import { Card, Button, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
+import { ScoreDetailsModal } from "./ScoreDetailsModal";
 
 export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
   const { categories } = useCategoryContext();
@@ -15,6 +16,8 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
   const [activeTab, setActiveTab] = useState<"round" | "event">("round");
   const [isLoading, setIsLoading] = useState(false);
   const [localRankings, setLocalRankings] = useState<any[]>([]);
+  
+  const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
 
   // Filter rounds by selected category
   const categoryRounds = roundsByCategory[localCategoryId] || [];
@@ -30,7 +33,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
     if (categoryRounds.length > 0 && !localRoundId) {
       setLocalRoundId(categoryRounds[0].roundId);
     }
-  }, [categoryRounds]);
+  }, [categoryRounds, localRoundId]);
 
   // Fetch rankings
   useEffect(() => {
@@ -95,6 +98,26 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
     }
   };
 
+  const doApprove = async () => {
+    if (!window.confirm("Are you sure you want to approve this leaderboard? Once approved, it will be locked and cannot be re-computed or modified.")) return;
+    setIsLoading(true);
+    try {
+      if (activeTab === "round" && localRoundId && localCategoryId) {
+        await rankingService.approveRound(localRoundId, localCategoryId);
+        const roundData = await rankingService.getRoundRankings(localRoundId, localCategoryId);
+        setLocalRankings(roundData);
+      } else if (activeTab === "event" && localCategoryId) {
+        await rankingService.approveCategory(localCategoryId);
+        const eventData = await rankingService.getCategoryLeaderboard(eventId, localCategoryId);
+        setLocalRankings(eventData);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card className="p-4">
@@ -141,17 +164,21 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             {activeTab === "round" && (
               <div className="flex-1 min-w-[200px]">
                 <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
-                <Select value={localRoundId || "none"} onValueChange={value => setLocalRoundId((value === "none" ? "" : value))} disabled={!localCategoryId || categoryRounds.length === 0}>
-  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-    <SelectValue placeholder="Select..." />
-  </SelectTrigger>
-  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select a Round</SelectItem>
-                  {categoryRounds.map(r => (
-                    <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
-                  ))}
-  </SelectContent>
-</Select>
+                  <Select value={localRoundId || "none"} onValueChange={value => setLocalRoundId((value === "none" ? "" : value))} disabled={!localCategoryId || categoryRounds.length === 0}>
+                    <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                      <SelectValue placeholder="Select..." />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="none" style={{ color: COLORS.textPrimary }}>
+                        {!localCategoryId 
+                          ? "Select Category First" 
+                          : (categoryRounds.length === 0 ? "No Rounds in Category" : "Select a Round")}
+                      </SelectItem>
+                      {categoryRounds.map(r => (
+                        <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
               </div>
             )}
           </div>
@@ -160,7 +187,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               variant="outline"
               icon={isLoading ? <Loader size={16} className="animate-spin" /> : <Trophy size={16} />}
               onClick={doCompute}
-              disabled={isLoading || !localCategoryId || (activeTab === "round" && !localRoundId)}
+              disabled={isLoading || !localCategoryId || (activeTab === "round" && !localRoundId) || localRankings.some(r => r.isApproved)}
             >
               Compute {activeTab === "round" ? "Round" : "Category"}
             </Button>
@@ -168,9 +195,18 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               variant="primary"
               icon={isLoading ? <Loader size={16} className="animate-spin" /> : <CheckCircle size={16} />}
               onClick={doPublish}
-              disabled={isLoading || localRankings.length === 0 || localRankings.every(r => r.isPublished) || !localCategoryId || (activeTab === "round" && !localRoundId)}
+              disabled={isLoading || localRankings.length === 0 || localRankings.every(r => r.isPublished) || !localCategoryId || (activeTab === "round" && !localRoundId) || localRankings.some(r => r.isApproved)}
             >
               Publish Results
+            </Button>
+            <Button
+              variant="primary"
+              style={{ background: localRankings.some(r => r.isApproved) ? COLORS.border : COLORS.error }}
+              icon={isLoading ? <Loader size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+              onClick={doApprove}
+              disabled={isLoading || localRankings.length === 0 || localRankings.some(r => !r.isPublished) || localRankings.every(r => r.isApproved) || !localCategoryId || (activeTab === "round" && !localRoundId)}
+            >
+              Approve Official
             </Button>
           </div>
         </div>
@@ -214,7 +250,21 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             {
               key: "score",
               label: "SCORE",
-              render: (_, row) => <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span>
+              render: (_, row) => (
+                <div className="flex items-center gap-2">
+                  <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
+                    {row.finalScore?.toFixed(1) ?? row.totalScore}
+                  </span>
+                  {activeTab === "round" && row.submissionId && (
+                    <button 
+                      onClick={() => setSelectedSubmissionId(row.submissionId)}
+                      className="text-xs text-primary hover:underline hover:text-primary-dark transition-colors"
+                    >
+                      (Details)
+                    </button>
+                  )}
+                </div>
+              )
             },
             ...(activeTab === "round" ? [{
               key: "advanced",
@@ -240,6 +290,14 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
           }] : localRankings}
         />
       </Card>
+
+      {selectedSubmissionId && (
+        <ScoreDetailsModal
+          submissionId={selectedSubmissionId}
+          roundId={localRoundId}
+          onClose={() => setSelectedSubmissionId(null)}
+        />
+      )}
     </div>
   );
 }

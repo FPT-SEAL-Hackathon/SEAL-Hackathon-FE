@@ -40,7 +40,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     if (categoryRounds.length > 0 && !localRoundId) {
       setLocalRoundId(categoryRounds[0].roundId);
     }
-  }, [categoryRounds]);
+  }, [categoryRounds, localRoundId]);
 
   const fetchSubmissions = async () => {
     if (!localRoundId) {
@@ -110,6 +110,23 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     }
   };
 
+  const bulkApprove = async () => {
+    const unapproved = submissions.filter(s => !s.isScoreApproved);
+    if (unapproved.length === 0) return;
+    
+    setIsLoading(true);
+    try {
+      await Promise.all(unapproved.map(s => 
+        api.post(`/api/v1/admin/submissions/${s.submissionId}/approve`, { approve: true })
+      ));
+      fetchSubmissions();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const rejectScore = async (submissionId: string) => {
     if (!rejectReason.trim()) return;
     setApprovingId(submissionId);
@@ -163,17 +180,32 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
 
           <div className="flex-1 min-w-[200px]">
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
-            <Select value={localRoundId || "none"} onValueChange={value => setLocalRoundId((value === "none" ? "" : value))} disabled={!localCategoryId || categoryRounds.length === 0}>
-  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-    <SelectValue placeholder="Select..." />
-  </SelectTrigger>
-  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select a Round</SelectItem>
-              {categoryRounds.map(r => (
-                <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
-              ))}
-  </SelectContent>
-</Select>
+              <Select value={localRoundId || "none"} onValueChange={value => setLocalRoundId((value === "none" ? "" : value))} disabled={!localCategoryId || categoryRounds.length === 0}>
+                <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="none" style={{ color: COLORS.textPrimary }}>
+                    {!localCategoryId 
+                      ? "Select Category First" 
+                      : (categoryRounds.length === 0 ? "No Rounds in Category" : "Select a Round")}
+                  </SelectItem>
+                  {categoryRounds.map(r => (
+                    <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+          </div>
+          
+          <div className="flex-1 flex justify-end items-end min-w-[200px]">
+            <Button
+              variant="primary"
+              disabled={isLoading || !localRoundId || submissions.filter(s => !s.isScoreApproved).length === 0}
+              onClick={bulkApprove}
+              icon={<CheckCircle size={16} />}
+            >
+              Approve All
+            </Button>
           </div>
         </div>
       </Card>

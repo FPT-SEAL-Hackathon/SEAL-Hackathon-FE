@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, SectionHeader, Button, StatusBadge } from "@/components/shared/UIComponents";
 import { appealService, type Appeal } from "@/features/appeals/api/appealService";
+import { parseApiError } from "@/lib/api/apiClient";
 import { eventService } from "@/features/events/api/eventService";
 import { categoryService } from "@/features/categories/api/categoryService";
 import { Loader, MessageSquare, PlusCircle, Info } from "lucide-react";
@@ -11,7 +12,7 @@ export function MemberAppealsView({ activeTeamContext }: { activeTeamContext: an
   const [loading, setLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const [form, setForm] = useState({ title: "", reason: "" });
+  const [form, setForm] = useState({ title: "", reason: "", appealType: "SCORE_REVIEW" as "SCORE_REVIEW" | "RULE_VIOLATION" | "TECHNICAL_ISSUE" });
   const [submitting, setSubmitting] = useState(false);
 
   const teamId = activeTeamContext?.teamId;
@@ -70,15 +71,17 @@ export function MemberAppealsView({ activeTeamContext }: { activeTeamContext: an
         eventId,
         categoryId,
         title: form.title,
-        reason: form.reason
+        reason: form.reason,
+        appealType: form.appealType
       });
       toast.success("Appeal submitted successfully.");
       setIsFormOpen(false);
-      setForm({ title: "", reason: "" });
+      setForm({ title: "", reason: "", appealType: "SCORE_REVIEW" });
       loadAppeals();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      toast.error(error?.response?.data?.message || "Failed to submit appeal");
+      const parsedError = parseApiError(error);
+      toast.error(parsedError.message || "Failed to submit appeal");
     } finally {
       setSubmitting(false);
     }
@@ -129,6 +132,18 @@ export function MemberAppealsView({ activeTeamContext }: { activeTeamContext: an
 
           <div className="space-y-4">
             <div>
+              <label className="block text-sm font-medium mb-1">Appeal Type</label>
+              <select 
+                className="w-full p-2 border rounded"
+                value={form.appealType}
+                onChange={e => setForm({...form, appealType: e.target.value as any})}
+              >
+                <option value="SCORE_REVIEW">Score Review (Request a re-check of scores)</option>
+                <option value="RULE_VIOLATION">Rule Violation (Report other teams breaking rules)</option>
+                <option value="TECHNICAL_ISSUE">Technical Issue (Report system bugs or issues)</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-sm font-medium mb-1">Title</label>
               <input 
                 className="w-full p-2 border rounded" 
@@ -177,6 +192,11 @@ export function MemberAppealsView({ activeTeamContext }: { activeTeamContext: an
                 <StatusBadge 
                   status={appeal.status.toLowerCase()} 
                 />
+              </div>
+              <div className="mb-2">
+                <span className="inline-block px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full font-medium">
+                  {appeal.appealType.replace('_', ' ')}
+                </span>
               </div>
               <p className="text-gray-600 text-sm whitespace-pre-wrap">{appeal.reason}</p>
               

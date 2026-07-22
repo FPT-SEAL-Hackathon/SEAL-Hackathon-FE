@@ -100,7 +100,12 @@ export function AdminAppealsView() {
             <Card key={appeal.appealId} className="p-5 border-l-4" style={{ borderLeftColor: appeal.status === 'PENDING' ? '#F59E0B' : appeal.status === 'RESOLVED' ? '#10B981' : '#EF4444' }}>
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <h4 className="font-bold text-lg">{appeal.title}</h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-bold text-lg">{appeal.title}</h4>
+                    <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded font-medium">
+                      {appeal.appealType.replace('_', ' ')}
+                    </span>
+                  </div>
                   <div className="text-xs text-gray-500 mt-1 flex gap-3">
                     <span>Team: <span className="font-semibold text-gray-700">{appeal.teamName}</span></span>
                     <span>Category: <span className="font-semibold text-gray-700">{appeal.categoryName}</span></span>

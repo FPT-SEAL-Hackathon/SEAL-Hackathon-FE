@@ -83,6 +83,8 @@ export const judgingService = {
     api.delete<{ message: string }>(`/api/v1/judging/submission/${submissionId}${reason ? `?reason=${encodeURIComponent(reason)}` : ""}`),
   getBySubmission: (submissionId: string) =>
     api.get<JudgingDTO[]>(`/api/v1/judging/submission/${submissionId}`),
+  getPublishedBySubmission: (submissionId: string) =>
+    api.get<JudgingDTO[]>(`/api/v1/judging/team-submission/${submissionId}/published`),
   getByJudge: (judgeUserId: string) =>
     api.get<JudgingDTO[]>(`/api/v1/judging/judge/${judgeUserId}`),
   getAuditLogs: (eventId: string) =>

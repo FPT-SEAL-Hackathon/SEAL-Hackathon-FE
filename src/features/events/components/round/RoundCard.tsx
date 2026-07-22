@@ -155,7 +155,8 @@ export function RoundCard({
           endDate: round.endDate ?? "",
           submissionDeadline: round.submissionDeadline ?? "",
           judgingDeadline: round.judgingDeadline ?? "",
-
+          appealStartTime: round.appealStartTime ?? "",
+          appealEndTime: round.appealEndTime ?? "",
           advancementTopN: round.advancementTopN,
           isCalibrationRound: round.isCalibrationRound,
         }}
@@ -265,6 +266,8 @@ export function RoundCard({
                 { label: "End Date", value: round.endDate },
                 { label: "Submission Deadline", value: round.submissionDeadline },
                 { label: "Judging Deadline", value: round.judgingDeadline },
+                { label: "Appeal Start Time", value: round.appealStartTime },
+                { label: "Appeal End Time", value: round.appealEndTime },
               ].map(f => (
                 <div key={f.label} className="p-2.5 rounded-xl" style={{ background: "var(--surface-bg)" }}>
                   <div style={{ fontSize: 10, color: COLORS.textSecondary, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 3 }}>

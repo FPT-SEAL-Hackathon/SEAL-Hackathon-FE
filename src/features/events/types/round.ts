@@ -11,6 +11,8 @@ export interface Round {
     endDate: string | null;
     submissionDeadline: string | null;
     judgingDeadline: string | null;
+    appealStartTime?: string | null;
+    appealEndTime?: string | null;
     advancementTopN: number | null;
     isCalibrationRound: boolean;
 }
@@ -61,6 +63,8 @@ export interface RoundRequest {
     endDate?: string | null;
     submissionDeadline?: string | null;
     judgingDeadline?: string | null;
+    appealStartTime?: string | null;
+    appealEndTime?: string | null;
     advancementTopN?: number | null;
     isCalibrationRound: boolean;
 }
