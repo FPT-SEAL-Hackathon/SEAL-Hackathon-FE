@@ -2238,7 +2238,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLORS.bg }}>
-                {["Rank", "Team", "Score", "Category"].concat(leaderboardRoundId !== "event" ? ["Result"] : []).map(h => (
+                {["Rank", "Team", ...(leaderboardRoundId !== "event" ? ["Score"] : []), "Category", ...(leaderboardRoundId !== "event" ? ["Result"] : [])].map(h => (
                   <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                 ))}
               </tr>
@@ -2273,11 +2273,13 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                         {row.teamName ?? row.teamId ?? row.team}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
-                        {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
-                      </span>
-                    </td>
+                    {leaderboardRoundId !== "event" && (
+                      <td className="px-4 py-3">
+                        <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
+                          {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "—"}</span>
                     </td>

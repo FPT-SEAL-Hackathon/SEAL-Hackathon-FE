@@ -70,13 +70,13 @@ export function AdminRankingsView({ context }: AdminViewProps) {
     }
     const fetchExisting = async () => {
       try {
-        if (activeTab === "round") {
-          if (localRoundId && localCategoryId) {
-            const data = await rankingService.getRoundRankings(localRoundId, localCategoryId);
-            setLocalRankings(data);
-          } else {
-            setLocalRankings([]);
-          }
+          if (activeTab === "round" || activeTab === "approval") {
+            if (localRoundId && localCategoryId) {
+              const data = await rankingService.getRoundRankings(localRoundId, localCategoryId);
+              setLocalRankings(data);
+            } else {
+              setLocalRankings([]);
+            }
         } else if (activeTab === "event") {
           const data = await rankingService.getEventRankings(context.selectedEventId);
           setLocalRankings(data);
@@ -271,8 +271,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
             t("adminRankings.rank"),
             t("adminRankings.team"),
             t("adminRankings.track"),
-            t("adminRankings.total"),
-            ...(activeTab === "round" ? ["ADVANCEMENT"] : []),
+            ...(activeTab === "round" ? [t("adminRankings.total"), "ADVANCEMENT"] : []),
             t("adminRankings.status")
           ].map(h => (
             <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>{h.toUpperCase()}</th>
@@ -307,7 +306,9 @@ export function AdminRankingsView({ context }: AdminViewProps) {
                 </span>
               </td>
               <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track}</span></td>
-              <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span></td>
+              {activeTab === "round" && (
+                <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span></td>
+              )}
               {activeTab === "round" && (
                 <td className="px-4 py-3">
                   {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
@@ -457,7 +458,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
 
 
       {activeTab === "approval" ? (
-        <AdminJudgingApprovalView context={context} localCategoryId={localCategoryId} localRoundId={localRoundId} />
+        <AdminJudgingApprovalView context={context} localCategoryId={localCategoryId} localRoundId={localRoundId} isRoundApproved={localRankings.some((r: any) => r.isApproved)} />
       ) : activeTab === "event" && localRankings.length > 0 ? (
         <div className="space-y-8">
           {Object.entries(
