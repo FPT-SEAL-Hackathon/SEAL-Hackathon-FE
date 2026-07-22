@@ -247,15 +247,15 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               label: "CATEGORY",
               render: (_, row) => <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track}</span>
             },
-            {
+            ...(activeTab === "round" ? [{
               key: "score",
               label: "SCORE",
-              render: (_, row) => (
+              render: (_: any, row: any) => (
                 <div className="flex items-center gap-2">
                   <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
                     {row.finalScore?.toFixed(1) ?? row.totalScore}
                   </span>
-                  {activeTab === "round" && row.submissionId && (
+                  {row.submissionId && (
                     <button 
                       onClick={() => setSelectedSubmissionId(row.submissionId)}
                       className="text-xs text-primary hover:underline hover:text-primary-dark transition-colors"
@@ -265,7 +265,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                   )}
                 </div>
               )
-            },
+            }] : []),
             ...(activeTab === "round" ? [{
               key: "advanced",
               label: "ADVANCED",

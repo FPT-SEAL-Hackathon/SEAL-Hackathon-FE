@@ -1,10 +1,11 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api/apiClient";
-import { CheckCircle, XCircle, Eye, Loader, CheckSquare } from "lucide-react";
+import { CheckCircle, XCircle, Eye, Loader, CheckSquare, Lock } from "lucide-react";
 import { Card, Button, StatusBadge, COLORS, DataTable } from "@/components/shared/UIComponents";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
+import { rankingService } from "@/features/rankings/api/rankingService";
 
 export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   const { categories } = useCategoryContext();
@@ -26,6 +27,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   const [batchScores, setBatchScores] = useState<Record<string, Record<string, number>>>({});
   const [judgesList, setJudgesList] = useState<string[]>([]);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [isRoundLocked, setIsRoundLocked] = useState(false);
 
   const categoryRounds = roundsByCategory[localCategoryId] || [];
 
@@ -43,16 +45,22 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   }, [categoryRounds, localRoundId]);
 
   const fetchSubmissions = async () => {
-    if (!localRoundId) {
+    if (!localRoundId || !localCategoryId) {
       setSubmissions([]);
       setBatchScores({});
       setJudgesList([]);
+      setIsRoundLocked(false);
       return;
     }
     setIsLoading(true);
     try {
-      const data = await api.get<any[]>(`/api/v1/admin/rounds/${localRoundId}/submissions`);
+      const [data, rankings] = await Promise.all([
+        api.get<any[]>(`/api/v1/admin/rounds/${localRoundId}/submissions`),
+        rankingService.getRoundRankings(localRoundId, localCategoryId).catch(() => [])
+      ]);
+      
       setSubmissions(data || []);
+      setIsRoundLocked(rankings.some(r => r.isApproved || r.isPublished));
       
       if (data && data.length > 0) {
         setIsBatchLoading(true);
@@ -94,7 +102,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     fetchSubmissions();
-  }, [localRoundId]);
+  }, [localRoundId, localCategoryId]);
 
   const toggleApproval = async (submissionId: string, currentStatus: boolean) => {
     setApprovingId(submissionId);
@@ -200,9 +208,10 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
           <div className="flex-1 flex justify-end items-end min-w-[200px]">
             <Button
               variant="primary"
-              disabled={isLoading || !localRoundId || submissions.filter(s => !s.isScoreApproved).length === 0}
+              disabled={isLoading || !localRoundId || isRoundLocked || submissions.filter(s => !s.isScoreApproved).length === 0}
               onClick={bulkApprove}
-              icon={<CheckCircle size={16} />}
+              icon={isRoundLocked ? <Lock size={16} /> : <CheckCircle size={16} />}
+              title={isRoundLocked ? "Round is locked because rankings are published/approved" : ""}
             >
               Approve All
             </Button>
@@ -281,7 +290,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                           setRejectReason("");
                         }}
                         style={{ color: COLORS.error, borderColor: COLORS.error }}
-                        disabled={approvingId === row.submissionId}
+                        disabled={approvingId === row.submissionId || isRoundLocked}
+                        title={isRoundLocked ? "Round is locked" : ""}
                       >
                         Reject
                       </Button>
@@ -289,10 +299,11 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                     <Button 
                       variant={row.isScoreApproved ? "secondary" : "primary"} 
                       size="sm" 
-                      icon={approvingId === row.submissionId ? <Loader size={16} className="animate-spin" /> : (row.isScoreApproved ? <XCircle size={16} /> : <CheckSquare size={16} />)}
+                      icon={approvingId === row.submissionId ? <Loader size={16} className="animate-spin" /> : (isRoundLocked ? <Lock size={16}/> : (row.isScoreApproved ? <XCircle size={16} /> : <CheckSquare size={16} />))}
                       onClick={() => toggleApproval(row.submissionId, row.isScoreApproved)}
-                      disabled={approvingId === row.submissionId}
-                      style={!row.isScoreApproved && approvingId !== row.submissionId ? { background: COLORS.success } : {}}
+                      disabled={approvingId === row.submissionId || isRoundLocked}
+                      title={isRoundLocked ? "Round is locked" : ""}
+                      style={!row.isScoreApproved && approvingId !== row.submissionId ? { background: isRoundLocked ? COLORS.border : COLORS.success } : {}}
                     >
                       {row.isScoreApproved ? "Un-Finalize" : "Finalize"}
                     </Button>
