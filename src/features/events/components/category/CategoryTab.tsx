@@ -6,6 +6,8 @@ import { CategoryCard } from "./CategoryCard";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { Category, CategoryMentor } from "../../types/category";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
@@ -49,11 +51,16 @@ export function CategoriesTab() {
           initial={{
             categoryName: "",
             description: "",
-            sortOrder: categories.length + 1,
+            sortOrder: categories.length === 0 ? 1 : Math.max(...categories.map(c => c.sortOrder)) + 1,
           }}
           onSave={async (data) => {
-            await createCategory(data);
-            setShowForm(false);
+            try {
+              await createCategory(data);
+              toast.success("Category created successfully.");
+              setShowForm(false);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to create category");
+            }
           }}
           onCancel={() => setShowForm(false)}
         />
@@ -103,8 +110,13 @@ export function CategoriesTab() {
           confirmVariant="danger"
           onCancel={() => setDeletingCategory(null)}
           onConfirm={async () => {
-            await deleteCategory(deletingCategory.categoryId);
-            setDeletingCategory(null);
+            try {
+              await deleteCategory(deletingCategory.categoryId);
+              toast.success("Category deleted.");
+              setDeletingCategory(null);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to delete category");
+            }
           }}
         />
       )}
@@ -116,11 +128,16 @@ export function CategoriesTab() {
           confirmVariant="danger"
           onCancel={() => setRemovingMentor(null)}
           onConfirm={async () => {
-            await removeMentor(
-              removingMentor?.category.categoryId,
-              removingMentor?.mentor.mentorId
-            );
-            setRemovingMentor(null);
+            try {
+              await removeMentor(
+                removingMentor?.category.categoryId,
+                removingMentor?.mentor.mentorId
+              );
+              toast.success("Mentor removed.");
+              setRemovingMentor(null);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to remove mentor");
+            }
           }}
         />
       )}

@@ -5,6 +5,7 @@ import { Card, SectionHeader, COLORS, ProgressBar, Button, ScoreSlider } from "@
 import { judgingService, type ScoreSubmissionDTO, type UpdateScoreSubmissionDTO } from "@/features/judging/api/judgingService";
 import { type RoundCriterionResponse, type RoundResponse } from "@/features/judging/api/roundService";
 import { updateGlobalScoreCache } from "./JudgeSubmissionsStep";
+import { RepositoryMetadataCard } from "@/features/submissions/components/SubmissionRepositoryField";
 
 interface JudgeScoringViewProps {
   apiCriteria: RoundCriterionResponse[];
@@ -247,6 +248,14 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
                     <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>Technical Report</span>
                   </div>
                 </a>
+              )}
+
+              {/* Judge chi DOC metadata repository: khong co nut edit/validate/resync o day. */}
+              {selectedSubmission.raw?.repository && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 }}>REPOSITORY METADATA</div>
+                  <RepositoryMetadataCard repository={selectedSubmission.raw.repository} showJudgeDisclaimer />
+                </div>
               )}
             </div>
           </Card>

@@ -4,6 +4,7 @@ import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared
 import { CriteriaImportPanel } from "../../shared/ui/shared";
 import { RoundForm } from "./RoundForm";
 import { Round, RoundCriteria, RoundJudge } from "../../types/round";
+import { EventResponse } from "../../api/eventService";
 import { getRoundStatus } from "../../utils/roundUtils";
 import { useRoundContext } from "../../context/RoundContext";
 import { AssignJudgesModal } from "./AssignJudgesModal";
@@ -12,6 +13,7 @@ import { submissionService } from "@/features/submissions/api/submissionService"
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { useEventCriteria } from "../../hooks/useEventCriteria";
 import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
+import { toast } from "sonner";
 
 const JUDGING_STATUS_ID = "40000000-0000-0000-0000-000000000003";
 const COMPLETED_STATUS_ID = "40000000-0000-0000-0000-000000000004";
@@ -32,6 +34,7 @@ function isSampleRoundLocked(round: Round) {
 
 interface Props {
     round: Round;
+    event?: EventResponse;
     onDeleteRound: (round: Round) => void;
     onRemoveJudge: (
       round: Round,
@@ -44,6 +47,7 @@ interface Props {
 }
 export function RoundCard({
   round,
+  event,
   onDeleteRound,
   onRemoveCriterion,
   onRemoveJudge
@@ -160,15 +164,16 @@ export function RoundCard({
           isCalibrationRound: round.isCalibrationRound,
         }}
         onSave={async data => {
-            await updateRound(
-                round.categoryId,
-                round.roundId,
-                data
-            );
-            setEditing(false);
-            }            
-        }
+            try {
+              await updateRound(round.categoryId, round.roundId, data);
+              toast.success("Round updated successfully.");
+              setEditing(false);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to update round");
+            }
+        }}
         onCancel={() => setEditing(false)}
+        event={event}
       />
     );
   }
@@ -180,20 +185,22 @@ export function RoundCard({
           title="Assign Judges"
           allPeople={availableJudges}
           assignedIds={judges.map(j => j.judgeId)}
-          onAssign={judge => 
-            assignJudges(
-              round.roundId,
-              {
-                judgeIds: [judge.judgeId]
-              }
-            )
-          }
-          onRemove={roundJudgeId => 
-            disableJudge(
-              round.roundId,
-              roundJudgeId
-            )
-          }
+          onAssign={async judge => {
+            try {
+              await assignJudges(round.roundId, { judgeIds: [judge.judgeId] });
+              toast.success("Judge assigned successfully.");
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to assign judge");
+            }
+          }}
+          onRemove={async roundJudgeId => {
+            try {
+              await disableJudge(round.roundId, roundJudgeId);
+              toast.success("Judge disabled.");
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to disable judge");
+            }
+          }}
           onClose={() => setShowJudgeModal(false)}
         />
       )}
@@ -367,20 +374,22 @@ export function RoundCard({
                 sourceLabel="Event Criteria"
                 availableCriteria={eventCriteria}
                 roundCriteria={importedCriteria}
-                onImport={(body) => 
-                  importEventCriteria(
-                    round.roundId,
-                    body
-                  )
-                }
-                onUpdateRoundCriteria={
-                  (roundCriterionId, body) => 
-                    updateRoundCriterion(
-                      round.roundId,
-                      roundCriterionId,
-                      body
-                    )
-                }
+                onImport={async (body) => {
+                  try {
+                    await importEventCriteria(round.roundId, body);
+                    toast.success("Criteria imported successfully.");
+                  } catch (error) {
+                    toast.error(parseApiError(error).message || "Failed to import criteria");
+                  }
+                }}
+                onUpdateRoundCriteria={async (roundCriterionId, body) => {
+                  try {
+                    await updateRoundCriterion(round.roundId, roundCriterionId, body);
+                    toast.success("Criteria updated.");
+                  } catch (error) {
+                    toast.error(parseApiError(error).message || "Failed to update criteria");
+                  }
+                }}
                 onRemoveRoundCriteria={(criterion) =>
                   onRemoveCriterion(round, criterion)
                 }

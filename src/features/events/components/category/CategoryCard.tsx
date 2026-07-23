@@ -4,6 +4,8 @@ import { Card, Button, COLORS } from "../../../../components/shared/UIComponents
 import { AssignModal } from "../../shared/ui/shared";
 import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 
 // ── Category card ──────────────────────────────────────────────────────────
 
@@ -34,9 +36,14 @@ export function CategoryCard({
   const [showMentorModal, setShowMentorModal] = useState(false);
 
   const handleAssignMentor = async (mentor: Mentor) => {
-    await onAssignMentor(category.categoryId, {
+    try {
+      await onAssignMentor(category.categoryId, {
         mentorIds: [mentor.id]
-    });
+      });
+      toast.success("Mentor assigned successfully.");
+    } catch (error) {
+      toast.error(parseApiError(error).message || "Failed to assign mentor");
+    }
   };
 
   const handleRemoveMentor = async (mentorId: string) => {
@@ -56,11 +63,13 @@ export function CategoryCard({
             sortOrder: category.sortOrder
         }}
         onSave={ async data => { 
-            await onUpdate(
-                category.categoryId,
-                data
-            ); 
-            setEditing(false); 
+            try {
+              await onUpdate(category.categoryId, data); 
+              toast.success("Category updated successfully.");
+              setEditing(false); 
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to update category");
+            }
         }}
 
         onCancel={() => setEditing(false)}
