@@ -8,6 +8,7 @@ export interface Appeal {
   eventName: string;
   categoryId: string;
   categoryName: string;
+  roundId?: string;
   title: string;
   reason: string;
   appealType: 'SCORE_REVIEW' | 'RULE_VIOLATION' | 'TECHNICAL_ISSUE';
@@ -24,6 +25,7 @@ export interface Appeal {
 export interface CreateAppealRequest {
   eventId: string;
   categoryId: string;
+  roundId?: string;
   teamId: string;
   title: string;
   reason: string;
