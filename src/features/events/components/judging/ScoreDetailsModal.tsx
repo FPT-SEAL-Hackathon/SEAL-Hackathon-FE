@@ -8,32 +8,40 @@ import { roundService } from "@/features/judging/api/roundService";
 interface Props {
   submissionId: string;
   roundId: string;
+  studentMode?: boolean;
   onClose: () => void;
 }
 
-export function ScoreDetailsModal({ submissionId, roundId, onClose }: Props) {
+export function ScoreDetailsModal({ submissionId, roundId, studentMode, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [judgings, setJudgings] = useState<JudgingDTO[]>([]);
   const [criteria, setCriteria] = useState<any[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchDetails = async () => {
       try {
         setLoading(true);
+        setErrorMsg(null);
         const [judgingsData, roundData] = await Promise.all([
-          judgingService.getBySubmission(submissionId),
+          studentMode ? judgingService.getPublishedBySubmission(submissionId) : judgingService.getBySubmission(submissionId),
           roundService.getCriteria(roundId)
         ]);
         setJudgings(judgingsData.filter((j: JudgingDTO) => !j.isCalibration));
         setCriteria(roundData);
-      } catch (e) {
+      } catch (e: any) {
         console.error("Failed to fetch score details", e);
+        if (studentMode && e?.status === 403) {
+          setErrorMsg("Results are not published yet, or you don't have permission to view them.");
+        } else {
+          setErrorMsg("Failed to load judging results.");
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchDetails();
-  }, [submissionId, roundId]);
+  }, [submissionId, roundId, studentMode]);
 
   // Group by judge
   const judges = Array.from(new Set(judgings.map(j => j.judgeName)));
@@ -64,6 +72,8 @@ export function ScoreDetailsModal({ submissionId, roundId, onClose }: Props) {
           <div className="p-4 overflow-y-auto">
             {loading ? (
               <div className="flex justify-center p-10"><Loader className="animate-spin text-primary" /></div>
+            ) : errorMsg ? (
+              <div className="text-center p-10 text-red-500 font-medium">{errorMsg}</div>
             ) : judgings.length === 0 ? (
               <div className="text-center p-10 text-gray-500">No scores recorded yet.</div>
             ) : (

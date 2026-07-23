@@ -14,7 +14,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Award", label: "Certificates", key: "certificates" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXTERNAL_STUDENT]: [
@@ -23,7 +23,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Award", label: "Certificates", key: "certificates" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.INTERNAL_JUDGE]: [
@@ -41,6 +41,9 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   [ROLES.ORGANIZER]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
     { icon: "Calendar", label: "Event Management", key: "events" },
+    { icon: "GitBranch", label: "Submission Repositories", key: "submission-repositories" },
+    // Legacy: PAT-based Event-level integration — giữ cho admin cũ, không còn là luồng chính.
+    { icon: "GitBranch", label: "Repository Integrations (Legacy)", key: "repository-integrations" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "FileText", label: "Submissions", key: "submissions" },
     { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },
@@ -66,9 +69,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "MessageSquare", label: "My Mentor", key: "mentor" },
     { icon: "ClipboardList", label: "Consultation History", key: "consultations" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
-    { icon: "Eye", label: "Judge Feedback", key: "feedback" },
-    { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.MEMBER]: [
@@ -77,8 +78,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "MessageSquare", label: "My Mentor", key: "mentor" },
     { icon: "ClipboardList", label: "Consultation History", key: "consultations" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
-    { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXPERT]: [

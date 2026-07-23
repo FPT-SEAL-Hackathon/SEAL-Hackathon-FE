@@ -6,6 +6,8 @@ import { useState } from "react";
 import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { EventCriterionRow } from "./EventCriterionRow";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 
 export function CriteriaTab() {
   const {
@@ -67,7 +69,14 @@ export function CriteriaTab() {
                       <span style={{ fontSize: 12, fontWeight: 600 }}>Imported</span>
                     </div>
                   ) : (
-                    <Button variant="primary" size="sm" icon={<Upload size={12} />} onClick={() => importCriteria({ templateIds: [template.templateId]})}>
+                    <Button variant="primary" size="sm" icon={<Upload size={12} />} onClick={async () => {
+                      try {
+                        await importCriteria({ templateIds: [template.templateId]});
+                        toast.success("Criteria imported.");
+                      } catch (error) {
+                        toast.error(parseApiError(error).message || "Failed to import criteria");
+                      }
+                    }}>
                       Import
                     </Button>
                   )}
@@ -119,11 +128,13 @@ export function CriteriaTab() {
             confirmVariant="danger"
             onCancel={() => setRemovingEventCriterion(null)}
             onConfirm={async () => {
-                await removeEventCriteria(
-                    removingEventCriterion.eventCriterionId
-                );
-
-                setRemovingEventCriterion(null);
+                try {
+                  await removeEventCriteria(removingEventCriterion.eventCriterionId);
+                  toast.success("Criteria removed.");
+                  setRemovingEventCriterion(null);
+                } catch (error) {
+                  toast.error(parseApiError(error).message || "Failed to remove criteria");
+                }
             }}
         />
       )}

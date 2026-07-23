@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import {
   CheckCircle,
   Eye,
@@ -30,6 +30,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/features/auth/store/authStore";
 import { MyProfileSection } from "@/features/users/components/MyProfileSection";
 import { submissionService, type SubmissionHistoryResponse, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { RepositoryMetadataCard, SubmissionRepositoryField } from "@/features/submissions/components/SubmissionRepositoryField";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
@@ -108,6 +109,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [leaderboardRounds, setLeaderboardRounds] = useState<Round[]>([]);
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [leaderboardTeams, setLeaderboardTeams] = useState<any[]>([]);
+  const leaderboardTeamsRef = useRef<any[]>([]);
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [handlingId, setHandlingId] = useState<string | null>(null);
@@ -126,6 +128,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [submissionRoundsLoading, setSubmissionRoundsLoading] = useState(false);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [activeSubmission, setActiveSubmission] = useState<SubmissionResponse | null>(null);
+  const [repoSyncing, setRepoSyncing] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submissionLoading, setSubmissionLoading] = useState(false);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
@@ -165,7 +168,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         setActiveTeam(team);
         setSubmissionForm(prev => ({ ...prev, teamId: team.teamId }));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [user?.userId]);
 
   const fetchNotifications = () => {
@@ -179,13 +182,13 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           read: notification.read,
         })));
       })
-      .catch(() => {});
+      .catch(() => { });
   };
 
   // Initial load
   useEffect(() => {
     fetchNotifications();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-fetch when navigating to notification page
@@ -193,7 +196,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     if (currentPage === "notifications") {
       fetchNotifications();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
   // Re-fetch when mark-all-read is triggered from the Layout dropdown
@@ -527,208 +530,241 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
     return (
       <>
-      <SectionHeader title="Submission Center" subtitle="Submit and load your team's work from backend API" />
-      {activeTeam && (
-        <Card className="p-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
-              Team status
-            </span>
-            <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId, activeTeam.teamStatusName).badge} />
-            {!isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName) && (
-              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                Submissions unlock after organizer approval.
+        <SectionHeader title="Submission Center" subtitle="Submit and load your team's work from backend API" />
+        {activeTeam && (
+          <Card className="p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>
+                Team status
               </span>
-            )}
-          </div>
-        </Card>
-      )}
-      <Card className="p-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label className="block">
-            <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Round</span>
-            <Select
-              value={submissionForm.roundId}
-              onValueChange={value => setSubmissionForm(prev => ({ ...prev, roundId: value }))}
-              disabled={submissionRoundsLoading}
-            >
-              <SelectTrigger
-                className="w-full px-3 py-2 rounded-xl outline-none mt-1"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : submissionRounds.length === 0 ? "No official rounds available" : "Select a round..."} />
-              </SelectTrigger>
-              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                {submissionRoundsLoading && <div className="p-2 text-sm text-center text-muted-foreground">Loading rounds...</div>}
-                {!submissionRoundsLoading && submissionRounds.length === 0 && <div className="p-2 text-sm text-center text-muted-foreground">No official rounds available</div>}
-                {submissionRounds.map(round => (
-                  <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
-                    {round.roundName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedRound ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <StatusBadge status={selectedRoundOpen ? "open" : "closed"} />
-                {selectedRound.roundOrder > 1 && (
-                  <StatusBadge status={submissionEligibility.loading ? "pending" : selectedRoundLocked ? "locked" : "advanced"} />
-                )}
+              <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId, activeTeam.teamStatusName).badge} />
+              {!isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName) && (
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                  Deadline: {formatDate(selectedRound.submissionDeadline)}
+                  Submissions unlock after organizer approval.
                 </span>
-                {submissionEligibility.reason && (
-                  <span style={{ fontSize: 12, color: selectedRoundLocked ? COLORS.error : COLORS.success }}>
-                    {submissionEligibility.reason}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="mt-2" style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                Choose the round this submission belongs to.
-              </div>
-            )}
-          </label>
-          <TextField label="Submission Name" value={submissionForm.submissionName} onChange={value => setSubmissionForm(prev => ({ ...prev, submissionName: value }))} icon={<FileText size={14} />} />
-          <TextField label="Repository URL" value={submissionForm.repositoryUrl} onChange={value => {
-            setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }));
-            setSubmissionFieldErrors(prev => ({ ...prev, repositoryUrl: undefined }));
-          }} icon={<Github size={14} />} error={submissionFieldErrors.repositoryUrl} />
-          <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => {
-            setSubmissionForm(prev => ({ ...prev, demoUrl: value }));
-            setSubmissionFieldErrors(prev => ({ ...prev, demoUrl: undefined }));
-          }} icon={<Globe size={14} />} error={submissionFieldErrors.demoUrl} />
-          <TextField label="Report URL" value={submissionForm.reportUrl} onChange={value => {
-            setSubmissionForm(prev => ({ ...prev, reportUrl: value }));
-            setSubmissionFieldErrors(prev => ({ ...prev, reportUrl: undefined }));
-          }} icon={<FileText size={14} />} error={submissionFieldErrors.reportUrl} />
-          <TextField label="Slide URL" value={submissionForm.slideUrl} onChange={value => {
-            setSubmissionForm(prev => ({ ...prev, slideUrl: value }));
-            setSubmissionFieldErrors(prev => ({ ...prev, slideUrl: undefined }));
-          }} icon={<FileText size={14} />} error={submissionFieldErrors.slideUrl} />
-        </div>
-        <div className="flex flex-wrap items-center gap-3 mt-5">
-          <Button
-            variant="primary"
-            size="md"
-            icon={submitLoading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-            onClick={handleSubmit}
-            disabled={submitLoading || !canSubmitSelectedRound}
-          >
-            {submitLoading ? "Submitting..." : "Submit"}
-          </Button>
-          <Button
-            variant="outline"
-            size="md"
-            icon={submissionLoading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
-            onClick={loadSubmission}
-            disabled={submissionLoading || !submissionForm.roundId}
-          >
-            {submissionLoading ? "Loading..." : selectedRound ? `Load ${selectedRound.roundName}` : "Load Submission"}
-          </Button>
-          {submitMessage && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>{submitMessage}</span>}
-          {submitError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{submitError}</span>}
-        </div>
-      </Card>
-
-      <Card className="p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Submission History</div>
-            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-              {selectedRound ? `Submitted work for ${selectedRound.roundName}` : "Select a round to view submission history"}
+              )}
             </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            icon={submissionHistoryLoading ? <Loader size={13} className="animate-spin" /> : <Search size={13} />}
-            onClick={() => loadSubmissionHistory()}
-            disabled={submissionHistoryLoading || !submissionForm.roundId}
-          >
-            {submissionHistoryLoading ? "Loading..." : "Refresh"}
-          </Button>
-        </div>
-        {submissionHistoryLoading ? (
-          <EmptyLine text="Loading submission history..." />
-        ) : submissionHistory.length === 0 ? (
-          <EmptyLine text={submissionForm.roundId ? "No saved versions for this round yet." : "Select a round to view submission history."} />
-        ) : (
-          <div className="space-y-3">
-            {submissionHistory.map(submission => (
-              <SubmissionCard
-                key={submission.submissionHistoryId}
-                submission={submission}
-                roundName={roundById.get(submission.roundId)?.roundName}
-                onLoadFeedback={() => loadFeedback(submission.submissionId)}
-              />
-            ))}
-          </div>
+          </Card>
         )}
-      </Card>
+        <Card className="p-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block">
+              <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>Round</span>
+              <Select
+                value={submissionForm.roundId}
+                onValueChange={value => setSubmissionForm(prev => ({ ...prev, roundId: value }))}
+                disabled={submissionRoundsLoading}
+              >
+                <SelectTrigger
+                  className="w-full px-3 py-2 rounded-xl outline-none mt-1"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : submissionRounds.length === 0 ? "No official rounds available" : "Select a round..."} />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  {submissionRoundsLoading && <div className="p-2 text-sm text-center text-muted-foreground">Loading rounds...</div>}
+                  {!submissionRoundsLoading && submissionRounds.length === 0 && <div className="p-2 text-sm text-center text-muted-foreground">No official rounds available</div>}
+                  {submissionRounds.map(round => (
+                    <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
+                      {round.roundName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedRound ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={selectedRoundOpen ? "open" : "closed"} />
+                  {selectedRound.roundOrder > 1 && (
+                    <StatusBadge status={submissionEligibility.loading ? "pending" : selectedRoundLocked ? "locked" : "advanced"} />
+                  )}
+                  <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                    Deadline: {formatDate(selectedRound.submissionDeadline || undefined)}
+                  </span>
+                  {submissionEligibility.reason && (
+                    <span style={{ fontSize: 12, color: selectedRoundLocked ? COLORS.error : COLORS.success }}>
+                      {submissionEligibility.reason}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-2" style={{ fontSize: 12, color: COLORS.textSecondary }}>
+                  Choose the round this submission belongs to.
+                </div>
+              )}
+            </label>
+            <TextField label="Submission Name" value={submissionForm.submissionName} onChange={value => setSubmissionForm(prev => ({ ...prev, submissionName: value }))} icon={<FileText size={14} />} />
+            <SubmissionRepositoryField
+              value={submissionForm.repositoryUrl}
+              onChange={value => {
+                setSubmissionForm(prev => ({ ...prev, repositoryUrl: value }));
+                setSubmissionFieldErrors(prev => ({ ...prev, repositoryUrl: undefined }));
+              }}
+              error={submissionFieldErrors.repositoryUrl}
+              editable={canSubmitSelectedRound}
+            />
+            <TextField label="Demo URL" value={submissionForm.demoUrl} onChange={value => {
+              setSubmissionForm(prev => ({ ...prev, demoUrl: value }));
+              setSubmissionFieldErrors(prev => ({ ...prev, demoUrl: undefined }));
+            }} icon={<Globe size={14} />} error={submissionFieldErrors.demoUrl} />
+            <TextField label="Report URL" value={submissionForm.reportUrl} onChange={value => {
+              setSubmissionForm(prev => ({ ...prev, reportUrl: value }));
+              setSubmissionFieldErrors(prev => ({ ...prev, reportUrl: undefined }));
+            }} icon={<FileText size={14} />} error={submissionFieldErrors.reportUrl} />
+            <TextField label="Slide URL" value={submissionForm.slideUrl} onChange={value => {
+              setSubmissionForm(prev => ({ ...prev, slideUrl: value }));
+              setSubmissionFieldErrors(prev => ({ ...prev, slideUrl: undefined }));
+            }} icon={<FileText size={14} />} error={submissionFieldErrors.slideUrl} />
+          </div>
+          <div className="flex flex-wrap items-center gap-3 mt-5">
+            <Button
+              variant="primary"
+              size="md"
+              icon={submitLoading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
+              onClick={handleSubmit}
+              disabled={submitLoading || !canSubmitSelectedRound}
+            >
+              {submitLoading ? "Submitting..." : "Submit"}
+            </Button>
+            <Button
+              variant="outline"
+              size="md"
+              icon={submissionLoading ? <Loader size={14} className="animate-spin" /> : <Search size={14} />}
+              onClick={loadSubmission}
+              disabled={submissionLoading || !submissionForm.roundId}
+            >
+              {submissionLoading ? "Loading..." : selectedRound ? `Load ${selectedRound.roundName}` : "Load Submission"}
+            </Button>
+            {submitMessage && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>{submitMessage}</span>}
+            {submitError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{submitError}</span>}
+          </div>
+          {activeSubmission?.repository && (
+            <div className="mt-4">
+              <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 6 }}>
+                Saved repository metadata (from database)
+              </div>
+              <RepositoryMetadataCard
+                repository={activeSubmission.repository}
+                // Refresh chi kha dung khi round con cho phep nop bai (submission editable).
+                onRefresh={canSubmitSelectedRound ? async () => {
+                  if (!activeSubmission?.submissionId) return;
+                  setRepoSyncing(true);
+                  try {
+                    const repo = await submissionService.syncSubmissionRepository(activeSubmission.submissionId);
+                    setActiveSubmission(prev => (prev ? { ...prev, repository: repo } : prev));
+                  } catch (error) {
+                    setSubmitError(error instanceof Error ? error.message : "Repository sync failed.");
+                  } finally {
+                    setRepoSyncing(false);
+                  }
+                } : undefined}
+                refreshing={repoSyncing}
+              />
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Submission History</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
+                {selectedRound ? `Submitted work for ${selectedRound.roundName}` : "Select a round to view submission history"}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={submissionHistoryLoading ? <Loader size={13} className="animate-spin" /> : <Search size={13} />}
+              onClick={() => loadSubmissionHistory()}
+              disabled={submissionHistoryLoading || !submissionForm.roundId}
+            >
+              {submissionHistoryLoading ? "Loading..." : "Refresh"}
+            </Button>
+          </div>
+          {submissionHistoryLoading ? (
+            <EmptyLine text="Loading submission history..." />
+          ) : submissionHistory.length === 0 ? (
+            <EmptyLine text={submissionForm.roundId ? "No saved versions for this round yet." : "Select a round to view submission history."} />
+          ) : (
+            <div className="space-y-3">
+              {submissionHistory.map(submission => (
+                <SubmissionCard
+                  key={submission.submissionHistoryId}
+                  submission={submission}
+                  roundName={roundById.get(submission.roundId)?.roundName}
+                  onLoadFeedback={() => loadFeedback(submission.submissionId)}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
       </>
     );
   };
 
   useEffect(() => {
     if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
-    
+
     let cancelled = false;
     const fetchTeams = async () => {
-       try {
-         const events = await eventService.getPublic();
-         if (cancelled) return;
-         const teams = await discoverUserTeamsForEvents(events, user?.userId);
-         if (cancelled) return;
-         setLeaderboardTeams(teams.map(t => {
-            const discoveredTeam = t as TeamResponse & { eventName?: string };
-            return {
-              eventId: discoveredTeam.eventId,
-              eventName: discoveredTeam.eventName ?? events.find(e => e.eventId === discoveredTeam.eventId)?.eventName,
-              categoryId: discoveredTeam.categoryId,
-            };
-         }));
-       } catch (e) {
-         console.error(e);
-       }
+      try {
+        const events = await eventService.getPublic();
+        if (cancelled) return;
+        const teams = await discoverUserTeamsForEvents(events, user?.userId);
+        if (cancelled) return;
+        setLeaderboardTeams(teams.map(t => {
+          const discoveredTeam = t as TeamResponse & { eventName?: string };
+          return {
+            eventId: discoveredTeam.eventId,
+            eventName: discoveredTeam.eventName ?? events.find(e => e.eventId === discoveredTeam.eventId)?.eventName,
+            categoryId: discoveredTeam.categoryId,
+          };
+        }));
+      } catch (e) {
+        console.error(e);
+      }
     };
     if (user?.userId) fetchTeams();
     return () => { cancelled = true; };
   }, [currentPage, user?.userId]);
 
   useEffect(() => {
-     if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
-     const targetEventId = leaderboardEventId || activeTeam?.eventId;
-     if (!targetEventId) return;
-
-     const team = leaderboardTeams.find(t => t.eventId === targetEventId);
-     const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
-     if (!targetCategoryId) return;
-
-     roundService.getByCategory(targetCategoryId)
-       .then(setLeaderboardRounds)
-       .catch(() => setLeaderboardRounds([]));
-  }, [currentPage, leaderboardEventId, activeTeam?.eventId, activeTeam?.categoryId, leaderboardTeams]);
+    leaderboardTeamsRef.current = leaderboardTeams;
+  }, [leaderboardTeams]);
 
   useEffect(() => {
-     if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
-     const targetEventId = leaderboardEventId || activeTeam?.eventId;
-     if (!targetEventId) return;
+    if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
+    const targetEventId = leaderboardEventId || activeTeam?.eventId;
+    if (!targetEventId) return;
 
-     const team = leaderboardTeams.find(t => t.eventId === targetEventId);
-     const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
-     if (!targetCategoryId) return;
+    const team = leaderboardTeamsRef.current.find(t => t.eventId === targetEventId);
+    const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
+    if (!targetCategoryId) return;
 
-     if (leaderboardRoundId === "event") {
-         rankingService.getLeaderboard(targetEventId, targetCategoryId)
-            .then(setApiLeaderboard)
-            .catch(() => setApiLeaderboard([]));
-     } else {
-         rankingService.getRoundLeaderboard(leaderboardRoundId, targetCategoryId)
-            .then(setApiLeaderboard)
-            .catch(() => setApiLeaderboard([]));
-     }
-  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeam?.eventId, activeTeam?.categoryId, leaderboardTeams]);
+    roundService.getByCategory(targetCategoryId)
+      .then(setLeaderboardRounds)
+      .catch(() => setLeaderboardRounds([]));
+  }, [currentPage, leaderboardEventId, activeTeam?.eventId, activeTeam?.categoryId]);
+
+  useEffect(() => {
+    if (currentPage !== "leaderboard" && currentPage !== "rankings") return;
+    const targetEventId = leaderboardEventId || activeTeam?.eventId;
+    if (!targetEventId) return;
+
+    const team = leaderboardTeamsRef.current.find(t => t.eventId === targetEventId);
+    const targetCategoryId = team?.categoryId || activeTeam?.categoryId;
+    if (!targetCategoryId) return;
+
+    if (leaderboardRoundId === "event") {
+      rankingService.getLeaderboard(targetEventId, targetCategoryId)
+        .then(setApiLeaderboard)
+        .catch(() => setApiLeaderboard([]));
+    } else {
+      rankingService.getRoundLeaderboard(leaderboardRoundId, targetCategoryId)
+        .then(setApiLeaderboard)
+        .catch(() => setApiLeaderboard([]));
+    }
+  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeam?.eventId, activeTeam?.categoryId]);
 
   const renderRankings = () => {
     const currentEventId = leaderboardEventId || activeTeam?.eventId || "";
@@ -799,7 +835,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <table className="w-full" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: COLORS.bg }}>
-                  {["Rank", "Team", "Score", "Category"].concat(leaderboardRoundId !== "event" ? ["Result"] : []).map(h => (
+                  {["Rank", "Team", ...(leaderboardRoundId !== "event" ? ["Score"] : []), "Category", ...(leaderboardRoundId !== "event" ? ["Result"] : [])].map(h => (
                     <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                   ))}
                 </tr>
@@ -817,16 +853,16 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                     >
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                        {(() => {
-                          const rank = row.rankPosition ?? row.rank;
-                          if (!rank || rank <= 0) {
-                            return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
-                          }
-                          if (rank <= 3) {
-                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
-                          }
-                          return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
-                        })()}
+                          {(() => {
+                            const rank = row.rankPosition ?? row.rank;
+                            if (!rank || rank <= 0) {
+                              return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
+                            }
+                            if (rank <= 3) {
+                              return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
+                            }
+                            return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
+                          })()}
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -834,20 +870,22 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                           {row.teamName ?? row.teamId ?? row.team} {isMe && <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 8, background: `${COLORS.primary}20`, color: COLORS.primary, marginLeft: 6 }}>You</span>}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
-                          {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
-                        </span>
-                      </td>
+                      {leaderboardRoundId !== "event" && (
+                        <td className="px-4 py-3">
+                          <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
+                            {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
+                          </span>
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "—"}</span>
                       </td>
                       {leaderboardRoundId !== "event" && (
-                         <td className="px-4 py-3">
-                            {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
-                            {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
-                            {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
-                         </td>
+                        <td className="px-4 py-3">
+                          {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
+                          {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
+                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                        </td>
                       )}
                     </tr>
                   );

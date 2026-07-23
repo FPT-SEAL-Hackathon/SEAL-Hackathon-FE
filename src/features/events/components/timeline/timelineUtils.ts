@@ -10,6 +10,13 @@ export interface TimelineBounds {
 
 export function parseSafeDate(dateStr?: string | null): Date | null {
     if (!dateStr) return null;
+    
+    // For date-only strings (e.g. "2026-07-22"), avoid UTC shift by building a local Date
+    if (dateStr.length === 10 && dateStr.indexOf('-') === 4) {
+        const [y, m, d] = dateStr.split('-');
+        return new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+    }
+    
     const d = new Date(dateStr);
     return isNaN(d.getTime()) ? null : d;
 }

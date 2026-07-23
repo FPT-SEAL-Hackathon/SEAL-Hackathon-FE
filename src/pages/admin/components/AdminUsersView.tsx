@@ -885,10 +885,18 @@ function UserFormModal({
           )}
           <FormInput label="Phone" value={form.phone} error={fieldErrors.phone} onChange={value => setForm(prev => ({ ...prev, phone: value }))} />
           <FormSelect label="Role" value={role} error={fieldErrors.role} onChange={handleRoleChange}>
-            {ROLE_OPTIONS.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
+            {ROLE_OPTIONS.map(role => (
+              <SelectItem key={role.value} value={role.value} style={{ color: COLORS.textPrimary }}>
+                {role.label}
+              </SelectItem>
+            ))}
           </FormSelect>
           <FormSelect label="Status" value={form.accountStatus} error={fieldErrors.accountStatus} onChange={value => setForm(prev => ({ ...prev, accountStatus: value }))}>
-            {STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+            {STATUS_OPTIONS.map(status => (
+              <SelectItem key={status.value} value={status.value} style={{ color: COLORS.textPrimary }}>
+                {status.label}
+              </SelectItem>
+            ))}
           </FormSelect>
           {role === "FPT_STUDENT" && (
             <FormInput
@@ -986,7 +994,7 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
     <SelectValue placeholder="Select..." />
   </SelectTrigger>
-  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+  <SelectContent className="z-[90]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
     {children}
   </SelectContent>
 </Select>
@@ -1019,7 +1027,7 @@ function FormSelect({ label, value, onChange, error, children }: { label: string
   <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
     <SelectValue placeholder="Select..." />
   </SelectTrigger>
-  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+  <SelectContent className="z-[100]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
     {children}
   </SelectContent>
 </Select>

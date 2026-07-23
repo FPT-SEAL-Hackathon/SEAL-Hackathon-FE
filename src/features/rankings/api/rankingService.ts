@@ -41,12 +41,12 @@ export const rankingService = {
     api.post<EventRankingDTO[]>(`/api/v1/admin/events/${eventId}/compute-rankings`, {}),
   computeCategory: (categoryId: string) =>
     api.post<EventRankingDTO[]>(`/api/v1/admin/categories/${categoryId}/compute-rankings`, {}),
-  publishRound: (roundId: string, categoryId: string) =>
-    api.post<void>(`/api/v1/admin/rounds/${roundId}/publish-rankings?categoryId=${categoryId}`, {}),
+  publishRound: (roundId: string, categoryId: string, appealDurationMinutes?: number) =>
+    api.post<void>(`/api/v1/admin/rounds/${roundId}/publish-rankings?categoryId=${categoryId}${appealDurationMinutes ? '&appealDurationMinutes=' + appealDurationMinutes : ''}`, {}),
   publishEvent: (eventId: string, categoryId?: string) =>
     api.post<void>(`/api/v1/admin/events/${eventId}/publish-rankings${categoryId ? '?categoryId=' + categoryId : ''}`, {}),
-  publishCategory: (categoryId: string) =>
-    api.post<void>(`/api/v1/admin/categories/${categoryId}/publish-rankings`, {}),
+  publishCategory: (categoryId: string, appealDurationMinutes?: number) =>
+    api.post<void>(`/api/v1/admin/categories/${categoryId}/publish-rankings${appealDurationMinutes ? '?appealDurationMinutes=' + appealDurationMinutes : ''}`, {}),
   approveRound: (roundId: string, categoryId: string) =>
     api.post<void>(`/api/v1/admin/rounds/${roundId}/approve-rankings?categoryId=${categoryId}`, {}),
   approveCategory: (categoryId: string) =>
