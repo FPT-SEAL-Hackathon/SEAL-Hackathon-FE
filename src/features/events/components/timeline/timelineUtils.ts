@@ -26,24 +26,28 @@ export function calculateTimelineBounds(
     categories: CategoryResponse[], 
     rounds: RoundResponse[]
 ): TimelineBounds | null {
-    const dates: Date[] = [];
+    const dates: (Date | null)[] = [];
     const safeRounds = Array.isArray(rounds) ? rounds : [];
-    
+
+    // Dùng parseSafeDate cho MỌI mốc để biên trục và vị trí bar (getPercentage cũng
+    // dùng parseSafeDate) diễn giải timezone giống nhau. Event dates là date-only
+    // ("YYYY-MM-DD"): new Date() sẽ hiểu là UTC midnight và lệch ~7h ở UTC+7, khiến
+    // thanh Registration/Event Live không khớp trục và round block.
     if (event) {
-        if (event.registrationStart) dates.push(new Date(event.registrationStart));
-        if (event.registrationEnd) dates.push(new Date(event.registrationEnd));
-        if (event.eventStartDate) dates.push(new Date(event.eventStartDate));
-        if (event.eventEndDate) dates.push(new Date(event.eventEndDate));
+        dates.push(parseSafeDate(event.registrationStart));
+        dates.push(parseSafeDate(event.registrationEnd));
+        dates.push(parseSafeDate(event.eventStartDate));
+        dates.push(parseSafeDate(event.eventEndDate));
     }
-    
+
     safeRounds.forEach(r => {
-        if (r.startDate) dates.push(new Date(r.startDate));
-        if (r.endDate) dates.push(new Date(r.endDate));
-        if (r.submissionDeadline) dates.push(new Date(r.submissionDeadline));
-        if (r.judgingDeadline) dates.push(new Date(r.judgingDeadline));
+        dates.push(parseSafeDate(r.startDate));
+        dates.push(parseSafeDate(r.endDate));
+        dates.push(parseSafeDate(r.submissionDeadline));
+        dates.push(parseSafeDate(r.judgingDeadline));
     });
 
-    const validDates = dates.filter(d => !isNaN(d.getTime()));
+    const validDates = dates.filter((d): d is Date => d !== null && !isNaN(d.getTime()));
     
     if (validDates.length === 0) return null;
     

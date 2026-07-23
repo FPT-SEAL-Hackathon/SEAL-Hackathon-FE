@@ -7,6 +7,7 @@ import { Round, RoundCriteria, RoundJudge } from "../../types/round";
 import { EventResponse } from "../../api/eventService";
 import { getRoundStatus } from "../../utils/roundUtils";
 import { useRoundContext } from "../../context/RoundContext";
+import { useCategoryContext } from "../../context/CategoryContext";
 import { AssignJudgesModal } from "./AssignJudgesModal";
 import { parseApiError } from "@/lib/api/apiClient";
 import { submissionService } from "@/features/submissions/api/submissionService";
@@ -93,8 +94,11 @@ export function RoundCard({
     removeRoundCriterion,
 
     loadRoundCriteria,
-    loadRoundJudges
+    loadRoundJudges,
+    roundsByCategory
   } = useRoundContext();
+
+  const { categories } = useCategoryContext();
 
   const { eventCriteria } = useEventCriteriaContext()
 
@@ -174,6 +178,10 @@ export function RoundCard({
         }}
         onCancel={() => setEditing(false)}
         event={event}
+        categories={categories}
+        allRounds={Object.values(roundsByCategory).flat()}
+        categoryId={round.categoryId}
+        editingRoundId={round.roundId}
       />
     );
   }
