@@ -14,6 +14,8 @@ export interface RoundResponse {
   endDate: string;
   advancementTopN: number;
   isCalibrationRound: boolean;
+  appealStartTime?: string;
+  appealEndTime?: string;
 }
 
 export interface CreateRoundRequest {
@@ -27,6 +29,8 @@ export interface CreateRoundRequest {
   endDate?: string;
   advancementTopN?: number;
   isCalibrationRound?: boolean;
+  appealStartTime?: string;
+  appealEndTime?: string;
 }
 
 export interface RoundCriterionResponse {

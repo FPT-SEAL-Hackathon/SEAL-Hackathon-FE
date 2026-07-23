@@ -40,6 +40,7 @@ import { awardService, type AwardResponse } from "@/features/awards/api/awardSer
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
+import { MemberMyResultsView } from "./components/MemberMyResultsView";
 import { ScoreDetailsModal } from "@/features/events/components/judging/ScoreDetailsModal";
 
 
@@ -412,7 +413,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const userInitials = getInitials(displayName);
   const studentCode = user?.fptStudentCode ?? user?.externalStudentCode ?? "";
 
-  // ── Events ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [apiEvents, setApiEvents] = useState<MemberEvent[]>([]);
   const [participations, setParticipations] = useState<Record<string, EventParticipantResponse>>({});
   const [eventsError, setEventsError] = useState("");
@@ -499,7 +500,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     return () => window.removeEventListener("focus", handleFocus);
   }, [loadEvents]);
 
-  // ── Notifications ────────────────────────────────────────────────────────────
+  // â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [notifs, setNotifs] = useState<MemberNotification[]>([]);
 
   const fetchNotifs = () => {
@@ -800,12 +801,12 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     }
   }, [submissionTeams.length, user?.userId]);
 
-  // Khi vào trang certificates, init event từ storedTeam hoặc apiEvents
+  // Khi vĂ o trang certificates, init event tá»« storedTeam hoáº·c apiEvents
   useEffect(() => {
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
-    // Nếu chưa chọn event, ưu tiên dùng eventId từ storedTeam
+    // Náº¿u chÆ°a chá»n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
     setCertificateSelectedEventId(prev => {
       if (prev) return prev;
       return storedTeam?.eventId ?? "";
@@ -813,7 +814,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     setCertificateCategoryId("all");
   }, [currentPage, user?.userId]);
 
-  // Load awards khi event được chọn
+  // Load awards khi event Ä‘Æ°á»£c chá»n
   useEffect(() => {
     if (currentPage !== "certificates") return;
     if (!certificateSelectedEventId) {
@@ -829,7 +830,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     awardService.getByEvent(certificateSelectedEventId)
       .then(awards => {
         if (cancelled) return;
-        // Chỉ lọc theo teamId nếu có, không lọc cứng theo categoryId
+        // Chá»‰ lá»c theo teamId náº¿u cĂ³, khĂ´ng lá»c cá»©ng theo categoryId
         const visibleAwards = awards.filter((award: any) => (
           (!storedTeam?.teamId || award.teamId === storedTeam.teamId)
           && award.isPublished
@@ -874,7 +875,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [activeTeamContext?.eventId, currentPage]);
 
   useEffect(() => {
-    if (currentPage !== "submissions" || !activeTeamContext?.categoryId) {
+    if ((currentPage !== "submissions" && currentPage !== "results") || !activeTeamContext?.categoryId) {
       setSubmissionRounds([]);
       setAllSubmissionRounds([]);
       setSubmissionHistory([]);
@@ -1377,9 +1378,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : "Select a round..."} />
             </SelectTrigger>
             <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-              {!submissionRoundsLoading && submissionRounds.length === 0 && (
-                <div className="p-2 text-sm text-center text-muted-foreground">No official rounds available</div>
-              )}
               {submissionRounds.map(round => (
                 <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
                   {round.roundName}
@@ -1387,7 +1385,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               ))}
             </SelectContent>
           </Select>
-          {selectedSubmissionRound ? (
+          {selectedSubmissionRound && currentPage !== "results" ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {selectedSubmissionRoundLocked ? (
                 <StatusBadge status="locked" />
@@ -2262,7 +2260,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                             return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
                           }
                           if (rank <= 3) {
-                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
+                            return <span style={{ fontSize: 16 }}>{["đŸ¥‡", "đŸ¥ˆ", "đŸ¥‰"][rank - 1]}</span>;
                           }
                           return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
                         })()}
@@ -2281,13 +2279,13 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                       </td>
                     )}
                     <td className="px-4 py-3">
-                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "—"}</span>
+                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "â€”"}</span>
                     </td>
                     {leaderboardRoundId !== "event" && (
                        <td className="px-4 py-3">
                           {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
                           {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
-                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>â€”</span>}
                        </td>
                     )}
                   </tr>
@@ -2313,7 +2311,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 };
 
   const renderCertificates = () => {
-    // Danh sách events mà user đang tham gia (ACTIVE)
+    // Danh sĂ¡ch events mĂ  user Ä‘ang tham gia (ACTIVE)
     const joinedEvents = apiEvents.filter(ev =>
       normalizeParticipationStatus(participations[ev.eventId]?.participantStatus ?? ev.participantStatus) === "ACTIVE",
     );
@@ -2977,7 +2975,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               >
                 {profileSaving ? "Saving..." : "Save Changes"}
               </Button>
-              {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Profile saved!</span>}
+              {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>âœ“ Profile saved!</span>}
               {profileError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{profileError}</span>}
             </div>
           </Card>
@@ -3014,6 +3012,17 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         {currentPage === "events" && renderEvents()}
         {currentPage === "certificates" && renderCertificates()}
         {currentPage === "submissions" && renderSubmissions()}
+        {currentPage === "results" && (
+          <div className="space-y-6">
+            <SectionHeader title="My Results" subtitle="Select a team to view your rankings, judge feedback, and manage appeals for each round." />
+            {renderSubmissionTeamSelector()}
+            {activeTeamContext?.teamId ? (
+               <MemberMyResultsView activeTeamContext={activeTeamContext} round={selectedSubmissionRound} />
+            ) : (
+               <Card className="p-6 text-center text-gray-500">Please select a team above to view your results.</Card>
+            )}
+          </div>
+        )}
         {currentPage === "feedback" && renderFeedback()}
         {currentPage === "requests" && renderRequests()}
         {currentPage === "notifications" && renderNotifications()}
@@ -3027,3 +3036,4 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
   return <div className="p-6 space-y-6">{renderPage()}</div>;
 }
+

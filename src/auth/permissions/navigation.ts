@@ -14,7 +14,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Award", label: "Certificates", key: "certificates" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXTERNAL_STUDENT]: [
@@ -23,7 +23,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Calendar", label: "My Events", key: "events" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
     { icon: "Award", label: "Certificates", key: "certificates" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.INTERNAL_JUDGE]: [
@@ -66,9 +66,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "MessageSquare", label: "My Mentor", key: "mentor" },
     { icon: "ClipboardList", label: "Consultation History", key: "consultations" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
-    { icon: "Eye", label: "Judge Feedback", key: "feedback" },
-    { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.MEMBER]: [
@@ -77,8 +75,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "MessageSquare", label: "My Mentor", key: "mentor" },
     { icon: "ClipboardList", label: "Consultation History", key: "consultations" },
     { icon: "FolderOpen", label: "Submission Center", key: "submissions" },
-    { icon: "Trophy", label: "Leaderboard", key: "leaderboard" },
-    { icon: "AlertCircle", label: "Appeals", key: "appeals" },
+    { icon: "Trophy", label: "My Results", key: "results" },
     { icon: "Bell", label: "Notifications", key: "notifications" },
   ],
   [ROLES.EXPERT]: [

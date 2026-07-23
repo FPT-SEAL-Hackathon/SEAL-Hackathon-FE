@@ -95,22 +95,22 @@ export function RoundForm({
           />
         </Field>
         <Field label="Start Date">
-          <Input type="datetime-local" value={form.startDate ?? ""} onChange={v => set("startDate", v)} />
+          <Input type="datetime-local" value={form.startDate ? form.startDate.substring(0, 16) : ""} onChange={v => set("startDate", v)} />
         </Field>
         <Field label="End Date">
-          <Input type="datetime-local" value={form.endDate ?? ""} onChange={v => set("endDate", v)} />
+          <Input type="datetime-local" value={form.endDate ? form.endDate.substring(0, 16) : ""} onChange={v => set("endDate", v)} />
         </Field>
         <Field label="Submission Deadline">
-          <Input type="datetime-local" value={form.submissionDeadline ?? ""} onChange={v => set("submissionDeadline", v)} />
+          <Input type="datetime-local" value={form.submissionDeadline ? form.submissionDeadline.substring(0, 16) : ""} onChange={v => set("submissionDeadline", v)} />
         </Field>
         <Field label="Judging Deadline">
-          <Input type="datetime-local" value={form.judgingDeadline ?? ""} onChange={v => set("judgingDeadline", v)} />
+          <Input type="datetime-local" value={form.judgingDeadline ? form.judgingDeadline.substring(0, 16) : ""} onChange={v => set("judgingDeadline", v)} />
         </Field>
         <Field label="Appeal Start Time">
-          <Input type="datetime-local" value={form.appealStartTime ?? ""} onChange={v => set("appealStartTime", v)} />
+          <Input type="datetime-local" value={form.appealStartTime ? form.appealStartTime.substring(0, 16) : ""} onChange={v => set("appealStartTime", v)} />
         </Field>
         <Field label="Appeal End Time">
-          <Input type="datetime-local" value={form.appealEndTime ?? ""} onChange={v => set("appealEndTime", v)} />
+          <Input type="datetime-local" value={form.appealEndTime ? form.appealEndTime.substring(0, 16) : ""} onChange={v => set("appealEndTime", v)} />
         </Field>
         <div className="md:col-span-2">
           <Field label="Description">
