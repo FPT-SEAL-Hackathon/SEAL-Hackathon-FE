@@ -23,8 +23,26 @@ export interface SubmissionRepositoryResponse {
   lastSynchronizedAt?: string;
   errorCode?: string;
   errorMessage?: string;
+  starCount?: number;
+  forkCount?: number;
+  openIssuesCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// Mot dong trong Organizer "Submission Repositories" overview theo event.
+export interface EventSubmissionRepositoryItem {
+  submissionId: string;
+  teamId?: string;
+  teamName?: string;
+  categoryName?: string;
+  roundName?: string;
+  submittedAt?: string;
+  submissionDeadline?: string;
+  repositoryUrl?: string;
+  repository?: SubmissionRepositoryResponse | null;
+  // Chi bao review (khong phai ket luan vi pham): null khi thieu du lieu so sanh.
+  lastPushAfterDeadline?: boolean | null;
 }
 
 export interface SubmissionResponse {
@@ -153,6 +171,13 @@ export const submissionService = {
 
   syncSubmissionRepository: (submissionId: string) =>
     api.post<SubmissionRepositoryResponse>(`/api/v1/submissions/${enc(submissionId)}/repository/sync`, {}),
+
+  // Organizer (event creator) overview of all submission repositories in an event.
+  getEventSubmissionRepositories: (eventId: string) =>
+    api.get<EventSubmissionRepositoryItem[]>(`/api/v1/events/${enc(eventId)}/submission-repositories`),
+
+  exportEventSubmissionRepositoriesCsv: (eventId: string) =>
+    api.blob(`/api/v1/events/${enc(eventId)}/submission-repositories/export`),
 
   // Student Downloads. Blob methods include Bearer auth through apiClient.
   downloadProblem: (roundId: string, type?: ProblemDownloadType) =>

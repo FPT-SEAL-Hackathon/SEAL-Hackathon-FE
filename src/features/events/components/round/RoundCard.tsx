@@ -4,6 +4,7 @@ import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared
 import { CriteriaImportPanel } from "../../shared/ui/shared";
 import { RoundForm } from "./RoundForm";
 import { Round, RoundCriteria, RoundJudge } from "../../types/round";
+import { EventResponse } from "../../api/eventService";
 import { getRoundStatus } from "../../utils/roundUtils";
 import { useRoundContext } from "../../context/RoundContext";
 import { AssignJudgesModal } from "./AssignJudgesModal";
@@ -33,6 +34,7 @@ function isSampleRoundLocked(round: Round) {
 
 interface Props {
     round: Round;
+    event?: EventResponse;
     onDeleteRound: (round: Round) => void;
     onRemoveJudge: (
       round: Round,
@@ -45,6 +47,7 @@ interface Props {
 }
 export function RoundCard({
   round,
+  event,
   onDeleteRound,
   onRemoveCriterion,
   onRemoveJudge
@@ -170,6 +173,7 @@ export function RoundCard({
             }
         }}
         onCancel={() => setEditing(false)}
+        event={event}
       />
     );
   }

@@ -7,6 +7,7 @@ export type PageKey =
   | "event-detail"
   | "event-participants"
   | "repository-integrations"
+  | "submission-repositories"
   | "leaderboard"
   | "certificates"
   | "notifications"
@@ -62,6 +63,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   events: [...STUDENT_ROLES, ...ORGANIZER_ROLES, ...LEADER_MEMBER_ROLES],
   "event-participants": [...ORGANIZER_ROLES],
   "repository-integrations": [...ORGANIZER_ROLES],
+  "submission-repositories": [...ORGANIZER_ROLES],
   // Duyệt team nằm trong Event Management -> Team Management (EventTeamsSection).
   leaderboard: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],
   certificates: [...STUDENT_ROLES, ...LEADER_MEMBER_ROLES],

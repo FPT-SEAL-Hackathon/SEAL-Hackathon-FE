@@ -35,9 +35,14 @@ export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime,
     }
   };
 
-  const parseBoundary = (b: string | Date) => {
+  const parseBoundary = (b: string | Date, edge: "min" | "max") => {
     if (b instanceof Date) return new Date(b);
-    return b.length === 10 ? parse(b, "yyyy-MM-dd", new Date()) : parse(b.substring(0, 16), "yyyy-MM-dd'T'HH:mm", new Date());
+    if (b.length === 10) {
+      const dateOnly = parse(b, "yyyy-MM-dd", new Date());
+      dateOnly.setHours(edge === "min" ? 0 : 23, edge === "min" ? 0 : 59, 0, 0);
+      return dateOnly;
+    }
+    return parse(b.substring(0, 16), "yyyy-MM-dd'T'HH:mm", new Date());
   };
 
   const normalizeToMinute = (date: Date) => {
@@ -48,14 +53,14 @@ export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime,
 
   const minBoundaryDate = React.useMemo(() => {
     if (!minDateTime) return undefined;
-    const d = normalizeToMinute(parseBoundary(minDateTime));
+    const d = normalizeToMinute(parseBoundary(minDateTime, "min"));
     if (strictMin) d.setMinutes(d.getMinutes() + 1);
     return d;
   }, [minDateTime, strictMin]);
 
   const maxBoundaryDate = React.useMemo(() => {
     if (!maxDateTime) return undefined;
-    const d = normalizeToMinute(parseBoundary(maxDateTime));
+    const d = normalizeToMinute(parseBoundary(maxDateTime, "max"));
     if (strictMax) d.setMinutes(d.getMinutes() - 1);
     return d;
   }, [maxDateTime, strictMax]);

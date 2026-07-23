@@ -91,6 +91,30 @@ export function RoundForm({
 
     const aStart = getTime(form.appealStartTime);
     const aEnd = getTime(form.appealEndTime);
+    if (event?.eventStartDate && form.appealStartTime) {
+      if (form.appealStartTime.substring(0, 10) < event.eventStartDate) {
+        setError(`Appeal Start Time must be on or after Event Start Date (${event.eventStartDate}).`);
+        return;
+      }
+    }
+    if (event?.eventEndDate && form.appealEndTime) {
+      if (form.appealEndTime.substring(0, 10) > event.eventEndDate) {
+        setError(`Appeal End Time must be on or before Event End Date (${event.eventEndDate}).`);
+        return;
+      }
+    }
+    if (jdgTime && aStart && aStart < jdgTime) {
+      setError("Appeal Start Time must be after or equal to Judging Deadline.");
+      return;
+    }
+    if (sTime && aStart && aStart < sTime) {
+      setError("Appeal Start Time must be after or equal to Start Date.");
+      return;
+    }
+    if (eTime && aEnd && aEnd > eTime) {
+      setError("Appeal End Time must be before or equal to End Date.");
+      return;
+    }
     if (aStart && aEnd && aStart >= aEnd) {
       setError("Appeal Start Time must be strictly before Appeal End Time.");
       return;
@@ -211,8 +235,8 @@ export function RoundForm({
           <DateTimePickerField 
             value={form.appealStartTime ?? ""} 
             onChange={v => set("appealStartTime", v)} 
-            minDateTime={event?.eventStartDate}
-            maxDateTime={form.appealEndTime || event?.eventEndDate}
+            minDateTime={form.judgingDeadline || form.startDate || event?.eventStartDate}
+            maxDateTime={form.appealEndTime || form.endDate || event?.eventEndDate}
             strictMax={!!form.appealEndTime}
           />
         </Field>
@@ -220,9 +244,9 @@ export function RoundForm({
           <DateTimePickerField 
             value={form.appealEndTime ?? ""} 
             onChange={v => set("appealEndTime", v)} 
-            minDateTime={form.appealStartTime || event?.eventStartDate}
+            minDateTime={form.appealStartTime || form.judgingDeadline || form.startDate || event?.eventStartDate}
             strictMin={!!form.appealStartTime}
-            maxDateTime={event?.eventEndDate}
+            maxDateTime={form.endDate || event?.eventEndDate}
           />
         </Field>
         <div className="md:col-span-2">

@@ -41,7 +41,9 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
   [ROLES.ORGANIZER]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
     { icon: "Calendar", label: "Event Management", key: "events" },
-    { icon: "GitBranch", label: "Repository Integrations", key: "repository-integrations" },
+    { icon: "GitBranch", label: "Submission Repositories", key: "submission-repositories" },
+    // Legacy: PAT-based Event-level integration — giữ cho admin cũ, không còn là luồng chính.
+    { icon: "GitBranch", label: "Repository Integrations (Legacy)", key: "repository-integrations" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "FileText", label: "Submissions", key: "submissions" },
     { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },

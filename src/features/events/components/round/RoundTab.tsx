@@ -145,6 +145,7 @@ export function RoundsTab({ event }: Props) {
                   <RoundCard
                     key={round.roundId}
                     round={round} 
+                    event={event}
                     onDeleteRound={setDeletingRound}
                     onRemoveCriterion={(round, criterion) => 
                       setRemovingRoundCriterion({
