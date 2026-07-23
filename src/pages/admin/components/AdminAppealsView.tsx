@@ -111,9 +111,7 @@ export function AdminAppealsView() {
                     <span>Category: <span className="font-semibold text-gray-700">{appeal.categoryName}</span></span>
                   </div>
                 </div>
-                <StatusBadge 
-                  status={appeal.status.toLowerCase()} 
-                />
+                <StatusBadge status={appeal.status.toLowerCase()} />
               </div>
               
               <div className="p-3 bg-gray-50 rounded mt-3 text-sm text-gray-700 whitespace-pre-wrap">

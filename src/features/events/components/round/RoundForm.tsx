@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Save, CheckCircle } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
-import { Field, Input, Textarea, Select } from "../../shared/ui/shared";
+import { Field, Input, Textarea, Select, DateTimePickerField } from "../../shared/ui/shared";
 import { RoundRequest } from "../../types/round";
 import { ROUND_STATUSES } from "../../constants/roundStatus";
 import { EventResponse } from "../../api/eventService";
@@ -31,7 +31,105 @@ export function RoundForm({
     categoryId
 }: Props) {
   const [form, setForm] = useState(initial);
+  const [error, setError] = useState("");
   const set = (key: keyof typeof form, value: unknown) => setForm(p => ({ ...p, [key]: value }));
+
+  const handleSave = async () => {
+    setError("");
+    if (!form.roundName) return;
+
+    const getTime = (d: string | null | undefined) => d ? new Date(d).getTime() : null;
+    
+    const sTime = getTime(form.startDate);
+    const eTime = getTime(form.endDate);
+    const subTime = getTime(form.submissionDeadline);
+    const jdgTime = getTime(form.judgingDeadline);
+
+    if (sTime && eTime && sTime >= eTime) {
+      setError("End Date must be strictly after Start Date.");
+      return;
+    }
+
+    if (event?.eventStartDate && form.startDate) {
+      if (form.startDate.substring(0, 10) < event.eventStartDate) {
+        setError(`Round Start Date must be on or after Event Start Date (${event.eventStartDate}).`);
+        return;
+      }
+    }
+
+    if (event?.eventEndDate && form.endDate) {
+      if (form.endDate.substring(0, 10) > event.eventEndDate) {
+        setError(`Round End Date must be on or before Event End Date (${event.eventEndDate}).`);
+        return;
+      }
+    }
+    
+    if (sTime && subTime && subTime < sTime) {
+      setError("Submission Deadline must be after or equal to Start Date.");
+      return;
+    }
+    
+    if (subTime && jdgTime && jdgTime < subTime) {
+      setError("Judging Deadline must be after or equal to Submission Deadline.");
+      return;
+    }
+    
+    if (jdgTime && eTime && eTime < jdgTime) {
+      setError("End Date must be after or equal to Judging Deadline.");
+      return;
+    }
+    
+    // Cross checks if some dates are missing
+    if (!subTime && sTime && jdgTime && jdgTime < sTime) {
+      setError("Judging Deadline must be after or equal to Start Date.");
+      return;
+    }
+    if (!jdgTime && eTime && subTime && eTime < subTime) {
+      setError("End Date must be after or equal to Submission Deadline.");
+      return;
+    }
+
+    const aStart = getTime(form.appealStartTime);
+    const aEnd = getTime(form.appealEndTime);
+    if (event?.eventStartDate && form.appealStartTime) {
+      if (form.appealStartTime.substring(0, 10) < event.eventStartDate) {
+        setError(`Appeal Start Time must be on or after Event Start Date (${event.eventStartDate}).`);
+        return;
+      }
+    }
+    if (event?.eventEndDate && form.appealEndTime) {
+      if (form.appealEndTime.substring(0, 10) > event.eventEndDate) {
+        setError(`Appeal End Time must be on or before Event End Date (${event.eventEndDate}).`);
+        return;
+      }
+    }
+    if (jdgTime && aStart && aStart < jdgTime) {
+      setError("Appeal Start Time must be after or equal to Judging Deadline.");
+      return;
+    }
+    if (sTime && aStart && aStart < sTime) {
+      setError("Appeal Start Time must be after or equal to Start Date.");
+      return;
+    }
+    if (eTime && aEnd && aEnd > eTime) {
+      setError("Appeal End Time must be before or equal to End Date.");
+      return;
+    }
+    if (aStart && aEnd && aStart >= aEnd) {
+      setError("Appeal Start Time must be strictly before Appeal End Time.");
+      return;
+    }
+
+    try {
+      const payload = { ...form };
+      if (!payload.roundStatusId) {
+        delete payload.roundStatusId;
+      }
+      await onSave(payload);
+    } catch (err: any) {
+      setError(err?.message || "Save failed.");
+    }
+  };
 
   // Prepare data for timeline preview
   let previewRounds = allRounds || [];
@@ -43,8 +141,8 @@ export function RoundForm({
           roundName: form.roundName || "Editing Round...",
           description: form.description || "",
           roundOrder: form.roundOrder || 0,
+          roundStatusId: form.roundStatusId || "",
           roundStatusName: "Draft",
-          roundStatusId: "draft-temp-id",
           isCalibrationRound: form.isCalibrationRound || false,
           startDate: form.startDate,
           endDate: form.endDate,
@@ -63,6 +161,11 @@ export function RoundForm({
 
   return (
     <Card className="p-5 mb-3" style={{ border: `1px solid ${COLORS.primary}30` }}>
+      {error && (
+        <div className="px-4 py-3 mb-4 rounded-xl text-sm whitespace-pre-wrap" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
+          {error}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <Field label="Round Name">
           <Input value={form.roundName} onChange={v => set("roundName", v)} placeholder="e.g. Qualifying Round" />
@@ -72,7 +175,7 @@ export function RoundForm({
         </Field>
         <Field label="Status">
           <Select 
-              value={form.roundStatusId} 
+              value={form.roundStatusId || ""} 
               onChange={v => set("roundStatusId", v)}
             >
             {ROUND_STATUSES.map(status => (
@@ -95,22 +198,56 @@ export function RoundForm({
           />
         </Field>
         <Field label="Start Date">
-          <Input type="datetime-local" value={form.startDate ? form.startDate.substring(0, 16) : ""} onChange={v => set("startDate", v)} />
+          <DateTimePickerField 
+            value={form.startDate ?? ""} 
+            onChange={v => set("startDate", v)} 
+            minDateTime={event?.eventStartDate}
+            maxDateTime={form.endDate || event?.eventEndDate}
+            strictMax={!!form.endDate}
+          />
         </Field>
         <Field label="End Date">
-          <Input type="datetime-local" value={form.endDate ? form.endDate.substring(0, 16) : ""} onChange={v => set("endDate", v)} />
+          <DateTimePickerField 
+            value={form.endDate ?? ""} 
+            onChange={v => set("endDate", v)} 
+            minDateTime={form.judgingDeadline || form.submissionDeadline || form.startDate || event?.eventStartDate}
+            strictMin={!form.judgingDeadline && !form.submissionDeadline && !!form.startDate}
+            maxDateTime={event?.eventEndDate}
+          />
         </Field>
         <Field label="Submission Deadline">
-          <Input type="datetime-local" value={form.submissionDeadline ? form.submissionDeadline.substring(0, 16) : ""} onChange={v => set("submissionDeadline", v)} />
+          <DateTimePickerField 
+            value={form.submissionDeadline ?? ""} 
+            onChange={v => set("submissionDeadline", v)} 
+            minDateTime={form.startDate || event?.eventStartDate}
+            maxDateTime={form.judgingDeadline || form.endDate || event?.eventEndDate}
+          />
         </Field>
         <Field label="Judging Deadline">
-          <Input type="datetime-local" value={form.judgingDeadline ? form.judgingDeadline.substring(0, 16) : ""} onChange={v => set("judgingDeadline", v)} />
+          <DateTimePickerField 
+            value={form.judgingDeadline ?? ""} 
+            onChange={v => set("judgingDeadline", v)} 
+            minDateTime={form.submissionDeadline || form.startDate || event?.eventStartDate}
+            maxDateTime={form.endDate || event?.eventEndDate}
+          />
         </Field>
         <Field label="Appeal Start Time">
-          <Input type="datetime-local" value={form.appealStartTime ? form.appealStartTime.substring(0, 16) : ""} onChange={v => set("appealStartTime", v)} />
+          <DateTimePickerField 
+            value={form.appealStartTime ?? ""} 
+            onChange={v => set("appealStartTime", v)} 
+            minDateTime={form.judgingDeadline || form.startDate || event?.eventStartDate}
+            maxDateTime={form.appealEndTime || form.endDate || event?.eventEndDate}
+            strictMax={!!form.appealEndTime}
+          />
         </Field>
         <Field label="Appeal End Time">
-          <Input type="datetime-local" value={form.appealEndTime ? form.appealEndTime.substring(0, 16) : ""} onChange={v => set("appealEndTime", v)} />
+          <DateTimePickerField 
+            value={form.appealEndTime ?? ""} 
+            onChange={v => set("appealEndTime", v)} 
+            minDateTime={form.appealStartTime || form.judgingDeadline || form.startDate || event?.eventStartDate}
+            strictMin={!!form.appealStartTime}
+            maxDateTime={form.endDate || event?.eventEndDate}
+          />
         </Field>
         <div className="md:col-span-2">
           <Field label="Description">
@@ -150,7 +287,7 @@ export function RoundForm({
       )}
 
       <div className="flex gap-2 mt-4">
-        <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={() => onSave(form)} disabled={!form.roundName}>
+        <Button variant="primary" size="sm" icon={<Save size={13} />} onClick={handleSave} disabled={!form.roundName}>
           Save Round
         </Button>
         <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>

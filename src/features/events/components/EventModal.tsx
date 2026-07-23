@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { eventService, type EventResponse, type CreateEventRequest } from "@/features/events/api/eventService";
 import { ApiError } from "@/lib/api/apiClient";
 import { COLORS } from "@/components/shared/UIComponents";
+import { DatePickerField, DateTimePickerField } from "../shared/ui/shared";
 import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
 import { uploadImageToCloudinary } from "@/utils/cloudinary";
 
@@ -47,7 +48,9 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
 }
 
 const formatDateTime = (value: string) => {
-    return value ? `${value}:00` : undefined;
+    if (!value) return undefined;
+    if (value.length === 16) return `${value}:00`;
+    return value;
 };
 
 export function EventModal({ event, onClose, onSaved }: Props) {
@@ -136,18 +139,35 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
   const handleSave = async () => {
     if (!form.eventName.trim()) { setError("Event name is required."); return; }
+    
+    if (form.registrationStart && form.registrationEnd && form.registrationStart >= form.registrationEnd) {
+      setError("Registration End time must be after Registration Start time.");
+      return;
+    }
+    if (form.eventStartDate && form.eventEndDate && form.eventStartDate > form.eventEndDate) {
+      setError("Event End Date must be after or equal to Event Start Date.");
+      return;
+    }
+    if (form.registrationEnd && form.eventStartDate) {
+      const regEndDate = form.registrationEnd.substring(0, 10);
+      if (regEndDate > form.eventStartDate) {
+        setError("Registration End date must be on or before Event Start Date.");
+        return;
+      }
+    }
+
     setLoading(true); setError("");
     try {
-      const payload: CreateEventRequest = {
+      const payload: any = {
         eventName: form.eventName,
         description: form.description || "",
         location: form.location || "",
         bannerImageUrl: form.bannerImageUrl || "",
-        eventStatusId: form.eventStatusId,
-        registrationStart: formatDateTime(form.registrationStart) ?? "",
-        registrationEnd: formatDateTime(form.registrationEnd) ?? "",
-        eventStartDate: form.eventStartDate || "",
-        eventEndDate: form.eventEndDate || "",
+        eventStatusId: form.eventStatusId || undefined,
+        registrationStart: formatDateTime(form.registrationStart),
+        registrationEnd: formatDateTime(form.registrationEnd),
+        eventStartDate: form.eventStartDate || undefined,
+        eventEndDate: form.eventEndDate || undefined,
         maxTeamSize: parseInt(form.maxTeamSize) || 5,
         minTeamSize: parseInt(form.minTeamSize) || 2,
       };
@@ -224,19 +244,40 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Registration Start">
-                <Input type="datetime-local" value={form.registrationStart} onChange={v => set("registrationStart", v)} />
+                <DateTimePickerField
+                  value={form.registrationStart}
+                  onChange={v => set("registrationStart", v)}
+                  minDateTime={!isEdit ? new Date() : undefined}
+                  maxDateTime={form.registrationEnd || undefined}
+                  strictMax={!!form.registrationEnd}
+                />
               </Field>
               <Field label="Registration End">
-                <Input type="datetime-local" value={form.registrationEnd} onChange={v => set("registrationEnd", v)} />
+                <DateTimePickerField
+                  value={form.registrationEnd}
+                  onChange={v => set("registrationEnd", v)}
+                  minDateTime={form.registrationStart || (!isEdit ? new Date() : undefined)}
+                  strictMin={!!form.registrationStart}
+                  maxDateTime={undefined}
+                />
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Event Start Date">
-                <Input type="date" value={form.eventStartDate} onChange={v => set("eventStartDate", v)} />
+                <DatePickerField
+                  value={form.eventStartDate}
+                  onChange={v => set("eventStartDate", v)}
+                  minDate={!isEdit ? new Date() : undefined}
+                  maxDate={form.eventEndDate}
+                />
               </Field>
               <Field label="Event End Date">
-                <Input type="date" value={form.eventEndDate} onChange={v => set("eventEndDate", v)} />
+                <DatePickerField
+                  value={form.eventEndDate}
+                  onChange={v => set("eventEndDate", v)}
+                  minDate={form.eventStartDate || (!isEdit ? new Date() : undefined)}
+                />
               </Field>
             </div>
 
