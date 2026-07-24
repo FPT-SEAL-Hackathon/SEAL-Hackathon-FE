@@ -269,8 +269,8 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
   const sendMessage = async () => {
     if (!messageInput.trim() || !selectedRequest) return;
     try {
-      const msg = await consultationService.sendMessage(selectedRequest.id, { content: messageInput });
-      setMessages([...messages, msg]);
+      await consultationService.sendMessage(selectedRequest.id, { content: messageInput });
+      await reloadMessages();
       setMessageInput("");
     } catch (e) { console.error(e); }
   };

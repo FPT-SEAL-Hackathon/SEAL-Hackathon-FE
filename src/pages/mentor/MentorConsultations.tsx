@@ -383,8 +383,8 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
     const content = messageInput.trim();
     if (!content || !selectedRequest) return;
     try {
-      const msg = await consultationService.sendMessage(selectedRequest.id, { content });
-      setMessages(prev => [...prev, msg]);
+      await consultationService.sendMessage(selectedRequest.id, { content });
+      await reloadMessages();
       setMessageInput("");
     } catch (e) { console.error(e); }
   };
