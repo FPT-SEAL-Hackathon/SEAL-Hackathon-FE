@@ -203,5 +203,5 @@ export const eventService = {
   update: async (id: string, data: UpdateEventRequest) => normalizeEventResponse(unwrapItem(await api.put<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/${id}`, data))),
   updateStatus: async (id: string, data: UpdateEventStatusRequest) => normalizeEventResponse(unwrapItem(await api.patch<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/status/${id}`, data))),
   delete: (id: string) => api.delete(`/api/v1/event/${id}`),
-  getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/event/organizer"))),
+  getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events/organizer"))),
 };
