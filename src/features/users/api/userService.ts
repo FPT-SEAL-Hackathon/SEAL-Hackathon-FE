@@ -118,6 +118,14 @@ export interface HardDeleteUserResponse {
   deletedAccounts: number;
 }
 
+// Kết quả deactivate: team đã tự chuyển quyền leader + cảnh báo cần xử lý tay.
+export interface DeactivateUserResponse {
+  success: boolean;
+  message: string;
+  transferredTeams: string[];
+  warnings: string[];
+}
+
 export interface PaginatedUsersResponse {
   content: UserManagementUser[];
   totalElements: number;
@@ -315,7 +323,7 @@ export const userService = {
     unwrapUser(await api.patch<BackendUser | { data?: BackendUser }>(`/api/v1/users/${userId}/role`, payload)),
 
   deleteUser: (userId: string) =>
-    api.delete<void>(`/api/v1/users/${userId}`),
+    api.delete<DeactivateUserResponse>(`/api/v1/users/${userId}`),
 
   // Xóa CỨNG mọi tài khoản trùng email (dev tool, không thể hoàn tác).
   // BE giữ dữ liệu tập thể (submission gán lại cho leader) và cho phép
