@@ -383,8 +383,8 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
     const content = messageInput.trim();
     if (!content || !selectedRequest) return;
     try {
-      const msg = await consultationService.sendMessage(selectedRequest.id, { content });
-      setMessages(prev => [...prev, msg]);
+      await consultationService.sendMessage(selectedRequest.id, { content });
+      await reloadMessages();
       setMessageInput("");
     } catch (e) { console.error(e); }
   };
@@ -546,12 +546,12 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
                     style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg }}
                   />
                 </div>
-                <div>
-                  <label className="text-sm font-bold block mb-1" style={{color: COLORS.textSecondary}}>AI should answer exactly this:</label>
-                  <div className="p-3 rounded-xl text-sm" style={{background: `${COLORS.primary}10`, color: COLORS.textPrimary}}>
-                    {teachAiModal.standardAnswer}
+                  <div>
+                    <label className="text-sm font-bold block mb-1" style={{color: COLORS.textSecondary}}>AI should answer exactly this:</label>
+                    <div className="p-3 rounded-xl text-sm overflow-y-auto" style={{background: `${COLORS.primary}10`, color: COLORS.textPrimary, maxHeight: "200px"}}>
+                      {teachAiModal.standardAnswer}
+                    </div>
                   </div>
-                </div>
               </div>
               <div className="px-5 py-4 flex justify-end gap-2" style={{ borderTop: `1px solid ${COLORS.border}` }}>
                 <Button variant="outline" size="sm" onClick={() => setTeachAiModal({open: false, standardAnswer: ""})}>Cancel</Button>

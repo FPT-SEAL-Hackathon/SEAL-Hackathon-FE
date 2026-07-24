@@ -144,6 +144,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<typeof events>([]);
+  const [eventReloadKey, setEventReloadKey] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EventResponse | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
@@ -269,17 +270,17 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
             .catch(() => 0);
 
           return {
-          ...e,
-          //Field to display on UI
-          id: e.eventId, 
-          name: e.eventName,
-          description: e.description ?? "—", 
-          status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
-          teams: visibleTeamCount,
-          visibleTeamCount,
-          rounds: 0, 
-          deadline: e.eventEndDate ?? "—", 
-          prize: "—",
+            ...e,
+            //Field to display on UI
+            id: e.eventId,
+            name: e.eventName,
+            description: e.description ?? "—",
+            status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
+            teams: visibleTeamCount,
+            visibleTeamCount,
+            rounds: 0,
+            deadline: e.eventEndDate ?? "—",
+            prize: "—",
           };
         }));
         setApiEvents(mapped as any);
@@ -328,7 +329,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         .then(roundGroups => setApiDashboardRounds(roundGroups.flat()));
       // Load rounds for first category
       if (data[0]) {
-        roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
+        roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => { });
         setAwardPatternCategoryId(data[0].categoryId);
         setManualAwardForm(prev => ({ ...prev, categoryId: data[0].categoryId }));
         setSelectedSubmissionCategoryId(data[0].categoryId);
@@ -336,8 +337,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }).catch(error => {
       setCategoryLoadError(error instanceof Error ? error.message : "Failed to load categories.");
     });
-    teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
-    awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+    teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => { });
+    awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => { });
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -354,12 +355,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           prizeCurrency: pattern.prizeCurrency || "VND",
         })));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [awardPatternCategoryId]);
 
   useEffect(() => {
     if (currentPage !== "criteria") return;
-    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
+    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => { });
   }, [currentPage]);
 
   useEffect(() => {
@@ -655,12 +656,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
     setRankingsPublished(true);
     setTimeout(() => {
-        setRankingsPublished(false);
-        if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
-            setBroadcastTitle("Leaderboard Published!");
-            setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
-            onNavigate("notifications");
-        }
+      setRankingsPublished(false);
+      if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
+        setBroadcastTitle("Leaderboard Published!");
+        setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
+        onNavigate("notifications");
+      }
     }, 1500);
   };
 
@@ -695,7 +696,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         return [...granted.filter((award: any) => !existingIds.has(award.id)), ...prev];
       });
       setAutoGrantMessage(`Granted ${granted.length} award(s) for top ${limit} ranking team(s).`);
-      if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+      if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => { });
     } catch (error) {
       setAutoGrantError(error instanceof Error ? error.message : "Failed to grant awards for top ranking teams.");
     } finally {
@@ -785,7 +786,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         description: "",
         prizeValue: "",
       }));
-      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => { });
     } catch (error) {
       setManualAwardError(error instanceof Error ? error.message : "Failed to grant manual award.");
     } finally {
@@ -974,39 +975,39 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <AdminDashboardView context={viewContext} />;
-      case "events": return <AdminEventsView context={viewContext} 
-          onViewEvent={(event) => {
-            setSelectedEvent(event);
-            viewContext.onNavigate("event-detail");
-          }}
+      case "events": return <AdminEventsView context={viewContext}
+        onViewEvent={(event) => {
+          setSelectedEvent(event);
+          viewContext.onNavigate("event-detail");
+        }}
       />;
-      case "event-detail": 
-          if (!selectedEvent) {
-            return (
-              <AdminEventsView 
-                  context={viewContext}
-                  onViewEvent={(event) => {
-                    setSelectedEvent(event);
-                  }}
-              />
-            );
-          }
+      case "event-detail":
+        if (!selectedEvent) {
           return (
-            <EventDetailPage 
-                event={selectedEvent}
-                onBack={() => {
-                  setSelectedEvent(null);
-                  viewContext.onNavigate("events");
-                }}
-                onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
+            <AdminEventsView
+              context={viewContext}
+              onViewEvent={(event) => {
+                setSelectedEvent(event);
+              }}
             />
           );
+        }
+        return (
+          <EventDetailPage
+            event={selectedEvent}
+            onBack={() => {
+              setSelectedEvent(null);
+              viewContext.onNavigate("events");
+            }}
+            onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
+          />
+        );
       case "event-participants": return <AdminEventParticipantsView />;
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
       case "criteria": return (
         <CriteriaTemplateProvider>
-          <AdminCriteriaView context={viewContext}/>
+          <AdminCriteriaView context={viewContext} />
         </CriteriaTemplateProvider>
       );
       case "users": return <AdminUsersView />;
@@ -1045,11 +1046,38 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           event={eventModal.edit}
           onClose={() => setEventModal({ open: false })}
           onSaved={saved => {
-            setApiEvents(prev => eventModal.edit
-              ? prev.map((e: any) => e.eventId === saved.eventId ? { ...e, ...saved,
-                 name: saved.eventName, description: saved.description ?? "-", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, deadline: saved.eventEndDate } : e)
-              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
+            // Determine the ID of the edited event
+            const editedEventId = saved.eventId || (eventModal.edit as any)?.eventId || (eventModal.edit as any)?.id;
+            const newStatus = saved.eventStatusName
+              || (typeof saved.eventStatus === 'object' && saved.eventStatus ? (saved.eventStatus as any).eventStatusName : null)
+              || "";
+
+            const updatedFields = {
+              ...saved,
+              id: editedEventId,
+              eventId: editedEventId,
+              name: saved.eventName,
+              description: saved.description ?? "—",
+              status: newStatus,
+              deadline: saved.eventEndDate ?? "—",
+            };
+
+            // Immediately update the apiEvents array for instant UI feedback
+            setApiEvents(prev =>
+              eventModal.edit
+                ? prev.map((e: any) =>
+                    (e.id === editedEventId || e.eventId === editedEventId)
+                      ? { ...e, ...updatedFields }
+                      : e
+                  )
+                : [...prev, { ...updatedFields, teams: 0, visibleTeamCount: 0, rounds: 0, prize: "—" }]
             );
+
+            // Also update selectedEvent if viewing this event's detail
+            if (selectedEvent && selectedEvent.eventId === editedEventId) {
+              setSelectedEvent({ ...selectedEvent, ...updatedFields } as any);
+            }
+
             setEventModal({ open: false });
           }}
         />
