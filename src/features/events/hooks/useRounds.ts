@@ -35,10 +35,10 @@ export function useRounds(eventId: string) {
     ) => {
         const request: RoundRequest = {
             ...body,
-            startDate: formatDateTime(body.startDate),
-            endDate: formatDateTime(body.endDate),
-            submissionDeadline: formatDateTime(body.submissionDeadline),
-            judgingDeadline: formatDateTime(body.judgingDeadline),
+            startDate: formatDateTime(body.startDate || undefined),
+            endDate: formatDateTime(body.endDate || undefined),
+            submissionDeadline: formatDateTime(body.submissionDeadline || undefined),
+            judgingDeadline: formatDateTime(body.judgingDeadline || undefined),
         };
         await roundService.create(
             categoryId,
@@ -54,10 +54,10 @@ export function useRounds(eventId: string) {
     ) => {
         const request: RoundRequest = {
             ...body,
-            startDate: formatDateTime(body.startDate),
-            endDate: formatDateTime(body.endDate),
-            submissionDeadline: formatDateTime(body.submissionDeadline),
-            judgingDeadline: formatDateTime(body.judgingDeadline),
+            startDate: formatDateTime(body.startDate || undefined),
+            endDate: formatDateTime(body.endDate || undefined),
+            submissionDeadline: formatDateTime(body.submissionDeadline || undefined),
+            judgingDeadline: formatDateTime(body.judgingDeadline || undefined),
         };
         await roundService.update(roundId, request);
         await loadRounds(categoryId);

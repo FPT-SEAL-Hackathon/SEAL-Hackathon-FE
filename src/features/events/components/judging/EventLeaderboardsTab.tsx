@@ -2,20 +2,24 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useEffect } from "react";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { Trophy, CheckCircle, Loader, Calendar, BookOpen, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 import { Card, Button, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
+import { parseApiError } from "@/lib/api/apiClient";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
 import { ScoreDetailsModal } from "./ScoreDetailsModal";
 
 export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
   const { categories } = useCategoryContext();
-  const { roundsByCategory } = useRoundContext();
+  const { roundsByCategory, loadRounds } = useRoundContext();
   
   const [localCategoryId, setLocalCategoryId] = useState<string>("");
   const [localRoundId, setLocalRoundId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"round" | "event">("round");
   const [isLoading, setIsLoading] = useState(false);
   const [localRankings, setLocalRankings] = useState<any[]>([]);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [appealDuration, setAppealDuration] = useState(60);
   
   const [selectedSubmissionId, setSelectedSubmissionId] = useState<string | null>(null);
 
@@ -68,12 +72,15 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
       if (activeTab === "round" && localRoundId && localCategoryId) {
         const data = await rankingService.computeRound(localRoundId, localCategoryId);
         setLocalRankings(data);
+        toast.success("Rankings computed successfully.");
       } else if (activeTab === "event" && localCategoryId) {
         const data = await rankingService.computeCategory(localCategoryId);
         setLocalRankings(data);
+        toast.success("Category rankings computed successfully.");
       }
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to compute rankings.");
     } finally {
       setIsLoading(false);
     }
@@ -83,16 +90,20 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
     setIsLoading(true);
     try {
       if (activeTab === "round" && localRoundId && localCategoryId) {
-        await rankingService.publishRound(localRoundId, localCategoryId);
+        await rankingService.publishRound(localRoundId, localCategoryId, appealDuration);
         const roundData = await rankingService.getRoundRankings(localRoundId, localCategoryId);
         setLocalRankings(roundData);
+        await loadRounds(localCategoryId);
       } else if (activeTab === "event" && localCategoryId) {
-        await rankingService.publishCategory(localCategoryId);
+        await rankingService.publishCategory(localCategoryId, appealDuration);
         const eventData = await rankingService.getCategoryLeaderboard(eventId, localCategoryId);
         setLocalRankings(eventData);
       }
+      setShowPublishModal(false);
+      toast.success("Rankings published successfully.");
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to publish rankings.");
     } finally {
       setIsLoading(false);
     }
@@ -106,13 +117,16 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
         await rankingService.approveRound(localRoundId, localCategoryId);
         const roundData = await rankingService.getRoundRankings(localRoundId, localCategoryId);
         setLocalRankings(roundData);
+        await loadRounds(localCategoryId);
       } else if (activeTab === "event" && localCategoryId) {
         await rankingService.approveCategory(localCategoryId);
         const eventData = await rankingService.getCategoryLeaderboard(eventId, localCategoryId);
         setLocalRankings(eventData);
       }
+      toast.success("Rankings approved successfully.");
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to approve rankings.");
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +208,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             <Button
               variant="primary"
               icon={isLoading ? <Loader size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              onClick={doPublish}
+              onClick={() => setShowPublishModal(true)}
               disabled={isLoading || localRankings.length === 0 || localRankings.every(r => r.isPublished) || !localCategoryId || (activeTab === "round" && !localRoundId) || localRankings.some(r => r.isApproved)}
             >
               Publish Results
@@ -297,6 +311,46 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
           roundId={localRoundId}
           onClose={() => setSelectedSubmissionId(null)}
         />
+      )}
+
+      {showPublishModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-4 border-b border-gray-100">
+              <h3 className="font-bold text-lg text-gray-800">Publish {activeTab === "round" ? "Round" : "Category"} Rankings</h3>
+              <button onClick={() => setShowPublishModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-800 text-sm">
+                <p>Publishing rankings will make them visible to participants and open the appeal window.</p>
+              </div>
+              {localRankings.some(r => r.isPublished) && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-800 text-sm flex gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                  <p><strong>Warning:</strong> Rankings have already been published. Re-publishing will reset the appeal window for all participants.</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Appeal Window Duration (minutes)</label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                  value={appealDuration}
+                  onChange={e => setAppealDuration(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setShowPublishModal(false)}>Cancel</Button>
+              <Button variant="primary" onClick={doPublish} disabled={isLoading}>
+                {isLoading ? "Publishing..." : "Confirm Publish"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
