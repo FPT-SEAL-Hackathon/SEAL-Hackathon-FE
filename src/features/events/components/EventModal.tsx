@@ -23,6 +23,8 @@ const STATUS_OPTIONS = [
   { label: "Ongoing", value: "30000000-0000-0000-0000-000000000003" },
   { label: "Completed", value: "30000000-0000-0000-0000-000000000004" },
   { label: "Cancelled", value: "30000000-0000-0000-0000-000000000005" },
+  { label: "Upcoming", value: "30000000-0000-0000-0000-000000000006"},
+  { label: "Registration Closed", value: "30000000-0000-0000-0000-000000000007"}
 ];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

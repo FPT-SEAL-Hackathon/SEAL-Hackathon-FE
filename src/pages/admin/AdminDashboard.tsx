@@ -260,7 +260,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
-    eventService.getAll()
+    eventService.getAllEventsForOrganizer()
       .then(async data => {
         setEventLoadError("");
         const mapped = await Promise.all(data.map(async e => {
