@@ -88,6 +88,51 @@ export function getWidthPercentage(startStr: string | null | undefined, endStr: 
     return Math.max(0, e - s);
 }
 
+/**
+ * Xếp các round vào nhiều "dòng con" để round có khoảng thời gian đè nhau không vẽ
+ * chồng lên nhau trên cùng một dòng (interval/lane packing).
+ * Thuật toán: sort theo % bắt đầu, gán mỗi round vào dòng đầu tiên mà round cuối của
+ * dòng đó đã kết thúc (có chừa MIN_GAP_PCT để nhãn không dính sát nhau).
+ * Trả về map roundId -> rowIndex và tổng số dòng.
+ */
+export function assignRoundRows(
+    rounds: RoundResponse[],
+    bounds: TimelineBounds | null,
+): { rowByRoundId: Record<string, number>; rowCount: number } {
+    const MIN_GAP_PCT = 0.5; // khoảng hở tối thiểu (%) giữa 2 block cùng dòng
+    const safeRounds = Array.isArray(rounds) ? rounds : [];
+
+    const items = safeRounds
+        .map(r => {
+            const start = getPercentage(r.startDate, bounds);
+            const width = getWidthPercentage(r.startDate, r.endDate, bounds);
+            return { id: r.roundId, start, end: start + Math.max(width, 0) };
+        })
+        .sort((a, b) => a.start - b.start);
+
+    const rowEnds: number[] = []; // % kết thúc của block cuối trên mỗi dòng
+    const rowByRoundId: Record<string, number> = {};
+
+    for (const item of items) {
+        let placed = -1;
+        for (let row = 0; row < rowEnds.length; row++) {
+            if (item.start >= rowEnds[row] + MIN_GAP_PCT) {
+                placed = row;
+                break;
+            }
+        }
+        if (placed === -1) {
+            placed = rowEnds.length;
+            rowEnds.push(item.end);
+        } else {
+            rowEnds[placed] = item.end;
+        }
+        rowByRoundId[item.id] = placed;
+    }
+
+    return { rowByRoundId, rowCount: Math.max(rowEnds.length, 1) };
+}
+
 export interface ValidationWarning {
     type: "error" | "warning";
     message: string;

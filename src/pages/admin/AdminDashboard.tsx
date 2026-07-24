@@ -39,7 +39,6 @@ import { AdminProfileView } from "./components/AdminProfileView";
 import { AdminSettingsView } from "./components/AdminSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
-import { AdminRepositoryIntegrationsView } from "./components/AdminRepositoryIntegrationsView";
 import { AdminSubmissionRepositoriesView } from "./components/AdminSubmissionRepositoriesView";
 import { COLORS } from "@/components/shared/UIComponents";
 import { EventDetailPage } from "@/features/events/pages/EventDetailPage";
@@ -1023,7 +1022,6 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "award-patterns": return <AdminAwardPatternsView context={viewContext} />;
       case "appeals": return <AdminAppealsView />;
       case "submission-repositories": return <AdminSubmissionRepositoriesView />;
-      case "repository-integrations": return <AdminRepositoryIntegrationsView />;
       case "settings": return <AdminSettingsView context={viewContext} />;
       case "profile": return <AdminProfileView context={viewContext} />;
       default: return <AdminDashboardView context={viewContext} />;

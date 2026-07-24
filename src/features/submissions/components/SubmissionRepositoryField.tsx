@@ -3,6 +3,7 @@ import { Github, Loader, RefreshCw, ShieldAlert } from "lucide-react";
 import { COLORS, Button } from "@/components/shared/UIComponents";
 import { parseApiError } from "@/lib/api/apiClient";
 import {
+  formatSyncStatus,
   submissionService,
   type SubmissionRepositoryResponse,
 } from "@/features/submissions/api/submissionService";
@@ -72,7 +73,7 @@ export function RepositoryMetadataCard({
         </div>
         <div className="flex items-center gap-2">
           <span style={{ fontSize: 12, fontWeight: 700, color: syncStatusColor(repository.lastSyncStatus) }}>
-            {repository.lastSyncStatus || "NOT_SYNCHRONIZED"}
+            {formatSyncStatus(repository.lastSyncStatus)}
           </span>
           {onRefresh && (
             <Button

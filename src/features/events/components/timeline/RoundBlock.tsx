@@ -5,9 +5,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/
 interface Props {
     round: RoundResponse;
     bounds: TimelineBounds;
+    // Vị trí dọc (px từ đỉnh track) do CategoryLane tính qua lane-packing để round đè
+    // nhau về thời gian không vẽ chồng lên nhau. Bỏ qua => giữ hành vi cũ (giữa track).
+    topPx?: number;
+    heightPx?: number;
 }
 
-export function RoundBlock({ round, bounds }: Props) {
+export function RoundBlock({ round, bounds, topPx, heightPx = 40 }: Props) {
     const rStartPct = getPercentage(round.startDate, bounds);
     const rWidth = getWidthPercentage(round.startDate, round.endDate, bounds);
     
@@ -40,9 +44,14 @@ export function RoundBlock({ round, bounds }: Props) {
     return (
         <Tooltip>
             <TooltipTrigger asChild>
-                <div 
-                    className="absolute top-1/2 -translate-y-1/2 h-[42px] rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden flex flex-col cursor-pointer transition-all hover:-translate-y-[calc(50%+2px)] hover:shadow-md hover:z-10 hover:border-gray-400"
-                    style={{ left: `${rStartPct}%`, width: `${rWidth}%` }}
+                <div
+                    className={`absolute rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-md hover:z-10 hover:border-gray-400 ${topPx == null ? "top-1/2 -translate-y-1/2" : ""}`}
+                    style={{
+                        left: `${rStartPct}%`,
+                        width: `${rWidth}%`,
+                        height: `${heightPx}px`,
+                        ...(topPx != null ? { top: `${topPx}px` } : {}),
+                    }}
                 >
                     {/* Round Label */}
                     <div className="flex-1 px-1.5 pt-1 flex items-start overflow-hidden">
