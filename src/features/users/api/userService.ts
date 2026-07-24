@@ -326,6 +326,10 @@ export const userService = {
   deleteUser: (userId: string) =>
     api.delete<DeactivateUserResponse>(`/api/v1/users/${userId}`),
 
+  // Organizer quét account có hồ sơ chưa chuẩn và gửi notification nhắc cập nhật (không khóa).
+  notifyNonCompliant: () =>
+    api.post<{ success: boolean; notifiedCount: number; message: string }>("/api/v1/users/notify-noncompliant", {}),
+
   // Xóa CỨNG mọi tài khoản trùng email (dev tool, không thể hoàn tác).
   // BE giữ dữ liệu tập thể (submission gán lại cho leader) và cho phép
   // đăng ký lại bằng chính email này ngay lập tức.
@@ -342,6 +346,9 @@ export interface UpdateMyProfileRequest {
   fullName?: string;
   phone?: string;
   universityName?: string;
+  // Học sinh tự sửa mã SV để chuẩn hóa (theo role).
+  fptStudentCode?: string;
+  externalStudentCode?: string;
 }
 
 export interface MyProfileResponse {
@@ -355,6 +362,9 @@ export interface MyProfileResponse {
   externalStudentCode?: string;
   accountStatus: string;
   createdAt?: string;
+  // Chuẩn hóa hồ sơ: false = hồ sơ chưa đúng định dạng → FE hiện banner nhắc.
+  profileCompliant?: boolean;
+  profileIssues?: string[];
 }
 
 export const meService = {
