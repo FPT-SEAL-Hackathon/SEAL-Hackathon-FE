@@ -105,7 +105,8 @@ export interface UpdateUserRequest {
 }
 
 export interface UpdateUserStatusRequest {
-  accountStatus: string;
+  // BE endpoint PATCH /users/{id}/status nhận field "status" (UpdateUserStatusRequest.status).
+  status: string;
 }
 
 export interface UpdateUserRoleRequest {

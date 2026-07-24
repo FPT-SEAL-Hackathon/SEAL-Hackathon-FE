@@ -498,7 +498,7 @@ export function AdminUsersView() {
     if (!window.confirm(`Reactivate ${user.fullName}? The account will be able to log in again.`)) return;
     setMutating(true);
     try {
-      await userService.updateUserStatus(user.userId, { accountStatus: "ACTIVE" });
+      await userService.updateUserStatus(user.userId, { status: "ACTIVE" });
       toast.success("User reactivated.");
       await loadUsers();
     } catch (err) {
