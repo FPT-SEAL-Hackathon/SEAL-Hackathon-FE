@@ -174,47 +174,56 @@ export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime,
             return false;
           }}
         />
-        {draftValue && (
-          <div className="p-3 border-t flex flex-col gap-3 bg-gray-50/50" style={{ borderColor: COLORS.border }}>
+        {/* Phần chọn giờ LUÔN hiển thị (kể cả khi chưa chọn ngày) để người dùng không
+            tưởng picker thiếu phần chọn giờ. Khi chưa chọn ngày: disable + hiện gợi ý. */}
+        <div className="p-3 border-t flex flex-col gap-3 bg-gray-50/50" style={{ borderColor: COLORS.border }}>
              {clampedMessage && (
                <div className="text-[11px] font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded" style={{ border: '1px solid #fed7aa' }}>
                  {clampedMessage}
                </div>
              )}
+             {!draftValue && (
+               <div className="text-[11px] text-center text-muted-foreground">
+                 Chọn ngày ở lịch phía trên rồi đặt giờ:phút
+               </div>
+             )}
              <div className="flex items-center gap-2 justify-center">
                <Clock size={14} className="text-muted-foreground mr-1" />
-               <select 
-                 className="px-2 py-1 rounded text-sm outline-none cursor-pointer"
+               <select
+                 className="px-2 py-1 rounded text-sm outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                  style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                 value={String(draftValue.getHours()).padStart(2, "0")}
+                 value={draftValue ? String(draftValue.getHours()).padStart(2, "0") : ""}
                  onChange={(e) => handleTimeChange("hour", e.target.value)}
+                 disabled={!draftValue}
                >
+                 {!draftValue && <option value="">--</option>}
                  {Array.from({length: 24}).map((_, i) => {
                    let minH = 0; let maxH = 23;
-                   if (minBoundaryDate && isSameDay(draftValue, minBoundaryDate)) minH = minBoundaryDate.getHours();
-                   if (maxBoundaryDate && isSameDay(draftValue, maxBoundaryDate)) maxH = maxBoundaryDate.getHours();
+                   if (draftValue && minBoundaryDate && isSameDay(draftValue, minBoundaryDate)) minH = minBoundaryDate.getHours();
+                   if (draftValue && maxBoundaryDate && isSameDay(draftValue, maxBoundaryDate)) maxH = maxBoundaryDate.getHours();
                    const isValid = i >= minH && i <= maxH;
                    return <option key={i} value={String(i).padStart(2, "0")} disabled={!isValid}>{String(i).padStart(2, "0")}</option>;
                  })}
                </select>
                <span style={{ color: COLORS.textPrimary, fontWeight: 500 }}>:</span>
-               <select 
-                 className="px-2 py-1 rounded text-sm outline-none cursor-pointer"
+               <select
+                 className="px-2 py-1 rounded text-sm outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                  style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                 value={String(draftValue.getMinutes()).padStart(2, "0")}
+                 value={draftValue ? String(draftValue.getMinutes()).padStart(2, "0") : ""}
                  onChange={(e) => handleTimeChange("minute", e.target.value)}
+                 disabled={!draftValue}
                >
+                 {!draftValue && <option value="">--</option>}
                  {Array.from({length: 60}).map((_, i) => {
                    let minM = 0; let maxM = 59;
-                   if (minBoundaryDate && isSameDay(draftValue, minBoundaryDate) && draftValue.getHours() === minBoundaryDate.getHours()) minM = minBoundaryDate.getMinutes();
-                   if (maxBoundaryDate && isSameDay(draftValue, maxBoundaryDate) && draftValue.getHours() === maxBoundaryDate.getHours()) maxM = maxBoundaryDate.getMinutes();
+                   if (draftValue && minBoundaryDate && isSameDay(draftValue, minBoundaryDate) && draftValue.getHours() === minBoundaryDate.getHours()) minM = minBoundaryDate.getMinutes();
+                   if (draftValue && maxBoundaryDate && isSameDay(draftValue, maxBoundaryDate) && draftValue.getHours() === maxBoundaryDate.getHours()) maxM = maxBoundaryDate.getMinutes();
                    const isValid = i >= minM && i <= maxM;
                    return <option key={i} value={String(i).padStart(2, "0")} disabled={!isValid}>{String(i).padStart(2, "0")}</option>;
                  })}
                </select>
              </div>
-          </div>
-        )}
+        </div>
         <div className="p-2 flex items-center justify-between border-t bg-white rounded-b-md" style={{ borderColor: COLORS.border }}>
           <button 
             type="button"

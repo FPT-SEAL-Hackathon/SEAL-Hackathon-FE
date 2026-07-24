@@ -26,24 +26,28 @@ export function calculateTimelineBounds(
     categories: CategoryResponse[], 
     rounds: RoundResponse[]
 ): TimelineBounds | null {
-    const dates: Date[] = [];
+    const dates: (Date | null)[] = [];
     const safeRounds = Array.isArray(rounds) ? rounds : [];
-    
+
+    // Dùng parseSafeDate cho MỌI mốc để biên trục và vị trí bar (getPercentage cũng
+    // dùng parseSafeDate) diễn giải timezone giống nhau. Event dates là date-only
+    // ("YYYY-MM-DD"): new Date() sẽ hiểu là UTC midnight và lệch ~7h ở UTC+7, khiến
+    // thanh Registration/Event Live không khớp trục và round block.
     if (event) {
-        if (event.registrationStart) dates.push(new Date(event.registrationStart));
-        if (event.registrationEnd) dates.push(new Date(event.registrationEnd));
-        if (event.eventStartDate) dates.push(new Date(event.eventStartDate));
-        if (event.eventEndDate) dates.push(new Date(event.eventEndDate));
+        dates.push(parseSafeDate(event.registrationStart));
+        dates.push(parseSafeDate(event.registrationEnd));
+        dates.push(parseSafeDate(event.eventStartDate));
+        dates.push(parseSafeDate(event.eventEndDate));
     }
-    
+
     safeRounds.forEach(r => {
-        if (r.startDate) dates.push(new Date(r.startDate));
-        if (r.endDate) dates.push(new Date(r.endDate));
-        if (r.submissionDeadline) dates.push(new Date(r.submissionDeadline));
-        if (r.judgingDeadline) dates.push(new Date(r.judgingDeadline));
+        dates.push(parseSafeDate(r.startDate));
+        dates.push(parseSafeDate(r.endDate));
+        dates.push(parseSafeDate(r.submissionDeadline));
+        dates.push(parseSafeDate(r.judgingDeadline));
     });
 
-    const validDates = dates.filter(d => !isNaN(d.getTime()));
+    const validDates = dates.filter((d): d is Date => d !== null && !isNaN(d.getTime()));
     
     if (validDates.length === 0) return null;
     
@@ -82,6 +86,51 @@ export function getWidthPercentage(startStr: string | null | undefined, endStr: 
     const s = getPercentage(startStr, bounds);
     const e = getPercentage(endStr, bounds);
     return Math.max(0, e - s);
+}
+
+/**
+ * Xếp các round vào nhiều "dòng con" để round có khoảng thời gian đè nhau không vẽ
+ * chồng lên nhau trên cùng một dòng (interval/lane packing).
+ * Thuật toán: sort theo % bắt đầu, gán mỗi round vào dòng đầu tiên mà round cuối của
+ * dòng đó đã kết thúc (có chừa MIN_GAP_PCT để nhãn không dính sát nhau).
+ * Trả về map roundId -> rowIndex và tổng số dòng.
+ */
+export function assignRoundRows(
+    rounds: RoundResponse[],
+    bounds: TimelineBounds | null,
+): { rowByRoundId: Record<string, number>; rowCount: number } {
+    const MIN_GAP_PCT = 0.5; // khoảng hở tối thiểu (%) giữa 2 block cùng dòng
+    const safeRounds = Array.isArray(rounds) ? rounds : [];
+
+    const items = safeRounds
+        .map(r => {
+            const start = getPercentage(r.startDate, bounds);
+            const width = getWidthPercentage(r.startDate, r.endDate, bounds);
+            return { id: r.roundId, start, end: start + Math.max(width, 0) };
+        })
+        .sort((a, b) => a.start - b.start);
+
+    const rowEnds: number[] = []; // % kết thúc của block cuối trên mỗi dòng
+    const rowByRoundId: Record<string, number> = {};
+
+    for (const item of items) {
+        let placed = -1;
+        for (let row = 0; row < rowEnds.length; row++) {
+            if (item.start >= rowEnds[row] + MIN_GAP_PCT) {
+                placed = row;
+                break;
+            }
+        }
+        if (placed === -1) {
+            placed = rowEnds.length;
+            rowEnds.push(item.end);
+        } else {
+            rowEnds[placed] = item.end;
+        }
+        rowByRoundId[item.id] = placed;
+    }
+
+    return { rowByRoundId, rowCount: Math.max(rowEnds.length, 1) };
 }
 
 export interface ValidationWarning {

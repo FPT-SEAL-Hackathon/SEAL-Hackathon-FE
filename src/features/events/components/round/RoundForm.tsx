@@ -20,15 +20,19 @@ interface Props {
     categories?: CategoryResponse[];
     allRounds?: RoundResponse[];
     categoryId?: string;
+    // Khi edit: id của round đang sửa, để loại nó khỏi allRounds và thay bằng bản
+    // preview đang chỉnh (tránh hiển thị trùng round trên timeline).
+    editingRoundId?: string;
 }
 export function RoundForm({
-    initial, 
-    onSave, 
+    initial,
+    onSave,
     onCancel,
     event,
     categories,
     allRounds,
-    categoryId
+    categoryId,
+    editingRoundId
 }: Props) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
@@ -131,8 +135,10 @@ export function RoundForm({
     }
   };
 
-  // Prepare data for timeline preview
-  let previewRounds = allRounds || [];
+  // Prepare data for timeline preview.
+  // Khi edit, loại round đang sửa (theo editingRoundId) khỏi allRounds để bản mock
+  // bên dưới thay thế nó, tránh vẽ trùng round trên timeline.
+  let previewRounds = (allRounds || []).filter(r => r.roundId !== editingRoundId);
   if (categoryId && form.startDate && form.endDate) {
       // Mock the current editing round to preview it on the timeline
       const editingRound: RoundResponse = {
@@ -274,10 +280,12 @@ export function RoundForm({
       </div>
 
       {event && categories && previewRounds && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="mt-4 mb-2 pt-4 border-t border-gray-100">
               <div className="text-xs font-semibold text-gray-500 mb-2">Timeline Preview</div>
-              <div className="opacity-80 hover:opacity-100 transition-opacity">
-                  <EventTimeline 
+              {/* Bọc cuộn ngang: EventTimeline có min-w-[800px] bên trong, cha phải cho tràn/cuộn
+                  để không đè lên các phần khác của form khi card hẹp. */}
+              <div className="w-full max-w-full overflow-x-auto">
+                  <EventTimeline
                       event={event}
                       categories={categories.filter(c => c.categoryId === categoryId)} // Only show this category lane for compactness
                       rounds={previewRounds.filter(r => r.categoryId === categoryId)}
