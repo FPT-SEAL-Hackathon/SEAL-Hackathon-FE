@@ -261,7 +261,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
-    eventService.getAllEventsForOrganizer(true)
+    eventService.getAll(true)
       .then(async data => {
         setEventLoadError("");
         const mapped = await Promise.all(data.map(async e => {

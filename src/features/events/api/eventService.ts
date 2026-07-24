@@ -196,7 +196,7 @@ function unwrapItem<T>(response: T | BackendEnvelope<T>): T {
 }
 
 export const eventService = {
-  getAllEventsForOrganizer: async (auth = false) => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events", auth))),
+  getAll: async (auth = false) => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events", auth))),
   getPublic: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[] | PageEnvelope<EventResponse>> | PageEnvelope<EventResponse>>("/api/v1/public/events", false))),
   getById: async (id: string, auth = false) => normalizeEventResponse(unwrapItem(await api.get<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/${id}`, auth))),
   create: async (data: CreateEventRequest) => normalizeEventResponse(unwrapItem(await api.post<EventResponse | BackendEnvelope<EventResponse>>("/api/v1/event", data))),
