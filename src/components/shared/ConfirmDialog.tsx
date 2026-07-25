@@ -1,11 +1,18 @@
-import { AlertTriangle, X } from "lucide-react";
+import { ReactNode } from "react";
+import { AlertTriangle, X, Loader2 } from "lucide-react";
 import { Button, Card, COLORS } from "./UIComponents";
+
+type ConfirmTone = "primary" | "warning" | "danger";
 
 interface Props {
 
   title: string;
 
   message: string;
+
+  icon?: ReactNode;
+
+  tone?: ConfirmTone;
 
   confirmText?: string;
 
@@ -14,6 +21,8 @@ interface Props {
   confirmVariant?: "primary" | "danger";
 
   loading?: boolean;
+
+  error?: string;
 
   onConfirm: () => Promise<void> | void;
 
@@ -25,6 +34,10 @@ export function ConfirmDialog({
   title,
   message,
 
+  icon,
+
+  tone = "danger",
+
   confirmText = "Confirm",
   cancelText = "Cancel",
 
@@ -32,9 +45,25 @@ export function ConfirmDialog({
 
   loading = false,
 
+  error,
+
   onConfirm,
   onCancel,
 }: Props) {
+
+  const toneColor =
+    tone === "primary"
+      ? COLORS.primary
+      : tone === "warning"
+      ? COLORS.warning
+      : COLORS.error;
+
+  const toneBackground =
+    tone === "primary"
+      ? `${COLORS.primary}15`
+      : tone === "warning"
+      ? `${COLORS.warning}15`
+      : `${COLORS.error}15`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
@@ -55,13 +84,15 @@ export function ConfirmDialog({
               <div
                 className="w-11 h-11 rounded-xl flex items-center justify-center"
                 style={{
-                  background: "#FEF2F2",
+                  background: toneBackground,
                 }}
               >
-                <AlertTriangle
-                  size={22}
-                  color="#DC2626"
-                />
+                {icon ?? (
+                  <AlertTriangle
+                    size={22}
+                    color={toneColor}
+                  />
+                )}
               </div>
 
               <div>
@@ -82,6 +113,7 @@ export function ConfirmDialog({
 
             <button
               onClick={onCancel}
+              disabled={loading}
               className="p-2 rounded-lg hover:bg-gray-100 transition"
             >
               <X
@@ -102,6 +134,21 @@ export function ConfirmDialog({
             {message}
           </p>
 
+          {error && (
+            <div
+              className="mt-4 rounded-xl px-4 py-3"
+              style={{
+                background: `${COLORS.error}10`,
+                border: `1px solid ${COLORS.error}30`,
+                color: COLORS.error,
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 mt-8">
 
             <Button
@@ -116,8 +163,16 @@ export function ConfirmDialog({
               variant={confirmVariant}
               onClick={onConfirm}
               disabled={loading}
+              icon={
+                loading ? (
+                  <Loader2
+                    size={14}
+                    className="animate-spin"
+                  />
+                ) : undefined
+              }
             >
-              {confirmText}
+              {loading ? "Processing..." : confirmText}
             </Button>
 
           </div>

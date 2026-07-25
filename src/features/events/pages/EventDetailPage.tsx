@@ -1,24 +1,25 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy, Clock } from "lucide-react";
-import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
+import { Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy, Clock } from "lucide-react";
+import { COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../shared/components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
 import { CategoriesTab } from "../components/category/CategoryTab";
 import { AssignMentorsTab } from "../components/category/AssignMentorsTab";
 import { RoundsTab } from "../components/round/RoundTab";
 import { AssignJudgesTab } from "../components/round/AssignJudgesTab";
-import { useEventCriteria } from "../hooks/useEventCriteria";
 import { EventResponse } from "../api/eventService";
-import { useCategories } from "../hooks/useCategories";
-import { useRounds } from "../hooks/useRounds";
 import { EventTeamsSection } from "../components/EventTeamsSection";
 import { EventJudgingApprovalTab } from "../components/judging/EventJudgingApprovalTab";
 import { EventLeaderboardsTab } from "../components/judging/EventLeaderboardsTab";
 import { CategoryProvider } from "../context/CategoryContext";
 import { RoundProvider } from "../context/RoundContext";
 import { EventDetailHeader } from "../shared/components/EventDetailHeader";
-import { EventCriteriaProvider, useEventCriteriaContext } from "../context/EventCriteriaContext";
+import { EventCriteriaProvider } from "../context/EventCriteriaContext";
 import { ScheduleTab } from "../components/timeline/ScheduleTab";
+import { useEventActions } from "../hooks/useEventActions";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { EVENT_ACTION_CONFIG } from "../constants/eventActions";
+import { ApiError } from "@/lib/api/apiClient";
 
 type TabKey = "overview" | "schedule" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors" | "judging-approval" | "leaderboards";
 
@@ -39,8 +40,49 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   // ── Shared state lifted here so all tabs can read/write ──────────────────
+  const [currentEvent, setCurrentEvent] = useState(event);
+  const [error, setError] = useState("");
 
   const [totalPrize, setTotalPrize] = useState<{ amount: number; currency: string } | null>(null);
+
+  type ConfirmAction = "publish" | "cancel" | "delete" | null;
+
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const {
+    loading,
+    publishEvent,
+  } = useEventActions();
+
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+
+    setConfirmLoading(true);
+
+    try {
+        switch (confirmAction) {
+            case "publish": {
+                const updatedEvent = await publishEvent(currentEvent.eventId);
+
+                setCurrentEvent(updatedEvent);
+
+                setConfirmAction(null);
+
+                break;
+            }
+        }
+    } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+            setError("Failed to publish event.");
+        }
+    } finally {
+        setConfirmLoading(false);
+    }
+    };
 
   useEffect(() => {
     import("../../awards/api/awardService").then(({ awardService }) => {
@@ -54,6 +96,10 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
     });
   }, [event.eventId]);
 
+  useEffect(() => {
+    setCurrentEvent(event);
+  }, [event]);
+
   return (
     <div className="p-6 space-y-6">   
       <EventCriteriaProvider eventId={event.eventId}>
@@ -66,6 +112,19 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
               event={event}
               totalPrize={totalPrize}
               onBack={onBack}
+
+              onPublish={() => {
+                setError("");
+                setConfirmAction("publish");
+              }}
+              onCancel={() => {
+                setError("");
+                setConfirmAction("cancel");
+              }}
+              onDelete={() => {
+                setError("");
+                setConfirmAction("delete");
+              }}
               onEdit={onEdit}
             />
             {/* Tab bar */}
@@ -139,6 +198,20 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             {activeTab === "leaderboards" && (
               <EventLeaderboardsTab eventId={event.eventId} />
             )}
+            {
+              confirmAction && (
+                  <ConfirmDialog
+                      title={EVENT_ACTION_CONFIG[confirmAction].title}
+                      message={EVENT_ACTION_CONFIG[confirmAction].message}
+                      confirmText={EVENT_ACTION_CONFIG[confirmAction].confirmText}
+                      confirmVariant={EVENT_ACTION_CONFIG[confirmAction].variant}
+                      loading={confirmLoading}
+                      error={error}
+                      onConfirm={handleConfirm}
+                      onCancel={() => setConfirmAction(null)}                    
+                  />
+              )
+            }
           </RoundProvider>
         </CategoryProvider>
       </EventCriteriaProvider> 
