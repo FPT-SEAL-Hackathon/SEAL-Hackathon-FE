@@ -62,7 +62,6 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     description: event?.description ?? "",
     location: event?.location ?? "",
     bannerImageUrl: event?.bannerImageUrl ?? "",
-    eventStatusId: typeof event?.eventStatus === 'object' ? event?.eventStatus?.eventStatusId : (event?.eventStatus ?? STATUS_OPTIONS[0].value),
     registrationStart: event?.registrationStart?.slice(0, 16) ?? "",
     registrationEnd: event?.registrationEnd?.slice(0, 16) ?? "",
     eventStartDate: event?.eventStartDate ?? "",
@@ -80,9 +79,9 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       location: event.location ?? "",
       bannerImageUrl: event.bannerImageUrl ?? "",
 
-      eventStatusId:
-        (typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus) ??
-        STATUS_OPTIONS[0].value,
+      // eventStatusId:
+      //   (typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus) ??
+      //   STATUS_OPTIONS[0].value,
 
       registrationStart:
         event.registrationStart?.slice(0,16) ?? "",
@@ -165,16 +164,15 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         description: form.description || "",
         location: form.location || "",
         bannerImageUrl: form.bannerImageUrl || "",
-        eventStatusId: form.eventStatusId || undefined,
-        registrationStart: formatDateTime(form.registrationStart),
-        registrationEnd: formatDateTime(form.registrationEnd),
-        eventStartDate: form.eventStartDate || undefined,
-        eventEndDate: form.eventEndDate || undefined,
+        registrationStart: formatDateTime(form.registrationStart) ?? "",
+        registrationEnd: formatDateTime(form.registrationEnd) ?? "",
+        eventStartDate: form.eventStartDate || "",
+        eventEndDate: form.eventEndDate || "",
         maxTeamSize: parseInt(form.maxTeamSize) || 5,
         minTeamSize: parseInt(form.minTeamSize) || 2,
       };
       const result = isEdit
-        ? await eventService.update(event!.eventId, { ...payload, eventName: payload.eventName, eventStatusId: payload.eventStatusId! })
+        ? await eventService.update(event!.eventId, payload )
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
@@ -232,16 +230,24 @@ export function EventModal({ event, onClose, onSaved }: Props) {
               <Field label="Location">
                 <Input value={form.location} onChange={v => set("location", v)} placeholder="FPT University, Hanoi" />
               </Field>
-              <Field label="Status">
-                <Select value={form.eventStatusId || "none"} onValueChange={value => set("eventStatusId", (value === "none" ? "" : value))} >
-  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-    <SelectValue placeholder="Select..." />
-  </SelectTrigger>
-  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-    {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value} style={{ color: COLORS.textPrimary }}>{s.label}</SelectItem>)}
-  </SelectContent>
-</Select>
-              </Field>
+              {isEdit && (
+                <Field label="Current Status">
+                  <div
+                    className="px-3 py-2.5 rounded-xl"
+                    style={{
+                      border: `1px solid ${COLORS.border}`,
+                      background: `${COLORS.primary}10`,
+                      color: COLORS.primary,
+                      fontSize: 14,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {typeof event?.eventStatus === "object"
+                      ? event.eventStatus.eventStatusName
+                      : event?.eventStatus}
+                  </div>
+                </Field>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
