@@ -27,7 +27,7 @@ const ROLE_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { label: "Pending Approval", value: "PENDING_APPROVAL" },
+  // "Pending Approval" đã bỏ: duyệt nay ở cấp TEAM (team status PENDING), không duyệt từng học sinh.
   { label: "Active", value: "ACTIVE" },
   { label: "Rejected", value: "REJECTED" },
   { label: "Suspended", value: "SUSPENDED" },
@@ -468,18 +468,23 @@ export function AdminUsersView() {
     }
   };
 
-  // Suspend (reversible): BE chỉ đổi status sang Suspended — account vẫn nằm
-  // trong danh sách, kích hoạt lại bằng Edit → Status → Active.
+  // Deactivate (reversible): BE khóa đăng nhập (status Suspended) + thu hồi session,
+  // GIỮ ghế trong team và tự chuyển quyền leader nếu cần để team không bị đóng băng.
+  // Bật lại bằng Edit → Status → Active. Hiện tóm tắt tác động (team chuyển leader,
+  // cảnh báo judge/organizer) cho organizer nắm.
   const deleteUser = async (user: UserManagementUser) => {
     if (!window.confirm(
-      `Suspend ${user.fullName}?\n\n` +
-      "The account stays in this list and can be reactivated anytime " +
-      "via Edit → Status → Active.",
+      `Deactivate ${user.fullName}?\n\n` +
+      "The account is locked from logging in but stays on the team (seat kept). " +
+      "If this user is a team leader, leadership is transferred automatically so the " +
+      "team can keep competing. Reactivate anytime via Edit → Status → Active.",
     )) return;
     setMutating(true);
     try {
-      await userService.deleteUser(user.userId);
-      toast.success("User suspended. Reactivate via Edit → Status → Active.");
+      const result = await userService.deleteUser(user.userId);
+      toast.success("User deactivated. Reactivate via Edit → Status → Active.");
+      (result?.transferredTeams ?? []).forEach(t => toast.info(`Leader transferred: ${t}`));
+      (result?.warnings ?? []).forEach(w => toast.warning(w));
       await loadUsers();
     } catch (err) {
       toast.error(parseApiError(err).message);
@@ -493,7 +498,7 @@ export function AdminUsersView() {
     if (!window.confirm(`Reactivate ${user.fullName}? The account will be able to log in again.`)) return;
     setMutating(true);
     try {
-      await userService.updateUserStatus(user.userId, { accountStatus: "ACTIVE" });
+      await userService.updateUserStatus(user.userId, { status: "ACTIVE" });
       toast.success("User reactivated.");
       await loadUsers();
     } catch (err) {
@@ -503,57 +508,8 @@ export function AdminUsersView() {
     }
   };
 
-  // Xóa CỨNG không thể hoàn tác: BE xóa MỌI account trùng email (kể cả account
-  // sống khi bấm từ dòng Deleted), nên phải liệt kê đầy đủ danh sách sẽ bị xóa
-  // trước khi confirm + bắt gõ lại email.
-  const hardDeleteUser = async (user: UserManagementUser) => {
-    let affectedSummary = "";
-    try {
-      const page = await userService.getUsers({ search: user.email, includeDeleted: true, size: 50 });
-      const sameEmail = page.content.filter(
-        item => item.email.trim().toLowerCase() === user.email.trim().toLowerCase(),
-      );
-      if (sameEmail.length > 0) {
-        affectedSummary =
-          `\n\nThis will remove ${sameEmail.length} account(s):\n` +
-          sameEmail
-            .map(item => `- ${item.fullName} (${labelValue(item.role)}, ${item.deleted ? "Deleted" : labelValue(item.accountStatusName ?? item.accountStatus)})`)
-            .join("\n");
-      }
-    } catch {
-      // Không chặn thao tác nếu preview lỗi — dialog vẫn cảnh báo "ALL accounts".
-    }
-    if (!window.confirm(
-      `PERMANENTLY delete ALL accounts with email ${user.email}?` +
-      affectedSummary +
-      "\n\nThis cannot be undone. Team submissions are kept (reassigned to the team leader) " +
-      "and the email can be reused for a new account immediately.",
-    )) return;
-    const typedEmail = window.prompt(`Type the email to confirm permanent deletion:`, "");
-    if (typedEmail === null) return;
-    if (typedEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
-      toast.error("Email does not match. Deletion cancelled.");
-      return;
-    }
-    setMutating(true);
-    try {
-      const result = await userService.hardDeleteUser(user.email);
-      toast.success(`User permanently deleted (${result.deletedAccounts} account(s)).`);
-      await loadUsers();
-    } catch (err) {
-      const parsed = parseApiError(err);
-      // Retry sau timeout/mất mạng: lần trước có thể đã xóa xong → 404 nghĩa là
-      // "không còn account nào" chứ không phải thao tác thất bại.
-      if (parsed.status === 404) {
-        toast.success("Account already removed.");
-        await loadUsers();
-      } else {
-        toast.error(parsed.message);
-      }
-    } finally {
-      setMutating(false);
-    }
-  };
+  // Hard delete ("Delete Forever") đã gỡ khỏi UI — chức năng còn ở backend nhưng
+  // tạm không dùng. Deactivate (reversible) là thao tác vô hiệu hóa tài khoản chính.
 
   return (
     <div className="h-full min-h-0 overflow-hidden flex flex-col gap-3">
@@ -701,7 +657,7 @@ export function AdminUsersView() {
                             Edit
                           </Button>
                           <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
-                            Suspend
+                            Deactivate
                           </Button>
                         </>
                       )}
@@ -710,9 +666,6 @@ export function AdminUsersView() {
                           Reactivate
                         </Button>
                       )}
-                      <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => hardDeleteUser(user)}>
-                        Delete Forever
-                      </Button>
                     </div>
                   </Td>
                 </tr>

@@ -35,6 +35,8 @@ export interface EventSubmissionRepositoryItem {
   submissionId: string;
   teamId?: string;
   teamName?: string;
+  // true = bài mẫu của calibration round (Organizer tạo, không thuộc đội thi nào).
+  sampleSubmission?: boolean;
   categoryName?: string;
   roundName?: string;
   submittedAt?: string;
@@ -94,6 +96,17 @@ export interface SubmissionDisqualificationResponse {
   disqualifiedById: string;
   disqualifiedAt: string;
   reversed: boolean;
+}
+
+// Chuyển mã trạng thái sync (NOT_SYNCHRONIZED, PARTIAL_SUCCESS...) sang chữ dễ đọc,
+// bỏ dấu gạch dưới và title-case (vd "NOT_SYNCHRONIZED" -> "Not Synchronized").
+export function formatSyncStatus(status?: string | null): string {
+  if (!status) return "Not Synchronized";
+  return status
+    .toLowerCase()
+    .split("_")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 const enc = encodeURIComponent;

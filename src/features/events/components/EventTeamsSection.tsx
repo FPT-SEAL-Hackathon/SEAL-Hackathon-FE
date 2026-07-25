@@ -622,7 +622,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
             <div className="relative min-w-[160px]">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
-  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+  <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
     <SelectValue placeholder="Select..." />
   </SelectTrigger>
   <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
