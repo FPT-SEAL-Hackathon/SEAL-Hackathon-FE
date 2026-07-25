@@ -3,6 +3,8 @@ import { useState, useEffect } from "react";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type RoundResponse } from "@/features/judging/api/roundService";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
@@ -105,8 +107,10 @@ export function AdminRankingsView({ context }: AdminViewProps) {
       }
       context.setRankingsComputed(true);
       setTimeout(() => context.setRankingsComputed(false), 3000);
+      toast.success("Rankings computed successfully.");
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to compute rankings.");
     } finally {
       setIsLoading(false);
     }
@@ -129,8 +133,10 @@ export function AdminRankingsView({ context }: AdminViewProps) {
       context.setRankingsPublished(true);
       setShowPublishModal(false);
       setTimeout(() => context.setRankingsPublished(false), 3000);
+      toast.success("Rankings published successfully.");
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to publish rankings.");
     } finally {
       setIsLoading(false);
     }
@@ -154,7 +160,9 @@ export function AdminRankingsView({ context }: AdminViewProps) {
       setTimeout(() => context.setRankingsPublished(false), 3000);
     } catch (e: any) {
       console.error(e);
-      setApproveError(e.response?.data?.message || e.message || "Failed to approve rankings.");
+      const errMsg = parseApiError(e).message || e.message || "Failed to approve rankings.";
+      setApproveError(errMsg);
+      toast.error(errMsg);
       setTimeout(() => setApproveError(""), 5000);
     } finally {
       setIsLoading(false);
