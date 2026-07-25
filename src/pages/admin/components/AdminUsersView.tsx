@@ -5,6 +5,7 @@ import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
+import { isValidVietnamesePhone } from "@/features/users/utils/profileValidation";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
@@ -89,7 +90,8 @@ function isValidEmail(value: string) {
 }
 
 function isValidPhone(value: string) {
-  return !value || /^[+()\d\s.-]{8,20}$/.test(value);
+  // SĐT optional; nếu có thì phải là số di động VN (khớp BE ProfileValidation).
+  return !value || isValidVietnamesePhone(value);
 }
 
 function normalizeRoleValue(role?: string) {
@@ -493,6 +495,21 @@ export function AdminUsersView() {
     }
   };
 
+  // Quét account có hồ sơ chưa chuẩn (mã SV/SĐT sai định dạng) và gửi notification nhắc.
+  // KHÔNG khóa/chặn account nào — chỉ nhắc để họ tự cập nhật cho đồng bộ dữ liệu.
+  const notifyNonCompliant = async () => {
+    if (!window.confirm("Gửi thông báo nhắc cập nhật hồ sơ cho tất cả tài khoản có dữ liệu chưa chuẩn?")) return;
+    setMutating(true);
+    try {
+      const result = await userService.notifyNonCompliant();
+      toast.success(`Đã nhắc ${result.notifiedCount} tài khoản cập nhật hồ sơ.`);
+    } catch (err) {
+      toast.error(parseApiError(err).message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
   // Mở khóa account Suspended: đổi status về Active qua endpoint sẵn có.
   const reactivateUser = async (user: UserManagementUser) => {
     if (!window.confirm(`Reactivate ${user.fullName}? The account will be able to log in again.`)) return;
@@ -520,6 +537,9 @@ export function AdminUsersView() {
             <div className="flex gap-2">
               <Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />} onClick={loadUsers} disabled={loading}>
                 Refresh
+              </Button>
+              <Button variant="outline" size="sm" disabled={mutating} onClick={notifyNonCompliant}>
+                Quét & nhắc chuẩn hóa
               </Button>
               <Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={openCreate}>
                 Add User
@@ -856,6 +876,8 @@ function UserFormModal({
               label="FPT Student Code"
               value={form.fptStudentCode}
               error={fieldErrors.fptStudentCode}
+              // Mã sinh viên là định danh — khóa read-only khi Edit để tránh sửa sai quy chiếu.
+              disabled={mode === "edit"}
               onChange={value => setForm(prev => ({ ...prev, fptStudentCode: value }))}
             />
           )}
@@ -865,6 +887,7 @@ function UserFormModal({
                 label="External Student Code"
                 value={form.externalStudentCode}
                 error={fieldErrors.externalStudentCode}
+                disabled={mode === "edit"}
                 onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
               />
               <FormInput

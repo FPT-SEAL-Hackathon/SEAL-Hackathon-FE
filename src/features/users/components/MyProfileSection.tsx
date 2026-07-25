@@ -5,11 +5,21 @@ import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/s
 import { parseApiError, saveUser } from "@/lib/api/apiClient";
 import { meService, type MyProfileResponse } from "@/features/users/api/userService";
 import { useAuth } from "@/features/auth/store/authStore";
+import {
+  isValidExternalStudentCode,
+  isValidFptStudentCode,
+  isValidVietnamesePhone,
+  MSG_EXTERNAL_CODE,
+  MSG_FPT_CODE,
+  MSG_PHONE,
+} from "@/features/users/utils/profileValidation";
 
-// Khớp validation BE (ProfileController): phone rỗng hoặc 7-20 ký tự số/+()-space.
-const PHONE_REGEX = /^[0-9+()\-\s]{7,20}$/;
 const MAX_NAME_LENGTH = 200;
 const MAX_UNIVERSITY_LENGTH = 200;
+
+function isFptStudent(role?: string | null) {
+  return (role ?? "").toUpperCase().replace(/^ROLE_/, "") === "FPT_STUDENT";
+}
 
 function formatLabel(value?: string | null) {
   if (!value) return "-";
@@ -20,10 +30,6 @@ function isExternalStudent(role?: string | null) {
   return (role ?? "").toUpperCase().includes("EXTERNAL");
 }
 
-function isStudent(role?: string | null) {
-  const normalized = (role ?? "").toUpperCase();
-  return normalized.includes("STUDENT");
-}
 
 /**
  * Form hồ sơ cá nhân dùng chung cho MỌI role (student, judge, mentor, organizer):
@@ -45,6 +51,8 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [universityName, setUniversityName] = useState("");
+  const [fptStudentCode, setFptStudentCode] = useState("");
+  const [externalStudentCode, setExternalStudentCode] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -55,6 +63,8 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
         setFullName(data.fullName ?? "");
         setPhone(data.phone ?? "");
         setUniversityName(data.universityName ?? "");
+        setFptStudentCode(data.fptStudentCode ?? "");
+        setExternalStudentCode(data.externalStudentCode ?? "");
       })
       .catch(err => {
         if (!cancelled) setLoadError(parseApiError(err).message);
@@ -69,8 +79,17 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
     const errors: Record<string, string> = {};
     if (!fullName.trim()) errors.fullName = "Full name is required.";
     else if (fullName.trim().length > MAX_NAME_LENGTH) errors.fullName = `Full name must not exceed ${MAX_NAME_LENGTH} characters.`;
-    if (phone.trim() && !PHONE_REGEX.test(phone.trim())) errors.phone = "Invalid phone number (7-20 digits).";
+    if (phone.trim() && !isValidVietnamesePhone(phone.trim())) errors.phone = MSG_PHONE;
+    // Enforce-on-change: chỉ báo lỗi mã SV khi user ĐỔI giá trị (grandfather dữ liệu cũ).
+    if (isFptStudent(profile?.role) && fptStudentCode.trim() !== (profile?.fptStudentCode ?? "")
+        && fptStudentCode.trim() && !isValidFptStudentCode(fptStudentCode.trim())) {
+      errors.fptStudentCode = MSG_FPT_CODE;
+    }
     if (isExternalStudent(profile?.role)) {
+      if (externalStudentCode.trim() !== (profile?.externalStudentCode ?? "")
+          && externalStudentCode.trim() && !isValidExternalStudentCode(externalStudentCode.trim())) {
+        errors.externalStudentCode = MSG_EXTERNAL_CODE;
+      }
       if (!universityName.trim()) errors.universityName = "University is required for External Student.";
       else if (universityName.trim().length > MAX_UNIVERSITY_LENGTH) errors.universityName = `University must not exceed ${MAX_UNIVERSITY_LENGTH} characters.`;
     }
@@ -86,6 +105,8 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
         fullName: fullName.trim(),
         phone: phone.trim(),
         universityName: isExternalStudent(profile?.role) ? universityName.trim() : undefined,
+        fptStudentCode: isFptStudent(profile?.role) ? fptStudentCode.trim() : undefined,
+        externalStudentCode: isExternalStudent(profile?.role) ? externalStudentCode.trim() : undefined,
       });
       setProfile(prev => (prev ? { ...prev, ...updated } : prev));
       // Đồng bộ auth state + localStorage để dashboard hiện tên mới ngay
@@ -121,9 +142,8 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
   } as const;
   const errorStyle = { fontSize: 12, color: COLORS.error, marginTop: 4 } as const;
 
-  const studentCode = profile?.fptStudentCode || profile?.externalStudentCode || "";
-  const showStudentCode = isStudent(profile?.role);
   const showUniversity = isExternalStudent(profile?.role) || !!profile?.universityName;
+  const notCompliant = profile?.profileCompliant === false;
 
   const body = loading ? (
     <Card className="p-8">
@@ -138,6 +158,17 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
     </Card>
   ) : (
     <Card className="p-5">
+      {notCompliant && (
+        <div
+          className="mb-4 px-4 py-3 rounded-xl"
+          style={{ background: `${COLORS.warning}12`, border: `1px solid ${COLORS.warning}40`, color: "#92400e" }}
+        >
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Hồ sơ chưa đúng định dạng chuẩn — vui lòng cập nhật</div>
+          <ul style={{ fontSize: 12, marginTop: 6, marginLeft: 16, listStyle: "disc" }}>
+            {(profile?.profileIssues ?? []).map((issue, i) => <li key={i}>{issue}</li>)}
+          </ul>
+        </div>
+      )}
       <div className="flex items-center justify-between" style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Personal Information</div>
         <div className="flex items-center gap-2">
@@ -178,10 +209,31 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
           {fieldErrors.phone && <div style={errorStyle}>{fieldErrors.phone}</div>}
         </div>
 
-        {showStudentCode && (
+        {isFptStudent(profile?.role) && (
           <div>
-            <label style={labelStyle}>Student Code (cannot be changed)</label>
-            <input value={studentCode} disabled className="w-full px-3 py-2 rounded-xl outline-none" style={disabledStyle} />
+            <label style={labelStyle}>Student Code (FPT)</label>
+            <input
+              value={fptStudentCode}
+              onChange={e => setFptStudentCode(e.target.value)}
+              placeholder="e.g. SE123456"
+              maxLength={20}
+              className="w-full px-3 py-2 rounded-xl outline-none"
+              style={inputStyle}
+            />
+            {fieldErrors.fptStudentCode && <div style={errorStyle}>{fieldErrors.fptStudentCode}</div>}
+          </div>
+        )}
+        {isExternalStudent(profile?.role) && (
+          <div>
+            <label style={labelStyle}>Student Code (External)</label>
+            <input
+              value={externalStudentCode}
+              onChange={e => setExternalStudentCode(e.target.value)}
+              maxLength={50}
+              className="w-full px-3 py-2 rounded-xl outline-none"
+              style={inputStyle}
+            />
+            {fieldErrors.externalStudentCode && <div style={errorStyle}>{fieldErrors.externalStudentCode}</div>}
           </div>
         )}
 

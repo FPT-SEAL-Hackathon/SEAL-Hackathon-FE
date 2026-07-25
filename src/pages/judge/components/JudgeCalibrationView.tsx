@@ -80,8 +80,10 @@ export function JudgeCalibrationView({
     }
   }, [selectedCategoryId, selectedEventId, categories]);
 
-  // Derived filtered rounds
-  const filteredRounds = (selectedEventId || selectedCategoryId) ? fetchedRounds : apiRounds;
+  // Derived filtered rounds — chỉ hiện calibration round vì điểm calibration (metrics)
+  // chỉ tồn tại ở round có isCalibrationRound; tránh chọn nhầm round không có dữ liệu.
+  const baseRounds = (selectedEventId || selectedCategoryId) ? fetchedRounds : apiRounds;
+  const filteredRounds = baseRounds.filter((r: any) => r?.isCalibrationRound);
 
   const renderContent = () => {
     if (loading) {
