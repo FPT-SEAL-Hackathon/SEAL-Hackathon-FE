@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { eventService } from "@/features/events/api/eventService";
 import { parseApiError } from "@/lib/api/apiClient";
 import {
+  formatSyncStatus,
   submissionService,
   type EventSubmissionRepositoryItem,
 } from "@/features/submissions/api/submissionService";
@@ -179,7 +180,7 @@ export function AdminSubmissionRepositoriesView() {
             </select>
             <select className="border rounded-md px-2 py-1.5 text-sm" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
               <option value="">All statuses</option>
-              {statuses.map(name => <option key={name} value={name}>{name}</option>)}
+              {statuses.map(name => <option key={name} value={name}>{formatSyncStatus(name)}</option>)}
             </select>
           </div>
 
@@ -211,7 +212,14 @@ export function AdminSubmissionRepositoriesView() {
                     const link = repo?.externalUrl || repo?.repositoryUrl || item.repositoryUrl;
                     return (
                       <tr key={item.submissionId} className="border-b align-top">
-                        <td className="py-2 pr-3 font-medium">{item.teamName ?? "—"}</td>
+                        <td className="py-2 pr-3 font-medium">
+                          {item.sampleSubmission ? (
+                            /* Bài mẫu calibration không thuộc đội thi nào → gắn nhãn thay vì "—". */
+                            <span className="inline-flex items-center rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[11px] font-semibold">
+                              Sample (Calibration)
+                            </span>
+                          ) : (item.teamName ?? "—")}
+                        </td>
                         <td className="py-2 pr-3">{item.categoryName ?? "—"}</td>
                         <td className="py-2 pr-3">{item.roundName ?? "—"}</td>
                         <td className="py-2 pr-3 max-w-[240px]">
@@ -233,7 +241,7 @@ export function AdminSubmissionRepositoriesView() {
                         <td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(repo?.lastPushedAt)}</td>
                         <td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(repo?.lastSynchronizedAt)}</td>
                         <td className="py-2 pr-3">
-                          <span className={`text-xs font-semibold ${statusClass(status)}`}>{status}</span>
+                          <span className={`text-xs font-semibold ${statusClass(status)}`}>{formatSyncStatus(status)}</span>
                           {repo?.errorCode && status === "FAILED" && (
                             <div className="text-[11px] text-red-500 mt-0.5" title={repo.errorMessage}>{repo.errorCode}</div>
                           )}

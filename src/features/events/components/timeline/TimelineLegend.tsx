@@ -17,8 +17,12 @@ export function TimelineLegend() {
                 <span>Submission</span>
             </div>
             <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 bg-purple-400 rounded-sm shadow-sm" /> 
+                <div className="w-3 h-3 bg-purple-400 rounded-sm shadow-sm" />
                 <span>Judging</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 bg-amber-400 rounded-sm shadow-sm" />
+                <span>Appeal</span>
             </div>
         </div>
     );

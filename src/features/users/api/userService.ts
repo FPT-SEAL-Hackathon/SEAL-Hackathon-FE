@@ -105,7 +105,8 @@ export interface UpdateUserRequest {
 }
 
 export interface UpdateUserStatusRequest {
-  accountStatus: string;
+  // BE endpoint PATCH /users/{id}/status nhận field "status" (UpdateUserStatusRequest.status).
+  status: string;
 }
 
 export interface UpdateUserRoleRequest {
@@ -116,6 +117,14 @@ export interface HardDeleteUserResponse {
   success: boolean;
   message: string;
   deletedAccounts: number;
+}
+
+// Kết quả deactivate: team đã tự chuyển quyền leader + cảnh báo cần xử lý tay.
+export interface DeactivateUserResponse {
+  success: boolean;
+  message: string;
+  transferredTeams: string[];
+  warnings: string[];
 }
 
 export interface PaginatedUsersResponse {
@@ -315,7 +324,11 @@ export const userService = {
     unwrapUser(await api.patch<BackendUser | { data?: BackendUser }>(`/api/v1/users/${userId}/role`, payload)),
 
   deleteUser: (userId: string) =>
-    api.delete<void>(`/api/v1/users/${userId}`),
+    api.delete<DeactivateUserResponse>(`/api/v1/users/${userId}`),
+
+  // Organizer quét account có hồ sơ chưa chuẩn và gửi notification nhắc cập nhật (không khóa).
+  notifyNonCompliant: () =>
+    api.post<{ success: boolean; notifiedCount: number; message: string }>("/api/v1/users/notify-noncompliant", {}),
 
   // Xóa CỨNG mọi tài khoản trùng email (dev tool, không thể hoàn tác).
   // BE giữ dữ liệu tập thể (submission gán lại cho leader) và cho phép
@@ -333,6 +346,9 @@ export interface UpdateMyProfileRequest {
   fullName?: string;
   phone?: string;
   universityName?: string;
+  // Học sinh tự sửa mã SV để chuẩn hóa (theo role).
+  fptStudentCode?: string;
+  externalStudentCode?: string;
 }
 
 export interface MyProfileResponse {
@@ -346,6 +362,9 @@ export interface MyProfileResponse {
   externalStudentCode?: string;
   accountStatus: string;
   createdAt?: string;
+  // Chuẩn hóa hồ sơ: false = hồ sơ chưa đúng định dạng → FE hiện banner nhắc.
+  profileCompliant?: boolean;
+  profileIssues?: string[];
 }
 
 export const meService = {
