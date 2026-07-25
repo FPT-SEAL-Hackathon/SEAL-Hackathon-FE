@@ -5,27 +5,35 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/
 interface Props {
     round: RoundResponse;
     bounds: TimelineBounds;
+    // Vị trí dọc (px từ đỉnh track) do CategoryLane tính qua lane-packing để round đè
+    // nhau về thời gian không vẽ chồng lên nhau. Bỏ qua => giữ hành vi cũ (giữa track).
+    topPx?: number;
+    heightPx?: number;
 }
 
-export function RoundBlock({ round, bounds }: Props) {
+export function RoundBlock({ round, bounds, topPx, heightPx = 40 }: Props) {
     const rStartPct = getPercentage(round.startDate, bounds);
     const rWidth = getWidthPercentage(round.startDate, round.endDate, bounds);
-    
-    // Sub-bars for Submission and Judging relative to the round block itself
-    const sStartPct = round.startDate && round.endDate ? getWidthPercentage(round.startDate, round.submissionDeadline, bounds) / Math.max(rWidth, 0.001) * 100 : 0;
-    const sWidth = round.startDate && round.endDate ? getWidthPercentage(round.startDate, round.submissionDeadline, bounds) / Math.max(rWidth, 0.001) * 100 : 0;
-    // Wait, submission is from round.startDate to round.submissionDeadline
-    // judging is from round.submissionDeadline to round.judgingDeadline
-    
+
+    // Các đoạn màu bên trong round block (tính theo % của chính round):
+    // Submission: start → submissionDeadline; Judging: submissionDeadline → judgingDeadline;
+    // Appeal: appealStartTime → appealEndTime (nằm sau judging theo luật nghiệp vụ).
     const subStartPct = 0;
-    const subWidthPct = (round.startDate && round.submissionDeadline && rWidth > 0) 
+    const subWidthPct = (round.startDate && round.submissionDeadline && rWidth > 0)
         ? (getWidthPercentage(round.startDate, round.submissionDeadline, bounds) / rWidth) * 100 : 0;
-        
+
     const judgeStartPct = subWidthPct;
     const judgeWidthPct = (round.submissionDeadline && round.judgingDeadline && rWidth > 0)
         ? (getWidthPercentage(round.submissionDeadline, round.judgingDeadline, bounds) / rWidth) * 100 : 0;
 
+    const appealStartPct = (round.startDate && round.appealStartTime && rWidth > 0)
+        ? (getWidthPercentage(round.startDate, round.appealStartTime, bounds) / rWidth) * 100 : 0;
+    const appealWidthPct = (round.appealStartTime && round.appealEndTime && rWidth > 0)
+        ? (getWidthPercentage(round.appealStartTime, round.appealEndTime, bounds) / rWidth) * 100 : 0;
+
     const formatDt = (d?: string | null) => d ? new Date(d).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : "Unknown";
+
+    const hasAppeal = !!(round.appealStartTime && round.appealEndTime);
 
     const tooltipContent = (
         <div className="text-xs">
@@ -33,6 +41,7 @@ export function RoundBlock({ round, bounds }: Props) {
             <div>Start: {formatDt(round.startDate)}</div>
             <div>Sub. Deadline: {formatDt(round.submissionDeadline)}</div>
             <div>Judg. Deadline: {formatDt(round.judgingDeadline)}</div>
+            {hasAppeal && <div>Appeal: {formatDt(round.appealStartTime)} → {formatDt(round.appealEndTime)}</div>}
             <div>End: {formatDt(round.endDate)}</div>
         </div>
     );
@@ -40,9 +49,14 @@ export function RoundBlock({ round, bounds }: Props) {
     return (
         <Tooltip>
             <TooltipTrigger asChild>
-                <div 
-                    className="absolute top-1/2 -translate-y-1/2 h-[42px] rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden flex flex-col cursor-pointer transition-all hover:-translate-y-[calc(50%+2px)] hover:shadow-md hover:z-10 hover:border-gray-400"
-                    style={{ left: `${rStartPct}%`, width: `${rWidth}%` }}
+                <div
+                    className={`absolute rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-md hover:z-10 hover:border-gray-400 ${topPx == null ? "top-1/2 -translate-y-1/2" : ""}`}
+                    style={{
+                        left: `${rStartPct}%`,
+                        width: `${rWidth}%`,
+                        height: `${heightPx}px`,
+                        ...(topPx != null ? { top: `${topPx}px` } : {}),
+                    }}
                 >
                     {/* Round Label */}
                     <div className="flex-1 px-1.5 pt-1 flex items-start overflow-hidden">
@@ -61,10 +75,17 @@ export function RoundBlock({ round, bounds }: Props) {
                             />
                         )}
                         {judgeWidthPct > 0 && (
-                            <div 
+                            <div
                                 className="absolute h-full bg-purple-400"
-                                style={{ left: `${judgeStartPct}%`, width: `${judgeWidthPct}%` }} 
+                                style={{ left: `${judgeStartPct}%`, width: `${judgeWidthPct}%` }}
                                 title="Judging Period"
+                            />
+                        )}
+                        {appealWidthPct > 0 && (
+                            <div
+                                className="absolute h-full bg-amber-400"
+                                style={{ left: `${appealStartPct}%`, width: `${appealWidthPct}%` }}
+                                title="Appeal Period"
                             />
                         )}
                     </div>

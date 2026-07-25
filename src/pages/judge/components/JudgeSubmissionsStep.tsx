@@ -87,7 +87,8 @@ export function JudgeSubmissionsStep({ apiSubmissions, apiRounds, apiCriteria, o
     
     return {
       id: s.submissionId,
-      team: s.teamName || s.teamId,
+      // Sample submission (calibration) không thuộc đội thi nào → gắn nhãn để judge nhận ra.
+      team: s.isSampleSubmission ? "Sample (Calibration)" : (s.teamName || s.teamId),
       title: s.notes || `Submission ${s.submissionId.slice(0, 8)}`,
       track: "—",
       github: s.repositoryUrl ?? "",

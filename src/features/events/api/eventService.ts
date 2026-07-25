@@ -51,7 +51,6 @@ export interface CreateEventRequest {
   description?: string;
   location: string;
   bannerImageUrl?: string;
-  eventStatusId: string;
   registrationStart: string;
   registrationEnd: string;
   eventStartDate: string;
@@ -62,7 +61,6 @@ export interface CreateEventRequest {
 
 export interface UpdateEventRequest extends Partial<CreateEventRequest> {
   eventName: string;
-  eventStatusId: string;
 }
 
 export interface UpdateEventStatusRequest {
@@ -204,4 +202,5 @@ export const eventService = {
   updateStatus: async (id: string, data: UpdateEventStatusRequest) => normalizeEventResponse(unwrapItem(await api.patch<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/status/${id}`, data))),
   delete: (id: string) => api.delete(`/api/v1/event/${id}`),
   getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/event/organizer"))),
+  publishEvent: (id: string) => api.post<EventResponse>(`/api/v1/event/publish/${id}`, {}),
 };
