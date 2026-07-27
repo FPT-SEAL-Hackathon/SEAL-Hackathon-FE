@@ -2243,7 +2243,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
   const renderLeaderboard = () => {
     const leaderboardEvents = apiEvents.filter(ev => submissionTeams.some(t => t.eventId === ev.eventId));
-    const currentEventId = leaderboardEventId || activeTeamContext?.eventId || "";
+    const currentEventId = selectedEventDetailId || leaderboardEventId || activeTeamContext?.eventId || "";
 
     return (
       <>
@@ -2252,33 +2252,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           subtitle={leaderboardRoundId === "event" ? "Event leaderboard rankings" : `Round Rankings`} 
           action={
             <div className="flex items-center gap-2">
-              {leaderboardEvents.length > 0 && (
-                <Select
-                  value={currentEventId || "none"}
-                  onValueChange={(value) => { setLeaderboardEventId(value === "none" ? "" : value); setLeaderboardRoundId("event"); }}
-                >
-                  <SelectTrigger
-                    className="px-3 py-1.5 rounded-md outline-none"
-                    style={{
-                      background: COLORS.bg,
-                      border: `1px solid ${COLORS.border}`,
-                      color: COLORS.textPrimary,
-                      fontSize: 13,
-                      width: "180px",
-                    }}
-                  >
-                    <SelectValue placeholder="Select Event" />
-                  </SelectTrigger>
-                  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select Event</SelectItem>
-                    {leaderboardEvents.map(ev => (
-                      <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>
-                        {ev.eventName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
               {leaderboardRounds.length > 0 && (
                 <Select
                   value={leaderboardRoundId}
