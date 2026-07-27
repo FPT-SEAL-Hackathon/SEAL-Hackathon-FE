@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router";
 import { DEFAULT_PAGE_BY_ROLE, canAccessPage } from "@/auth/permissions/permissions";
-import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, type Role, ROLES } from "@/auth/rbac/roles";
+import { getRoleRouteSegment, isAdmin, isJudge, isOrganizer, isStudent, normalizeRole, type Role, ROLES } from "@/auth/rbac/roles";
 import { useAuth } from "@/features/auth/store/authStore";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
 import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
@@ -182,7 +182,9 @@ function DashboardByRole({ role, currentPage, onNavigate, navKey, markAllReadKey
   if (isJudge(role)) {
     return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
   }
-  if (isOrganizer(role)) {
+  // Admin dùng chung container AdminDashboard (nơi cung cấp viewContext cho các view),
+  // nhưng URL (/admin/...) và menu lấy theo role nên hai khu vực vẫn tách biệt.
+  if (isOrganizer(role) || isAdmin(role)) {
     return <AdminDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   if (role === ROLES.MENTOR) {

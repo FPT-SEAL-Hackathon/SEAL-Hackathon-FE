@@ -28,8 +28,8 @@ export function CategoryLane({ category, rounds, bounds }: Props) {
 
     return (
         <div className="relative flex border-b transition-colors hover:bg-gray-50" style={{ borderColor: COLORS.border, minHeight: `${laneMinHeight}px` }}>
-            {/* Label */}
-            <div className="w-48 shrink-0 px-4 flex flex-col justify-center border-r" style={{ borderColor: COLORS.border }}>
+            {/* Label — dính (sticky) khi kéo ngang để luôn thấy tên category */}
+            <div className="w-48 shrink-0 px-4 flex flex-col justify-center border-r sticky left-0 z-30 bg-white" style={{ borderColor: COLORS.border }}>
                 <span className="font-semibold text-sm truncate" style={{ color: COLORS.textPrimary }} title={category.categoryName}>
                     {category.categoryName}
                 </span>
