@@ -7,11 +7,13 @@ interface Props {
 
 // Khoảng cách % tối thiểu giữa hai nhãn ngày để không chồng chữ lên nhau.
 const MIN_DAY_LABEL_GAP_PCT = 4;
+// Ngưỡng coi tick là "sát mép" để căn nhãn về trong, tránh bị cắt/che ở hai biên.
+const EDGE_PCT = 2;
 
 export function TimeScaleHeader({ bounds }: Props) {
     const totalDays = bounds.totalMs / (1000 * 60 * 60 * 24);
 
-    // Mật độ tick theo tổng thời lượng để không quá dày.
+    // Mật độ tick thích ứng theo tổng thời lượng để không quá dày.
     let intervalDays = 1;
     if (totalDays > 60) intervalDays = 14;
     else if (totalDays > 30) intervalDays = 7;
@@ -43,6 +45,14 @@ export function TimeScaleHeader({ bounds }: Props) {
         }
     });
 
+    // Căn nhãn theo vị trí: sát mép trái → căn trái, sát mép phải → căn phải, còn lại → giữa.
+    // Vạch tick luôn ở đúng percent; chỉ NHÃN dịch để không tràn ra ngoài / chui dưới cột nhãn.
+    const labelTransform = (percent: number) => {
+        if (percent <= EDGE_PCT) return "translateX(0)";
+        if (percent >= 100 - EDGE_PCT) return "translateX(-100%)";
+        return "translateX(-50%)";
+    };
+
     return (
         <div className="relative h-14 border-b text-[10px] font-medium select-none bg-gray-50/50" style={{ borderColor: COLORS.border }}>
             {/* Dải tháng (trên) */}
@@ -51,7 +61,7 @@ export function TimeScaleHeader({ bounds }: Props) {
                     <div
                         key={i}
                         className="absolute top-1 whitespace-nowrap text-gray-800 font-bold text-xs tracking-tight px-1"
-                        style={{ left: `${m.percent}%` }}
+                        style={{ left: `${m.percent}%`, transform: labelTransform(m.percent) }}
                     >
                         {m.label}
                     </div>
@@ -67,17 +77,21 @@ export function TimeScaleHeader({ bounds }: Props) {
                         const showDay = tick.percent - lastShownPercent >= MIN_DAY_LABEL_GAP_PCT;
                         if (showDay) lastShownPercent = tick.percent;
                         return (
-                            <div
-                                key={i}
-                                className="absolute top-0 bottom-0 flex flex-col items-center -translate-x-1/2"
-                                style={{ left: `${tick.percent}%` }}
-                            >
+                            <div key={i}>
+                                {/* Nhãn số ngày — căn mép để không bị che ở hai biên */}
                                 {showDay && (
-                                    <span className="whitespace-nowrap mt-1 text-gray-600">
+                                    <span
+                                        className="absolute top-1 whitespace-nowrap text-gray-600"
+                                        style={{ left: `${tick.percent}%`, transform: labelTransform(tick.percent) }}
+                                    >
                                         {tick.date.toLocaleDateString(undefined, { day: "2-digit" })}
                                     </span>
                                 )}
-                                <div className="w-px bg-gray-300 mt-auto" style={{ height: 6 }} />
+                                {/* Vạch tick — luôn ở đúng vị trí percent */}
+                                <div
+                                    className="absolute bottom-0 w-px bg-gray-300"
+                                    style={{ left: `${tick.percent}%`, height: 6, transform: "translateX(-50%)" }}
+                                />
                             </div>
                         );
                     });

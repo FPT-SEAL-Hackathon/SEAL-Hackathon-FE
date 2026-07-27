@@ -17,8 +17,6 @@ export interface RoundResponse {
   appealEndTime?: string | null;
   advancementTopN: number | null;
   isCalibrationRound: boolean;
-  appealStartTime?: string;
-  appealEndTime?: string;
 }
 
 export interface CreateRoundRequest {

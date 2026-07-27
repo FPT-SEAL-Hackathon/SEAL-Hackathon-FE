@@ -47,7 +47,7 @@ export function AdminSubmissionRepositoriesView() {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [items, setItems] = useState<EventSubmissionRepositoryItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const [bulkSyncing, setBulkSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // Filters
@@ -58,15 +58,14 @@ export function AdminSubmissionRepositoriesView() {
   const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
-    eventService.getAll(true).then(res => {
-      setEvents(res);
-      if (res.length > 0) setSelectedEventId(res[0].eventId);
-    }).catch(() => setEvents([]));
+    // Khong auto-chon event: mac dinh "" = hien HET repo cua moi event Organizer to chuc.
+    eventService.getAll(true).then(res => setEvents(res)).catch(() => setEvents([]));
   }, []);
 
+  // Khong chon event = gop tat ca event; chon 1 event = chi event do.
   useEffect(() => {
-    if (selectedEventId) void loadItems(selectedEventId);
-  }, [selectedEventId]);
+    if (events.length > 0) void reload();
+  }, [selectedEventId, events]);
 
   const loadItems = async (eventId: string) => {
     setLoading(true);
@@ -81,22 +80,48 @@ export function AdminSubmissionRepositoriesView() {
     }
   };
 
-  const handleResync = async (item: EventSubmissionRepositoryItem) => {
-    setSyncing(prev => ({ ...prev, [item.submissionId]: true }));
+  // Gop repo cua TAT CA event Organizer to chuc (moi event mot call, loi tung event bo qua).
+  const loadAll = async () => {
+    setLoading(true);
     try {
-      const repo = await submissionService.syncSubmissionRepository(item.submissionId);
-      setItems(prev => prev.map(existing =>
-        existing.submissionId === item.submissionId ? { ...existing, repository: repo } : existing));
-      toast.success("Repository metadata synchronized.");
+      const results = await Promise.all(
+        events.map(ev =>
+          submissionService.getEventSubmissionRepositories(ev.eventId).catch(() => [] as EventSubmissionRepositoryItem[])
+        )
+      );
+      setItems(results.flat());
     } catch (error) {
-      const parsed = parseApiError(error);
-      // 409 = mot phien sync khac dang chay; cac loi khac hien message an toan tu backend.
-      toast.error(parsed.message);
-      // Sync co the da luu trang thai FAILED — reload de hien error code moi nhat.
-      if (selectedEventId) void loadItems(selectedEventId);
+      toast.error(parseApiError(error).message);
+      setItems([]);
     } finally {
-      setSyncing(prev => ({ ...prev, [item.submissionId]: false }));
+      setLoading(false);
     }
+  };
+
+  const reload = () => (selectedEventId ? loadItems(selectedEventId) : loadAll());
+
+  // Resync HET cac dong DANG LOC bang 1 nut: tuan tu (ton trong rate-limit + khoa RUNNING),
+  // cap nhat tung dong khi xong, tong ket ok/fail cuoi cung.
+  const handleBulkResync = async () => {
+    const targets = filtered.filter(i => i.repositoryUrl);
+    if (targets.length === 0) return;
+    setBulkSyncing(true);
+    let ok = 0;
+    let fail = 0;
+    for (const item of targets) {
+      try {
+        const repo = await submissionService.syncSubmissionRepository(item.submissionId);
+        setItems(prev => prev.map(existing =>
+          existing.submissionId === item.submissionId ? { ...existing, repository: repo } : existing));
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    setBulkSyncing(false);
+    if (fail > 0) toast.warning(`Resynced ${ok}/${targets.length}, ${fail} failed.`);
+    else toast.success(`Resynced ${ok}/${targets.length}.`);
+    if (fail > 0) void reload();
   };
 
   const handleExport = async () => {
@@ -146,14 +171,23 @@ export function AdminSubmissionRepositoriesView() {
               value={selectedEventId}
               onChange={event => setSelectedEventId(event.target.value)}
             >
+              <option value="">All events</option>
               {events.map(item => (
                 <option key={item.eventId} value={item.eventId}>{item.eventName}</option>
               ))}
             </select>
-            <Button variant="outline" size="sm" onClick={() => selectedEventId && loadItems(selectedEventId)} disabled={loading}>
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+            {/* Resync 1 lan cho TAT CA dong dang loc */}
+            <Button variant="outline" size="sm" onClick={handleBulkResync} disabled={bulkSyncing || loading || filtered.length === 0}>
+              <RefreshCw size={14} className={`mr-1 ${bulkSyncing ? "animate-spin" : ""}`} />
+              {bulkSyncing ? "Resyncing..." : `Resync filtered (${filtered.filter(i => i.repositoryUrl).length})`}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting || !selectedEventId}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={exporting || !selectedEventId}
+              title={selectedEventId ? "" : "Select a specific event to export CSV"}
+            >
               <Download size={14} className="mr-1" /> {exporting ? "Exporting..." : "Export CSV"}
             </Button>
           </div>
@@ -198,11 +232,12 @@ export function AdminSubmissionRepositoriesView() {
                     <th className="py-2 pr-3">Round</th>
                     <th className="py-2 pr-3">Repository</th>
                     <th className="py-2 pr-3">Language</th>
+                    <th className="py-2 pr-3">Commits</th>
+                    <th className="py-2 pr-3">Contributors</th>
                     <th className="py-2 pr-3">Branch</th>
                     <th className="py-2 pr-3">Last pushed</th>
                     <th className="py-2 pr-3">Last synced</th>
                     <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 pr-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -237,6 +272,8 @@ export function AdminSubmissionRepositoriesView() {
                           )}
                         </td>
                         <td className="py-2 pr-3">{repo?.primaryLanguage ?? "—"}</td>
+                        <td className="py-2 pr-3 tabular-nums">{repo?.commitCount ?? "—"}</td>
+                        <td className="py-2 pr-3 tabular-nums">{repo?.contributorCount ?? "—"}</td>
                         <td className="py-2 pr-3">{repo?.defaultBranch ?? "—"}</td>
                         <td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(repo?.lastPushedAt)}</td>
                         <td className="py-2 pr-3 whitespace-nowrap">{formatDateTime(repo?.lastSynchronizedAt)}</td>
@@ -244,19 +281,6 @@ export function AdminSubmissionRepositoriesView() {
                           <span className={`text-xs font-semibold ${statusClass(status)}`}>{formatSyncStatus(status)}</span>
                           {repo?.errorCode && status === "FAILED" && (
                             <div className="text-[11px] text-red-500 mt-0.5" title={repo.errorMessage}>{repo.errorCode}</div>
-                          )}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {item.repositoryUrl && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleResync(item)}
-                              disabled={!!syncing[item.submissionId]}
-                            >
-                              <RefreshCw size={13} className={syncing[item.submissionId] ? "animate-spin" : ""} />
-                              <span className="ml-1">{syncing[item.submissionId] ? "Syncing..." : "Resync"}</span>
-                            </Button>
                           )}
                         </td>
                       </tr>

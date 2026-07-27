@@ -20,6 +20,7 @@ const roleColors: Record<string, string> = {
   ROLE_MENTOR: COLORS.success,
   ROLE_EXPERT: COLORS.success,
   ROLE_ORGANIZER: COLORS.error,
+  ROLE_ADMIN: COLORS.textPrimary,
 };
 
 export { COLORS, roleColors };
@@ -100,7 +101,9 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   });
 
   const accentColor = roleColors[role] || COLORS.primary;
-  const lockRouteScroll = role === "ROLE_ORGANIZER" && (currentPage === "users" || currentPage === "event-participants");
+  // User Management (nay thuoc Admin) va Event Participants co bang dai tu cuon ben trong.
+  const lockRouteScroll = (role === "ROLE_ORGANIZER" || role === "ROLE_ADMIN")
+    && (currentPage === "users" || currentPage === "event-participants");
 
   // Hover-delay: open sidebar only after cursor lingers 200ms to avoid accidental triggers
   const sidebarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -227,6 +230,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   // Maps role to the profile page key used in navigation
   const roleProfileKey: Record<string, string> = {
     ROLE_ORGANIZER: "profile",
+    ROLE_ADMIN: "profile",
     ROLE_MEMBER: "profile",
     ROLE_LEADER: "profile",
     ROLE_JUDGE: "profile",

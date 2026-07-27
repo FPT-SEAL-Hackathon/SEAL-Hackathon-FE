@@ -6,6 +6,9 @@ import { judgingService, type ScoreSubmissionDTO, type UpdateScoreSubmissionDTO 
 import { type RoundCriterionResponse, type RoundResponse } from "@/features/judging/api/roundService";
 import { updateGlobalScoreCache } from "./JudgeSubmissionsStep";
 import { RepositoryMetadataCard } from "@/features/submissions/components/SubmissionRepositoryField";
+import { submissionService, type SubmissionRepositoryResponse } from "@/features/submissions/api/submissionService";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 
 interface JudgeScoringViewProps {
   apiCriteria: RoundCriterionResponse[];
@@ -27,6 +30,20 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
   const [submitStatus, setSubmitStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [successMessage, setSuccessMessage] = useState("");
   const [viewMode, setViewMode] = useState<"edit" | "view">(selectedSubmission?.status === "completed" ? "view" : "edit");
+  // Judge tu resync repo de nap ban moi nhat khi cham. Ghi de metadata hien thi cho dung submission.
+  const [repoResync, setRepoResync] = useState<{ id?: string; repo?: SubmissionRepositoryResponse; loading: boolean }>({ loading: false });
+
+  const handleJudgeResync = async (submissionId: string) => {
+    setRepoResync(prev => ({ ...prev, id: submissionId, loading: true }));
+    try {
+      const repo = await submissionService.syncSubmissionRepository(submissionId);
+      setRepoResync({ id: submissionId, repo, loading: false });
+      toast.success("Repository metadata refreshed.");
+    } catch (e) {
+      toast.error(parseApiError(e).message);
+      setRepoResync(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   // Reset scoring form and fetch existing scores when changing submissions
   useEffect(() => {
@@ -250,13 +267,23 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
                 </a>
               )}
 
-              {/* Judge chi DOC metadata repository: khong co nut edit/validate/resync o day. */}
-              {selectedSubmission.raw?.repository && (
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 }}>REPOSITORY METADATA</div>
-                  <RepositoryMetadataCard repository={selectedSubmission.raw.repository} showJudgeDisclaimer />
-                </div>
-              )}
+              {/* Judge doc metadata + tu Resync de nap ban moi nhat cua repo khi cham. */}
+              {selectedSubmission.raw?.repository && (() => {
+                const baseRepo = selectedSubmission.raw.repository as SubmissionRepositoryResponse;
+                const subId = baseRepo.submissionId;
+                const repo = repoResync.id === subId && repoResync.repo ? repoResync.repo : baseRepo;
+                return (
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 8, marginTop: 16 }}>REPOSITORY METADATA</div>
+                    <RepositoryMetadataCard
+                      repository={repo}
+                      showJudgeDisclaimer
+                      onRefresh={subId ? () => handleJudgeResync(subId) : undefined}
+                      refreshing={repoResync.loading && repoResync.id === subId}
+                    />
+                  </div>
+                );
+              })()}
             </div>
           </Card>
         </div>
