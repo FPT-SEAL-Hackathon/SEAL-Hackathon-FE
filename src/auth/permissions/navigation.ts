@@ -38,6 +38,18 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "BarChart2", label: "Calibration", key: "calibration" },
     { icon: "Clock", label: "History", key: "history" },
   ],
+  // Admin = quản trị hệ thống. KHÔNG có Event/Submission/Ranking/Appeal/Award
+  // (đó là việc vận hành cuộc thi của Organizer).
+  [ROLES.ADMIN]: [
+    { icon: "Users", label: "User Management", key: "users" },
+    { icon: "BarChart2", label: "Research & Analytics", key: "reports" },
+    { icon: "Bell", label: "Notifications Broadcast", key: "notifications" },
+    { icon: "Shield", label: "Audit Logs", key: "audit" },
+    { icon: "Wrench", label: "System Settings", key: "settings" },
+    { icon: "User", label: "Profile", key: "profile" },
+  ],
+  // Organizer = vận hành cuộc thi. User Management / Settings đã chuyển sang Admin;
+  // Criteria (template) VẪN thuộc Organizer vì là nguyên liệu dựng tiêu chí cho event.
   [ROLES.ORGANIZER]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },
     { icon: "Calendar", label: "Event Management", key: "events" },
@@ -45,13 +57,11 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "FileText", label: "Submissions", key: "submissions" },
     { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },
-    { icon: "Users", label: "User Management", key: "users" },
     { icon: "BarChart2", label: "Research & Analytics", key: "reports" },
     { icon: "AlertCircle", label: "Appeals Management", key: "appeals" },
     { icon: "Award", label: "Awards", key: "awards" },
     { icon: "Bell", label: "Notifications Broadcast", key: "notifications" },
     { icon: "Shield", label: "Audit Logs", key: "audit" },
-    { icon: "Wrench", label: "Settings", key: "settings" },
   ],
   [ROLES.MENTOR]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },

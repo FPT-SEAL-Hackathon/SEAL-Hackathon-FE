@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "@/app/store/languageStore";
+import { useAuth } from "@/features/auth/store/authStore";
+import { isAdmin } from "@/auth/rbac/roles";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type CriterionTemplateResponse, type RoundResponse } from "@/features/judging/api/roundService";
@@ -140,6 +142,10 @@ const createEmptyManualAwardForm = () => ({
 
 export function AdminDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { t } = useLanguage();
+  // Container nay dung chung cho Organizer va Admin. Quan ly nguoi dung va System
+  // Settings gio la ADMIN-only o backend -> Organizer goi se bi 403. Chi tai khi la Admin.
+  const { role } = useAuth();
+  const isAdminUser = isAdmin(role);
 
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<typeof events>([]);
@@ -243,6 +249,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   // Load system settings from API on mount
   useEffect(() => {
+    if (!isAdminUser) return; // Organizer khong co quyen doc System Settings
     settingsService.getSettings()
       .then(data => {
         setSystemSettings({
@@ -257,7 +264,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         });
       })
       .catch(() => { /* use default values on error */ });
-  }, []);
+  }, [isAdminUser]);
 
   useEffect(() => {
     eventService.getAllEventsForOrganizer()
@@ -290,10 +297,11 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
+    if (!isAdminUser) { setApiUsers([]); return; } // /api/v1/users la ADMIN-only
     userService.getUsers({ page: 0, size: 500 })
       .then(data => setApiUsers(data.content))
       .catch(() => setApiUsers([]));
-  }, []);
+  }, [isAdminUser]);
 
   useEffect(() => {
     if (!selectedEventId) {

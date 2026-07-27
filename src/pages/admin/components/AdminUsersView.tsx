@@ -20,6 +20,7 @@ import {
 const ROLE_OPTIONS = [
   { label: "FPT Student", value: "FPT_STUDENT" },
   { label: "External Student", value: "EXTERNAL_STUDENT" },
+  { label: "Admin", value: "ADMIN" },
   { label: "Organizer", value: "ORGANIZER" },
   { label: "Internal Judge", value: "INTERNAL_JUDGE" },
   { label: "Guest Judge", value: "GUEST_JUDGE" },
