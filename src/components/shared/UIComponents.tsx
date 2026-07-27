@@ -159,7 +159,7 @@ type CardProps = React.HTMLAttributes<HTMLDivElement> & {
 
 export function Card({ children, className = "", style = {}, ...rest }: CardProps) {
   return (
-    <div {...rest} className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
+    <div {...rest} className={`rounded-2xl overflow-hidden ui-card-glow ${className}`} style={{ ...glassSurface, ...style }}>
       {children}
     </div>
   );
