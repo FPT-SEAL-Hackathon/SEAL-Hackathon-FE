@@ -801,16 +801,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     }
   }, [submissionTeams.length, user?.userId]);
 
-  // Khi vĂ o trang certificates, init event tá»« storedTeam hoáº·c apiEvents
   useEffect(() => {
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
     // Náº¿u chÆ°a chá»n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
-    setCertificateSelectedEventId(prev => {
-      if (prev) return prev;
-      return storedTeam?.eventId ?? "";
-    });
     setCertificateCategoryId("all");
   }, [currentPage, user?.userId]);
 
@@ -2412,11 +2407,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                       {ev.eventName}
                     </SelectItem>
                   ))}
-                  {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
-                    <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
-                      {ev.eventName} (not joined)
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </label>
@@ -2487,82 +2477,86 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
-          <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
-          <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
-        </div>
+        {certificateSelectedEventId && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
+              <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
+              <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
+            </div>
 
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: COLORS.bg }}>
-                  {["Award", "Event", "Category", "Published", "Actions"].map(h => (
-                    <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {certificateLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                      Loading certificates...
-                    </td>
-                  </tr>
-                ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
-                  const actionLoading = certificateActionLoading[award.id];
-                  return (
-                    <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td className="px-4 py-3">
-                        <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
-                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
-                      </td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                        {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            icon={<Eye size={13} />}
-                            disabled={!!actionLoading}
-                            onClick={() => handleCertificateFile(award, "view")}
-                          >
-                            {actionLoading === "view" ? "Opening..." : "View"}
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            icon={<Download size={13} />}
-                            disabled={!!actionLoading}
-                            onClick={() => handleCertificateFile(award, "download")}
-                          >
-                            {actionLoading === "download" ? "Downloading..." : "Download"}
-                          </Button>
-                        </div>
-                      </td>
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: COLORS.bg }}>
+                      {["Award", "Event", "Category", "Published", "Actions"].map(h => (
+                        <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
+                      ))}
                     </tr>
-                  );
-                }) : (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center">
-                      <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                        No published certificates are available for this category.
-                      </div>
-                      <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                        Certificates will appear here after awards are published by the organizer.
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {certificateLoading ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                          Loading certificates...
+                        </td>
+                      </tr>
+                    ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
+                      const actionLoading = certificateActionLoading[award.id];
+                      return (
+                        <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                          <td className="px-4 py-3">
+                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
+                          </td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                            {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Eye size={13} />}
+                                disabled={!!actionLoading}
+                                onClick={() => handleCertificateFile(award, "view")}
+                              >
+                                {actionLoading === "view" ? "Opening..." : "View"}
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                icon={<Download size={13} />}
+                                disabled={!!actionLoading}
+                                onClick={() => handleCertificateFile(award, "download")}
+                              >
+                                {actionLoading === "download" ? "Downloading..." : "Download"}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center">
+                          <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
+                            No published certificates are available for this category.
+                          </div>
+                          <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                            Certificates will appear here after awards are published by the organizer.
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
       </>
     );
   };

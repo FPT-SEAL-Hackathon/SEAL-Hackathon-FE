@@ -85,20 +85,20 @@ const RANK_META = [
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "ongoing") return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-orange-500/15 text-orange-600 border border-orange-500/30">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white/90 dark:bg-black/90 text-orange-600 border border-orange-500/40 shadow-sm backdrop-blur-md">
       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
       Live
     </span>
   );
   if (status === "completed") return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
-      <Trophy size={10} />
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white/90 dark:bg-black/90 text-emerald-600 border border-emerald-500/40 shadow-sm backdrop-blur-md">
+      <Trophy size={11} />
       Completed
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/15 text-blue-600 border border-blue-500/30">
-      <Clock size={10} />
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white/90 dark:bg-black/90 text-blue-600 border border-blue-500/40 shadow-sm backdrop-blur-md">
+      <Clock size={11} />
       Upcoming
     </span>
   );
