@@ -4,10 +4,20 @@ import {
   Trophy, Star, Crown, Flame, Zap, Users, Calendar,
   ArrowRight, Award, Target, Clock, MapPin, Shield, Hash, Loader
 } from "lucide-react";
-import { api } from "@/lib/api/apiClient";
-import { eventService, type EventResponse } from "@/features/events/api/eventService";
-import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService";
+import { type TotalPrizeSummary } from "@/features/awards/api/awardService";
+import { publicSummaryService } from "@/features/public/api/publicSummaryService";
 
+/**
+ * Giao diện Landing Page (Trang chủ công khai).
+ * 
+ * Tối ưu & Kiến trúc (BFF/Aggregate):
+ * Thay vì gọi 4-5 API riêng biệt để lấy danh sách giải thưởng, danh sách sự kiện, tổng số đội,
+ * Component này sử dụng một API duy nhất (`publicSummaryService.getLandingSummary`) để fetch
+ * toàn bộ dữ liệu cần thiết trong một lần tải trang. Việc này giúp:
+ * - Tránh lỗi N+1 request ở Frontend.
+ * - Loại bỏ hiện tượng chớp màn hình (waterfall loading).
+ * - Cải thiện tốc độ load (SEO & Performance).
+ */
 interface Props {
   onGoToLogin: () => void;
   onGoToRegister: () => void;
@@ -279,10 +289,7 @@ function normalizeDateTime(date: string): string {
   return date.includes(" ") ? date.replace(" ", "T") : date;
 }
 
-async function getPublicTeamCount() {
-  const response = await api.get<TeamCountResponse>("/api/v1/public/teams/count", false);
-  return response.totalTeams;
-}
+
 
 function formatPrizeMoney(summary: TotalPrizeSummary): string {
   const { totalPrize, currency } = summary;
@@ -324,52 +331,43 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
     return () => clearInterval(timer);
   }, [competitions.length]);
 
+  // ─── Fetch All Landing Data via 1 Aggregate API Call ───────────────────────
   useEffect(() => {
-    eventService.getPublic()
+    setCompetitionsLoading(true);
+    setHofLoading(true);
+    
+    publicSummaryService.getLandingSummary()
       .then(data => {
-        const mapped = pickLandingCompetitions(data).map(toCompetition);
+        // 1. Set Competitions & Events Stats
+        const mapped = pickLandingCompetitions(data.events).map(toCompetition);
         setCompetitions(mapped);
-        setStats(prev => ({ ...prev, events: String(data.length) }));
+        setStats(prev => ({ ...prev, events: String(data.events.length) }));
         setCompetitionsError("");
         setActiveCompetition(0);
+        
+        // 2. Set Teams Stats
+        setStats(prev => ({ ...prev, teams: String(data.totalTeams) }));
+        
+        // 3. Set Prize Stats
+        setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(data.totalPrize) }));
+        
+        // 4. Set Hall of Fame
+        setHofGroups(groupHallOfFame(data.hallOfFame));
+        setStats(prev => ({ ...prev, topProjects: String(data.hallOfFame.length) }));
       })
-      .catch((error) => {
-        console.error("Failed to load landing events", error);
+      .catch(error => {
+        console.error("Failed to load landing summary", error);
         setCompetitionsError(error instanceof Error ? error.message : "Failed to load events.");
         setCompetitions([]);
-        setStats(prev => ({ ...prev, events: "N/A" }));
+        setStats(prev => ({ 
+          ...prev, 
+          events: "N/A", teams: "N/A", prizeMoney: "N/A"
+        }));
       })
-      .finally(() => setCompetitionsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    getPublicTeamCount()
-      .then(teamCount => setStats(prev => ({ ...prev, teams: String(teamCount) })))
-      .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
-  }, []);
-
-  // Fetch total prize money across all events (public endpoint, no auth needed)
-  useEffect(() => {
-    awardService.getTotalPrize()
-      .then(summary => {
-        console.log("[LandingPage] getTotalPrize raw summary:", summary);
-        setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(summary) }));
-      })
-      .catch((err) => {
-        console.error("[LandingPage] getTotalPrize error:", err);
-        setStats(prev => ({ ...prev, prizeMoney: "N/A" }));
+      .finally(() => {
+        setCompetitionsLoading(false);
+        setHofLoading(false);
       });
-  }, []);
-
-  // Fetch Hall of Fame from real API
-  useEffect(() => {
-    api.get<HallOfFameResponse[]>("/api/v1/public/hall-of-fame", false)
-      .then(data => {
-        setHofGroups(groupHallOfFame(data));
-        setStats(prev => ({ ...prev, topProjects: String(data.length) }));
-      })
-      .catch(() => { /* keep empty, show fallback */ })
-      .finally(() => setHofLoading(false));
   }, []);
 
   const currentCompetition = competitions[activeCompetition];

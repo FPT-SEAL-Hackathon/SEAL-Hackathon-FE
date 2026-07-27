@@ -181,7 +181,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
       stream.addEventListener("error", () => {
         if (stream?.readyState === EventSource.CLOSED) {
           // Trigger a dummy API call to refresh the token if it expired, then reconnect
-          notificationService.getUnreadCount()
+          notificationService.getMyNotifications(0, 1)
             .then(() => {
               if (cancelled) return;
               clearTimeout(retryTimeout);

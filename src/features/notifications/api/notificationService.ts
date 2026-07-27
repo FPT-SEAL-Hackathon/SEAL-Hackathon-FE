@@ -15,6 +15,7 @@ export interface NotificationPage {
   totalPages: number;
   number: number;
   size: number;
+  unreadCount?: number;
 }
 
 interface BackendNotification {
@@ -35,6 +36,7 @@ interface BackendNotificationPage {
   currentPage: number;
   statusCode: number;
   message: string;
+  unreadCount?: number;
 }
 
 interface BackendEnvelope<T> {
@@ -63,14 +65,10 @@ export const notificationService = {
       content: (response.data ?? []).map(mapNotification),
       totalElements: response.totalElements ?? 0,
       totalPages: response.totalPages ?? 0,
-      number: response.currentPage ?? page,
+      number: response.currentPage ?? 0,
       size,
+      unreadCount: response.unreadCount ?? 0,
     };
-  },
-
-  getUnreadCount: async () => {
-    const response = await api.get<BackendEnvelope<number>>("/api/v1/notifications/unread-count");
-    return { count: response.data ?? 0 };
   },
 
   markAsRead: async (notificationId: string) => {

@@ -10,9 +10,8 @@ import {
 } from "@/components/shared/UIComponents";
 import { MentorConsultations } from "./MentorConsultations";
 import { useAuth } from "@/features/auth/store/authStore";
-import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
-import { teamService, type TeamResponse } from "@/features/teams/api/teamService";
-import { eventService } from "@/features/events/api/eventService";
+import { mentorDashboardService } from "@/features/mentor/api/mentorDashboardService";
+import { type TeamResponse } from "@/features/teams/api/teamService";
 import { MyProfileSection } from "@/features/users/components/MyProfileSection";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,6 +28,15 @@ interface MentorCategory {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
+/**
+ * Giao diện chính của Mentor (Mentor Dashboard).
+ * 
+ * Tối ưu & Kiến trúc (BFF/Aggregate):
+ * - Component này sử dụng một API duy nhất (`mentorDashboardService.getDashboardSummary`)
+ *   để lấy cả danh sách Categories được phân công (assignedCategories) VÀ các Teams trực thuộc.
+ * - Triệt tiêu được hiện tượng N+1 request Waterfall (trước đây phải gọi getEvents -> map gọi getCategories -> map gọi getMentors -> lọc).
+ * - Code sạch hơn, hiệu suất tăng và giảm tải đáng kể cho backend database.
+ */
 export function MentorDashboard({
   currentPage,
   onNavigate,
@@ -51,7 +59,7 @@ export function MentorDashboard({
   const [filterEventId, setFilterEventId] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("");
 
-  // ─── Fetch assigned categories ─────────────────────────────────────────────
+  // ─── Fetch assigned categories — 1 aggregate call thay thế 50+ request ──────
   useEffect(() => {
     if (!user?.userId) return;
 
@@ -59,82 +67,30 @@ export function MentorDashboard({
     setLoading(true);
     setError(null);
 
-    (async () => {
-      try {
-        // 1. Get all events
-        const events = await eventService.getAll().catch(() => [] as any[]);
-
-        // 2. For each event, get categories and check if this mentor is assigned
-        const eventMap = Object.fromEntries(events.map((e: any) => [e.eventId, e.eventName ?? e.eventId]));
-
-        // Fetch all categories across all events in parallel
-        const categoryLists = await Promise.all(
-          events.map((e: any) =>
-            categoryService.getByEvent(e.eventId).catch(() => [] as CategoryResponse[])
-          )
-        );
-        const allCategories = categoryLists.flat();
-
-        // 3. For each category, check if the current mentor is assigned
-        const assignmentChecks = await Promise.all(
-          allCategories.map(async (cat) => {
-            try {
-              const mentors = await categoryService.getMentors(cat.categoryId);
-              const isAssigned = Array.isArray(mentors) && mentors.some(
-                (m) => m.mentorId === user.userId
-              );
-              return isAssigned ? cat : null;
-            } catch {
-              return null;
-            }
-          })
-        );
-
-        const assignedCategories = assignmentChecks.filter((c): c is CategoryResponse => c !== null);
-
+    mentorDashboardService.getDashboardSummary()
+      .then(data => {
         if (cancelled) return;
-
-        // 4. Load teams for each assigned category's event (deduplicated)
-        const eventIds = [...new Set(assignedCategories.map((c) => c.eventId))];
-        const teamLists = await Promise.all(
-          eventIds.map((eid) =>
-            teamService.getByEvent(eid).catch(() => [] as TeamResponse[])
-          )
-        );
-        const teams = teamLists.flat();
-
-        if (cancelled) return;
-
-        // 5. Build mentor category view with team counts
-        const mentorCats: MentorCategory[] = assignedCategories.map((cat) => ({
+        const mentorCats: MentorCategory[] = data.assignedCategories.map(cat => ({
           categoryId: cat.categoryId,
           categoryName: cat.categoryName,
           description: cat.description,
           eventId: cat.eventId,
-          eventName: eventMap[cat.eventId] ?? cat.eventId,
-          teamCount: teams.filter((t) => t.categoryId === cat.categoryId).length,
+          eventName: cat.eventName,
+          teamCount: cat.teamCount,
           isActive: cat.isActive,
         }));
-
         setCategories(mentorCats);
-        setAllTeams(teams);
-
-        // Auto-select first category for teams page
+        setAllTeams(data.teams);
         if (mentorCats.length > 0 && !selectedCategoryId) {
           setSelectedCategoryId(mentorCats[0].categoryId);
         }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load data.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load data.");
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.userId]);
 
