@@ -240,9 +240,20 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen overflow-hidden relative"
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
     >
+      {/* Background Watermark Logo */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden"
+        aria-hidden="true"
+      >
+        <img 
+          src="/logo.png" 
+          alt="Watermark Logo" 
+          className="w-[600px] h-[600px] object-contain opacity-[0.035] grayscale dark:invert select-none blur-[0.5px]"
+        />
+      </div>
       {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 
