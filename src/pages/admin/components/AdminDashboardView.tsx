@@ -198,23 +198,25 @@ export function AdminDashboardView({ context }: AdminViewProps) {
         <div className="col-span-2 space-y-4">
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Active Events Overview</div>
-            {overviewEvents.length === 0 && (
-              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No events loaded from API.</div>
-            )}
-            {overviewEvents.map((ev: any) => (
-              <div key={ev.id} className="mb-4 last:mb-0">
-                <div className="flex items-center justify-between mb-2">
-                  <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{ev.name}</span>
-                  <StatusBadge status={ev.status} />
+            <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              {overviewEvents.length === 0 && (
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No events loaded from API.</div>
+              )}
+              {overviewEvents.map((ev: any) => (
+                <div key={ev.id} className="mb-4 last:mb-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{ev.name}</span>
+                    <StatusBadge status={ev.status} />
+                  </div>
+                  <ProgressBar
+                    value={ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)}
+                    max={Math.max(ev.maxTeamSize ?? totalTeams, totalTeams, 1)}
+                    color={COLORS.primary}
+                    label={`${ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)} teams registered`}
+                  />
                 </div>
-                <ProgressBar
-                  value={ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)}
-                  max={Math.max(ev.maxTeamSize ?? totalTeams, totalTeams, 1)}
-                  color={COLORS.primary}
-                  label={`${ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)} teams registered`}
-                />
-              </div>
-            ))}
+              ))}
+            </div>
           </Card>
 
           <Card className="p-5">
