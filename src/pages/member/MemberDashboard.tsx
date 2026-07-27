@@ -2339,9 +2339,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <h2 style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary }}>
-                  {targetEvent.eventName ?? targetEvent.name}
+                  {targetEvent.eventName ?? (targetEvent as any).name}
                 </h2>
-                <StatusBadge status={targetEvent.eventStatus ?? targetEvent.status ?? "ACTIVE"} />
+                <StatusBadge status={targetEvent.eventStatus ?? (targetEvent as any).status ?? "ACTIVE"} />
               </div>
               <p style={{ fontSize: 13, color: COLORS.textSecondary }}>
                 {targetEvent.description || "Comprehensive event dashboard for active participants."}
@@ -2356,7 +2356,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
                   <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {userTeamForEvent.teamCode || "N/A"}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
                   Manage Team
