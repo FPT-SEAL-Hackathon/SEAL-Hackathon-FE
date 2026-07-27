@@ -1886,6 +1886,85 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   );
 
   const renderEvents = () => {
+    if (selectedEventDetailId) {
+      const targetEvent = apiEvents.find(ev => ev.eventId === selectedEventDetailId);
+      const userTeamForEvent = submissionTeams.find(t => t.eventId === selectedEventDetailId)
+        || (activeTeamContext?.eventId === selectedEventDetailId ? activeTeamContext : null);
+      const eventRounds = leaderboardRounds || [];
+
+      return (
+        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setSelectedEventDetailId(null)}>
+              Back to Events
+            </Button>
+            <StatusBadge status={targetEvent?.eventStatus ?? (targetEvent as any)?.status ?? "ACTIVE"} />
+          </div>
+
+          <div className="rounded-2xl p-6 shadow-sm space-y-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            <div className="flex justify-between items-start border-b pb-4" style={{ borderColor: COLORS.border }}>
+              <div>
+                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.textPrimary }}>
+                  {targetEvent?.eventName ?? (targetEvent as any)?.name} - Event Dashboard
+                </h1>
+                <p style={{ fontSize: 14, color: COLORS.textSecondary }}>
+                  {targetEvent?.description || "Comprehensive event dashboard for active participants."}
+                </p>
+              </div>
+            </div>
+
+            {/* Event Team Overview */}
+            {userTeamForEvent && (
+              <Card className="p-5 bg-primary/5 border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
+                    Manage Team
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* Rounds & Timeline Section */}
+            <div className="space-y-4">
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                <Clock size={20} style={{ color: COLORS.primary }} /> Event Rounds & Deadlines
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {eventRounds.length > 0 ? (
+                  eventRounds.map((r: any) => (
+                    <Card key={r.roundId} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
+                        <StatusBadge status={r.roundStatusName ?? r.status ?? "OPEN"} />
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1">
+                        <div><strong style={{ color: COLORS.textPrimary }}>Start:</strong> {r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</div>
+                        <div><strong style={{ color: COLORS.textPrimary }}>Deadline:</strong> {r.endDate ? new Date(r.endDate).toLocaleString() : "TBD"}</div>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
+                    No round schedules published yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Leaderboard Section inside Event Dashboard */}
+            <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+              {renderLeaderboard()}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (viewingEventDetail) {
       const ev = viewingEventDetail;
       const participation = participations[ev.eventId];
@@ -2308,98 +2387,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     </>
   );
 };
-
-  const renderEventDashboardModal = () => {
-    if (!selectedEventDetailId) return null;
-    const targetEvent = apiEvents.find(ev => ev.eventId === selectedEventDetailId);
-    if (!targetEvent) return null;
-
-    const userTeamForEvent = submissionTeams.find(t => t.eventId === selectedEventDetailId)
-      || (activeTeamContext?.eventId === selectedEventDetailId ? activeTeamContext : null);
-
-    const eventRounds = leaderboardRounds || [];
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-        <div 
-          className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 shadow-2xl space-y-6 custom-scrollbar"
-          style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}
-        >
-          {/* Close Button */}
-          <button
-            onClick={() => setSelectedEventDetailId(null)}
-            className="absolute top-4 right-4 p-2 rounded-xl transition-colors hover:bg-black/10 dark:hover:bg-white/10"
-            style={{ color: COLORS.textSecondary }}
-          >
-            <X size={20} />
-          </button>
-
-          {/* Modal Header */}
-          <div className="flex items-start justify-between border-b pb-4" style={{ borderColor: COLORS.border }}>
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: COLORS.textPrimary }}>
-                  {targetEvent.eventName ?? (targetEvent as any).name}
-                </h2>
-                <StatusBadge status={targetEvent.eventStatus ?? (targetEvent as any).status ?? "ACTIVE"} />
-              </div>
-              <p style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                {targetEvent.description || "Comprehensive event dashboard for active participants."}
-              </p>
-            </div>
-          </div>
-
-          {/* Event Team Overview */}
-          {userTeamForEvent && (
-            <Card className="p-4 bg-primary/5 border border-primary/20">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
-                  <div style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
-                </div>
-                <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
-                  Manage Team
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {/* Rounds & Timeline Section */}
-          <div className="space-y-3">
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
-              <Clock size={18} style={{ color: COLORS.primary }} /> Event Rounds & Deadlines
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {eventRounds.length > 0 ? (
-                eventRounds.map((r: any) => (
-                  <Card key={r.roundId} className="p-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
-                      <StatusBadge status={r.roundStatusName ?? r.status ?? "OPEN"} />
-                    </div>
-                    <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1">
-                      <div><strong style={{ color: COLORS.textPrimary }}>Start:</strong> {r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</div>
-                      <div><strong style={{ color: COLORS.textPrimary }}>Deadline:</strong> {r.endDate ? new Date(r.endDate).toLocaleString() : "TBD"}</div>
-                    </div>
-                  </Card>
-                ))
-              ) : (
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-4 text-center border rounded-xl">
-                  No round schedules published yet.
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Leaderboard Section inside Event Dashboard */}
-          <div className="space-y-3 pt-4 border-t" style={{ borderColor: COLORS.border }}>
-            {renderLeaderboard()}
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const renderCertificates = () => {
     // Danh sĂ¡ch events mĂ  user Ä‘ang tham gia (ACTIVE)
@@ -3125,11 +3112,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     );
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      {renderPage()}
-      {renderEventDashboardModal()}
-    </div>
-  );
+  return <div className="p-6 space-y-6">{renderPage()}</div>;
 }
 
