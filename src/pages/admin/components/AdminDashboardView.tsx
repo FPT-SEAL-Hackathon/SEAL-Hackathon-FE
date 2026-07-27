@@ -221,25 +221,27 @@ export function AdminDashboardView({ context }: AdminViewProps) {
 
           <Card className="p-5">
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Scoring Progress - {selectedEvent?.name ?? selectedEvent?.eventName ?? "Selected Event"}</div>
-            {dashboardRounds.length === 0 && (
-              <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No rounds loaded from API.</div>
-            )}
-            {dashboardRounds.map((r: any) => {
-              const roundSubmissions = adminSubmissions.filter((submission: any) => submission.roundId === r.roundId);
-              const scored = roundSubmissions.filter((submission: any) => {
-                const status = String(submission.submissionStatusName ?? "").toUpperCase();
-                return status.includes("SCORED") || status.includes("REVIEWED");
-              }).length;
-              const status = r.roundStatusName ?? r.status ?? "OPEN";
-              return (
-              <div key={r.roundId} className="mb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
-                  <StatusBadge status={status} />
+            <div className="max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              {dashboardRounds.length === 0 && (
+                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No rounds loaded from API.</div>
+              )}
+              {dashboardRounds.map((r: any) => {
+                const roundSubmissions = adminSubmissions.filter((submission: any) => submission.roundId === r.roundId);
+                const scored = roundSubmissions.filter((submission: any) => {
+                  const status = String(submission.submissionStatusName ?? "").toUpperCase();
+                  return status.includes("SCORED") || status.includes("REVIEWED");
+                }).length;
+                const status = r.roundStatusName ?? r.status ?? "OPEN";
+                return (
+                <div key={r.roundId} className="mb-4 last:mb-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
+                    <StatusBadge status={status} />
+                  </div>
+                  <ProgressBar value={scored} max={Math.max(roundSubmissions.length, 1)} color={String(status).toUpperCase().includes("COMPLETED") ? COLORS.success : COLORS.warning} label={`Scored: ${scored}/${roundSubmissions.length}`} />
                 </div>
-                <ProgressBar value={scored} max={Math.max(roundSubmissions.length, 1)} color={String(status).toUpperCase().includes("COMPLETED") ? COLORS.success : COLORS.warning} label={`Scored: ${scored}/${roundSubmissions.length}`} />
-              </div>
-            )})}
+              )})}
+            </div>
           </Card>
         </div>
 
