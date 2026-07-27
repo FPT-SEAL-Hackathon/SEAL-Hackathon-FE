@@ -187,7 +187,7 @@ export function AdminSubmissionRepositoriesView() {
               size="sm"
               onClick={handleExport}
               disabled={exporting || !selectedEventId}
-              title={selectedEventId ? "" : "Chọn một event cụ thể để xuất CSV"}
+              title={selectedEventId ? "" : "Select a specific event to export CSV"}
               className="bg-orange-500 hover:bg-orange-600 text-white border-orange-500"
             >
               <Download size={14} className="mr-1" />

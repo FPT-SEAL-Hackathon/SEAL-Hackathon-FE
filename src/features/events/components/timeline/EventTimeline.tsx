@@ -57,7 +57,7 @@ export function EventTimeline({ event, categories, rounds }: Props) {
                         <div className="flex items-center px-5 py-3 border-b shrink-0" style={{ borderColor: COLORS.border }}>
                             <div>
                                 <DialogTitle className="text-base font-bold text-gray-900">Event Schedule Timeline</DialogTitle>
-                                <p className="text-xs text-gray-500">Kéo để xem · bấm ra ngoài hoặc nhấn Esc để đóng</p>
+                                <p className="text-xs text-gray-500">Drag to pan · click outside or press Esc to close</p>
                             </div>
                         </div>
                         <div className="flex-1 min-h-0 p-3 bg-gray-50/40">

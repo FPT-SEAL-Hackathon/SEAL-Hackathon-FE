@@ -201,6 +201,9 @@ export const eventService = {
   update: async (id: string, data: UpdateEventRequest) => normalizeEventResponse(unwrapItem(await api.put<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/${id}`, data))),
   updateStatus: async (id: string, data: UpdateEventStatusRequest) => normalizeEventResponse(unwrapItem(await api.patch<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/status/${id}`, data))),
   delete: (id: string) => api.delete(`/api/v1/event/${id}`),
-  getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events/organizer"))),
+  // BE khai bao /api/v1/event/organizer (SO IT). Dung "events/organizer" se roi vao
+  // PublicEventController @GetMapping("/api/v1/events/{id}") -> Spring parse "organizer"
+  // thanh UUID that bai -> 400 Bad Request va danh sach event rong.
+  getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/event/organizer"))),
   publishEvent: (id: string) => api.post<EventResponse>(`/api/v1/event/publish/${id}`, {}),
 };
