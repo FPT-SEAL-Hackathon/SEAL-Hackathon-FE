@@ -159,7 +159,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
       if (stream) {
         stream.close();
       }
-      
+
       stream = notificationService.createStream();
       if (!stream) return;
 
@@ -206,14 +206,14 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notificationService.markAllAsRead().catch(() => {});
+    notificationService.markAllAsRead().catch(() => { });
     // Notify parent dashboard pages to re-sync their own notification state
     onMarkAllRead?.();
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    notificationService.markAsRead(id).catch(() => {});
+    notificationService.markAsRead(id).catch(() => { });
   };
 
   // ── User avatar ───────────────────────────────────────────────────────────
@@ -240,20 +240,9 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   return (
     <div
-      className="flex h-screen overflow-hidden relative"
+      className="flex h-screen overflow-hidden"
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
     >
-      {/* Background Watermark Logo */}
-      <div 
-        className="fixed inset-0 pointer-events-none z-0 flex items-center justify-center overflow-hidden"
-        aria-hidden="true"
-      >
-        <img 
-          src="/logo.png" 
-          alt="Watermark Logo" 
-          className="w-[600px] h-[600px] object-contain opacity-[0.035] grayscale dark:invert select-none blur-[0.5px]"
-        />
-      </div>
       {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 
