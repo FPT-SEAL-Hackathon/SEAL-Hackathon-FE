@@ -26,6 +26,16 @@ export interface SubmissionRepositoryResponse {
   starCount?: number;
   forkCount?: number;
   openIssuesCount?: number;
+  // Development activity (best-effort; co the thieu neu call phu that bai). Tham khao, khong tinh diem.
+  languagesJson?: string;       // {"Java": 12345, "TypeScript": 6789} (bytes)
+  contributorCount?: number;
+  topContributorsJson?: string; // [{"login":"x","contributions":42,"avatarUrl":"..."}]
+  commitCount?: number;
+  lastCommitSha?: string;
+  // Phien ban duoc cham (auto-pin luc nop; Organizer co the ghim lai)
+  pinnedCommitSha?: string;
+  pinnedAt?: string;
+  pinnedByUserId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -184,6 +194,10 @@ export const submissionService = {
 
   syncSubmissionRepository: (submissionId: string) =>
     api.post<SubmissionRepositoryResponse>(`/api/v1/submissions/${enc(submissionId)}/repository/sync`, {}),
+
+  // README raw markdown, lazy — chi goi khi nguoi dung mo.
+  getRepositoryReadme: (submissionId: string) =>
+    api.get<{ content: string | null }>(`/api/v1/submissions/${enc(submissionId)}/repository/readme`),
 
   // Organizer (event creator) overview of all submission repositories in an event.
   getEventSubmissionRepositories: (eventId: string) =>

@@ -1,6 +1,7 @@
 import { EventResponse } from "../../api/eventService";
 import { CategoryResponse } from "../../../categories/api/categoryService";
 import { RoundResponse } from "../../../judging/api/roundService";
+import { parseSafeDate } from "./timelineUtils";
 
 interface Props {
     event: EventResponse | null;
@@ -14,15 +15,17 @@ export function TimelineSummary({ event, categories, rounds }: Props) {
     const safeCategories = Array.isArray(categories) ? categories : [];
     const safeRounds = Array.isArray(rounds) ? rounds : [];
 
+    // Event start/end là date-only (LocalDate) → CHỈ hiển thị ngày, không kèm giờ.
+    // Trước đây format kèm hour/minute khiến new Date("YYYY-MM-DD") (UTC midnight)
+    // hiện ra giờ sai (vd "07:00" ở UTC+7) như thể bị hardcode. parseSafeDate dựng
+    // Date local từ Y/M/D nên không lệch múi giờ.
     const formatDt = (d?: string | null) => {
-        if (!d) return "TBD";
-        return new Date(d).toLocaleDateString(undefined, { 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        const parsed = parseSafeDate(d);
+        return parsed ? parsed.toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        }) : "TBD";
     };
 
     // Calculate current phase
@@ -30,10 +33,18 @@ export function TimelineSummary({ event, categories, rounds }: Props) {
     let phase = "Upcoming";
     let countdown = "";
 
-    const eStart = event.eventStartDate ? new Date(event.eventStartDate) : null;
-    const eEnd = event.eventEndDate ? new Date(event.eventEndDate) : null;
-    const rStart = event.registrationStart ? new Date(event.registrationStart) : null;
-    const rEnd = event.registrationEnd ? new Date(event.registrationEnd) : null;
+    // parseSafeDate: event dates (date-only) dựng ở nửa đêm local thay vì UTC midnight,
+    // nên mốc chuyển phase và đếm ngược không lệch múi giờ (~7h ở UTC+7).
+    // Event bắt đầu ĐẦU ngày eventStartDate (00:00) và kết thúc CUỐI ngày eventEndDate
+    // (23:59:59.999) — khớp backend RoundServiceImpl: eventStartDate.atStartOfDay() /
+    // eventEndDate.atTime(LocalTime.MAX). Nếu để eEnd ở 00:00 sẽ báo "ended" sớm trọn 1 ngày.
+    const eStart = parseSafeDate(event.eventStartDate);
+    const eEndRaw = parseSafeDate(event.eventEndDate);
+    const eEnd = eEndRaw
+        ? new Date(eEndRaw.getFullYear(), eEndRaw.getMonth(), eEndRaw.getDate(), 23, 59, 59, 999)
+        : null;
+    const rStart = parseSafeDate(event.registrationStart);
+    const rEnd = parseSafeDate(event.registrationEnd);
 
     const getDiffText = (target: Date) => {
         const diffMs = target.getTime() - now.getTime();

@@ -36,8 +36,12 @@ export function calculateTimelineBounds(
     if (event) {
         dates.push(parseSafeDate(event.registrationStart));
         dates.push(parseSafeDate(event.registrationEnd));
+        // Event bắt đầu ĐẦU ngày eventStartDate (00:00) và kết thúc CUỐI ngày eventEndDate
+        // (23:59:59.999) — khớp backend RoundServiceImpl (atStartOfDay / atTime(LocalTime.MAX)).
+        // Dựng mốc cuối ngày để trục timeline phủ trọn ngày cuối, không hụt ~1 ngày.
         dates.push(parseSafeDate(event.eventStartDate));
-        dates.push(parseSafeDate(event.eventEndDate));
+        const evEnd = parseSafeDate(event.eventEndDate);
+        dates.push(evEnd ? new Date(evEnd.getFullYear(), evEnd.getMonth(), evEnd.getDate(), 23, 59, 59, 999) : null);
     }
 
     safeRounds.forEach(r => {

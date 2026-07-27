@@ -1,5 +1,5 @@
 import { EventResponse } from "../../api/eventService";
-import { TimelineBounds, getPercentage, getWidthPercentage } from "./timelineUtils";
+import { TimelineBounds, getPercentage, getWidthPercentage, parseSafeDate } from "./timelineUtils";
 import { COLORS } from "../../../../components/shared/UIComponents";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/ui/tooltip";
 
@@ -14,18 +14,33 @@ export function MasterTimeline({ event, bounds }: Props) {
     const regStartPct = getPercentage(event.registrationStart, bounds);
     const regWidth = getWidthPercentage(event.registrationStart, event.registrationEnd, bounds);
     
+    // Thanh Event Live phải phủ trọn ngày cuối: eventEndDate là date-only (00:00) nên
+    // ép về cuối ngày (23:59:59) để mép phải khớp mốc kết thúc thật (khớp backend
+    // eventEndDate.atTime(LocalTime.MAX)). eventStartDate giữ 00:00 = đầu ngày bắt đầu.
+    const eventEndEod = event.eventEndDate ? `${event.eventEndDate}T23:59:59` : null;
     const eventStartPct = getPercentage(event.eventStartDate, bounds);
-    const eventWidth = getWidthPercentage(event.eventStartDate, event.eventEndDate, bounds);
+    const eventWidth = getWidthPercentage(event.eventStartDate, eventEndEod, bounds);
 
+    // Registration là datetime (LocalDateTime) → hiển thị cả ngày + giờ.
+    // parseSafeDate diễn giải chuỗi ở local timezone, khớp với trục timeline.
     const formatDt = (d?: string | null) => {
-        if (!d) return "Unknown";
-        return new Date(d).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+        const parsed = parseSafeDate(d);
+        return parsed ? parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : "Unknown";
+    };
+
+    // Event start/end là date-only (LocalDate) → CHỈ hiển thị ngày, không kèm giờ.
+    // Nếu format kèm timeStyle, new Date("YYYY-MM-DD") bị hiểu là UTC midnight và
+    // hiện ra giờ sai (vd "07:00" ở UTC+7) trông như hardcode. parseSafeDate dựng
+    // Date local từ Y/M/D nên không lệch múi giờ.
+    const formatDate = (d?: string | null) => {
+        const parsed = parseSafeDate(d);
+        return parsed ? parsed.toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Unknown";
     };
 
     return (
         <div className="relative py-4 flex border-b bg-white" style={{ borderColor: COLORS.border }}>
-            {/* Label */}
-            <div className="w-48 shrink-0 px-4 flex flex-col justify-center border-r" style={{ borderColor: COLORS.border }}>
+            {/* Label — dính (sticky) khi kéo ngang để luôn thấy tên hàng */}
+            <div className="w-48 shrink-0 px-4 flex flex-col justify-center border-r sticky left-0 z-30 bg-white" style={{ borderColor: COLORS.border }}>
                 <span className="font-bold text-sm text-gray-800">Event Master</span>
                 <span className="text-[10px] text-gray-400 uppercase tracking-wider">Registration & Live</span>
             </div>
@@ -75,8 +90,8 @@ export function MasterTimeline({ event, bounds }: Props) {
                         <TooltipContent>
                             <div className="text-xs">
                                 <div className="font-bold border-b border-gray-600 pb-1 mb-1" style={{ color: '#bae0ff' }}>Event Live Phase</div>
-                                <div><span className="text-gray-400">Starts:</span> {formatDt(event.eventStartDate)}</div>
-                                <div><span className="text-gray-400">Ends:</span> {formatDt(event.eventEndDate)}</div>
+                                <div><span className="text-gray-400">Starts:</span> {formatDate(event.eventStartDate)}</div>
+                                <div><span className="text-gray-400">Ends:</span> {formatDate(event.eventEndDate)}</div>
                             </div>
                         </TooltipContent>
                     </Tooltip>
