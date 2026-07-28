@@ -246,6 +246,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
         <div className="p-8 text-center"><Loader className="animate-spin inline-block mr-2" size={20}/> Loading submissions...</div>
       ) : !localRoundId ? (
         <Card className="p-8 text-center text-gray-500">Please select a category and round to view submissions.</Card>
+      ) : submissions.length === 0 ? (
+        <Card className="p-8 text-center text-gray-500">No submissions ready for approval in this round.</Card>
       ) : (
         <Card>
           <DataTable
@@ -257,6 +259,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                 label: judge.split(' ').pop() || judge,
                 render: (_: any, row: any) => {
                   const subId = row.submissionId || row.id;
+                  if (!subId) return <span className="text-gray-300">-</span>;
                   const score = batchScores[subId]?.[judge];
                   if (score === undefined) return <span className="text-gray-300">-</span>;
                   let bgColor = "", textColor = "";
@@ -272,6 +275,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
               })),
               { key: "finalScore", label: "FINAL SCORE", render: (_, row) => {
                 const subId = row.submissionId || row.id;
+                if (!subId) return <span className="font-bold text-primary text-lg">-</span>;
                 const subScores = batchScores[subId] || {};
                 const scoresArray = Object.values(subScores);
                 const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
@@ -279,7 +283,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
               } },
               { key: "action", label: "ACTIONS", render: (_, row) => {
                 const subId = row.submissionId || row.id;
-                if (rejectingId === subId) {
+                if (!subId) return null;
+                if (rejectingId && rejectingId === subId) {
                   return (
                     <div className="flex flex-col gap-2 items-end min-w-[200px]">
                       <input 
@@ -337,11 +342,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                 );
               }}
             ]}
-            data={submissions.length === 0 ? [{
-              team: "No submissions ready for approval",
-              status: "draft",
-              finalScore: "-"
-            }] : submissions}
+            data={submissions}
           />
         </Card>
       )}

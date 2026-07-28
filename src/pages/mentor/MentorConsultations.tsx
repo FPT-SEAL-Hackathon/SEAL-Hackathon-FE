@@ -10,7 +10,7 @@ import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/s
 import {
   MessageSquare, Send, CheckCircle, XCircle,
   PlayCircle, ArrowLeft, Search, SlidersHorizontal, X,
-  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users, BrainCircuit
+  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users, BrainCircuit, Sparkles, Bot
 } from "lucide-react";
 import { aiService } from "@/features/ai/api/aiService";
 import { useAuth } from "@/features/auth/store/authStore";
@@ -430,21 +430,45 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
               {messages.map((m, i) => {
                 const isAi = m.content?.startsWith("[AI Mentor]") || m.senderName === "null" || !m.senderId;
                 const isMe = !isAi && m.senderId === user?.userId;
-                return (
-                  <div key={m.id || i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
-                      {isAi && <BrainCircuit size={12} style={{ color: COLORS.primary }} />}
-                      {isAi ? "AI Mentor" : m.senderName || "System"} · {new Date(m.createdAt).toLocaleString()}
-                    </div>
-                    <div className={`flex items-center gap-2 max-w-[80%] ${isMe ? "flex-row-reverse" : ""}`}>
-                      <div className="px-4 py-2 rounded-2xl break-words whitespace-pre-wrap" style={{
-                        background: isAi ? `${COLORS.primary}15` : (isMe ? COLORS.primary : COLORS.bg),
-                        color: isMe && !isAi ? "#fff" : COLORS.textPrimary,
-                        border: isAi ? `1px solid ${COLORS.primary}40` : (isMe ? "none" : `1px solid ${COLORS.border}`)
-                      }}>
+
+                if (isAi) {
+                  return (
+                    <div key={m.id || i} className="flex flex-col items-start my-2">
+                      <div style={{ fontSize: 11, marginBottom: 4 }} className="flex items-center gap-1.5 font-semibold text-purple-700">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                          <Sparkles size={11} className="text-purple-600 animate-pulse" /> AI Assistant
+                        </span>
+                        <span style={{ fontSize: 11, color: COLORS.textSecondary }}>• {new Date(m.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div
+                        className="px-4 py-3 rounded-2xl max-w-[85%] break-words whitespace-pre-wrap shadow-sm"
+                        style={{
+                          background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
+                          color: "#3b0764",
+                          border: "1px solid #c084fc",
+                          borderLeft: "4px solid #8b5cf6",
+                        }}
+                      >
                         {m.content?.replace("[AI Mentor]: ", "")}
                       </div>
-                      {isMe && !isAi && (
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={m.id || i} className={`flex flex-col ${isMe ? "items-end" : "items-start"} my-1`}>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
+                      <span className="font-semibold">{m.senderName || "User"}</span> {isMe ? "(You)" : ""} • {new Date(m.createdAt).toLocaleString()}
+                    </div>
+                    <div className={`flex items-center gap-2 max-w-[80%] ${isMe ? "flex-row-reverse" : ""}`}>
+                      <div className="px-4 py-2.5 rounded-2xl break-words whitespace-pre-wrap shadow-sm" style={{
+                        background: isMe ? COLORS.primary : "#ffffff",
+                        color: isMe ? "#fff" : COLORS.textPrimary,
+                        border: isMe ? "none" : `1px solid ${COLORS.border}`,
+                      }}>
+                        {m.content}
+                      </div>
+                      {isMe && (
                         <button 
                           onClick={() => setTeachAiModal({ open: true, standardAnswer: m.content })}
                           className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-primary transition-colors flex-shrink-0"
