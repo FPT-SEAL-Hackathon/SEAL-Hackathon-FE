@@ -81,6 +81,63 @@ export interface SubmissionResponse {
   isSampleSubmission?: boolean;
 }
 
+export const SUBMISSION_STATUS_IDS = {
+  SUBMITTED: "50000000-0000-0000-0000-000000000002",
+  UNDER_REVIEW: "50000000-0000-0000-0000-000000000003",
+  DISQUALIFIED: "50000000-0000-0000-0000-000000000004",
+  SCORED: "50000000-0000-0000-0000-000000000005",
+  IN_PROGRESS: "50000000-0000-0000-0000-000000000006",
+} as const;
+
+export type SubmissionStatusKey = keyof typeof SUBMISSION_STATUS_IDS;
+
+const SUBMISSION_STATUS_NAMES: Record<SubmissionStatusKey, string> = {
+  SUBMITTED: "Submitted",
+  UNDER_REVIEW: "Under Review",
+  DISQUALIFIED: "Disqualified",
+  SCORED: "Scored",
+  IN_PROGRESS: "In Progress",
+};
+
+const SUBMISSION_STATUS_NAME_TO_KEY: Record<string, SubmissionStatusKey> = {
+  submitted: "SUBMITTED",
+  under_review: "UNDER_REVIEW",
+  review: "UNDER_REVIEW",
+  disqualified: "DISQUALIFIED",
+  scored: "SCORED",
+  in_progress: "IN_PROGRESS",
+  judging: "IN_PROGRESS",
+};
+
+export function normalizeSubmissionStatusName(statusName?: string | null): string {
+  return String(statusName ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+export function getSubmissionStatusKey(submission?: Partial<SubmissionResponse> | null): SubmissionStatusKey | null {
+  const statusId = String(submission?.submissionStatusId ?? "").toLowerCase();
+  const idMatch = (Object.entries(SUBMISSION_STATUS_IDS) as [SubmissionStatusKey, string][])
+    .find(([, id]) => id.toLowerCase() === statusId);
+  if (idMatch) return idMatch[0];
+
+  const normalizedName = normalizeSubmissionStatusName(submission?.submissionStatusName);
+  return SUBMISSION_STATUS_NAME_TO_KEY[normalizedName] ?? null;
+}
+
+export function isSubmissionStatus(
+  submission: Partial<SubmissionResponse> | null | undefined,
+  status: SubmissionStatusKey,
+): boolean {
+  return getSubmissionStatusKey(submission) === status;
+}
+
+export function getSubmissionStatusLabel(submission?: Partial<SubmissionResponse> | null): string {
+  const key = getSubmissionStatusKey(submission);
+  return key ? SUBMISSION_STATUS_NAMES[key] : (submission?.submissionStatusName ?? "Submitted");
+}
+
 export interface SubmissionHistoryResponse extends SubmissionResponse {
   submissionHistoryId: string;
   versionNumber: number;
