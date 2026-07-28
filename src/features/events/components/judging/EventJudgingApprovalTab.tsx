@@ -109,11 +109,15 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   }, [localRoundId, localCategoryId]);
 
   const toggleApproval = async (submissionId: string, currentStatus: boolean) => {
+    if (!submissionId || submissionId === "undefined") {
+      console.error("Cannot toggle approval: Invalid submissionId");
+      return;
+    }
     setApprovingId(submissionId);
     try {
       await api.post(`/api/v1/admin/submissions/${submissionId}/approve`, { approve: !currentStatus });
       setSubmissions(prev => prev.map(s => 
-        s.submissionId === submissionId ? {
+        (s.submissionId === submissionId || s.id === submissionId) ? {
           ...s,
           isScoreApproved: !currentStatus,
           submissionStatusId: !currentStatus ? SUBMISSION_STATUS_IDS.SCORED : SUBMISSION_STATUS_IDS.IN_PROGRESS,
@@ -133,9 +137,11 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     
     setIsLoading(true);
     try {
-      await Promise.all(unapproved.map(s => 
-        api.post(`/api/v1/admin/submissions/${s.submissionId}/approve`, { approve: true })
-      ));
+      await Promise.all(unapproved.map(s => {
+        const id = s.submissionId || s.id;
+        if (!id || id === "undefined") return Promise.resolve();
+        return api.post(`/api/v1/admin/submissions/${id}/approve`, { approve: true });
+      }));
       fetchSubmissions();
     } catch (e) {
       console.error(e);
@@ -145,6 +151,10 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   };
 
   const rejectScore = async (submissionId: string) => {
+    if (!submissionId || submissionId === "undefined") {
+      console.error("Cannot reject score: Invalid submissionId");
+      return;
+    }
     if (!rejectReason.trim()) return;
     setApprovingId(submissionId);
     try {
@@ -160,6 +170,10 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   };
 
   const viewScores = async (submissionId: string) => {
+    if (!submissionId || submissionId === "undefined") {
+      console.error("Cannot view scores: Invalid submissionId");
+      return;
+    }
     setSelectedSubmissionId(submissionId);
     setIsJudgingLoading(true);
     try {
@@ -232,6 +246,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
         <div className="p-8 text-center"><Loader className="animate-spin inline-block mr-2" size={20}/> Loading submissions...</div>
       ) : !localRoundId ? (
         <Card className="p-8 text-center text-gray-500">Please select a category and round to view submissions.</Card>
+      ) : submissions.length === 0 ? (
+        <Card className="p-8 text-center text-gray-500">No submissions ready for approval in this round.</Card>
       ) : (
         <Card>
           <DataTable
@@ -242,7 +258,9 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                 key: judge,
                 label: judge.split(' ').pop() || judge,
                 render: (_: any, row: any) => {
-                  const score = batchScores[row.submissionId]?.[judge];
+                  const subId = row.submissionId || row.id;
+                  if (!subId) return <span className="text-gray-300">-</span>;
+                  const score = batchScores[subId]?.[judge];
                   if (score === undefined) return <span className="text-gray-300">-</span>;
                   let bgColor = "", textColor = "";
                   if (score >= 80) { bgColor = "bg-green-100"; textColor = "text-green-800"; }
@@ -256,13 +274,17 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                 }
               })),
               { key: "finalScore", label: "FINAL SCORE", render: (_, row) => {
-                const subScores = batchScores[row.submissionId] || {};
+                const subId = row.submissionId || row.id;
+                if (!subId) return <span className="font-bold text-primary text-lg">-</span>;
+                const subScores = batchScores[subId] || {};
                 const scoresArray = Object.values(subScores);
                 const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
                 return <span className="font-bold text-primary text-lg">{totalScore}</span>;
               } },
               { key: "action", label: "ACTIONS", render: (_, row) => {
-                if (rejectingId === row.submissionId) {
+                const subId = row.submissionId || row.id;
+                if (!subId) return null;
+                if (rejectingId && rejectingId === subId) {
                   return (
                     <div className="flex flex-col gap-2 items-end min-w-[200px]">
                       <input 
@@ -278,7 +300,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                           setRejectingId(null);
                           setRejectReason("");
                         }}>Cancel</Button>
-                        <Button variant="danger" size="sm" onClick={() => rejectScore(row.submissionId)}>
+                        <Button variant="danger" size="sm" onClick={() => rejectScore(subId)}>
                           Confirm Reject
                         </Button>
                       </div>
@@ -288,18 +310,18 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
 
                 return (
                   <div className="flex gap-2 justify-end">
-                    <Button variant="secondary" size="sm" icon={<Eye size={16} />} onClick={() => viewScores(row.submissionId)} title="View Detail Scores" />
+                    <Button variant="secondary" size="sm" icon={<Eye size={16} />} onClick={() => viewScores(subId)} title="View Detail Scores" />
                     {!row.isScoreApproved && (
                       <Button 
                         variant="outline" 
                         size="sm" 
                         icon={<XCircle size={16} />}
                         onClick={() => {
-                          setRejectingId(row.submissionId);
+                          setRejectingId(subId);
                           setRejectReason("");
                         }}
                         style={{ color: COLORS.error, borderColor: COLORS.error }}
-                        disabled={approvingId === row.submissionId || isRoundLocked}
+                        disabled={approvingId === subId || isRoundLocked}
                         title={isRoundLocked ? "Round is locked" : ""}
                       >
                         Reject
@@ -308,11 +330,11 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                     <Button 
                       variant={row.isScoreApproved ? "secondary" : "primary"} 
                       size="sm" 
-                      icon={approvingId === row.submissionId ? <Loader size={16} className="animate-spin" /> : (isRoundLocked ? <Lock size={16}/> : (row.isScoreApproved ? <XCircle size={16} /> : <CheckSquare size={16} />))}
-                      onClick={() => toggleApproval(row.submissionId, row.isScoreApproved)}
-                      disabled={approvingId === row.submissionId || isRoundLocked}
+                      icon={approvingId === subId ? <Loader size={16} className="animate-spin" /> : (isRoundLocked ? <Lock size={16}/> : (row.isScoreApproved ? <XCircle size={16} /> : <CheckSquare size={16} />))}
+                      onClick={() => toggleApproval(subId, row.isScoreApproved)}
+                      disabled={approvingId === subId || isRoundLocked}
                       title={isRoundLocked ? "Round is locked" : ""}
-                      style={!row.isScoreApproved && approvingId !== row.submissionId ? { background: isRoundLocked ? COLORS.border : COLORS.success } : {}}
+                      style={!row.isScoreApproved && approvingId !== subId ? { background: isRoundLocked ? COLORS.border : COLORS.success } : {}}
                     >
                       {row.isScoreApproved ? "Un-Finalize" : "Finalize"}
                     </Button>
@@ -320,11 +342,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
                 );
               }}
             ]}
-            data={submissions.length === 0 ? [{
-              team: "No submissions ready for approval",
-              status: "draft",
-              finalScore: "-"
-            }] : submissions}
+            data={submissions}
           />
         </Card>
       )}

@@ -91,14 +91,20 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
     ?? submission.team?.name
     ?? submission.teamId
     ?? "Unknown team";
+  const getDisqualificationReason = (submission: any) =>
+    submission.activeDisqualificationReason
+    ?? submission.disqualificationReason
+    ?? submission.disqualifiedReason
+    ?? submission.reason
+    ?? "";
   const submissionColumns = [
     { label: "Team Name", width: "14%", align: "left" },
     { label: "Round Name", width: "12%", align: "left" },
     { label: "Submission Name", width: "15%", align: "left" },
-    { label: "Status", width: "9%", align: "left" },
-    { label: "Submitted", width: "15%", align: "left" },
-    { label: "Artifacts", width: "21%", align: "center" },
-    { label: "Action", width: "14%", align: "center" },
+    { label: "Status", width: "13%", align: "left" },
+    { label: "Submitted", width: "14%", align: "left" },
+    { label: "Artifacts", width: "19%", align: "center" },
+    { label: "Action", width: "13%", align: "center" },
   ] as const;
 
   const loadSubmissionHistory = async (submission: any) => {
@@ -245,6 +251,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
               {adminSubmissions.map((submission: any) => {
                 const status = normalizeSubmissionStatusName(getSubmissionStatusLabel(submission));
                 const isCalibration = isCalibrationSubmission(submission);
+                const disqualificationReason = getDisqualificationReason(submission);
                 return (
                   <tr key={submission.submissionId} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                     <td className="px-4 py-3" style={{ verticalAlign: "middle" }}>
@@ -256,7 +263,25 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                     </td>
                     <td className="px-4 py-3" style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary, verticalAlign: "middle" }}>{getRoundName(submission)}</td>
                     <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary, verticalAlign: "middle" }}>{getSubmissionName(submission)}</td>
-                    <td className="px-4 py-3" style={{ verticalAlign: "middle" }}><StatusBadge status={status} /></td>
+                    <td className="px-4 py-3" style={{ verticalAlign: "middle" }}>
+                      <div className="flex flex-col items-start gap-1">
+                        <StatusBadge status={status} />
+                        {isSubmissionStatus(submission, "DISQUALIFIED") && disqualificationReason && (
+                          <div
+                            title={disqualificationReason}
+                            style={{
+                              fontSize: 11,
+                              lineHeight: 1.35,
+                              color: COLORS.error,
+                              maxWidth: "100%",
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {disqualificationReason}
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3" style={{ fontSize: 12, color: COLORS.textSecondary, verticalAlign: "middle" }}>
                       {submission.submittedAt ? new Date(submission.submittedAt).toLocaleString("en-US") : "Not submitted"}
                     </td>
@@ -318,6 +343,11 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
               <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
                 {getSubmissionName(historyTarget)} - {getTeamName(historyTarget)}
               </div>
+              {isSubmissionStatus(historyTarget, "DISQUALIFIED") && getDisqualificationReason(historyTarget) && (
+                <div style={{ fontSize: 12, color: COLORS.error, marginTop: 6 }}>
+                  Reason: {getDisqualificationReason(historyTarget)}
+                </div>
+              )}
             </div>
             <Button variant="ghost" size="sm" icon={<X size={13} />} onClick={() => setHistoryTarget(null)}>
               Close

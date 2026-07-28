@@ -62,7 +62,7 @@ export function AdminAppealsView() {
       loadAppeals(selectedEventId);
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.response?.data?.message || "Failed to resolve appeal");
+      toast.error(error?.message || error?.response?.data?.message || "Failed to resolve appeal");
     } finally {
       setResolving(false);
     }

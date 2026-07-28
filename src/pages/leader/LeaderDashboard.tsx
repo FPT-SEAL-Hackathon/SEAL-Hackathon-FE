@@ -42,10 +42,12 @@ import { roundService } from "@/features/events/service/roundService";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { eventService } from "@/features/events/api/eventService";
 import { discoverUserTeamsForEvents } from "@/features/teams/api/userTeamDiscovery";
+import { getRoundStatus } from "@/features/events/utils/roundUtils";
 import type { Round } from "@/features/events/types/round";
 import type { RoundRankingDTO } from "@/features/rankings/api/rankingService";
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
+const TEAM_WITHDRAWN_SUBMISSION_MESSAGE = "This team has been withdrawn and can no longer submit work.";
 
 type StoredTeam = {
   teamId?: string;
@@ -77,10 +79,63 @@ function formatDate(value?: string) {
   return value ? new Date(value).toLocaleString() : "-";
 }
 
-function isBeforeSubmissionDeadline(round?: Round) {
-  if (!round?.submissionDeadline) return true;
-  const deadline = new Date(round.submissionDeadline).getTime();
-  return Number.isNaN(deadline) || Date.now() <= deadline;
+function parseDateTime(value?: string | null) {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
+function normalizeRoundStatusName(round?: Round | null) {
+  return (getRoundStatus(round?.roundStatusId ?? "")?.statusName ?? "")
+    .trim()
+    .replace(/[\s-]+/g, "_")
+    .toLowerCase();
+}
+
+function roundStatusLabel(round?: Round | null) {
+  return getRoundStatus(round?.roundStatusId ?? "")?.statusName?.trim() || "Unknown";
+}
+
+function getSubmissionRoundState(round?: Round | null) {
+  const now = Date.now();
+  const startTime = parseDateTime(round?.startDate);
+  const deadlineTime = parseDateTime(round?.submissionDeadline);
+  const status = normalizeRoundStatusName(round);
+  const hasStarted = !startTime || now >= startTime;
+  const deadlinePassed = Boolean(deadlineTime && now > deadlineTime);
+  const statusAllowsSubmission = status === "submission_open" || status === "open";
+  const statusClosed = ["judging", "completed", "closed"].includes(status);
+  const canSubmit = !!round
+    && isOfficialSubmissionRound(round)
+    && statusAllowsSubmission
+    && hasStarted
+    && !deadlinePassed;
+
+  let reason = "";
+  if (!round) {
+    reason = "Select a round before submitting.";
+  } else if (!isOfficialSubmissionRound(round)) {
+    reason = "Only official competition rounds accept team submissions.";
+  } else if (deadlinePassed) {
+    reason = "The submission deadline has passed.";
+  } else if (!hasStarted) {
+    reason = "Round has not started yet.";
+  } else if (!statusAllowsSubmission || statusClosed) {
+    reason = `Round is ${roundStatusLabel(round)} and is not accepting submissions.`;
+  }
+
+  return {
+    canSubmit,
+    deadlinePassed,
+    hasStarted,
+    statusAllowsSubmission,
+    statusClosed,
+    reason,
+  };
+}
+
+function isWithdrawnTeam(team?: TeamResponse | null) {
+  return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "withdrawn";
 }
 
 function isOfficialSubmissionRound(round: Round) {
@@ -359,13 +414,18 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       setSubmitError("Submission name is required.");
       return;
     }
+    if (isWithdrawnTeam(activeTeam)) {
+      setSubmitError(TEAM_WITHDRAWN_SUBMISSION_MESSAGE);
+      return;
+    }
     if (activeTeam && !isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName)) {
       setSubmitError("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
     }
     const selectedRound = submissionRounds.find(round => round.roundId === submissionForm.roundId);
-    if (!isBeforeSubmissionDeadline(selectedRound)) {
-      setSubmitError("The submission deadline for this round has passed.");
+    const roundState = getSubmissionRoundState(selectedRound);
+    if (!roundState.canSubmit) {
+      setSubmitError(roundState.reason || "This round is not accepting submissions.");
       return;
     }
     if (submissionEligibility.loading) {
@@ -518,14 +578,17 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
   const renderSubmissions = () => {
     const selectedRound = submissionRounds.find(item => item.roundId === submissionForm.roundId);
-    const selectedRoundOpen = isBeforeSubmissionDeadline(selectedRound);
+    const selectedRoundState = getSubmissionRoundState(selectedRound);
     const selectedRoundLocked = !!selectedRound
       && !submissionEligibility.loading
       && !submissionEligibility.canSubmit;
+    const teamWithdrawn = isWithdrawnTeam(activeTeam);
+    const teamCanSubmit = !activeTeam || isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName);
     const canSubmitSelectedRound = !!submissionForm.roundId
-      && selectedRoundOpen
+      && selectedRoundState.canSubmit
       && !submissionEligibility.loading
-      && submissionEligibility.canSubmit;
+      && submissionEligibility.canSubmit
+      && teamCanSubmit;
     const roundById = new Map(allSubmissionRounds.map(round => [round.roundId, round]));
 
     return (
@@ -540,7 +603,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId, activeTeam.teamStatusName).badge} />
               {!isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName) && (
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                  Submissions unlock after organizer approval.
+                  {teamWithdrawn ? TEAM_WITHDRAWN_SUBMISSION_MESSAGE : "Submissions unlock after organizer approval."}
                 </span>
               )}
             </div>
@@ -573,7 +636,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               </Select>
               {selectedRound ? (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <StatusBadge status={selectedRoundOpen ? "open" : "closed"} />
+                  <StatusBadge status={selectedRoundState.canSubmit ? "open" : selectedRoundState.deadlinePassed ? "closed" : roundStatusLabel(selectedRound)} />
                   {selectedRound.roundOrder > 1 && (
                     <StatusBadge status={submissionEligibility.loading ? "pending" : selectedRoundLocked ? "locked" : "advanced"} />
                   )}
@@ -583,6 +646,11 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   {submissionEligibility.reason && (
                     <span style={{ fontSize: 12, color: selectedRoundLocked ? COLORS.error : COLORS.success }}>
                       {submissionEligibility.reason}
+                    </span>
+                  )}
+                  {!selectedRoundState.canSubmit && selectedRoundState.reason && (
+                    <span style={{ fontSize: 12, color: COLORS.error }}>
+                      {selectedRoundState.reason}
                     </span>
                   )}
                 </div>

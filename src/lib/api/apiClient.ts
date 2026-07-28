@@ -258,14 +258,20 @@ async function attemptRefresh(): Promise<string | null> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!res.ok) { clearTokens(); return null; }
+    if (!res.ok) {
+      // Only clear session if token is explicitly rejected (401, 403, 400)
+      if (res.status === 401 || res.status === 403 || res.status === 400) {
+        clearTokens();
+      }
+      return null;
+    }
     const data = await res.json();
     const newAccess: string = data.accessToken;
     const nextRefresh: string = data.refreshToken ?? getRefreshToken()!;
     setTokens(newAccess, nextRefresh);
     return newAccess;
   } catch {
-    clearTokens();
+    // Network / Server timeout error: do not clear session
     return null;
   }
 }

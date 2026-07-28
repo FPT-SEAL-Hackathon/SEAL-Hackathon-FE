@@ -39,6 +39,7 @@ import { AdminAppealsView } from "./components/AdminAppealsView";
 import { AdminAuditView } from "./components/AdminAuditView";
 import { AdminProfileView } from "./components/AdminProfileView";
 import { AdminSettingsView } from "./components/AdminSettingsView";
+import { AdminLandingSettingsView } from "./components/AdminLandingSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
 import { AdminSubmissionRepositoriesView } from "./components/AdminSubmissionRepositoriesView";
@@ -1036,6 +1037,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "appeals": return <AdminAppealsView />;
       case "submission-repositories": return <AdminSubmissionRepositoriesView />;
       case "settings": return <AdminSettingsView context={viewContext} />;
+      case "landing-settings": return <AdminLandingSettingsView context={viewContext} />;
       case "profile": return <AdminProfileView context={viewContext} />;
       default: return <AdminDashboardView context={viewContext} />;
 
