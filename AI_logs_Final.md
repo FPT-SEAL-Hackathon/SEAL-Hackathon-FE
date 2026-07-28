@@ -42,7 +42,7 @@
 
 ### 6. Mentor Dashboard Team Status Badge & AI Mentor Prompt Refinement
 - **Mentor Dashboard Team Status Badge Fix (FE):** Cập nhật `MentorDashboard.tsx` thay thế badge trạng thái hardcode `status="active"` thành trạng thái động `status={(team.teamStatusName || team.teamStatusId || "active") as any}` ở danh sách đội thi bên trái, giúp hiển thị đúng các trạng thái như `Withdrawn` hoặc `Inactive`.
-- **AI Mentor Prompt Refinement & Model Config (BE):** Cập nhật `GeminiServiceImpl.java` tự động fallback endpoint sang `gemini-2.0-flash` (khắc phục lỗi 404 Not Found do model `gemini-3.1-pro` không tồn tại). Đồng thời tinh chỉnh System Prompt của AI Mentor với bộ quy tắc trùng khớp nghiêm ngặt (Strict Matching Rules): Nếu sinh viên hỏi chi tiết chuyên sâu, hỏi đào sâu hoặc báo đã biết câu trả lời chung chung (`"I know but..."`), AI Mentor bắt buộc trả về `UNKNOWN` để kích hoạt cơ chế chuyển tiếp câu hỏi cho Mentor người thật hỗ trợ.
+- **AI Mentor Chat Bubble Redesign (FE):** Thiết kế lại toàn bộ giao diện bong bóng tin nhắn của AI Mentor trên `TeamConsultations.tsx` và `MentorConsultations.tsx`. Chuyển tin nhắn AI Mentor sang tông màu Tím thạch anh (Purple Violet Gradient `linear-gradient(135deg, #f5f3ff, #ede9fe)`), viền viền tím đậm (`border: 1px solid #c084fc`, `borderLeft: 4px solid #8b5cf6`), chữ tím sẫm (`color: #3b0764`), đi kèm huy hiệu phát sáng `✨ AI Assistant`. Giúp phân biệt hoàn toàn 100% với tin nhắn của Team Leader (khung trắng sắc nét) và Mentor (khung màu chủ đạo).
 - **[SYSTEM]:** 
-  - FE commits: `5f974027`, `a1544468`, `f50a9c9e`, `0780faab`, `a6d8875d`, `ab03f1c5` — Branch `mentor_AI`.
+  - FE commits: `5f974027`, `a1544468`, `f50a9c9e`, `0780faab`, `a6d8875d`, `ab03f1c5`, `8c43be43` — Branch `mentor_AI`.
   - BE commits: `4d93373`, `0495cac`, `fad6451`, `e0ad34a`, `4b51d35`, `b99dceb` — Branch `mentor_AI`.
