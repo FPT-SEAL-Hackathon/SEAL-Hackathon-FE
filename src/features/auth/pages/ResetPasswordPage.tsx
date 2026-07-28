@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { AlertCircle, CheckCircle, Eye, EyeOff, Lock, Loader } from "lucide-react";
 import { resetPassword } from "@/features/auth/api/authService";
+import { parseApiError } from "@/lib/api/apiClient";
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -37,7 +38,7 @@ export function ResetPasswordPage() {
       setDone(true);
       setTimeout(() => navigate("/login", { replace: true }), 1800);
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Could not reset your password.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }

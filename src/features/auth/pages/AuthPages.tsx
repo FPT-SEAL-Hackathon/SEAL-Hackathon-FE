@@ -8,8 +8,15 @@ import { motion, AnimatePresence } from "motion/react";
 import { login, register, REGISTER_USER_TYPES, getGoogleLoginUrl, sendLinkOtp, verifyLinkOtp, setupLocalPassword, type UserResponse } from "@/features/auth/api/authService.ts";
 import { useAuth } from "@/features/auth/store/authStore";
 import { useNavigate } from "react-router";
-import { ApiError, api } from "@/lib/api/apiClient.ts";
+import { ApiError, api, parseApiError } from "@/lib/api/apiClient.ts";
 import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService.ts";
+import { fptStudentCodePrefixService, type FptStudentCodePrefix } from "@/features/users/api/fptStudentCodePrefixService";
+import {
+  getFptStudentCodePrefixInfo,
+  isValidFptStudentCode,
+  MSG_FPT_CODE,
+  normalizeFptStudentCode,
+} from "@/features/users/utils/profileValidation";
 
 // ─── Dev bypass credential ───────────────────────────────────────────────────
 const DEV_EMAIL = "dev@seal.dev";
@@ -210,6 +217,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [fptPrefixes, setFptPrefixes] = useState<FptStudentCodePrefix[]>([]);
   // Email đã có tài khoản Google-only (chưa có mật khẩu): backend trả 409
   // ACCOUNT_LINK_REQUIRED + linkingToken — chuyển sang bước xác minh OTP để
   // thiết lập mật khẩu cho CHÍNH tài khoản đó (không tạo user mới).
@@ -218,6 +226,20 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   const [otpInfo, setOtpInfo] = useState("");
   const { setAuth } = useAuth();
   const navigate = useNavigate();
+  const isFptStudent = form.userTypeId === REGISTER_USER_TYPES[0].value;
+  const prefixInfo = isFptStudent ? getFptStudentCodePrefixInfo(form.studentCode, fptPrefixes) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    fptStudentCodePrefixService.list()
+      .then(data => {
+        if (!cancelled) setFptPrefixes(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFptPrefixes([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const set = (k: keyof typeof form, v: string) => {
     setForm(prev => ({ ...prev, [k]: v }));
@@ -233,6 +255,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
     if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords don't match";
     if (!form.phone.match(/^\d{1,10}$/)) e.phone = "Invalid phone (max 10 digits)";
     if (!form.studentCode.trim()) e.studentCode = "Required";
+    else if (isFptStudent && !isValidFptStudentCode(form.studentCode, fptPrefixes)) e.studentCode = MSG_FPT_CODE;
     if (!form.universityName.trim()) e.universityName = "Required";
     if (!form.userTypeId.trim()) e.userTypeId = "Required";
     setErrors(e);
@@ -250,7 +273,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
         password: form.password,
         confirmPassword: form.confirmPassword,
         phone: form.phone,
-        studentCode: form.studentCode,
+        studentCode: isFptStudent ? normalizeFptStudentCode(form.studentCode) : form.studentCode.trim(),
         universityName: form.universityName,
         userTypeId: form.userTypeId,
       });
@@ -266,7 +289,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
             await sendLinkOtp(linkingToken);
             setOtpInfo("We sent a 6-digit code to your email.");
           } catch (otpErr) {
-            setApiError(otpErr instanceof Error ? otpErr.message : "Could not send the verification code.");
+            setApiError(parseApiError(otpErr).message);
           }
           return;
         }
@@ -296,7 +319,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       const isTemporary = res.user.accountStatus?.toUpperCase() === "TEMPORARY";
       navigate(isTemporary ? "/complete-profile" : "/", { replace: true });
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }
@@ -309,7 +332,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       await sendLinkOtp(linkSetup.linkingToken);
       setOtpInfo("A new code has been sent to your email.");
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Could not resend the code.");
+      setApiError(parseApiError(err).message);
     }
   };
 
@@ -514,7 +537,7 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
       const res = await login({ email: normalizedEmail, password });
       onLogin(res.user);
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }

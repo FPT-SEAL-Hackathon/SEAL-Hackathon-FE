@@ -34,7 +34,7 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
       setJudges(updatedJudges);
     } catch (err: any) {
       if (err.message && err.message.includes("JUDGE_HAS_SCORES")) {
-        if (window.confirm("Giám khảo này đã có bảng điểm (chấm thi). Việc xoá sẽ làm mất các điểm số đó. Bạn có chắc chắn muốn xoá không?")) {
+        if (window.confirm("This judge has already submitted scores. Removing them will delete those scores. Are you sure?")) {
           return handleRemove(judgeId, roundJudgeId, true);
         }
       } else {
