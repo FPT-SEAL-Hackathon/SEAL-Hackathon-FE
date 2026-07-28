@@ -375,6 +375,10 @@ function isOfficialSubmissionRound(round: Round) {
   return !round.isCalibrationRound;
 }
 
+function isNotFoundApiError(error: unknown) {
+  return parseApiError(error).status === 404;
+}
+
 function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadline, "teamId"> {
   const officialRounds = rounds
     .filter(round => isOfficialSubmissionRound(round) && round.submissionDeadline)
@@ -942,12 +946,18 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           : [];
       const historyResults = await Promise.all(
         roundsToQuery.map(round =>
-          submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId),
+          submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId)
+            .catch(error => {
+              if (isNotFoundApiError(error)) return [] as SubmissionHistoryResponse[];
+              throw error;
+            }),
         ),
       );
+      const historyByRound = historyResults.flat();
+      const submittedRoundIds = [...new Set(historyByRound.map(history => history.roundId).filter(Boolean))];
       const currentSubmissionResults = await Promise.allSettled(
-        roundsToQuery.map(round =>
-          submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId),
+        submittedRoundIds.map(roundId =>
+          submissionService.getByTeamAndRound(submissionForm.teamId, roundId),
         ),
       );
       const currentSubmissionById = new Map<string, SubmissionResponse>();
@@ -958,7 +968,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       });
 
       setSubmissionHistory(
-        historyResults.flat()
+        historyByRound
           .map(history => {
             const currentSubmission = currentSubmissionById.get(history.submissionId);
             return currentSubmission
@@ -1111,11 +1121,39 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     let cancelled = false;
     setSubmissionLookupLoading(true);
     submissionService.getHistoryByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
-      .then(history => {
+      .catch(error => {
+        if (isNotFoundApiError(error)) return [] as SubmissionHistoryResponse[];
+        throw error;
+      })
+      .then(async history => {
         if (cancelled) return;
         setSubmissionHistoryError("");
+        const currentSubmission = history.length > 0
+          ? await submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
+              .catch(error => {
+                if (isNotFoundApiError(error)) return null;
+                throw error;
+              })
+          : null;
+        if (cancelled) return;
+        const currentSubmissionById = currentSubmission?.submissionId
+          ? new Map([[currentSubmission.submissionId, currentSubmission]])
+          : new Map<string, SubmissionResponse>();
         setSubmissionHistory(prev => [
-          ...history,
+          ...history.map(item => {
+            const latest = currentSubmissionById.get(item.submissionId);
+            return latest
+              ? {
+                  ...item,
+                  submissionStatusId: latest.submissionStatusId,
+                  submissionStatusName: latest.submissionStatusName,
+                  activeDisqualificationId: latest.activeDisqualificationId,
+                  activeDisqualificationReason: latest.activeDisqualificationReason,
+                  activeDisqualifiedById: latest.activeDisqualifiedById,
+                  activeDisqualifiedAt: latest.activeDisqualifiedAt,
+                }
+              : item;
+          }),
           ...prev.filter(item => item.roundId !== submissionForm.roundId),
         ]);
       })
@@ -1233,9 +1271,13 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       }));
       setSubmissionFieldErrors({});
       await loadSubmissionHistory();
-      setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
+      setSubmissionStatus(`Current status: ${getSubmissionStatusLabel(submission)}.`);
     } catch (error) {
-      setSubmissionStatus(error instanceof Error ? error.message : "Could not load current submission.");
+      if (isNotFoundApiError(error)) {
+        setSubmissionStatus("No submission has been saved for this round yet.");
+        return;
+      }
+      setSubmissionStatus(parseApiError(error).message || "Could not load current submission.");
     } finally {
       setSubmissionLookupLoading(false);
     }
