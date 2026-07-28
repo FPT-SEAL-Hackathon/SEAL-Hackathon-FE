@@ -83,7 +83,12 @@ function normalizeBadgeValue(value: string) {
 
 function labelValue(value?: string) {
   if (!value) return "-";
-  return value.replace(/^ROLE_/, "").replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+  return value
+    .replace(/^ROLE_/, "")
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase())
+    .replace(/\bFpt\b/g, "FPT");
 }
 
 function formatDate(value?: string) {
