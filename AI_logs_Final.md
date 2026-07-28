@@ -23,7 +23,7 @@
   - `CriterionTemplateServiceImpl.java`: Added `@Transactional(readOnly = true)` to `getAllActiveCriterionTemplates`, `getById`, and `@Transactional` to `create`.
   - `MentorDashboardServiceImpl.java`: Added `@Transactional(readOnly = true)` to `getDashboardSummary`.
   - `PublicSummaryServiceImpl.java`: Added `@Transactional(readOnly = true)` to `getLandingSummary`.
-  - `ConsultationServiceImpl.java`: Added `@Transactional(readOnly = true)` to `getMyMentors`, `getMyTeamMentorNotes`, `getMyTeamRequests`, `getConsultationRequestDetail`, `getConsultationMessages`.
+  - `ConsultationServiceImpl.java`: Added `@Transactional(readOnly = true)` to `getMentorRequests`, `getMentorsOfCategory`, `getAssignedCategoriesForMentor`, `getTeamsForMentorCategory`, `getMyMentors`, `getMyTeamMentorNotes`, `getMyTeamRequests`, `getConsultationRequestDetail`, `getConsultationMessages`.
 
 ### 3. Frontend String Interpolation Safety & `400 BAD_REQUEST` Prevention
 - **Root Cause**: Passing undefined variables into URL template literals (e.g. `/api/v1/admin/submissions/${sub.submissionId}/approve`) resulted in `/api/v1/admin/submissions/undefined/approve`, failing Spring Boot UUID path parameter parsing.
