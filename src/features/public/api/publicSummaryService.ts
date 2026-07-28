@@ -1,12 +1,24 @@
 import { api } from "@/lib/api/apiClient";
 import { type EventResponse } from "@/features/events/api/eventService";
-import { type HallOfFameResponse, type SystemAwardPrizeTotalResponse } from "@/features/awards/api/awardService";
+
+export interface PublicHallOfFameItem {
+  eventName: string;
+  categoryName: string;
+  teamName: string;
+  awardTierName: string;
+  awardTitle: string;
+  leaderName: string;
+}
+
+export interface PublicSystemPrizeTotal {
+  totalPrizes: Array<{ prizeCurrency: string; totalPrize: number }>;
+}
 
 export interface LandingSummaryResponse {
   events: EventResponse[];
   totalTeams: number;
-  totalPrize: SystemAwardPrizeTotalResponse;
-  hallOfFame: HallOfFameResponse[];
+  totalPrize: PublicSystemPrizeTotal;
+  hallOfFame: PublicHallOfFameItem[];
 }
 
 export const publicSummaryService = {

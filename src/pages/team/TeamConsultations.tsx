@@ -337,7 +337,7 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
               })}
             </div>
 
-            {["PENDING", "ACCEPTED", "IN_PROGRESS"].includes(selectedRequest.status) && (
+            {["ACCEPTED", "IN_PROGRESS"].includes(selectedRequest.status) && (
               <div className="p-4 border-t flex gap-2" style={{ borderColor: COLORS.border }}>
                 <input
                   type="text" value={messageInput} onChange={e => setMessageInput(e.target.value)}
@@ -345,6 +345,12 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
                   onKeyDown={e => e.key === "Enter" && sendMessage()}
                 />
                 <Button variant="primary" size="md" icon={<Send size={14} />} onClick={sendMessage}>Send</Button>
+              </div>
+            )}
+
+            {selectedRequest.status === "PENDING" && (
+              <div className="p-3 border-t text-center text-sm font-medium" style={{ borderColor: COLORS.border, background: `${COLORS.warning}10`, color: "#b45309" }}>
+                ⏳ Waiting for an expert to accept this request before messaging.
               </div>
             )}
 

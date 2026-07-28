@@ -78,11 +78,15 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
   }, [localRoundId]);
 
   const toggleApproval = async (submissionId: string, currentStatus: boolean) => {
+    if (!submissionId || submissionId === "undefined") {
+      console.error("Cannot toggle approval: Invalid submissionId");
+      return;
+    }
     setApprovingId(submissionId);
     try {
       await api.post(`/api/v1/admin/submissions/${submissionId}/approve`, { approve: !currentStatus });
       setSubmissions(prev => prev.map(s => 
-        s.submissionId === submissionId ? {
+        (s.submissionId === submissionId || s.id === submissionId) ? {
           ...s,
           isScoreApproved: !currentStatus,
           submissionStatusId: !currentStatus ? SUBMISSION_STATUS_IDS.SCORED : SUBMISSION_STATUS_IDS.IN_PROGRESS,
@@ -97,6 +101,10 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
   };
 
   const rejectScore = async (submissionId: string) => {
+    if (!submissionId || submissionId === "undefined") {
+      console.error("Cannot reject score: Invalid submissionId");
+      return;
+    }
     if (!rejectReason.trim()) return;
     setApprovingId(submissionId); // Borrow this state for loading indicator
     try {
@@ -113,6 +121,10 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
   };
 
   const viewScores = async (submissionId: string) => {
+    if (!submissionId || submissionId === "undefined") {
+      console.error("Cannot view scores: Invalid submissionId");
+      return;
+    }
     setSelectedSubmissionId(submissionId);
     setIsJudgingLoading(true);
     try {
@@ -160,13 +172,14 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
             </thead>
             <tbody>
               {submissions.map((sub: any) => {
-                const subScores = batchScores[sub.submissionId] || {};
+                const subId = sub.submissionId || sub.id;
+                const subScores = batchScores[subId] || {};
                 const scoresArray = Object.values(subScores);
                 const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
                 
                 return (
                   <tr 
-                    key={sub.submissionId} 
+                    key={subId} 
                     className="border-b" 
                     style={{ borderColor: COLORS.border, backgroundColor: '#fefcf9', transition: 'background-color 0.15s' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
@@ -205,7 +218,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                     </td>
 
                     <td className="p-4 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>
-                      {rejectingId === sub.submissionId ? (
+                      {rejectingId === subId ? (
                         <div className="flex flex-col gap-2 items-end min-w-[200px]">
                           <input 
                             type="text" 
@@ -220,16 +233,16 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                               variant="ghost" 
                               size="sm" 
                               onClick={() => { setRejectingId(null); setRejectReason(""); }}
-                              disabled={approvingId === sub.submissionId}
+                              disabled={approvingId === subId}
                             >
                               Cancel
                             </Button>
                             <Button 
                               variant="danger"
                               size="sm" 
-                              onClick={() => rejectScore(sub.submissionId)}
-                              disabled={!rejectReason.trim() || approvingId === sub.submissionId}
-                              icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : undefined}
+                              onClick={() => rejectScore(subId)}
+                              disabled={!rejectReason.trim() || approvingId === subId}
+                              icon={approvingId === subId ? <Loader size={14} className="animate-spin"/> : undefined}
                             >
                               Confirm Reject
                             </Button>
@@ -237,14 +250,14 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                         </div>
                       ) : (
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="secondary" size="sm" icon={<Eye size={14} />} onClick={() => viewScores(sub.submissionId)} title="View Detail Scores" />
+                          <Button variant="secondary" size="sm" icon={<Eye size={14} />} onClick={() => viewScores(subId)} title="View Detail Scores" />
                           {!sub.isScoreApproved && (
                             <Button 
                               variant="outline" 
                               size="sm" 
                               icon={<XCircle size={14}/>}
-                              onClick={() => setRejectingId(sub.submissionId)}
-                              disabled={approvingId === sub.submissionId || isRoundApproved}
+                              onClick={() => setRejectingId(subId)}
+                              disabled={approvingId === subId || isRoundApproved}
                               style={{ color: COLORS.error, borderColor: COLORS.error }}
                               title="Reject and require re-score"
                             >
@@ -254,10 +267,10 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                           <Button 
                             variant={sub.isScoreApproved ? "secondary" : "primary"} 
                             size="sm" 
-                            icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
-                            onClick={() => toggleApproval(sub.submissionId, sub.isScoreApproved)}
-                            disabled={approvingId === sub.submissionId || isRoundApproved}
-                            style={!sub.isScoreApproved && approvingId !== sub.submissionId ? { background: COLORS.success } : {}}
+                            icon={approvingId === subId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
+                            onClick={() => toggleApproval(subId, sub.isScoreApproved)}
+                            disabled={approvingId === subId || isRoundApproved}
+                            style={!sub.isScoreApproved && approvingId !== subId ? { background: COLORS.success } : {}}
                           >
                             {sub.isScoreApproved ? "Un-Finalize" : "Finalize"}
                           </Button>

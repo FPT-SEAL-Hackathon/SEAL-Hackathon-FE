@@ -2,10 +2,13 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Trophy, Star, Crown, Flame, Zap, Users, Calendar,
-  ArrowRight, Award, Target, Clock, MapPin, Shield, Hash, Loader
+  ArrowRight, Award, Target, Clock, MapPin, Shield, Hash, Loader,
+  Image as ImageIcon, Camera, Mail, Phone, ExternalLink, X, Maximize2, Sparkles, Globe
 } from "lucide-react";
 import { type TotalPrizeSummary } from "@/features/awards/api/awardService";
+import { type EventResponse } from "@/features/events/api/eventService";
 import { publicSummaryService } from "@/features/public/api/publicSummaryService";
+import { loadLandingSettings, type LandingPageSettingsData } from "@/pages/admin/components/AdminLandingSettingsView";
 
 /**
  * Giao diện Landing Page (Trang chủ công khai).
@@ -81,6 +84,68 @@ const RANK_META = [
   { bg: "from-yellow-400/30 to-amber-300/20", border: "border-yellow-400/50", text: "text-yellow-600", label: "Champion" },
   { bg: "from-slate-300/30 to-gray-200/20", border: "border-slate-400/50", text: "text-slate-600", label: "Runner-up" },
   { bg: "from-orange-300/30 to-amber-200/20", border: "border-orange-400/50", text: "text-orange-600", label: "3rd Place" },
+];
+
+interface GalleryItem {
+  id: string;
+  title: string;
+  category: string;
+  url: string;
+  spanClass: string;
+  description: string;
+  isFeatured?: boolean;
+}
+
+const GALLERY_IMAGES: GalleryItem[] = [
+  {
+    id: "gal-1",
+    title: "Grand Finals Main Stage",
+    category: "Opening & Expo",
+    url: "https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&w=1200&q=80",
+    spanClass: "md:col-span-2 md:row-span-2 min-h-[320px] md:min-h-[440px]",
+    description: "The grand opening ceremony & live team presentations at SEAL Hackathon Arena.",
+    isFeatured: true,
+  },
+  {
+    id: "gal-2",
+    title: "24h Intensive Hackathon",
+    category: "Team Coding Lab",
+    url: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=800&q=80",
+    spanClass: "md:col-span-2 md:row-span-1 min-h-[210px]",
+    description: "Developers collaborating non-stop to solve real-world tech challenges.",
+  },
+  {
+    id: "gal-3",
+    title: "Expert Mentorship",
+    category: "1-on-1 Guidance",
+    url: "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=600&q=80",
+    spanClass: "md:col-span-1 md:row-span-1 min-h-[210px]",
+    description: "Industry leaders advising teams on system architecture and UX.",
+  },
+  {
+    id: "gal-4",
+    title: "Judge Pitch Defense",
+    category: "Evaluation",
+    url: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=600&q=80",
+    spanClass: "md:col-span-1 md:row-span-1 min-h-[210px]",
+    description: "Teams presenting prototype solutions to expert judges.",
+  },
+  {
+    id: "gal-5",
+    title: "Champion Award Ceremony",
+    category: "Victory & Prizes",
+    url: "https://images.unsplash.com/photo-1515187029135-18ee286d815b?auto=format&fit=crop&w=800&q=80",
+    spanClass: "md:col-span-2 md:row-span-1 min-h-[210px]",
+    description: "Honoring winning teams and presenting grand prize trophies.",
+  },
+  {
+    id: "gal-6",
+    title: "Developer Community Expo",
+    category: "Networking",
+    url: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=800&q=80",
+    spanClass: "md:col-span-2 md:row-span-1 min-h-[210px]",
+    description: "Connecting student innovators with recruiters and tech sponsors.",
+  },
 ];
 
 function StatusBadge({ status }: { status: string }) {
@@ -291,8 +356,18 @@ function normalizeDateTime(date: string): string {
 
 
 
-function formatPrizeMoney(summary: TotalPrizeSummary): string {
-  const { totalPrize, currency } = summary;
+function formatPrizeMoney(summary: TotalPrizeSummary | import("@/features/public/api/publicSummaryService").PublicSystemPrizeTotal | any): string {
+  if (!summary) return "N/A";
+  let totalPrize = 0;
+  let currency = "VND";
+  if (typeof summary.totalPrize === "number") {
+    totalPrize = summary.totalPrize;
+    currency = summary.currency || "VND";
+  } else if (summary.totalPrizes && Array.isArray(summary.totalPrizes) && summary.totalPrizes.length > 0) {
+    const picked = summary.totalPrizes.find((p: any) => p.prizeCurrency?.toUpperCase() === "VND") || summary.totalPrizes[0];
+    totalPrize = Number(picked.totalPrize || 0);
+    currency = picked.prizeCurrency || "VND";
+  }
   if (!totalPrize || totalPrize === 0) return "N/A";
   const cur = (currency || "VND").toUpperCase();
   let display: string;
@@ -308,6 +383,74 @@ function formatPrizeMoney(summary: TotalPrizeSummary): string {
   return `${display} ${cur}`;
 }
 
+const POLICY_DOCS = {
+  privacy: {
+    title: "Privacy Policy",
+    subtitle: "How we collect, protect, and handle your data on the SEAL Hackathon Platform.",
+    updated: "Last Updated: January 2026",
+    sections: [
+      {
+        heading: "1. Information We Collect",
+        content: "We collect personal and academic information provided during account creation and competition registration, including your full name, institutional email address (@fpt.edu.vn or student email), phone number, student ID, and team affiliation details."
+      },
+      {
+        heading: "2. How We Use Your Information",
+        content: "Your data is used exclusively to verify eligibility, manage team registrations, issue official competition updates, facilitate evaluation by assigned judges, and generate verifiable digital certificates and awards."
+      },
+      {
+        heading: "3. Data Confidentiality & Sharing",
+        content: "Your data is encrypted in transit and stored on secure cloud servers. SEAL Hackathon Platform does not sell or distribute personal data to third parties, except to authorized Event Organizers and assigned Board of Judges for official evaluation."
+      },
+      {
+        heading: "4. User Rights & Data Deletion",
+        content: "Participants reserve the right to review, update, or request the deletion of their profile data at any time by contacting our support team at contact@sealhackathon.edu.vn."
+      }
+    ]
+  },
+  terms: {
+    title: "Terms of Service",
+    subtitle: "Rules, code of conduct, and legal agreements governing competition participation.",
+    updated: "Last Updated: January 2026",
+    sections: [
+      {
+        heading: "1. Acceptance of Terms",
+        content: "By creating an account or registering for any competition on the SEAL Hackathon Platform, you agree to abide by all platform policies, event guidelines, and regulations established by FPT University."
+      },
+      {
+        heading: "2. Intellectual Property Rights",
+        content: "Participating teams retain full intellectual property rights and ownership of their submitted project source code, prototypes, and designs. Organizers reserve the right to display project summaries, team names, and event media for promotional purposes."
+      },
+      {
+        heading: "3. Academic Integrity & Code of Conduct",
+        content: "All submitted source code must be authored by registered team members within the official hackathon timeframe. Plagiarism, unauthorized code duplication, or malicious network activities will result in immediate team disqualification."
+      },
+      {
+        heading: "4. Binding Decisions",
+        content: "All evaluation scores, rankings, tier assignments, and arbitration rulings declared by the Board of Judges and Organizing Committee are final and non-negotiable."
+      }
+    ]
+  },
+  security: {
+    title: "Security Policy",
+    subtitle: "Our technical architecture, data encryption standards, and vulnerability disclosure process.",
+    updated: "Last Updated: January 2026",
+    sections: [
+      {
+        heading: "1. Authentication & Access Control",
+        content: "The platform implements industry-standard JWT token authentication and strict Role-Based Access Control (RBAC), isolating student data, judging rubrics, and administrative controls."
+      },
+      {
+        heading: "2. Code Submission & Artifact Security",
+        content: "Project repository URLs, submitted artifacts, and judge scoring records are encrypted at rest and in transit. Access is limited strictly to assigned judges for evaluation."
+      },
+      {
+        heading: "3. Vulnerability Disclosure",
+        content: "We take security vulnerabilities seriously. If you discover a security flaw or potential exploit, please report it responsibly to contact@sealhackathon.edu.vn. We appreciate your cooperation in keeping our platform safe."
+      }
+    ]
+  }
+};
+
 export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   const [activeCompetition, setActiveCompetition] = useState(0);
   const [competitions, setCompetitions] = useState<LandingCompetition[]>([]);
@@ -322,6 +465,19 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   const [activeHof, setActiveHof] = useState(0);
   const [hofGroups, setHofGroups] = useState<HofGroup[]>([]);
   const [hofLoading, setHofLoading] = useState(true);
+  const [selectedGalleryImage, setSelectedGalleryImage] = useState<GalleryItem | null>(null);
+  const [landingSettings, setLandingSettings] = useState<LandingPageSettingsData>(loadLandingSettings);
+  const [activePolicyModal, setActivePolicyModal] = useState<"privacy" | "terms" | "security" | null>(null);
+
+  useEffect(() => {
+    const syncSettings = () => setLandingSettings(loadLandingSettings());
+    window.addEventListener("seal_landing_settings_updated", syncSettings);
+    window.addEventListener("storage", syncSettings);
+    return () => {
+      window.removeEventListener("seal_landing_settings_updated", syncSettings);
+      window.removeEventListener("storage", syncSettings);
+    };
+  }, []);
 
   useEffect(() => {
     if (competitions.length <= 1) return;
@@ -335,7 +491,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   useEffect(() => {
     setCompetitionsLoading(true);
     setHofLoading(true);
-    
+
     publicSummaryService.getLandingSummary()
       .then(data => {
         // 1. Set Competitions & Events Stats
@@ -344,13 +500,13 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         setStats(prev => ({ ...prev, events: String(data.events.length) }));
         setCompetitionsError("");
         setActiveCompetition(0);
-        
+
         // 2. Set Teams Stats
         setStats(prev => ({ ...prev, teams: String(data.totalTeams) }));
-        
+
         // 3. Set Prize Stats
         setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(data.totalPrize) }));
-        
+
         // 4. Set Hall of Fame
         setHofGroups(groupHallOfFame(data.hallOfFame));
         setStats(prev => ({ ...prev, topProjects: String(data.hallOfFame.length) }));
@@ -359,8 +515,8 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         console.error("Failed to load landing summary", error);
         setCompetitionsError(error instanceof Error ? error.message : "Failed to load events.");
         setCompetitions([]);
-        setStats(prev => ({ 
-          ...prev, 
+        setStats(prev => ({
+          ...prev,
           events: "N/A", teams: "N/A", prizeMoney: "N/A"
         }));
       })
@@ -381,15 +537,13 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
       {/* ─── Sticky Nav ────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 glass-strong border-b border-white/20">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: ORANGE_PRIMARY }}>
-              <Shield size={18} className="text-white" />
-            </div>
+          <div className="flex items-center gap-3.5">
+            <img src="/logo_trans.png" alt="SEAL Logo" className="h-14 md:h-16 w-auto object-contain shrink-0 filter drop-shadow-md" />
             <div>
-              <span style={{ fontSize: "1.1rem", fontWeight: 700, letterSpacing: "-0.02em", background: ORANGE_WHITE, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+              <span style={{ fontSize: "1.35rem", fontWeight: 800, letterSpacing: "-0.02em", background: ORANGE_WHITE, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
                 SEAL
               </span>
-              <span className="text-xs text-muted-foreground ml-1.5">Hackathon Platform</span>
+              <span className="text-xs text-slate-600 dark:text-slate-400 font-bold ml-1.5">Hackathon Platform</span>
             </div>
           </div>
 
@@ -397,6 +551,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
             {[
               { id: "nav-competitions", href: "#competitions", label: "Competitions" },
               { id: "nav-hall-of-fame", href: "#hall-of-fame", label: "Hall of Fame" },
+              { id: "nav-gallery", href: "#gallery", label: "Gallery" },
               { id: "nav-stats", href: "#stats", label: "Stats" },
             ].map(item => (
               <a key={item.id} href={item.href}
@@ -541,7 +696,11 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                       <div>
                         <StatusBadge status={c.status} />
                         <h3 className="mt-2 mb-1">{c.name}</h3>
-                        <p className="text-muted-foreground text-sm">{c.description}</p>
+                        <p className="text-muted-foreground text-sm line-clamp-2 max-w-2xl mt-1">
+                          {c.description && c.description.length > 130
+                            ? `${c.description.slice(0, 130)}...`
+                            : c.description}
+                        </p>
                       </div>
                     </div>
 
@@ -740,6 +899,124 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         </div>
       </section>
 
+      {/* ─── Gallery ────────────────────────────────────────────── */}
+      <section id="gallery" className="py-24 px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            className="text-center mb-14">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass border border-orange-400/30 mb-4">
+              <Camera size={14} style={{ color: "#F47920" }} />
+              <span className="text-sm" style={{ color: "#F47920", fontWeight: 500 }}>Event Moments</span>
+            </div>
+            <h2 className="mb-3">
+              Competition{" "}
+              <span style={{ background: "linear-gradient(135deg, #F47920 0%, #FF8C2A 50%, #FFD0A0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                Gallery
+              </span>
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto">
+              Memorable moments, intense coding sessions, and victorious celebrations captured at SEAL Hackathons.
+            </p>
+          </motion.div>
+
+          {/* 6-Image Balanced Grid Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[198px]">
+            {landingSettings.gallery.map((img, i) => (
+              <motion.div
+                key={img.id}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.4, delay: i * 0.08 }}
+                onClick={() => setSelectedGalleryImage(img)}
+                className={`relative group rounded-3xl overflow-hidden glass border border-white/20 cursor-pointer ${img.spanClass}`}
+              >
+                {/* Background Image */}
+                <img
+                  src={img.url}
+                  alt={img.title}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  loading="lazy"
+                />
+
+                {/* Gradient Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent opacity-80 group-hover:opacity-90 transition-opacity" />
+
+                {/* Featured Badge if 1st image */}
+                {img.isFeatured && (
+                  <div className="absolute top-4 left-4 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-orange-500/90 backdrop-blur-md shadow-md">
+                    <Sparkles size={12} />
+                    Featured Highlight
+                  </div>
+                )}
+
+                {/* Maximize Icon on Hover */}
+                <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 backdrop-blur-md border border-white/30 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 scale-90 group-hover:scale-100">
+                  <Maximize2 size={16} />
+                </div>
+
+                {/* Caption Content */}
+                <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                  <span className="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-white/20 backdrop-blur-sm border border-white/30 text-orange-200 mb-1.5">
+                    {img.category}
+                  </span>
+                  <h3 className={`font-bold tracking-tight text-white mb-1 ${img.isFeatured ? "text-xl md:text-2xl" : "text-base md:text-lg"}`}>
+                    {img.title}
+                  </h3>
+                  <p className="text-xs text-white/80 line-clamp-1 group-hover:line-clamp-2 transition-all">
+                    {img.description}
+                  </p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Gallery Lightbox Modal ───────────────────────────── */}
+      <AnimatePresence>
+        {selectedGalleryImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedGalleryImage(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-4xl w-full glass rounded-3xl overflow-hidden border border-white/30 text-foreground shadow-2xl bg-black/90"
+            >
+              <button
+                onClick={() => setSelectedGalleryImage(null)}
+                className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-black/50 hover:bg-black/80 text-white border border-white/20 flex items-center justify-center transition-colors"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="max-h-[70vh] overflow-hidden bg-black flex items-center justify-center">
+                <img
+                  src={selectedGalleryImage.url}
+                  alt={selectedGalleryImage.title}
+                  className="w-full h-full object-contain max-h-[70vh]"
+                />
+              </div>
+
+              <div className="p-6 bg-slate-900/90 text-white">
+                <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-orange-500/30 border border-orange-400/40 text-orange-300 mb-2">
+                  {selectedGalleryImage.category}
+                </span>
+                <h3 className="text-xl font-bold mb-2">{selectedGalleryImage.title}</h3>
+                <p className="text-sm text-gray-300">{selectedGalleryImage.description}</p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ─── Stats ─────────────────────────────────────────────── */}
       <section id="stats" className="py-16 px-6">
         <div className="max-w-5xl mx-auto">
@@ -787,19 +1064,166 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
       </section>
 
       {/* ─── Footer ────────────────────────────────────────────── */}
-      <footer className="py-8 px-6 border-t border-white/15">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: ORANGE_PRIMARY }}>
-              <Shield size={14} className="text-white" />
+      <footer className="relative pt-20 pb-12 px-6 bg-white/85 dark:bg-slate-950/90 backdrop-blur-2xl text-slate-800 dark:text-slate-200 border-t border-white/60 dark:border-white/10 shadow-[0_-12px_48px_rgba(244,121,32,0.08)] overflow-hidden transition-colors">
+        {/* Ambient Glass Glow Orbs */}
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 md:gap-12 pb-16 border-b border-slate-200/80 dark:border-white/10">
+
+            {/* Col 1: Brand & Tagline (Spans 5 cols) */}
+            <div className="space-y-5 md:col-span-5 pr-0 md:pr-4">
+              <div className="flex items-center gap-4">
+                <img src="/logo_trans.png" alt="SEAL Logo" className="h-16 md:h-20 w-auto object-contain shrink-0 filter drop-shadow-md" />
+                <div>
+                  <span style={{ fontSize: "1.5rem", fontWeight: 800, letterSpacing: "-0.02em", background: ORANGE_WHITE, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
+                    SEAL
+                  </span>
+                  <span className="text-xs text-slate-600 dark:text-slate-400 font-bold ml-1.5">Hackathon Platform</span>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed font-normal max-w-sm">
+                {landingSettings.footer.tagline}
+              </p>
+              <div className="flex items-center gap-3 pt-1">
+                <a href="https://github.com" target="_blank" rel="noreferrer" className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-500/40 hover:bg-orange-500/10 flex items-center justify-center transition-all shadow-sm">
+                  <Globe size={17} />
+                </a>
+                <a href={`mailto:${landingSettings.footer.email}`} className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 hover:border-orange-500/40 hover:bg-orange-500/10 flex items-center justify-center transition-all shadow-sm">
+                  <Mail size={17} />
+                </a>
+              </div>
             </div>
-            <span style={{ fontSize: "0.875rem", fontWeight: 700, background: ORANGE_WHITE, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>
-              SEAL Hackathon Platform
-            </span>
+
+            {/* Col 2: Navigation (Spans 3 cols) */}
+            <div className="md:col-span-3">
+              <h4 className="text-xs font-extrabold text-slate-900 dark:text-white mb-5 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block shadow-sm" />
+                Navigation
+              </h4>
+              <ul className="space-y-3 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                <li><a href="#competitions" className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-block hover:translate-x-1 duration-200">Tech Arena</a></li>
+                <li><a href="#hall-of-fame" className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-block hover:translate-x-1 duration-200">Hall of Fame</a></li>
+                <li><a href="#gallery" className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-block hover:translate-x-1 duration-200">Event Gallery</a></li>
+                <li><a href="#stats" className="hover:text-orange-600 dark:hover:text-orange-400 transition-colors inline-block hover:translate-x-1 duration-200">Platform Statistics</a></li>
+              </ul>
+            </div>
+
+            {/* Col 3: Contact Info (Spans 4 cols) */}
+            <div className="space-y-4 md:col-span-4">
+              <h4 className="text-xs font-extrabold text-slate-900 dark:text-white mb-5 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block shadow-sm" />
+                Contact Us
+              </h4>
+              <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+                <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 shrink-0 flex items-center justify-center shadow-sm">
+                  <MapPin size={15} />
+                </div>
+                <span className="font-medium leading-normal">{landingSettings.footer.address}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+                <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 shrink-0 flex items-center justify-center shadow-sm">
+                  <Mail size={15} />
+                </div>
+                <span className="font-medium leading-normal">{landingSettings.footer.email}</span>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+                <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 shrink-0 flex items-center justify-center shadow-sm">
+                  <Phone size={15} />
+                </div>
+                <span className="font-medium leading-normal">{landingSettings.footer.phone}</span>
+              </div>
+            </div>
+
           </div>
-          <p className="text-xs text-muted-foreground">© 2026 FPT University. Where tech talent shines.</p>
+
+          {/* Bottom Bar */}
+          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400 font-medium">
+            <p>{landingSettings.footer.copyright}</p>
+            <div className="flex items-center gap-6">
+              <button onClick={() => setActivePolicyModal("privacy")} className="hover:text-orange-600 dark:hover:text-orange-400 cursor-pointer transition-colors">Privacy Policy</button>
+              <button onClick={() => setActivePolicyModal("terms")} className="hover:text-orange-600 dark:hover:text-orange-400 cursor-pointer transition-colors">Terms of Service</button>
+              <button onClick={() => setActivePolicyModal("security")} className="hover:text-orange-600 dark:hover:text-orange-400 cursor-pointer transition-colors">Security Policy</button>
+            </div>
+          </div>
         </div>
       </footer>
+
+      {/* ─── Policy Detail Modal ────────────────────────────── */}
+      <AnimatePresence>
+        {activePolicyModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setActivePolicyModal(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 15 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-2xl w-full max-h-[85vh] flex flex-col rounded-3xl overflow-hidden border border-white/60 dark:border-white/10 text-foreground shadow-[0_20px_60px_rgba(244,121,32,0.12)] bg-white/90 dark:bg-slate-950/95 backdrop-blur-2xl transition-colors"
+            >
+              {/* Ambient Glass Glow Orbs */}
+              <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+              <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
+
+              {/* Modal Header */}
+              <div className="p-6 pb-4 border-b border-slate-200/80 dark:border-white/10 flex items-center justify-between bg-white/40 dark:bg-slate-900/40 backdrop-blur-md relative z-10">
+                <div className="flex items-center gap-3.5">
+                  <img src="/logo_trans.png" alt="SEAL Logo" className="h-14 w-auto object-contain shrink-0 filter drop-shadow-md" />
+                  <div>
+                    <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                      {POLICY_DOCS[activePolicyModal].title}
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      {POLICY_DOCS[activePolicyModal].updated}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActivePolicyModal(null)}
+                  className="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors shadow-sm"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 text-sm text-slate-600 dark:text-slate-300 leading-relaxed relative z-10">
+                <p className="text-xs text-orange-700 dark:text-orange-300 font-semibold bg-orange-500/10 p-3.5 rounded-2xl border border-orange-500/20 shadow-sm">
+                  {POLICY_DOCS[activePolicyModal].subtitle}
+                </p>
+
+                {POLICY_DOCS[activePolicyModal].sections.map((sec, idx) => (
+                  <div key={idx} className="space-y-2">
+                    <h4 className="font-bold text-slate-900 dark:text-white text-sm">
+                      {sec.heading}
+                    </h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-normal">
+                      {sec.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="p-4 px-6 border-t border-slate-200/80 dark:border-white/10 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md flex items-center justify-between text-xs text-slate-500 font-medium relative z-10">
+                <span>SEAL Hackathon Platform — FPT University</span>
+                <button
+                  onClick={() => setActivePolicyModal(null)}
+                  className="px-5 py-2.5 rounded-xl bg-orange-500 text-white font-semibold hover:bg-orange-600 transition-all shadow-md active:scale-95"
+                >
+                  Close & Accept
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
