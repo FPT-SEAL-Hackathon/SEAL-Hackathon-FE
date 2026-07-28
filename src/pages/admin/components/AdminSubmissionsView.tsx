@@ -7,7 +7,13 @@ import {
 import {
   Card, SectionHeader, COLORS, StatusBadge, Button, StatCard
 } from "@/components/shared/UIComponents";
-import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
+import {
+  getSubmissionStatusLabel,
+  isSubmissionStatus,
+  normalizeSubmissionStatusName,
+  submissionService,
+  type SubmissionHistoryResponse,
+} from "@/features/submissions/api/submissionService";
 
 interface AdminViewProps {
   context: any;
@@ -44,15 +50,9 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
-  const submitted = adminSubmissions.filter((submission: any) =>
-    (submission.submissionStatusName ?? "").toLowerCase().includes("submitted")
-  ).length;
-  const disqualified = adminSubmissions.filter((submission: any) =>
-    (submission.submissionStatusName ?? "").toLowerCase().includes("disqualified")
-  ).length;
-  const scored = adminSubmissions.filter((submission: any) =>
-    (submission.submissionStatusName ?? "").toLowerCase().includes("scored")
-  ).length;
+  const submitted = adminSubmissions.filter((submission: any) => isSubmissionStatus(submission, "SUBMITTED")).length;
+  const disqualified = adminSubmissions.filter((submission: any) => isSubmissionStatus(submission, "DISQUALIFIED")).length;
+  const scored = adminSubmissions.filter((submission: any) => isSubmissionStatus(submission, "SCORED")).length;
   const eventRounds = [...apiDashboardRounds, ...apiRounds].filter(
     (round, index, rounds) => rounds.findIndex(item => item.roundId === round.roundId) === index
   );
@@ -243,7 +243,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                 </tr>
               )}
               {adminSubmissions.map((submission: any) => {
-                const status = (submission.submissionStatusName || "draft").toLowerCase().replace(/\s+/g, "_");
+                const status = normalizeSubmissionStatusName(getSubmissionStatusLabel(submission));
                 const isCalibration = isCalibrationSubmission(submission);
                 return (
                   <tr key={submission.submissionId} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
@@ -296,7 +296,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                         size="sm"
                         icon={<AlertTriangle size={13} />}
                         onClick={() => setSubmissionDisqualifyTarget(submission)}
-                        disabled={status === "disqualified"}
+                        disabled={isSubmissionStatus(submission, "DISQUALIFIED")}
                       >
                         Disqualify
                       </Button>
@@ -339,7 +339,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                         {history.notes || "Untitled submission"}
                       </div>
                     </div>
-                    <StatusBadge status={(history.submissionStatusName || "submitted").toLowerCase()} />
+                    <StatusBadge status={getSubmissionStatusLabel(history)} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
                     {[
