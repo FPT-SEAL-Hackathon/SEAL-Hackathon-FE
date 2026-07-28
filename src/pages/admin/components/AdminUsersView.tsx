@@ -66,7 +66,7 @@ const emptyForm: UserFormState = {
   password: "",
   fptStudentCode: "",
   externalStudentCode: "",
-  universityName: "",
+  universityName: "FPT University",
   accountExpiresAt: "",
 };
 
@@ -409,7 +409,7 @@ export function AdminUsersView() {
       password: form.password,
     };
     if (role === "FPT_STUDENT") {
-      return compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim() });
+      return compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim(), universityName: "FPT University" });
     }
     if (role === "EXTERNAL_STUDENT") {
       return compactPayload({
@@ -433,7 +433,7 @@ export function AdminUsersView() {
       accountStatus: form.accountStatus,
     };
     if (role === "FPT_STUDENT") {
-      return compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim() });
+      return compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim(), universityName: "FPT University" });
     }
     if (role === "EXTERNAL_STUDENT") {
       return compactPayload({
@@ -829,7 +829,7 @@ function UserFormModal({
       accountStatus: defaultStatusForRole(normalizedRole),
       fptStudentCode: normalizedRole === "FPT_STUDENT" ? prev.fptStudentCode : "",
       externalStudentCode: normalizedRole === "EXTERNAL_STUDENT" ? prev.externalStudentCode : "",
-      universityName: normalizedRole === "EXTERNAL_STUDENT" ? prev.universityName : "",
+      universityName: normalizedRole === "FPT_STUDENT" ? "FPT University" : (normalizedRole === "EXTERNAL_STUDENT" ? prev.universityName : ""),
       accountExpiresAt: normalizedRole === "GUEST_JUDGE" ? prev.accountExpiresAt : "",
     }));
   };

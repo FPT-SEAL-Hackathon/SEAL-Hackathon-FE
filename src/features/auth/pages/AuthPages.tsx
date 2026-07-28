@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Eye, EyeOff, Mail, Lock, ArrowLeft, ArrowRight, X, CheckCircle, Loader,
   User, BookOpen, Building2, Phone, AlertCircle,
@@ -133,9 +134,9 @@ function OAuthModal({ provider, onSuccess, onClose }: { provider: OAuthProvider;
 }
 
 // ─── Glassmorphism Input ──────────────────────────────────────────────────────
-export function GlassInput({ type = "text", label, placeholder, icon, value, onChange, rightElement, error }: {
+export function GlassInput({ type = "text", label, placeholder, icon, value, onChange, rightElement, error, disabled = false }: {
   type?: string; label: string; placeholder: string; icon: React.ReactNode;
-  value: string; onChange: (v: string) => void; rightElement?: React.ReactNode; error?: string;
+  value: string; onChange: (v: string) => void; rightElement?: React.ReactNode; error?: string; disabled?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -149,6 +150,7 @@ export function GlassInput({ type = "text", label, placeholder, icon, value, onC
         </div>
         <input
           type={type} placeholder={placeholder} value={value}
+          disabled={disabled}
           onChange={e => onChange(e.target.value)}
           onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
           className="w-full py-3.5 rounded-2xl outline-none transition-all duration-200"
@@ -158,6 +160,8 @@ export function GlassInput({ type = "text", label, placeholder, icon, value, onC
             color: "var(--text-primary)", fontSize: 14, paddingLeft: 44,
             paddingRight: rightElement ? 44 : 16,
             boxShadow: focused ? "0 0 0 3px rgba(244,121,32,0.1)" : "0 2px 4px rgba(180,100,20,0.04)",
+            opacity: disabled ? 0.6 : 1,
+            cursor: disabled ? "not-allowed" : "text",
           }}
         />
         {rightElement && <div className="absolute right-3.5 top-1/2 -translate-y-1/2">{rightElement}</div>}
@@ -388,56 +392,80 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       <div className="space-y-4">
         {apiError && <ErrorBanner message={apiError} />}
 
-        <GlassInput label="Full Name" placeholder="John Doe" icon={<User size={15} />}
-          value={form.fullName} onChange={v => set("fullName", v)} error={errors.fullName} />
-        <GlassInput label="Email" placeholder="you@fpt.edu.vn" icon={<Mail size={15} />}
-          value={form.email} onChange={v => set("email", v)} error={errors.email} />
-        <GlassInput type={showPwd ? "text" : "password"} label="Password" placeholder="Min 8 characters"
-          icon={<Lock size={15} />} value={form.password} onChange={v => set("password", v)} error={errors.password}
-          rightElement={<button type="button" onClick={() => setShowPwd(!showPwd)} style={{ color: "#c09060" }}>{showPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>} />
-        <GlassInput type="password" label="Confirm Password" placeholder="Re-enter password"
-          icon={<Lock size={15} />} value={form.confirmPassword} onChange={v => set("confirmPassword", v)} error={errors.confirmPassword} />
-        <GlassInput label="Phone Number" placeholder="0912345678" icon={<Phone size={15} />}
-          value={form.phone} onChange={v => set("phone", v)} error={errors.phone} />
-        <div>
-          <label style={{ fontSize: 11, fontWeight: 700, color: "#a07850", display: "block", marginBottom: 8, letterSpacing: "0.06em" }}>
-            USER TYPE
-          </label>
-          <div className="relative">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2" style={{ color: errors.userTypeId ? "#e53e2e" : "#c09060" }}>
-              <User size={15} />
-            </div>
-            <select
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <GlassInput label="Full Name" placeholder="John Doe" icon={<User size={15} />}
+            value={form.fullName} onChange={v => set("fullName", v)} error={errors.fullName} />
+          <GlassInput label="Email" placeholder="you@fpt.edu.vn" icon={<Mail size={15} />}
+            value={form.email} onChange={v => set("email", v)} error={errors.email} />
+
+          <GlassInput type={showPwd ? "text" : "password"} label="Password" placeholder="Min 8 characters"
+            icon={<Lock size={15} />} value={form.password} onChange={v => set("password", v)} error={errors.password}
+            rightElement={<button type="button" onClick={() => setShowPwd(!showPwd)} style={{ color: "#c09060" }}>{showPwd ? <EyeOff size={15} /> : <Eye size={15} />}</button>} />
+          <GlassInput type="password" label="Confirm Password" placeholder="Re-enter password"
+            icon={<Lock size={15} />} value={form.confirmPassword} onChange={v => set("confirmPassword", v)} error={errors.confirmPassword} />
+
+          <GlassInput label="Phone Number" placeholder="0912345678" icon={<Phone size={15} />}
+            value={form.phone} onChange={v => set("phone", v)} error={errors.phone} />
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "#a07850", display: "block", marginBottom: 8, letterSpacing: "0.06em" }}>
+              USER TYPE
+            </label>
+            <Select
               value={form.userTypeId}
-              onChange={e => set("userTypeId", e.target.value)}
-              className="w-full py-3.5 rounded-2xl outline-none transition-all duration-200 appearance-none"
-              style={{
-                background: "var(--glass-bg)",
-                border: errors.userTypeId ? "1.5px solid rgba(229,62,46,0.5)" : "1.5px solid rgba(244,121,32,0.15)",
-                color: "var(--text-primary)",
-                fontSize: 14,
-                paddingLeft: 44,
-                paddingRight: 16,
-                boxShadow: "0 2px 4px rgba(180,100,20,0.04)",
+              onValueChange={val => {
+                set("userTypeId", val);
+                if (val === REGISTER_USER_TYPES[0].value || val === "FPT_STUDENT") {
+                  set("universityName", "FPT University");
+                }
               }}
             >
-              {REGISTER_USER_TYPES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger
+                className="w-full py-3.5 h-[48px] rounded-2xl outline-none transition-all duration-200"
+                style={{
+                  background: "var(--glass-bg)",
+                  border: errors.userTypeId ? "1.5px solid rgba(229,62,46,0.5)" : "1.5px solid rgba(244,121,32,0.15)",
+                  color: "var(--text-primary)",
+                  fontSize: 14,
+                  paddingLeft: 14,
+                  paddingRight: 14,
+                  boxShadow: "0 2px 4px rgba(180,100,20,0.04)",
+                }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <User size={15} style={{ color: errors.userTypeId ? "#e53e2e" : "#c09060" }} />
+                  <SelectValue placeholder="Select User Type" />
+                </div>
+              </SelectTrigger>
+              <SelectContent
+                style={{
+                  background: "var(--glass-bg, #1e1208)",
+                  backdropFilter: "blur(24px)",
+                  border: "1.5px solid rgba(244,121,32,0.2)",
+                  color: "var(--text-primary)",
+                  borderRadius: "1rem",
+                }}
+              >
+                {REGISTER_USER_TYPES.map(option => (
+                  <SelectItem key={option.value} value={option.value} className="cursor-pointer py-2.5 hover:bg-orange-500/10 focus:bg-orange-500/15">
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.userTypeId && (
+              <div className="flex items-center gap-1 mt-1" style={{ fontSize: 11, color: "#e53e2e" }}>
+                <AlertCircle size={11} /> {errors.userTypeId}
+              </div>
+            )}
           </div>
-          {errors.userTypeId && (
-            <div className="flex items-center gap-1 mt-1" style={{ fontSize: 11, color: "#e53e2e" }}>
-              <AlertCircle size={11} /> {errors.userTypeId}
-            </div>
-          )}
+
+          <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
+            value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
+          <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
+            disabled={form.userTypeId === REGISTER_USER_TYPES[0].value || form.userTypeId === "FPT_STUDENT"}
+            value={(form.userTypeId === REGISTER_USER_TYPES[0].value || form.userTypeId === "FPT_STUDENT") ? "FPT University" : form.universityName}
+            onChange={v => set("universityName", v)} error={errors.universityName} />
         </div>
-        <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
-          value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
-        <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
-          value={form.universityName} onChange={v => set("universityName", v)} error={errors.universityName} />
 
         <motion.button onClick={handleRegister} disabled={loading}
           whileHover={{ scale: loading ? 1 : 1.02, y: loading ? 0 : -1 }} whileTap={{ scale: 0.97 }}
@@ -684,7 +712,7 @@ export function AuthPages({
   if (mode === "register") {
     return (
       <div className="min-h-screen flex items-center justify-center p-8" style={{ background: "var(--gradient-bg)", backgroundAttachment: "fixed" }}>
-        <div className="w-full" style={{ maxWidth: 480 }}>
+        <div className="w-full" style={{ maxWidth: 720 }}>
           <RegisterCard onSwitchToLogin={onSwitchToLogin} />
         </div>
       </div>

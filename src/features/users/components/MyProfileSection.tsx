@@ -193,7 +193,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
         </div>
 
         <div>
-          <label style={labelStyle}>Email (cannot be changed)</label>
+          <label style={labelStyle}>Email</label>
           <input value={profile?.email ?? ""} disabled className="w-full px-3 py-2 rounded-xl outline-none" style={disabledStyle} />
         </div>
 
@@ -214,11 +214,11 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
             <label style={labelStyle}>Student Code (FPT)</label>
             <input
               value={fptStudentCode}
-              onChange={e => setFptStudentCode(e.target.value)}
+              disabled
               placeholder="e.g. SE123456"
               maxLength={20}
               className="w-full px-3 py-2 rounded-xl outline-none"
-              style={inputStyle}
+              style={disabledStyle}
             />
             {fieldErrors.fptStudentCode && <div style={errorStyle}>{fieldErrors.fptStudentCode}</div>}
           </div>
@@ -228,10 +228,10 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
             <label style={labelStyle}>Student Code (External)</label>
             <input
               value={externalStudentCode}
-              onChange={e => setExternalStudentCode(e.target.value)}
+              disabled
               maxLength={50}
               className="w-full px-3 py-2 rounded-xl outline-none"
-              style={inputStyle}
+              style={disabledStyle}
             />
             {fieldErrors.externalStudentCode && <div style={errorStyle}>{fieldErrors.externalStudentCode}</div>}
           </div>
