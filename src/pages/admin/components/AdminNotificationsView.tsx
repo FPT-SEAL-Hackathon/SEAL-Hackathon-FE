@@ -49,10 +49,10 @@ export function AdminNotificationsView({ context }: AdminViewProps) {
     <SelectValue placeholder="Select..." />
   </SelectTrigger>
   <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Teams</SelectItem>
-                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Judges</SelectItem>
-                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Mentors</SelectItem>
-                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Participants</SelectItem>
+    <SelectItem value="all_teams" style={{ color: COLORS.textPrimary }}>All Teams</SelectItem>
+    <SelectItem value="all_judges" style={{ color: COLORS.textPrimary }}>All Judges</SelectItem>
+    <SelectItem value="all_mentors" style={{ color: COLORS.textPrimary }}>All Mentors</SelectItem>
+    <SelectItem value="all_participants" style={{ color: COLORS.textPrimary }}>All Participants</SelectItem>
   </SelectContent>
 </Select>
             </div>

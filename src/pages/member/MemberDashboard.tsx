@@ -14,7 +14,7 @@ import {
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader
+  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader, X
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -801,16 +801,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     }
   }, [submissionTeams.length, user?.userId]);
 
-  // Khi vĂ o trang certificates, init event tá»« storedTeam hoáº·c apiEvents
   useEffect(() => {
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
     // Náº¿u chÆ°a chá»n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
-    setCertificateSelectedEventId(prev => {
-      if (prev) return prev;
-      return storedTeam?.eventId ?? "";
-    });
     setCertificateCategoryId("all");
   }, [currentPage, user?.userId]);
 
@@ -1882,11 +1877,89 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         onNavigate={onNavigate}
         onTeamChange={handleTeamPanelChange}
       />
-      {activeTeamContext?.teamId && renderLeaderboard()}
     </div>
   );
 
   const renderEvents = () => {
+    if (selectedEventDetailId) {
+      const targetEvent = apiEvents.find(ev => ev.eventId === selectedEventDetailId);
+      const userTeamForEvent = submissionTeams.find(t => t.eventId === selectedEventDetailId)
+        || (activeTeamContext?.eventId === selectedEventDetailId ? activeTeamContext : null);
+      const eventRounds = leaderboardRounds || [];
+
+      return (
+        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setSelectedEventDetailId(null)}>
+              Back to Events
+            </Button>
+            <StatusBadge status={targetEvent?.eventStatus ?? (targetEvent as any)?.status ?? "ACTIVE"} />
+          </div>
+
+          <div className="rounded-2xl p-6 shadow-sm space-y-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            <div className="flex justify-between items-start border-b pb-4" style={{ borderColor: COLORS.border }}>
+              <div>
+                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.textPrimary }}>
+                  {targetEvent?.eventName ?? (targetEvent as any)?.name} - Event Dashboard
+                </h1>
+                <p style={{ fontSize: 14, color: COLORS.textSecondary }}>
+                  {targetEvent?.description || "Comprehensive event dashboard for active participants."}
+                </p>
+              </div>
+            </div>
+
+            {/* Event Team Overview */}
+            {userTeamForEvent && (
+              <Card className="p-5 bg-primary/5 border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
+                    Manage Team
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* Rounds & Timeline Section */}
+            <div className="space-y-4">
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                <Clock size={20} style={{ color: COLORS.primary }} /> Event Rounds & Deadlines
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {eventRounds.length > 0 ? (
+                  eventRounds.map((r: any) => (
+                    <Card key={r.roundId} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
+                        <StatusBadge status={r.roundStatusName ?? r.status ?? "OPEN"} />
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1">
+                        <div><strong style={{ color: COLORS.textPrimary }}>Start:</strong> {r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</div>
+                        <div><strong style={{ color: COLORS.textPrimary }}>Deadline:</strong> {r.endDate ? new Date(r.endDate).toLocaleString() : "TBD"}</div>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
+                    No round schedules published yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Leaderboard Section inside Event Dashboard */}
+            <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+              {renderLeaderboard()}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (viewingEventDetail) {
       const ev = viewingEventDetail;
       const participation = participations[ev.eventId];
@@ -1979,7 +2052,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   {isActiveParticipant ? (
                     <>
                       <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined</Button>
-                      <Button variant="primary" size="md" icon={<ExternalLink size={16} />} onClick={() => setSelectedEventDetailId(ev.eventId)}>Enter Event Dashboard</Button>
+                      <Button variant="primary" size="md" icon={<ExternalLink size={16} />} onClick={() => { setSelectedEventDetailId(ev.eventId); setLeaderboardEventId(ev.eventId); setLeaderboardRoundId("event"); }}>Enter Event Dashboard</Button>
                     </>
                   ) : isPendingParticipant ? (
                     <Button variant="outline" size="md" disabled icon={<Clock size={16} />}>Pending Approval</Button>
@@ -2165,7 +2238,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
   const renderLeaderboard = () => {
     const leaderboardEvents = apiEvents.filter(ev => submissionTeams.some(t => t.eventId === ev.eventId));
-    const currentEventId = leaderboardEventId || activeTeamContext?.eventId || "";
+    const currentEventId = selectedEventDetailId || leaderboardEventId || activeTeamContext?.eventId || "";
 
     return (
       <>
@@ -2174,33 +2247,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           subtitle={leaderboardRoundId === "event" ? "Event leaderboard rankings" : `Round Rankings`} 
           action={
             <div className="flex items-center gap-2">
-              {leaderboardEvents.length > 0 && (
-                <Select
-                  value={currentEventId || "none"}
-                  onValueChange={(value) => { setLeaderboardEventId(value === "none" ? "" : value); setLeaderboardRoundId("event"); }}
-                >
-                  <SelectTrigger
-                    className="px-3 py-1.5 rounded-md outline-none"
-                    style={{
-                      background: COLORS.bg,
-                      border: `1px solid ${COLORS.border}`,
-                      color: COLORS.textPrimary,
-                      fontSize: 13,
-                      width: "180px",
-                    }}
-                  >
-                    <SelectValue placeholder="Select Event" />
-                  </SelectTrigger>
-                  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select Event</SelectItem>
-                    {leaderboardEvents.map(ev => (
-                      <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>
-                        {ev.eventName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
               {leaderboardRounds.length > 0 && (
                 <Select
                   value={leaderboardRoundId}
@@ -2361,11 +2407,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                       {ev.eventName}
                     </SelectItem>
                   ))}
-                  {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
-                    <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
-                      {ev.eventName} (not joined)
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </label>
@@ -2436,82 +2477,86 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
-          <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
-          <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
-        </div>
+        {certificateSelectedEventId && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
+              <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
+              <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
+            </div>
 
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: COLORS.bg }}>
-                  {["Award", "Event", "Category", "Published", "Actions"].map(h => (
-                    <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {certificateLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                      Loading certificates...
-                    </td>
-                  </tr>
-                ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
-                  const actionLoading = certificateActionLoading[award.id];
-                  return (
-                    <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td className="px-4 py-3">
-                        <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
-                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
-                      </td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                        {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            icon={<Eye size={13} />}
-                            disabled={!!actionLoading}
-                            onClick={() => handleCertificateFile(award, "view")}
-                          >
-                            {actionLoading === "view" ? "Opening..." : "View"}
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            icon={<Download size={13} />}
-                            disabled={!!actionLoading}
-                            onClick={() => handleCertificateFile(award, "download")}
-                          >
-                            {actionLoading === "download" ? "Downloading..." : "Download"}
-                          </Button>
-                        </div>
-                      </td>
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: COLORS.bg }}>
+                      {["Award", "Event", "Category", "Published", "Actions"].map(h => (
+                        <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
+                      ))}
                     </tr>
-                  );
-                }) : (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center">
-                      <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                        No published certificates are available for this category.
-                      </div>
-                      <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                        Certificates will appear here after awards are published by the organizer.
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {certificateLoading ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                          Loading certificates...
+                        </td>
+                      </tr>
+                    ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
+                      const actionLoading = certificateActionLoading[award.id];
+                      return (
+                        <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                          <td className="px-4 py-3">
+                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
+                          </td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                            {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Eye size={13} />}
+                                disabled={!!actionLoading}
+                                onClick={() => handleCertificateFile(award, "view")}
+                              >
+                                {actionLoading === "view" ? "Opening..." : "View"}
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                icon={<Download size={13} />}
+                                disabled={!!actionLoading}
+                                onClick={() => handleCertificateFile(award, "download")}
+                              >
+                                {actionLoading === "download" ? "Downloading..." : "Download"}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center">
+                          <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
+                            No published certificates are available for this category.
+                          </div>
+                          <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                            Certificates will appear here after awards are published by the organizer.
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
       </>
     );
   };

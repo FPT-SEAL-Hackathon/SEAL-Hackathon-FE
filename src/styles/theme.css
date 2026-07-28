@@ -323,3 +323,25 @@
   background: rgba(38, 24, 8, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
+
+/* ─── Cyber Dot-Grid & Card Glow (Option 1, 2, 3) ─── */
+.bg-dot-pattern {
+  background-image: radial-gradient(rgba(244, 121, 32, 0.15) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+[data-theme="dark"] .bg-dot-pattern {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.ui-card-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ui-card-glow:hover {
+  border-color: rgba(244, 121, 32, 0.35) !important;
+  box-shadow: 0 12px 32px -8px rgba(244, 121, 32, 0.15), 0 0 16px 0 rgba(244, 121, 32, 0.08) !important;
+  transform: translateY(-2px);
+}
+

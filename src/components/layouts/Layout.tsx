@@ -162,7 +162,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
       if (stream) {
         stream.close();
       }
-      
+
       stream = notificationService.createStream();
       if (!stream) return;
 
@@ -184,7 +184,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
       stream.addEventListener("error", () => {
         if (stream?.readyState === EventSource.CLOSED) {
           // Trigger a dummy API call to refresh the token if it expired, then reconnect
-          notificationService.getUnreadCount()
+          notificationService.getMyNotifications(0, 1)
             .then(() => {
               if (cancelled) return;
               clearTimeout(retryTimeout);
@@ -209,14 +209,14 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notificationService.markAllAsRead().catch(() => {});
+    notificationService.markAllAsRead().catch(() => { });
     // Notify parent dashboard pages to re-sync their own notification state
     onMarkAllRead?.();
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    notificationService.markAsRead(id).catch(() => {});
+    notificationService.markAsRead(id).catch(() => { });
   };
 
   // ── User avatar ───────────────────────────────────────────────────────────
@@ -244,9 +244,30 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen overflow-hidden relative"
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
     >
+      {/* Option 2: Cyber Dot-Grid Pattern Layer */}
+      <div className="fixed inset-0 bg-dot-pattern pointer-events-none z-0 opacity-40" />
+
+      {/* Option 1: Ambient Glow Orbs */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
+        {/* Top-Right Glow Orb (Orange) */}
+        <div 
+          className="absolute -top-[200px] -right-[200px] w-[600px] h-[600px] rounded-full blur-[140px] opacity-[0.14] dark:opacity-[0.22] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #F47920 0%, rgba(244,121,32,0) 70%)" }}
+        />
+        {/* Bottom-Left Glow Orb (AI Violet) */}
+        <div 
+          className="absolute -bottom-[250px] -left-[150px] w-[650px] h-[650px] rounded-full blur-[150px] opacity-[0.12] dark:opacity-[0.18] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #8B5CF6 0%, rgba(139,92,246,0) 70%)" }}
+        />
+        {/* Center-Right Glow Orb (FPT Green / Emerald) */}
+        <div 
+          className="absolute top-[40%] right-[15%] w-[450px] h-[450px] rounded-full blur-[130px] opacity-[0.08] dark:opacity-[0.14] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #009444 0%, rgba(0,148,68,0) 70%)" }}
+        />
+      </div>
       {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 
