@@ -29,9 +29,9 @@ const glassSurface: React.CSSProperties = {
 };
 
 // Status Badge
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, opaque = false }: { status: string; opaque?: boolean }) {
   if (!status) return null;
-  const normalizedStatus = status.toLowerCase();
+  const normalizedStatus = status.trim().toLowerCase().replace(/[\s-]+/g, "_");
   
   const configs: Record<string, { bg: string; color: string; label: string; border: string }> = {
     forming:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Forming", border: "rgba(244,121,32,0.22)" },
@@ -51,6 +51,8 @@ export function StatusBadge({ status }: { status: string }) {
     resolved:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Resolved",     border: "rgba(0,148,68,0.22)" },
     completed:     { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Completed",    border: "rgba(0,148,68,0.22)" },
     draft:         { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Draft",        border: "rgba(100,70,30,0.14)" },
+    scored:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Scored",       border: "rgba(0,148,68,0.22)" },
+    under_review:  { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Under Review", border: "rgba(245,158,11,0.22)" },
     disqualified:  { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Disqualified", border: "rgba(229,62,46,0.2)" },
     withdrawn:     { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Withdrawn",    border: "rgba(100,70,30,0.14)" },
     finalist:      { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Finalist",     border: "rgba(245,158,11,0.22)" },
@@ -82,12 +84,12 @@ export function StatusBadge({ status }: { status: string }) {
   const cfg = configs[normalizedStatus] || { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: formatLabel(status), border: "rgba(100,70,30,0.14)" };
   return (
     <span
-      className="inline-flex items-center px-2.5 py-0.5 rounded-full"
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${opaque ? "shadow-md backdrop-blur-md" : ""}`}
       style={{
-        background: cfg.bg,
+        background: opaque ? "var(--sidebar-surface, rgba(255, 255, 255, 0.95))" : cfg.bg,
         color: cfg.color,
         fontSize: 11,
-        fontWeight: 600,
+        fontWeight: 700,
         letterSpacing: "0.02em",
         border: `1px solid ${cfg.border}`,
       }}
@@ -159,7 +161,7 @@ type CardProps = React.HTMLAttributes<HTMLDivElement> & {
 
 export function Card({ children, className = "", style = {}, ...rest }: CardProps) {
   return (
-    <div {...rest} className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
+    <div {...rest} className={`rounded-2xl overflow-hidden ui-card-glow ${className}`} style={{ ...glassSurface, ...style }}>
       {children}
     </div>
   );

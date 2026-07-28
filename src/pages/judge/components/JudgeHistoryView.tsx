@@ -1,10 +1,11 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Card, SectionHeader, COLORS, StatusBadge, Button } from "@/components/shared/UIComponents";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { useAuth } from "@/features/auth/store/authStore";
-import { Loader2, Search, Edit3, ArrowUpDown } from "lucide-react";
+import { CheckCircle, Clock, ChevronDown, Check, X, Search, Filter, Loader2, Edit3, ArrowUpDown, Trash2 } from "lucide-react";
 
 export function JudgeHistoryView({
   apiRounds,
@@ -127,6 +128,23 @@ export function JudgeHistoryView({
   useEffect(() => {
     fetchScores();
   }, [user?.userId]);
+
+  const handleDelete = async (submissionId: string) => {
+    const reason = window.prompt("Please provide a reason for deleting your scores:");
+    if (reason === null) return; // User cancelled
+    
+    try {
+      setLoading(true);
+      await judgingService.deleteScores(submissionId, reason);
+      // Reload scores
+      fetchScores();
+    } catch (error) {
+      console.error("Failed to delete scores", error);
+      alert("Failed to delete scores. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Aggregate scores by submission
   const historyData = useMemo(() => {
@@ -300,37 +318,36 @@ export function JudgeHistoryView({
 
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Category:</span>
-            <select 
-              value={selectedCategoryId} 
-              onChange={(e) => setSelectedCategoryId(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
-              disabled={!selectedEventId}
-            >
-              <option value="">All Categories</option>
-              {categories.map(c => <option key={c.categoryId} value={c.categoryId}>{c.categoryName}</option>)}
-            </select>
+            <Select value={selectedCategoryId || "none"} onValueChange={(value) => setSelectedCategoryId((value === "none" ? "" : value))} disabled={!selectedEventId}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Categories</SelectItem>
+              {categories.map(c => <SelectItem key={c.categoryId} value={c.categoryId} style={{ color: COLORS.textPrimary }}>{c.categoryName}</SelectItem>)}
+  </SelectContent>
+</Select>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Round:</span>
-            <select 
-              value={localSelectedRoundId || ""} 
-              onChange={(e) => {
-                setLocalSelectedRoundId(e.target.value);
+            <Select value={localSelectedRoundId || "" || "none"} onValueChange={(value) => {
+                setLocalSelectedRoundId((value === "none" ? "" : value));
                 setSelectedTeamId(""); // reset team
-              }}
-              className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
-            >
-              {filteredRounds && filteredRounds.length > 0 ? (
+              }} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {filteredRounds && filteredRounds.length > 0 ? (
                 filteredRounds.map(r => (
-                  <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
+                  <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
                 ))
               ) : (
-                <option value="">No rounds found</option>
+                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No rounds found</SelectItem>
               )}
-            </select>
+  </SelectContent>
+</Select>
           </div>
 
           <Button 
@@ -365,17 +382,17 @@ export function JudgeHistoryView({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Team Filter:</span>
-            <select 
-              value={selectedTeamId} 
-              onChange={(e) => setSelectedTeamId(e.target.value)}
-              className="px-3 py-2 border rounded-xl outline-none bg-white hover:bg-gray-50 transition-colors cursor-pointer text-sm w-48 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
-            >
-              <option value="">All Scored Teams</option>
+            <Select value={selectedTeamId || "none"} onValueChange={(value) => setSelectedTeamId((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Scored Teams</SelectItem>
               {uniqueTeams.map(([tId, tName]) => (
-                <option key={tId} value={tId}>{tName}</option>
+                <SelectItem key={tId} value={tId} style={{ color: COLORS.textPrimary }}>{tName}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
           </div>
         </div>
 
@@ -438,32 +455,42 @@ export function JudgeHistoryView({
                       </td>
                       <td className="px-4 py-4 text-xs text-gray-500">{row.date}</td>
                       <td className="px-4 py-4 text-center">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          icon={<Edit3 size={14} />} 
-                          onClick={() => {
-                            if (onSelectSubmission && onNavigate) {
-                              onSelectSubmission({
-                                id: row.id,
-                                team: row.teamId,
-                                title: row.title,
-                                track: "—",
-                                status: "completed",
-                                score: row.total,
-                                round: row.roundName,
-                                github: row.originalSub.repositoryUrl ?? "",
-                                demo: row.originalSub.demoUrl ?? "",
-                                slide: row.originalSub.slideUrl ?? "",
-                                report: row.originalSub.reportUrl ?? "",
-                                raw: row.originalSub
-                              });
-                              onNavigate("scoring");
-                            }
-                          }}
-                        >
-                          Edit
-                        </Button>
+                        <div className="flex items-center justify-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            icon={<Edit3 size={14} />} 
+                            onClick={() => {
+                              if (onSelectSubmission && onNavigate) {
+                                onSelectSubmission({
+                                  id: row.id,
+                                  team: row.teamId,
+                                  title: row.title,
+                                  track: "—",
+                                  status: "completed",
+                                  score: row.total,
+                                  round: row.roundName,
+                                  github: row.originalSub.repositoryUrl ?? "",
+                                  demo: row.originalSub.demoUrl ?? "",
+                                  slide: row.originalSub.slideUrl ?? "",
+                                  report: row.originalSub.reportUrl ?? "",
+                                  raw: row.originalSub
+                                });
+                                onNavigate("scoring");
+                              }
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            icon={<Trash2 size={14} />} 
+                            style={{ borderColor: COLORS.error, color: COLORS.error }}
+                            onClick={() => handleDelete(row.id)}
+                            title="Delete Scores"
+                          />
+                        </div>
                       </td>
                     </tr>
                   );

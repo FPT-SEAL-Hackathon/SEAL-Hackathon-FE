@@ -9,7 +9,7 @@ import {
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
   UserCheck, FolderOpen, UserPlus,
-  Target, TrendingUp, MessageSquare, User, Wrench
+  Target, TrendingUp, MessageSquare, User, Wrench, AlertCircle
 } from "lucide-react";
 import { COLORS } from "@/components/shared/UIComponents";
 
@@ -20,6 +20,7 @@ const roleColors: Record<string, string> = {
   ROLE_MENTOR: COLORS.success,
   ROLE_EXPERT: COLORS.success,
   ROLE_ORGANIZER: COLORS.error,
+  ROLE_ADMIN: COLORS.textPrimary,
 };
 
 export { COLORS, roleColors };
@@ -100,7 +101,9 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   });
 
   const accentColor = roleColors[role] || COLORS.primary;
-  const lockRouteScroll = role === "ROLE_ORGANIZER" && (currentPage === "users" || currentPage === "event-participants");
+  // User Management (nay thuoc Admin) va Event Participants co bang dai tu cuon ben trong.
+  const lockRouteScroll = (role === "ROLE_ORGANIZER" || role === "ROLE_ADMIN")
+    && (currentPage === "users" || currentPage === "event-participants");
 
   // Hover-delay: open sidebar only after cursor lingers 200ms to avoid accidental triggers
   const sidebarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -125,7 +128,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     GitBranch, Clock, Award, Zap, BookOpen,
     LogOut, Search, ChevronDown,
     UserCheck, FolderOpen, UserPlus,
-    Target, TrendingUp, MessageSquare, User, Wrench,
+    Target, TrendingUp, MessageSquare, User, Wrench, AlertCircle
   };
 
   // ── Notifications ─────────────────────────────────────────────────────────
@@ -134,53 +137,86 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   useEffect(() => {
     let cancelled = false;
-    notificationService.getMyNotifications(0, 10)
-      .then(page => {
-        if (cancelled) return;
-        setNotifications(page.content.map(item => ({
-          id: item.notificationId,
-          title: item.title,
-          body: item.body,
-          time: formatNotificationTime(item.createdAt),
-          read: item.read,
-        })));
-      })
-      .catch(() => {
-        if (!cancelled) setNotifications([]);
+    let stream: EventSource | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout>;
+
+    const loadNotifications = () => {
+      notificationService.getMyNotifications(0, 10)
+        .then(page => {
+          if (cancelled) return;
+          setNotifications(page.content.map(item => ({
+            id: item.notificationId,
+            title: item.title,
+            body: item.body,
+            time: formatNotificationTime(item.createdAt),
+            read: item.read,
+          })));
+        })
+        .catch(() => {
+          if (!cancelled) setNotifications([]);
+        });
+    };
+
+    const connectStream = () => {
+      if (cancelled) return;
+      if (stream) {
+        stream.close();
+      }
+
+      stream = notificationService.createStream();
+      if (!stream) return;
+
+      stream.addEventListener("message", event => {
+        try {
+          const item = JSON.parse(event.data);
+          setNotifications(prev => [{
+            id: item.notificationId ?? item.id,
+            title: item.title ?? "Notification",
+            body: item.body ?? "",
+            time: formatNotificationTime(item.createdAt ?? item.sentAt),
+            read: Boolean(item.read ?? item.isRead),
+          }, ...prev].slice(0, 10));
+        } catch {
+          // Ignore malformed SSE payloads.
+        }
       });
 
-    const stream = notificationService.createStream();
-    stream?.addEventListener("message", event => {
-      try {
-        const item = JSON.parse(event.data);
-        setNotifications(prev => [{
-          id: item.notificationId ?? item.id,
-          title: item.title ?? "Notification",
-          body: item.body ?? "",
-          time: formatNotificationTime(item.createdAt ?? item.sentAt),
-          read: Boolean(item.read ?? item.isRead),
-        }, ...prev].slice(0, 10));
-      } catch {
-        // Ignore malformed SSE payloads.
-      }
-    });
+      stream.addEventListener("error", () => {
+        if (stream?.readyState === EventSource.CLOSED) {
+          // Trigger a dummy API call to refresh the token if it expired, then reconnect
+          notificationService.getMyNotifications(0, 1)
+            .then(() => {
+              if (cancelled) return;
+              clearTimeout(retryTimeout);
+              retryTimeout = setTimeout(connectStream, 2000);
+            })
+            .catch(() => {
+              // If completely unauthenticated, stop retrying aggressively
+            });
+        }
+      });
+    };
+
+    loadNotifications();
+    connectStream();
 
     return () => {
       cancelled = true;
+      clearTimeout(retryTimeout);
       stream?.close();
     };
   }, []);
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notificationService.markAllAsRead().catch(() => {});
+    notificationService.markAllAsRead().catch(() => { });
     // Notify parent dashboard pages to re-sync their own notification state
     onMarkAllRead?.();
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    notificationService.markAsRead(id).catch(() => {});
+    notificationService.markAsRead(id).catch(() => { });
   };
 
   // ── User avatar ───────────────────────────────────────────────────────────
@@ -194,6 +230,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   // Maps role to the profile page key used in navigation
   const roleProfileKey: Record<string, string> = {
     ROLE_ORGANIZER: "profile",
+    ROLE_ADMIN: "profile",
     ROLE_MEMBER: "profile",
     ROLE_LEADER: "profile",
     ROLE_JUDGE: "profile",
@@ -207,9 +244,30 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen overflow-hidden relative"
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
     >
+      {/* Option 2: Cyber Dot-Grid Pattern Layer */}
+      <div className="fixed inset-0 bg-dot-pattern pointer-events-none z-0 opacity-40" />
+
+      {/* Option 1: Ambient Glow Orbs */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
+        {/* Top-Right Glow Orb (Orange) */}
+        <div 
+          className="absolute -top-[200px] -right-[200px] w-[600px] h-[600px] rounded-full blur-[140px] opacity-[0.14] dark:opacity-[0.22] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #F47920 0%, rgba(244,121,32,0) 70%)" }}
+        />
+        {/* Bottom-Left Glow Orb (AI Violet) */}
+        <div 
+          className="absolute -bottom-[250px] -left-[150px] w-[650px] h-[650px] rounded-full blur-[150px] opacity-[0.12] dark:opacity-[0.18] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #8B5CF6 0%, rgba(139,92,246,0) 70%)" }}
+        />
+        {/* Center-Right Glow Orb (FPT Green / Emerald) */}
+        <div 
+          className="absolute top-[40%] right-[15%] w-[450px] h-[450px] rounded-full blur-[130px] opacity-[0.08] dark:opacity-[0.14] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #009444 0%, rgba(0,148,68,0) 70%)" }}
+        />
+      </div>
       {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 

@@ -7,11 +7,13 @@ export interface Round {
     description: string;
     roundOrder: number;
     roundStatusId: string;
-    startDate: string;
-    endDate: string;
-    submissionDeadline: string;
-    judgingDeadline: string;
-    advancementTopN: number;
+    startDate: string | null;
+    endDate: string | null;
+    submissionDeadline: string | null;
+    judgingDeadline: string | null;
+    appealStartTime?: string | null;
+    appealEndTime?: string | null;
+    advancementTopN: number | null;
     isCalibrationRound: boolean;
 }
 
@@ -56,12 +58,14 @@ export interface RoundRequest {
     roundName: string;
     description?: string;
     roundOrder: number;
-    roundStatusId: string;
-    startDate?: string;
-    endDate?: string;
-    submissionDeadline?: string;
-    judgingDeadline?: string;
-    advancementTopN?: number;
+    roundStatusId?: string;
+    startDate?: string | null;
+    endDate?: string | null;
+    submissionDeadline?: string | null;
+    judgingDeadline?: string | null;
+    appealStartTime?: string | null;
+    appealEndTime?: string | null;
+    advancementTopN?: number | null;
     isCalibrationRound: boolean;
 }
 

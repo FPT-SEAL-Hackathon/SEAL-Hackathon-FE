@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
@@ -188,17 +189,17 @@ export function AdminDataExportView({ context }: AdminViewProps) {
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-              <select
-                value={selectedEventId ?? ""}
-                onChange={e => setSelectedEventId(e.target.value || null)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {apiEvents.length === 0 && <option value="">No events found</option>}
+              <Select value={(selectedEventId  ?? "") || "none"} onValueChange={value => setSelectedEventId((value === "none" ? "" : value) || null)} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {apiEvents.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No events found</SelectItem>}
                 {apiEvents.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
+                  <SelectItem key={event.id} value={event.id} style={{ color: COLORS.textPrimary }}>{event.name}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <Button
               variant="primary"

@@ -2,8 +2,12 @@ import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Eye, Loader, CheckSquare, X } from "lucide-react";
 import { Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
 import { api } from "@/lib/api/apiClient";
+import {
+  getSubmissionStatusLabel,
+  SUBMISSION_STATUS_IDS,
+} from "@/features/submissions/api/submissionService";
 
-export function AdminJudgingApprovalView({ context, localCategoryId, localRoundId }: any) {
+export function AdminJudgingApprovalView({ context, localCategoryId, localRoundId, isRoundApproved }: any) {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -78,7 +82,12 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
     try {
       await api.post(`/api/v1/admin/submissions/${submissionId}/approve`, { approve: !currentStatus });
       setSubmissions(prev => prev.map(s => 
-        s.submissionId === submissionId ? { ...s, isScoreApproved: !currentStatus } : s
+        s.submissionId === submissionId ? {
+          ...s,
+          isScoreApproved: !currentStatus,
+          submissionStatusId: !currentStatus ? SUBMISSION_STATUS_IDS.SCORED : SUBMISSION_STATUS_IDS.IN_PROGRESS,
+          submissionStatusName: !currentStatus ? "Scored" : "In Progress",
+        } : s
       ));
     } catch (e) {
       console.error(e);
@@ -127,6 +136,12 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
 
   return (
     <>
+      {isRoundApproved && (
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-2">
+          <CheckCircle size={18} />
+          <span className="font-medium text-sm">Round rankings have been finalized and approved. Judging scores are locked.</span>
+        </div>
+      )}
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-max">
@@ -147,7 +162,6 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
               {submissions.map((sub: any) => {
                 const subScores = batchScores[sub.submissionId] || {};
                 const scoresArray = Object.values(subScores);
-                const isDisqualified = sub.submissionStatusName?.toLowerCase() === 'disqualified';
                 const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
                 
                 return (
@@ -160,7 +174,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                   >
                     <td className="p-4 font-medium text-sm sticky left-0 shadow-[1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>{sub.teamName}</td>
                     <td className="p-4">
-                      <StatusBadge status={sub.submissionStatusName?.toLowerCase()} />
+                      <StatusBadge status={getSubmissionStatusLabel(sub)} />
                     </td>
                     
                     {judgesList.map((judge, idx) => {
@@ -230,7 +244,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                               size="sm" 
                               icon={<XCircle size={14}/>}
                               onClick={() => setRejectingId(sub.submissionId)}
-                              disabled={approvingId === sub.submissionId}
+                              disabled={approvingId === sub.submissionId || isRoundApproved}
                               style={{ color: COLORS.error, borderColor: COLORS.error }}
                               title="Reject and require re-score"
                             >
@@ -242,7 +256,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                             size="sm" 
                             icon={approvingId === sub.submissionId ? <Loader size={14} className="animate-spin"/> : (sub.isScoreApproved ? <XCircle size={14}/> : <CheckSquare size={14}/>)}
                             onClick={() => toggleApproval(sub.submissionId, sub.isScoreApproved)}
-                            disabled={approvingId === sub.submissionId}
+                            disabled={approvingId === sub.submissionId || isRoundApproved}
                             style={!sub.isScoreApproved && approvingId !== sub.submissionId ? { background: COLORS.success } : {}}
                           >
                             {sub.isScoreApproved ? "Un-Finalize" : "Finalize"}

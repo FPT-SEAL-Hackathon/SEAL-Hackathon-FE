@@ -9,9 +9,15 @@ import { useRoundContext } from "../../context/RoundContext";
 import { Round, RoundCriteria, RoundJudge } from "../../types/round";
 import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
 import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
+import { EventResponse } from "../../api/eventService";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 
+interface Props {
+  event: EventResponse;
+}
 
-export function RoundsTab() {
+export function RoundsTab({ event }: Props) {
 
   const [showAddRound, setShowAddRound] = useState<string | null>(null); // categoryId
   const { categories } = useCategoryContext();
@@ -98,8 +104,7 @@ export function RoundsTab() {
                 initial={{
                     roundName: "",
                     description: "",
-                    roundOrder:
-                        (roundsByCategory[cat.categoryId]?.length ?? 0) + 1,
+                    roundOrder: rounds.length === 0 ? 1 : Math.max(...rounds.map(r => r.roundOrder)) + 1,
                     roundStatusId: ROUND_STATUSES[0].statusId,
                     advancementTopN: undefined,
                     startDate: "",
@@ -109,13 +114,19 @@ export function RoundsTab() {
                     isCalibrationRound: false,
                 }}
                 onSave={async data => {
-                    await createRound(
-                        cat.categoryId,
-                        data
-                    );
-                    setShowAddRound(null);
+                    try {
+                        await createRound(cat.categoryId, data);
+                        toast.success("Round created successfully.");
+                        setShowAddRound(null);
+                    } catch (error) {
+                        toast.error(parseApiError(error).message || "Failed to create round");
+                    }
                 }}
                 onCancel={() => setShowAddRound(null)}
+                event={event}
+                categories={categories}
+                allRounds={Object.values(roundsByCategory).flat()}
+                categoryId={cat.categoryId}
               />
             )}
             
@@ -134,6 +145,7 @@ export function RoundsTab() {
                   <RoundCard
                     key={round.roundId}
                     round={round} 
+                    event={event}
                     onDeleteRound={setDeletingRound}
                     onRemoveCriterion={(round, criterion) => 
                       setRemovingRoundCriterion({
@@ -158,12 +170,13 @@ export function RoundsTab() {
             confirmVariant="danger"
             onCancel={() => setDeletingRound(null)}
             onConfirm={async () => {
-
-              await deleteRound(
-                deletingRound.categoryId,
-                deletingRound.roundId
-              );
-              setDeletingRound(null);
+              try {
+                await deleteRound(deletingRound.categoryId, deletingRound.roundId);
+                toast.success("Round deleted.");
+                setDeletingRound(null);
+              } catch (error) {
+                toast.error(parseApiError(error).message || "Failed to delete round");
+              }
             }}
           />
         )}
@@ -175,12 +188,16 @@ export function RoundsTab() {
               confirmVariant="danger"
               onCancel={() => setRemovingRoundCriterion(null)}
               onConfirm={async () => {
-                  await removeRoundCriterion(
-                      removingRoundCriterion.round.roundId,
-                      removingRoundCriterion.criterion.roundCriterionId
-                  );
-
-                  setRemovingRoundCriterion(null);
+                  try {
+                    await removeRoundCriterion(
+                        removingRoundCriterion.round.roundId,
+                        removingRoundCriterion.criterion.roundCriterionId
+                    );
+                    toast.success("Criterion removed.");
+                    setRemovingRoundCriterion(null);
+                  } catch (error) {
+                    toast.error(parseApiError(error).message || "Failed to remove criterion");
+                  }
               }}
           />
         )}
@@ -192,12 +209,16 @@ export function RoundsTab() {
               confirmVariant="danger"
               onCancel={() => setRemovingJudge(null)}
               onConfirm={async () => {
-                  await disableJudge(
-                      removingJudge.round.roundId,
-                      removingJudge.judge.roundJudgeId
-                  );
-
-                  setRemovingJudge(null);
+                  try {
+                    await disableJudge(
+                        removingJudge.round.roundId,
+                        removingJudge.judge.roundJudgeId
+                    );
+                    toast.success("Judge removed.");
+                    setRemovingJudge(null);
+                  } catch (error) {
+                    toast.error(parseApiError(error).message || "Failed to remove judge");
+                  }
               }}
           />
         )}

@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle, Loader, Search, Users } from "lucide-react";
@@ -471,9 +472,14 @@ function FilterSelect({ label, value, onChange, children, disabled }: { label: s
   return (
     <label className="block min-w-[150px]">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select disabled={disabled} value={value} onChange={event => onChange(event.target.value)} className="w-full px-3 py-2 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13, opacity: disabled ? 0.5 : 1 }}>
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} disabled={disabled}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
     </label>
   );
 }

@@ -51,7 +51,6 @@ export interface CreateEventRequest {
   description?: string;
   location: string;
   bannerImageUrl?: string;
-  eventStatusId: string;
   registrationStart: string;
   registrationEnd: string;
   eventStartDate: string;
@@ -62,7 +61,6 @@ export interface CreateEventRequest {
 
 export interface UpdateEventRequest extends Partial<CreateEventRequest> {
   eventName: string;
-  eventStatusId: string;
 }
 
 export interface UpdateEventStatusRequest {
@@ -188,12 +186,21 @@ function unwrapList<T>(response: T[] | BackendEnvelope<T[] | PageEnvelope<T>> | 
   throw new Error(("message" in response && response.message) || "Unexpected events response from server.");
 }
 
+function unwrapItem<T>(response: T | BackendEnvelope<T>): T {
+  if (response && typeof response === "object" && "data" in response && response.data) {
+    return response.data as T;
+  }
+  return response as T;
+}
+
 export const eventService = {
   getAll: async (auth = false) => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/events", auth))),
   getPublic: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[] | PageEnvelope<EventResponse>> | PageEnvelope<EventResponse>>("/api/v1/public/events", false))),
-  getById: async (id: string, auth = false) => normalizeEventResponse(await api.get<EventResponse>(`/api/v1/event/${id}`, auth)),
-  create: (data: CreateEventRequest) => api.post<EventResponse>("/api/v1/event", data),
-  update: (id: string, data: UpdateEventRequest) => api.put<EventResponse>(`/api/v1/event/${id}`, data),
-  updateStatus: (id: string, data: UpdateEventStatusRequest) => api.patch<EventResponse>(`/api/v1/event/status/${id}`, data),
+  getById: async (id: string, auth = false) => normalizeEventResponse(unwrapItem(await api.get<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/getById/${id}`, auth))),
+  create: async (data: CreateEventRequest) => normalizeEventResponse(unwrapItem(await api.post<EventResponse | BackendEnvelope<EventResponse>>("/api/v1/event", data))),
+  update: async (id: string, data: UpdateEventRequest) => normalizeEventResponse(unwrapItem(await api.put<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/${id}`, data))),
+  updateStatus: async (id: string, data: UpdateEventStatusRequest) => normalizeEventResponse(unwrapItem(await api.patch<EventResponse | BackendEnvelope<EventResponse>>(`/api/v1/event/status/${id}`, data))),
   delete: (id: string) => api.delete(`/api/v1/event/${id}`),
+  getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/event/organizer"))),
+  publishEvent: (id: string) => api.post<EventResponse>(`/api/v1/event/publish/${id}`, {}),
 };

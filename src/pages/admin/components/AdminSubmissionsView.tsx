@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import {
   AlertTriangle, BookOpen, CheckCircle, Eye, FileText, Filter,
@@ -6,7 +7,13 @@ import {
 import {
   Card, SectionHeader, COLORS, StatusBadge, Button, StatCard
 } from "@/components/shared/UIComponents";
-import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
+import {
+  getSubmissionStatusLabel,
+  isSubmissionStatus,
+  normalizeSubmissionStatusName,
+  submissionService,
+  type SubmissionHistoryResponse,
+} from "@/features/submissions/api/submissionService";
 
 interface AdminViewProps {
   context: any;
@@ -43,15 +50,9 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
 
-  const submitted = adminSubmissions.filter((submission: any) =>
-    (submission.submissionStatusName ?? "").toLowerCase().includes("submitted")
-  ).length;
-  const disqualified = adminSubmissions.filter((submission: any) =>
-    (submission.submissionStatusName ?? "").toLowerCase().includes("disqualified")
-  ).length;
-  const scored = adminSubmissions.filter((submission: any) =>
-    (submission.submissionStatusName ?? "").toLowerCase().includes("scored")
-  ).length;
+  const submitted = adminSubmissions.filter((submission: any) => isSubmissionStatus(submission, "SUBMITTED")).length;
+  const disqualified = adminSubmissions.filter((submission: any) => isSubmissionStatus(submission, "DISQUALIFIED")).length;
+  const scored = adminSubmissions.filter((submission: any) => isSubmissionStatus(submission, "SCORED")).length;
   const eventRounds = [...apiDashboardRounds, ...apiRounds].filter(
     (round, index, rounds) => rounds.findIndex(item => item.roundId === round.roundId) === index
   );
@@ -133,62 +134,60 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_auto] gap-4 items-end">
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-            <select
-              value={selectedEventId ?? ""}
-              onChange={e => setSelectedEventId(e.target.value || null)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              <option value="">{apiEvents.length === 0 ? "No events found" : "Select an event"}</option>
+            <Select value={(selectedEventId ?? "") || "none"} onValueChange={value => setSelectedEventId((value === "none" ? "" : value) || null)} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>{apiEvents.length === 0 ? "No events found" : "Select an event"}</SelectItem>
               {apiEvents.map((event: any) => (
-                <option key={event.id} value={event.id}>{event.name}</option>
+                <SelectItem key={event.id} value={event.id} style={{ color: COLORS.textPrimary }}>{event.name}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-            <select
-              value={selectedSubmissionCategoryId}
-              onChange={e => setSelectedSubmissionCategoryId(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={!selectedEventId || apiCategories.length === 0}
-            >
-              {apiCategories.length === 0 && <option value="">No categories found</option>}
+            <Select value={selectedSubmissionCategoryId || "none"} onValueChange={value => setSelectedSubmissionCategoryId((value === "none" ? "" : value))} disabled={!selectedEventId || apiCategories.length === 0}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {apiCategories.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No categories found</SelectItem>}
               {apiCategories.map((category: any) => (
-                <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                <SelectItem key={category.categoryId} value={category.categoryId} style={{ color: COLORS.textPrimary }}>{category.categoryName}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>ROUND</label>
-            <select
-              value={selectedSubmissionRoundId}
-              onChange={e => {
-                setSelectedSubmissionRoundId(e.target.value);
-                if (e.target.value) setSubmissionScope("round");
-              }}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              disabled={!selectedSubmissionCategoryId || apiRounds.length === 0}
-            >
-              {apiRounds.length === 0 && <option value="">No rounds loaded</option>}
+            <Select value={selectedSubmissionRoundId || "none"} onValueChange={value => {
+                setSelectedSubmissionRoundId((value === "none" ? "" : value));
+                if ((value === "none" ? "" : value)) setSubmissionScope("round");
+              }} disabled={!selectedSubmissionCategoryId || apiRounds.length === 0}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {apiRounds.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No rounds loaded</SelectItem>}
               {apiRounds.map((round: any) => (
-                <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
+                <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>{round.roundName}</SelectItem>
               ))}
-            </select>
+  </SelectContent>
+</Select>
           </div>
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>VIEW</label>
-            <select
-              value={submissionScope}
-              onChange={e => setSubmissionScope(e.target.value as "round" | "unreview")}
-              className="w-full px-3 py-2.5 rounded-xl outline-none"
-              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            >
-              <option value="round">All submissions in round</option>
-              <option value="unreview">Unreviewed submissions in round</option>
-            </select>
+            <Select value={submissionScope || "none"} onValueChange={value => setSubmissionScope((value === "none" ? "" : value) as "round" | "unreview")} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="round" style={{ color: COLORS.textPrimary }}>All submissions in round</SelectItem>
+              <SelectItem value="unreview" style={{ color: COLORS.textPrimary }}>Unreviewed submissions in round</SelectItem>
+  </SelectContent>
+</Select>
           </div>
           <Button
             variant="outline"
@@ -244,7 +243,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                 </tr>
               )}
               {adminSubmissions.map((submission: any) => {
-                const status = (submission.submissionStatusName || "draft").toLowerCase().replace(/\s+/g, "_");
+                const status = normalizeSubmissionStatusName(getSubmissionStatusLabel(submission));
                 const isCalibration = isCalibrationSubmission(submission);
                 return (
                   <tr key={submission.submissionId} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
@@ -297,7 +296,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                         size="sm"
                         icon={<AlertTriangle size={13} />}
                         onClick={() => setSubmissionDisqualifyTarget(submission)}
-                        disabled={status === "disqualified"}
+                        disabled={isSubmissionStatus(submission, "DISQUALIFIED")}
                       >
                         Disqualify
                       </Button>
@@ -340,7 +339,7 @@ export function AdminSubmissionsView({ context }: AdminViewProps) {
                         {history.notes || "Untitled submission"}
                       </div>
                     </div>
-                    <StatusBadge status={(history.submissionStatusName || "submitted").toLowerCase()} />
+                    <StatusBadge status={getSubmissionStatusLabel(history)} />
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3">
                     {[

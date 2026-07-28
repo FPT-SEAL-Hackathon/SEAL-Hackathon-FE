@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "@/app/store/languageStore";
+import { useAuth } from "@/features/auth/store/authStore";
+import { isAdmin } from "@/auth/rbac/roles";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { roundService, type CriterionTemplateResponse, type RoundResponse } from "@/features/judging/api/roundService";
@@ -9,7 +11,7 @@ import { awardService, type AwardResponse } from "@/features/awards/api/awardSer
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { researchService } from "@/features/research/api/researchService";
 import { settingsService } from "@/features/settings/api/settingsService";
-import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { submissionService, SUBMISSION_STATUS_IDS, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { userService, type UserManagementUser } from "@/features/users/api/userService";
 import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
@@ -19,7 +21,6 @@ import { AssignJudgeModal } from "@/features/judging/components/AssignJudgeModal
 import { AdminDashboardView } from "./components/AdminDashboardView";
 import { AdminEventsView } from "./components/AdminEventsView";
 import { AdminEventParticipantsView } from "./components/AdminEventParticipantsView";
-import { AdminTeamApprovalView } from "./components/AdminTeamApprovalView";
 import { getVisibleEventTeams } from "@/features/events/components/EventTeamsSection";
 import { AdminCategoriesView } from "./components/AdminCategoriesView";
 import { AdminRoundsView } from "./components/AdminRoundsView";
@@ -34,11 +35,13 @@ import { AdminReportsView } from "./components/AdminReportsView";
 import { AdminDataExportView } from "./components/AdminDataExportView";
 import { AdminNotificationsView } from "./components/AdminNotificationsView";
 import { AdminDirectNotificationView } from "./components/AdminDirectNotificationView";
+import { AdminAppealsView } from "./components/AdminAppealsView";
 import { AdminAuditView } from "./components/AdminAuditView";
 import { AdminProfileView } from "./components/AdminProfileView";
 import { AdminSettingsView } from "./components/AdminSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
+import { AdminSubmissionRepositoriesView } from "./components/AdminSubmissionRepositoriesView";
 import { COLORS } from "@/components/shared/UIComponents";
 import { EventDetailPage } from "@/features/events/pages/EventDetailPage";
 import { CriteriaTemplateProvider } from "@/features/criteriaTemplates/context/CriteriaTemplateContext";
@@ -139,9 +142,14 @@ const createEmptyManualAwardForm = () => ({
 
 export function AdminDashboard({ currentPage, onNavigate }: { currentPage: string; onNavigate: (p: string) => void }) {
   const { t } = useLanguage();
+  // Container nay dung chung cho Organizer va Admin. Quan ly nguoi dung va System
+  // Settings gio la ADMIN-only o backend -> Organizer goi se bi 403. Chi tai khi la Admin.
+  const { role } = useAuth();
+  const isAdminUser = isAdmin(role);
 
   // ── API state ────────────────────────────────────────────────────────────
   const [apiEvents, setApiEvents] = useState<typeof events>([]);
+  const [eventReloadKey, setEventReloadKey] = useState(0);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EventResponse | null>(null);
   const [apiCategories, setApiCategories] = useState<CategoryResponse[]>([]);
@@ -241,6 +249,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
 
   // Load system settings from API on mount
   useEffect(() => {
+    if (!isAdminUser) return; // Organizer khong co quyen doc System Settings
     settingsService.getSettings()
       .then(data => {
         setSystemSettings({
@@ -255,10 +264,10 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         });
       })
       .catch(() => { /* use default values on error */ });
-  }, []);
+  }, [isAdminUser]);
 
   useEffect(() => {
-    eventService.getAll()
+    eventService.getAllEventsForOrganizer()
       .then(async data => {
         setEventLoadError("");
         const mapped = await Promise.all(data.map(async e => {
@@ -267,17 +276,17 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
             .catch(() => 0);
 
           return {
-          ...e,
-          //Field to display on UI
-          id: e.eventId, 
-          name: e.eventName,
-          description: e.description ?? "—", 
-          status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
-          teams: visibleTeamCount,
-          visibleTeamCount,
-          rounds: 0, 
-          deadline: e.eventEndDate ?? "—", 
-          prize: "—",
+            ...e,
+            //Field to display on UI
+            id: e.eventId,
+            name: e.eventName,
+            description: e.description ?? "—",
+            status: typeof e.eventStatus === 'object' ? e.eventStatus?.eventStatusName : e.eventStatus,
+            teams: visibleTeamCount,
+            visibleTeamCount,
+            rounds: 0,
+            deadline: e.eventEndDate ?? "—",
+            prize: "—",
           };
         }));
         setApiEvents(mapped as any);
@@ -288,10 +297,11 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   }, []);
 
   useEffect(() => {
+    if (!isAdminUser) { setApiUsers([]); return; } // /api/v1/users la ADMIN-only
     userService.getUsers({ page: 0, size: 500 })
       .then(data => setApiUsers(data.content))
       .catch(() => setApiUsers([]));
-  }, []);
+  }, [isAdminUser]);
 
   useEffect(() => {
     if (!selectedEventId) {
@@ -326,7 +336,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         .then(roundGroups => setApiDashboardRounds(roundGroups.flat()));
       // Load rounds for first category
       if (data[0]) {
-        roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => {});
+        roundService.getByCategory(data[0].categoryId).then(setApiRounds).catch(() => { });
         setAwardPatternCategoryId(data[0].categoryId);
         setManualAwardForm(prev => ({ ...prev, categoryId: data[0].categoryId }));
         setSelectedSubmissionCategoryId(data[0].categoryId);
@@ -334,8 +344,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }).catch(error => {
       setCategoryLoadError(error instanceof Error ? error.message : "Failed to load categories.");
     });
-    teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => {});
-    awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+    teamService.reviewEligibility(selectedEventId).then(setApiTeamEligibility).catch(() => { });
+    awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => { });
   }, [selectedEventId]);
 
   useEffect(() => {
@@ -352,12 +362,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           prizeCurrency: pattern.prizeCurrency || "VND",
         })));
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [awardPatternCategoryId]);
 
   useEffect(() => {
     if (currentPage !== "criteria") return;
-    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => {});
+    roundService.getTemplates().then(setApiCriteriaTemplates).catch(() => { });
   }, [currentPage]);
 
   useEffect(() => {
@@ -430,7 +440,11 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       await submissionService.disqualify(submissionDisqualifyTarget.submissionId, submissionDisqualifyReason.trim());
       setAdminSubmissions(prev => prev.map(submission =>
         submission.submissionId === submissionDisqualifyTarget.submissionId
-          ? { ...submission, submissionStatusName: "Disqualified" }
+          ? {
+              ...submission,
+              submissionStatusId: SUBMISSION_STATUS_IDS.DISQUALIFIED,
+              submissionStatusName: "Disqualified",
+            }
           : submission
       ));
       setSubmissionActionMessage("Submission disqualified successfully.");
@@ -653,12 +667,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     }
     setRankingsPublished(true);
     setTimeout(() => {
-        setRankingsPublished(false);
-        if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
-            setBroadcastTitle("Leaderboard Published!");
-            setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
-            onNavigate("notifications");
-        }
+      setRankingsPublished(false);
+      if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
+        setBroadcastTitle("Leaderboard Published!");
+        setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
+        onNavigate("notifications");
+      }
     }, 1500);
   };
 
@@ -693,7 +707,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         return [...granted.filter((award: any) => !existingIds.has(award.id)), ...prev];
       });
       setAutoGrantMessage(`Granted ${granted.length} award(s) for top ${limit} ranking team(s).`);
-      if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+      if (selectedEventId) awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => { });
     } catch (error) {
       setAutoGrantError(error instanceof Error ? error.message : "Failed to grant awards for top ranking teams.");
     } finally {
@@ -783,7 +797,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
         description: "",
         prizeValue: "",
       }));
-      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => {});
+      awardService.getByEvent(selectedEventId).then(setApiAwards).catch(() => { });
     } catch (error) {
       setManualAwardError(error instanceof Error ? error.message : "Failed to grant manual award.");
     } finally {
@@ -972,40 +986,39 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const renderPage = () => {
     switch (currentPage) {
       case "dashboard": return <AdminDashboardView context={viewContext} />;
-      case "events": return <AdminEventsView context={viewContext} 
-          onViewEvent={(event) => {
-            setSelectedEvent(event);
-            viewContext.onNavigate("event-detail");
-          }}
+      case "events": return <AdminEventsView context={viewContext}
+        onViewEvent={(event) => {
+          setSelectedEvent(event);
+          viewContext.onNavigate("event-detail");
+        }}
       />;
-      case "event-detail": 
-          if (!selectedEvent) {
-            return (
-              <AdminEventsView 
-                  context={viewContext}
-                  onViewEvent={(event) => {
-                    setSelectedEvent(event);
-                  }}
-              />
-            );
-          }
+      case "event-detail":
+        if (!selectedEvent) {
           return (
-            <EventDetailPage 
-                event={selectedEvent}
-                onBack={() => {
-                  setSelectedEvent(null);
-                  viewContext.onNavigate("events");
-                }}
-                onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
+            <AdminEventsView
+              context={viewContext}
+              onViewEvent={(event) => {
+                setSelectedEvent(event);
+              }}
             />
           );
+        }
+        return (
+          <EventDetailPage
+            event={selectedEvent}
+            onBack={() => {
+              setSelectedEvent(null);
+              viewContext.onNavigate("events");
+            }}
+            onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
+          />
+        );
       case "event-participants": return <AdminEventParticipantsView />;
-      case "team-approval": return <AdminTeamApprovalView context={viewContext} />;
       case "categories": return <AdminCategoriesView context={viewContext} />;
       case "rounds": return <AdminRoundsView context={viewContext} />;
       case "criteria": return (
         <CriteriaTemplateProvider>
-          <AdminCriteriaView context={viewContext}/>
+          <AdminCriteriaView context={viewContext} />
         </CriteriaTemplateProvider>
       );
       case "users": return <AdminUsersView />;
@@ -1020,6 +1033,8 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "audit": return <AdminAuditView context={viewContext} />;
       case "awards": return <AdminAwardsView context={viewContext} />;
       case "award-patterns": return <AdminAwardPatternsView context={viewContext} />;
+      case "appeals": return <AdminAppealsView />;
+      case "submission-repositories": return <AdminSubmissionRepositoriesView />;
       case "settings": return <AdminSettingsView context={viewContext} />;
       case "profile": return <AdminProfileView context={viewContext} />;
       default: return <AdminDashboardView context={viewContext} />;
@@ -1041,11 +1056,38 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           event={eventModal.edit}
           onClose={() => setEventModal({ open: false })}
           onSaved={saved => {
-            setApiEvents(prev => eventModal.edit
-              ? prev.map((e: any) => e.eventId === saved.eventId ? { ...e, ...saved,
-                 name: saved.eventName, description: saved.description ?? "-", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, deadline: saved.eventEndDate } : e)
-              : [...prev, { ...saved, id: saved.eventId, name: saved.eventName, description: saved.description ?? "—", status: typeof saved.eventStatus === 'object' ? saved.eventStatus?.eventStatusName : saved.eventStatus, teams: 0, rounds: 0, deadline: saved.eventEndDate ?? "—", prize: "—" }]
+            // Determine the ID of the edited event
+            const editedEventId = saved.eventId || (eventModal.edit as any)?.eventId || (eventModal.edit as any)?.id;
+            const newStatus = saved.eventStatusName
+              || (typeof saved.eventStatus === 'object' && saved.eventStatus ? (saved.eventStatus as any).eventStatusName : null)
+              || "";
+
+            const updatedFields = {
+              ...saved,
+              id: editedEventId,
+              eventId: editedEventId,
+              name: saved.eventName,
+              description: saved.description ?? "—",
+              status: newStatus,
+              deadline: saved.eventEndDate ?? "—",
+            };
+
+            // Immediately update the apiEvents array for instant UI feedback
+            setApiEvents(prev =>
+              eventModal.edit
+                ? prev.map((e: any) =>
+                    (e.id === editedEventId || e.eventId === editedEventId)
+                      ? { ...e, ...updatedFields }
+                      : e
+                  )
+                : [...prev, { ...updatedFields, teams: 0, visibleTeamCount: 0, rounds: 0, prize: "—" }]
             );
+
+            // Also update selectedEvent if viewing this event's detail
+            if (selectedEvent && selectedEvent.eventId === editedEventId) {
+              setSelectedEvent({ ...selectedEvent, ...updatedFields } as any);
+            }
+
             setEventModal({ open: false });
           }}
         />

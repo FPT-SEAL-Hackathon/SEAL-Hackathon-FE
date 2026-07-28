@@ -1,9 +1,11 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
+import { isValidVietnamesePhone } from "@/features/users/utils/profileValidation";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
@@ -18,6 +20,7 @@ import {
 const ROLE_OPTIONS = [
   { label: "FPT Student", value: "FPT_STUDENT" },
   { label: "External Student", value: "EXTERNAL_STUDENT" },
+  { label: "Admin", value: "ADMIN" },
   { label: "Organizer", value: "ORGANIZER" },
   { label: "Internal Judge", value: "INTERNAL_JUDGE" },
   { label: "Guest Judge", value: "GUEST_JUDGE" },
@@ -26,7 +29,7 @@ const ROLE_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { label: "Pending Approval", value: "PENDING_APPROVAL" },
+  // "Pending Approval" đã bỏ: duyệt nay ở cấp TEAM (team status PENDING), không duyệt từng học sinh.
   { label: "Active", value: "ACTIVE" },
   { label: "Rejected", value: "REJECTED" },
   { label: "Suspended", value: "SUSPENDED" },
@@ -88,7 +91,8 @@ function isValidEmail(value: string) {
 }
 
 function isValidPhone(value: string) {
-  return !value || /^[+()\d\s.-]{8,20}$/.test(value);
+  // SĐT optional; nếu có thì phải là số di động VN (khớp BE ProfileValidation).
+  return !value || isValidVietnamesePhone(value);
 }
 
 function normalizeRoleValue(role?: string) {
@@ -467,19 +471,39 @@ export function AdminUsersView() {
     }
   };
 
-  // Suspend (reversible): BE chỉ đổi status sang Suspended — account vẫn nằm
-  // trong danh sách, kích hoạt lại bằng Edit → Status → Active.
+  // Deactivate (reversible): BE khóa đăng nhập (status Suspended) + thu hồi session,
+  // GIỮ ghế trong team và tự chuyển quyền leader nếu cần để team không bị đóng băng.
+  // Bật lại bằng Edit → Status → Active. Hiện tóm tắt tác động (team chuyển leader,
+  // cảnh báo judge/organizer) cho organizer nắm.
   const deleteUser = async (user: UserManagementUser) => {
     if (!window.confirm(
-      `Suspend ${user.fullName}?\n\n` +
-      "The account stays in this list and can be reactivated anytime " +
-      "via Edit → Status → Active.",
+      `Deactivate ${user.fullName}?\n\n` +
+      "The account is locked from logging in but stays on the team (seat kept). " +
+      "If this user is a team leader, leadership is transferred automatically so the " +
+      "team can keep competing. Reactivate anytime via Edit → Status → Active.",
     )) return;
     setMutating(true);
     try {
-      await userService.deleteUser(user.userId);
-      toast.success("User suspended. Reactivate via Edit → Status → Active.");
+      const result = await userService.deleteUser(user.userId);
+      toast.success("User deactivated. Reactivate via Edit → Status → Active.");
+      (result?.transferredTeams ?? []).forEach(t => toast.info(`Leader transferred: ${t}`));
+      (result?.warnings ?? []).forEach(w => toast.warning(w));
       await loadUsers();
+    } catch (err) {
+      toast.error(parseApiError(err).message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  // Quét account có hồ sơ chưa chuẩn (mã SV/SĐT sai định dạng) và gửi notification nhắc.
+  // KHÔNG khóa/chặn account nào — chỉ nhắc để họ tự cập nhật cho đồng bộ dữ liệu.
+  const notifyNonCompliant = async () => {
+    if (!window.confirm("Gửi thông báo nhắc cập nhật hồ sơ cho tất cả tài khoản có dữ liệu chưa chuẩn?")) return;
+    setMutating(true);
+    try {
+      const result = await userService.notifyNonCompliant();
+      toast.success(`Đã nhắc ${result.notifiedCount} tài khoản cập nhật hồ sơ.`);
     } catch (err) {
       toast.error(parseApiError(err).message);
     } finally {
@@ -492,7 +516,7 @@ export function AdminUsersView() {
     if (!window.confirm(`Reactivate ${user.fullName}? The account will be able to log in again.`)) return;
     setMutating(true);
     try {
-      await userService.updateUserStatus(user.userId, { accountStatus: "ACTIVE" });
+      await userService.updateUserStatus(user.userId, { status: "ACTIVE" });
       toast.success("User reactivated.");
       await loadUsers();
     } catch (err) {
@@ -502,57 +526,8 @@ export function AdminUsersView() {
     }
   };
 
-  // Xóa CỨNG không thể hoàn tác: BE xóa MỌI account trùng email (kể cả account
-  // sống khi bấm từ dòng Deleted), nên phải liệt kê đầy đủ danh sách sẽ bị xóa
-  // trước khi confirm + bắt gõ lại email.
-  const hardDeleteUser = async (user: UserManagementUser) => {
-    let affectedSummary = "";
-    try {
-      const page = await userService.getUsers({ search: user.email, includeDeleted: true, size: 50 });
-      const sameEmail = page.content.filter(
-        item => item.email.trim().toLowerCase() === user.email.trim().toLowerCase(),
-      );
-      if (sameEmail.length > 0) {
-        affectedSummary =
-          `\n\nThis will remove ${sameEmail.length} account(s):\n` +
-          sameEmail
-            .map(item => `- ${item.fullName} (${labelValue(item.role)}, ${item.deleted ? "Deleted" : labelValue(item.accountStatusName ?? item.accountStatus)})`)
-            .join("\n");
-      }
-    } catch {
-      // Không chặn thao tác nếu preview lỗi — dialog vẫn cảnh báo "ALL accounts".
-    }
-    if (!window.confirm(
-      `PERMANENTLY delete ALL accounts with email ${user.email}?` +
-      affectedSummary +
-      "\n\nThis cannot be undone. Team submissions are kept (reassigned to the team leader) " +
-      "and the email can be reused for a new account immediately.",
-    )) return;
-    const typedEmail = window.prompt(`Type the email to confirm permanent deletion:`, "");
-    if (typedEmail === null) return;
-    if (typedEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
-      toast.error("Email does not match. Deletion cancelled.");
-      return;
-    }
-    setMutating(true);
-    try {
-      const result = await userService.hardDeleteUser(user.email);
-      toast.success(`User permanently deleted (${result.deletedAccounts} account(s)).`);
-      await loadUsers();
-    } catch (err) {
-      const parsed = parseApiError(err);
-      // Retry sau timeout/mất mạng: lần trước có thể đã xóa xong → 404 nghĩa là
-      // "không còn account nào" chứ không phải thao tác thất bại.
-      if (parsed.status === 404) {
-        toast.success("Account already removed.");
-        await loadUsers();
-      } else {
-        toast.error(parsed.message);
-      }
-    } finally {
-      setMutating(false);
-    }
-  };
+  // Hard delete ("Delete Forever") đã gỡ khỏi UI — chức năng còn ở backend nhưng
+  // tạm không dùng. Deactivate (reversible) là thao tác vô hiệu hóa tài khoản chính.
 
   return (
     <div className="h-full min-h-0 overflow-hidden flex flex-col gap-3">
@@ -563,6 +538,9 @@ export function AdminUsersView() {
             <div className="flex gap-2">
               <Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />} onClick={loadUsers} disabled={loading}>
                 Refresh
+              </Button>
+              <Button variant="outline" size="sm" disabled={mutating} onClick={notifyNonCompliant}>
+                Quét & nhắc chuẩn hóa
               </Button>
               <Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={openCreate}>
                 Add User
@@ -700,7 +678,7 @@ export function AdminUsersView() {
                             Edit
                           </Button>
                           <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
-                            Suspend
+                            Deactivate
                           </Button>
                         </>
                       )}
@@ -709,9 +687,6 @@ export function AdminUsersView() {
                           Reactivate
                         </Button>
                       )}
-                      <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => hardDeleteUser(user)}>
-                        Delete Forever
-                      </Button>
                     </div>
                   </Td>
                 </tr>
@@ -723,14 +698,14 @@ export function AdminUsersView() {
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Rows</span>
-            <select
-              value={String(filters.size ?? 10)}
-              onChange={event => setFilter("size", Number(event.target.value))}
-              className="px-2 py-1 rounded-xl outline-none"
-              style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-            >
-              {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
+            <Select value={String(filters.size ?? 10) || "none"} onValueChange={value => setFilter("size", Number((value === "none" ? "" : value)))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {PAGE_SIZE_OPTIONS.map(size => <SelectItem key={size} value={String(size)} style={{ color: COLORS.textPrimary }}>{size}</SelectItem>)}
+  </SelectContent>
+</Select>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" disabled={(filters.page ?? 0) <= 0 || loading} onClick={() => setFilter("page", Math.max((filters.page ?? 0) - 1, 0))}>
@@ -884,16 +859,26 @@ function UserFormModal({
           )}
           <FormInput label="Phone" value={form.phone} error={fieldErrors.phone} onChange={value => setForm(prev => ({ ...prev, phone: value }))} />
           <FormSelect label="Role" value={role} error={fieldErrors.role} onChange={handleRoleChange}>
-            {ROLE_OPTIONS.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
+            {ROLE_OPTIONS.map(role => (
+              <SelectItem key={role.value} value={role.value} style={{ color: COLORS.textPrimary }}>
+                {role.label}
+              </SelectItem>
+            ))}
           </FormSelect>
           <FormSelect label="Status" value={form.accountStatus} error={fieldErrors.accountStatus} onChange={value => setForm(prev => ({ ...prev, accountStatus: value }))}>
-            {STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+            {STATUS_OPTIONS.map(status => (
+              <SelectItem key={status.value} value={status.value} style={{ color: COLORS.textPrimary }}>
+                {status.label}
+              </SelectItem>
+            ))}
           </FormSelect>
           {role === "FPT_STUDENT" && (
             <FormInput
               label="FPT Student Code"
               value={form.fptStudentCode}
               error={fieldErrors.fptStudentCode}
+              // Mã sinh viên là định danh — khóa read-only khi Edit để tránh sửa sai quy chiếu.
+              disabled={mode === "edit"}
               onChange={value => setForm(prev => ({ ...prev, fptStudentCode: value }))}
             />
           )}
@@ -903,6 +888,7 @@ function UserFormModal({
                 label="External Student Code"
                 value={form.externalStudentCode}
                 error={fieldErrors.externalStudentCode}
+                disabled={mode === "edit"}
                 onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
               />
               <FormInput
@@ -981,14 +967,14 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   return (
     <label className="block">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13 }}
-      >
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent className="z-[90]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
     </label>
   );
 }
@@ -1014,14 +1000,14 @@ function FormSelect({ label, value, onChange, error, children }: { label: string
   return (
     <label className="block">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ border: `1px solid ${error ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13 }}
-      >
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent className="z-[100]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
       {error && <span style={{ display: "block", marginTop: 5, color: COLORS.error, fontSize: 12 }}>{error}</span>}
     </label>
   );

@@ -7,6 +7,7 @@ import { eventService, type EventResponse } from "@/features/events/api/eventSer
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import { useAuth } from "@/features/auth/store/authStore";
 import { JudgeConsensusMatrix } from "./JudgeConsensusMatrix";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function JudgeCalibrationView({ 
   apiRounds = [], 
@@ -79,8 +80,10 @@ export function JudgeCalibrationView({
     }
   }, [selectedCategoryId, selectedEventId, categories]);
 
-  // Derived filtered rounds
-  const filteredRounds = (selectedEventId || selectedCategoryId) ? fetchedRounds : apiRounds;
+  // Derived filtered rounds — chỉ hiện calibration round vì điểm calibration (metrics)
+  // chỉ tồn tại ở round có isCalibrationRound; tránh chọn nhầm round không có dữ liệu.
+  const baseRounds = (selectedEventId || selectedCategoryId) ? fetchedRounds : apiRounds;
+  const filteredRounds = baseRounds.filter((r: any) => r?.isCalibrationRound);
 
   const renderContent = () => {
     if (loading) {
@@ -198,47 +201,63 @@ export function JudgeCalibrationView({
         <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Event:</span>
-            <select 
-              value={selectedEventId} 
-              onChange={(e) => setSelectedEventId(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-48 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+            <Select 
+              value={selectedEventId || "none"} 
+              onValueChange={(value) => setSelectedEventId(value === "none" ? "" : value)}
             >
-              <option value="">All Events</option>
-              {events.map(e => <option key={e.eventId} value={e.eventId}>{e.eventName}</option>)}
-            </select>
+              <SelectTrigger 
+                className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-48 truncate"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder="All Events" />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Events</SelectItem>
+                {events.map(e => <SelectItem key={e.eventId} value={e.eventId} style={{ color: COLORS.textPrimary }}>{e.eventName}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Category:</span>
-            <select 
-              value={selectedCategoryId} 
-              onChange={(e) => setSelectedCategoryId(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+            <Select 
+              value={selectedCategoryId || "none"} 
+              onValueChange={(value) => setSelectedCategoryId(value === "none" ? "" : value)}
               disabled={!selectedEventId}
             >
-              <option value="">All Categories</option>
-              {categories.map(c => <option key={c.categoryId} value={c.categoryId}>{c.categoryName}</option>)}
-            </select>
+              <SelectTrigger 
+                className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder="All Categories" />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                <SelectItem value="none" style={{ color: COLORS.textPrimary }}>All Categories</SelectItem>
+                {categories.map(c => <SelectItem key={c.categoryId} value={c.categoryId} style={{ color: COLORS.textPrimary }}>{c.categoryName}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">Round:</span>
-            <select 
-              value={selectedRoundId || ""} 
-              onChange={(e) => onSelectRound && onSelectRound(e.target.value)}
-              className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
-              style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+            <Select 
+              value={selectedRoundId || "none"} 
+              onValueChange={(value) => onSelectRound && onSelectRound(value === "none" ? "" : value)}
+              disabled={filteredRounds.length === 0}
             >
-              {filteredRounds.length > 0 ? (
-                filteredRounds.map(r => (
-                  <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
-                ))
-              ) : (
-                <option value="">No rounds found</option>
-              )}
-            </select>
+              <SelectTrigger 
+                className="px-3 py-1.5 border rounded-lg outline-none bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer text-sm w-40 truncate"
+                style={{ borderColor: COLORS.border, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder={filteredRounds.length > 0 ? "Select Round" : "No rounds found"} />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                {filteredRounds.length > 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select Round</SelectItem>}
+                {filteredRounds.map(r => (
+                  <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>{r.roundName}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

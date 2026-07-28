@@ -12,6 +12,7 @@ export interface RoundRankingDTO {
   isAdvanced: boolean;
   computedAt: string;
   isPublished?: boolean;
+  isApproved?: boolean;
 }
 
 export interface EventRankingDTO {
@@ -23,6 +24,7 @@ export interface EventRankingDTO {
   rankPosition: number;
   computedAt: string;
   isPublished?: boolean;
+  isApproved?: boolean;
 }
 
 export const rankingService = {
@@ -37,13 +39,23 @@ export const rankingService = {
     api.post<RoundRankingDTO[]>(`/api/v1/admin/rounds/${roundId}/compute-rankings?categoryId=${categoryId}`, {}),
   computeEvent: (eventId: string) =>
     api.post<EventRankingDTO[]>(`/api/v1/admin/events/${eventId}/compute-rankings`, {}),
-  publishRound: (roundId: string, categoryId: string) =>
-    api.post<void>(`/api/v1/admin/rounds/${roundId}/publish-rankings?categoryId=${categoryId}`, {}),
-  publishEvent: (eventId: string, categoryId: string) =>
-    api.post<void>(`/api/v1/admin/events/${eventId}/publish-rankings?categoryId=${categoryId}`, {}),
+  computeCategory: (categoryId: string) =>
+    api.post<EventRankingDTO[]>(`/api/v1/admin/categories/${categoryId}/compute-rankings`, {}),
+  publishRound: (roundId: string, categoryId: string, appealDurationMinutes?: number) =>
+    api.post<void>(`/api/v1/admin/rounds/${roundId}/publish-rankings?categoryId=${categoryId}${appealDurationMinutes ? '&appealDurationMinutes=' + appealDurationMinutes : ''}`, {}),
+  publishEvent: (eventId: string, categoryId?: string) =>
+    api.post<void>(`/api/v1/admin/events/${eventId}/publish-rankings${categoryId ? '?categoryId=' + categoryId : ''}`, {}),
+  publishCategory: (categoryId: string, appealDurationMinutes?: number) =>
+    api.post<void>(`/api/v1/admin/categories/${categoryId}/publish-rankings${appealDurationMinutes ? '?appealDurationMinutes=' + appealDurationMinutes : ''}`, {}),
+  approveRound: (roundId: string, categoryId: string) =>
+    api.post<void>(`/api/v1/admin/rounds/${roundId}/approve-rankings?categoryId=${categoryId}`, {}),
+  approveCategory: (categoryId: string) =>
+    api.post<void>(`/api/v1/admin/categories/${categoryId}/approve-rankings`, {}),
   // Admin get existing rankings
   getRoundRankings: (roundId: string, categoryId: string) =>
     api.get<RoundRankingDTO[]>(`/api/v1/admin/rounds/${roundId}/rankings?categoryId=${categoryId}`),
+  getCategoryLeaderboard: (eventId: string, categoryId: string) =>
+    api.get<EventRankingDTO[]>(`/api/v1/admin/events/${eventId}/categories/${categoryId}/rankings`),
   getEventRankings: (eventId: string) =>
     api.get<EventRankingDTO[]>(`/api/v1/admin/events/${eventId}/rankings`),
 };

@@ -1,17 +1,27 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { toast } from "sonner";
 import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Calendar, Trophy, Users, Clock, Bell, CheckCircle,
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2
+  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader, X
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
   ProgressBar, DataTable, Button, AvatarGroup, TimelineItem
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
+import { updateProfile } from "@/features/auth/api/authService";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { roundService } from "@/features/events/service/roundService";
@@ -28,11 +38,10 @@ import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestRespo
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
-import {
-  eventParticipantService,
-  type EventParticipantResponse,
-  type EventParticipantStatus,
-} from "@/features/eventParticipants/api/eventParticipantService";
+import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
+import { MemberAppealsView } from "./components/MemberAppealsView";
+import { MemberMyResultsView } from "./components/MemberMyResultsView";
+import { ScoreDetailsModal } from "@/features/events/components/judging/ScoreDetailsModal";
 
 
 
@@ -46,7 +55,9 @@ const EVENTS_RELOAD_MIN_INTERVAL_MS = 15_000;
 type ActiveTeamContext = {
   teamId: string;
   eventId?: string;
+  eventName?: string;
   categoryId?: string;
+  categoryName?: string;
   teamName?: string;
   leaderUserId?: string;
   teamStatusId?: string;
@@ -61,6 +72,15 @@ type SubmissionEligibility = {
   reason: string;
   previousRoundName?: string;
   previousRank?: RoundRankingDTO;
+};
+
+type DashboardTeamDeadline = {
+  teamId: string;
+  roundId?: string;
+  roundName?: string;
+  deadline?: string;
+  canSubmit: boolean;
+  status: "upcoming" | "closed" | "scheduled" | "unavailable";
 };
 
 function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById>>, userId?: string): ActiveTeamContext {
@@ -164,6 +184,9 @@ type MemberEvent = {
   rejectedReason?: string | null;
   appliedAt?: string | null;
   approvedAt?: string | null;
+  bannerImageUrl?: string;
+  minTeamSize?: number;
+  maxTeamSize?: number;
 };
 
 type EventCardParticipationStatus = UserParticipationStatus;
@@ -212,6 +235,9 @@ function mapEvent(event: EventResponse): MemberEvent {
     tracks: "N/A",
     prizePool: "N/A",
     participantStatus,
+    bannerImageUrl: event.bannerImageUrl,
+    minTeamSize: event.minTeamSize,
+    maxTeamSize: event.maxTeamSize,
   };
 }
 
@@ -254,17 +280,6 @@ type MemberNotification = {
   type: "info" | "success" | "warning";
   time: string;
   read: boolean;
-};
-
-type MemberTeamMember = {
-  id: string;
-  name: string;
-  role: string;
-  avatar: string;
-  skills: string[];
-  tasks: number;
-  completed: number;
-  email: string;
 };
 
 const getInitials = (name?: string) =>
@@ -351,6 +366,37 @@ function isOfficialSubmissionRound(round: Round) {
   return !round.isCalibrationRound;
 }
 
+function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadline, "teamId"> {
+  const officialRounds = rounds
+    .filter(round => isOfficialSubmissionRound(round) && round.submissionDeadline)
+    .sort((a, b) => {
+      const aTime = parseDateTime(a.submissionDeadline) ?? Number.MAX_SAFE_INTEGER;
+      const bTime = parseDateTime(b.submissionDeadline) ?? Number.MAX_SAFE_INTEGER;
+      return aTime - bTime;
+    });
+
+  const now = Date.now();
+  const upcomingRound = officialRounds.find(round => {
+    const deadlineTime = parseDateTime(round.submissionDeadline);
+    return deadlineTime !== null && deadlineTime >= now;
+  });
+  const round = upcomingRound ?? officialRounds[officialRounds.length - 1];
+
+  if (!round) {
+    return { canSubmit: false, status: "unavailable" };
+  }
+
+  const deadlineTime = parseDateTime(round.submissionDeadline);
+  const roundState = getSubmissionRoundState(round);
+  return {
+    roundId: round.roundId,
+    roundName: round.roundName,
+    deadline: round.submissionDeadline || undefined,
+    canSubmit: roundState.canSubmit,
+    status: deadlineTime !== null && deadlineTime < now ? "closed" : roundState.hasStarted ? "upcoming" : "scheduled",
+  };
+}
+
 function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
   const selectedRound = rounds.find(round => round.roundId === selectedRoundId);
   if (!selectedRound) return undefined;
@@ -361,13 +407,13 @@ function getPreviousOfficialRound(rounds: Round[], selectedRoundId: string) {
 }
 
 export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { currentPage: string; onNavigate: (p: string) => void; markAllReadKey?: number }) {
-  const { user } = useAuth();
+  const { user, setAuth } = useAuth();
   const submissionFormRef = useRef<HTMLDivElement | null>(null);
   const displayName = user?.fullName || user?.email || "Member";
   const userInitials = getInitials(displayName);
   const studentCode = user?.fptStudentCode ?? user?.externalStudentCode ?? "";
 
-  // ── Events ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [apiEvents, setApiEvents] = useState<MemberEvent[]>([]);
   const [participations, setParticipations] = useState<Record<string, EventParticipantResponse>>({});
   const [eventsError, setEventsError] = useState("");
@@ -375,11 +421,19 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [eventActionMessage, setEventActionMessage] = useState<Record<string, string>>({});
   const [selectedEventDetailId, setSelectedEventDetailId] = useState<string | null>(null);
   const [teamInitialEventId, setTeamInitialEventId] = useState("");
+  const [teamInitialTeamId, setTeamInitialTeamId] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
+  const [eventStatusFilter, setEventStatusFilter] = useState("all");
+  const [eventStartDateFilter, setEventStartDateFilter] = useState("");
+  const [eventEndDateFilter, setEventEndDateFilter] = useState("");
+  const [viewingEventDetail, setViewingEventDetail] = useState<MemberEvent | null>(null);
   const [apiLeaderboard, setApiLeaderboard] = useState<any[]>([]);
   const [leaderboardEventId, setLeaderboardEventId] = useState<string>("");
   const [leaderboardRoundId, setLeaderboardRoundId] = useState("event");
   const [leaderboardRounds, setLeaderboardRounds] = useState<Round[]>([]);
-  const [teamMembers] = useState<MemberTeamMember[]>([]);
+  const [dashboardTeams, setDashboardTeams] = useState<TeamResponse[]>([]);
+  const [dashboardDeadlines, setDashboardDeadlines] = useState<Record<string, DashboardTeamDeadline>>({});
+  const [dashboardDeadlinesLoading, setDashboardDeadlinesLoading] = useState(false);
   const eventsRequestInFlightRef = useRef(false);
   const lastEventsLoadAtRef = useRef(0);
   const loadEvents = useCallback(() => {
@@ -446,7 +500,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     return () => window.removeEventListener("focus", handleFocus);
   }, [loadEvents]);
 
-  // ── Notifications ────────────────────────────────────────────────────────────
+  // â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [notifs, setNotifs] = useState<MemberNotification[]>([]);
 
   const fetchNotifs = () => {
@@ -495,10 +549,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     studentId: studentCode ?? "",
     email: user?.email ?? "",
     phone: user?.phone ?? "",
-    github: "", portfolio: "",
-    bio: "", major: "",
+    github: user?.github ?? "", portfolio: user?.portfolio ?? "",
+    bio: user?.bio ?? "", major: "",
   });
+  const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const handleSaveProfile = async () => {
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const isFpt = user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT";
+      const isExternal = user?.role === "EXTERNAL_STUDENT" || user?.role === "ROLE_EXTERNAL_STUDENT";
+      
+      const updatedUser = await updateProfile({
+        fullName: profileForm.fullName.trim(),
+        phone: profileForm.phone.trim() || undefined,
+        fptStudentCode: isFpt ? profileForm.studentId.trim() || undefined : undefined,
+        externalStudentCode: isExternal ? profileForm.studentId.trim() || undefined : undefined,
+        universityName: isExternal ? user?.universityName : undefined,
+        bio: profileForm.bio.trim() || undefined,
+        github: profileForm.github.trim() || undefined,
+        portfolio: profileForm.portfolio.trim() || undefined,
+      });
+      
+      setAuth(updatedUser); // Update context and local storage via setAuth
+      
+      setProfileSaved(true);
+      toast.success("Profile saved successfully");
+      setTimeout(() => setProfileSaved(false), 2000);
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : "Failed to save profile");
+      toast.error("Failed to save profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
   const [activeTeamContext, setActiveTeamContext] = useState<ActiveTeamContext | null>(() => getStoredActiveTeam(user?.userId));
   const [submissionTeams, setSubmissionTeams] = useState<ActiveTeamContext[]>([]);
   const [submissionTeamsLoading, setSubmissionTeamsLoading] = useState(false);
@@ -564,6 +651,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [handlingRequestId, setHandlingRequestId] = useState<string | null>(null);
+  const [viewResultsTarget, setViewResultsTarget] = useState<{ submissionId: string, roundId: string } | null>(null);
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -575,9 +663,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
   useEffect(() => {
-    if (currentPage !== "submissions") return;
     if (!user?.userId || apiEvents.length === 0) {
       setSubmissionTeams([]);
+      setDashboardTeams([]);
       return;
     }
 
@@ -597,6 +685,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         if (cancelled) return;
         const userTeams = results.map(team => teamToActiveContext(team, user.userId));
 
+        setDashboardTeams(results);
         setSubmissionTeams(userTeams);
 
         const selectedTeam = (storedSubmissionTeam?.teamId
@@ -624,6 +713,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       .catch(() => {
         if (!cancelled) {
           setSubmissionTeams([]);
+          setDashboardTeams([]);
           if (storedSubmissionTeam?.teamId) {
             teamService.getById(storedSubmissionTeam.teamId)
               .then(team => {
@@ -635,6 +725,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   return;
                 }
                 const refreshedTeam = teamToActiveContext(team, user.userId);
+                setDashboardTeams([team]);
                 setSubmissionTeams([refreshedTeam]);
                 setActiveTeamContext(refreshedTeam);
                 setSubmissionForm(prev => ({ ...prev, teamId: refreshedTeam.teamId }));
@@ -653,10 +744,40 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     return () => {
       cancelled = true;
     };
-  }, [apiEvents, currentPage, user?.userId]);
+  }, [apiEvents, user?.userId]);
 
   useEffect(() => {
-    if (currentPage !== "submissions") return;
+    if (dashboardTeams.length === 0) {
+      setDashboardDeadlines({});
+      return;
+    }
+
+    let cancelled = false;
+    setDashboardDeadlinesLoading(true);
+    Promise.all(
+      dashboardTeams.map(async team => {
+        if (!team.categoryId) {
+          return [team.teamId, { teamId: team.teamId, canSubmit: false, status: "unavailable" } satisfies DashboardTeamDeadline] as const;
+        }
+
+        const rounds = await roundService.getByCategory(team.categoryId).catch(() => [] as Round[]);
+        return [team.teamId, { teamId: team.teamId, ...getDashboardDeadlineForRounds(rounds) } satisfies DashboardTeamDeadline] as const;
+      }),
+    )
+      .then(entries => {
+        if (cancelled) return;
+        setDashboardDeadlines(Object.fromEntries(entries));
+      })
+      .finally(() => {
+        if (!cancelled) setDashboardDeadlinesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dashboardTeams]);
+
+  useEffect(() => {
     const storedTeam = getStoredActiveTeam(user?.userId);
     if (storedTeam?.teamId && isActiveTeamContext(storedTeam) && submissionTeams.length === 0) {
       teamService.getById(storedTeam.teamId)
@@ -670,6 +791,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           const refreshedTeam = teamToActiveContext(team, user?.userId);
           setActiveTeamContext(refreshedTeam);
           setSubmissionTeams([refreshedTeam]);
+          setDashboardTeams([team]);
           setSubmissionForm(prev => ({ ...prev, teamId: refreshedTeam.teamId }));
           localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(refreshedTeam));
         })
@@ -677,22 +799,17 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           // Submission API remains the source of truth if refreshing the team fails.
         });
     }
-  }, [currentPage, submissionTeams.length, user?.userId]);
+  }, [submissionTeams.length, user?.userId]);
 
-  // Khi vào trang certificates, init event từ storedTeam hoặc apiEvents
   useEffect(() => {
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
-    // Nếu chưa chọn event, ưu tiên dùng eventId từ storedTeam
-    setCertificateSelectedEventId(prev => {
-      if (prev) return prev;
-      return storedTeam?.eventId ?? "";
-    });
+    // Náº¿u chÆ°a chá»n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
     setCertificateCategoryId("all");
   }, [currentPage, user?.userId]);
 
-  // Load awards khi event được chọn
+  // Load awards khi event Ä‘Æ°á»£c chá»n
   useEffect(() => {
     if (currentPage !== "certificates") return;
     if (!certificateSelectedEventId) {
@@ -708,7 +825,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     awardService.getByEvent(certificateSelectedEventId)
       .then(awards => {
         if (cancelled) return;
-        // Chỉ lọc theo teamId nếu có, không lọc cứng theo categoryId
+        // Chá»‰ lá»c theo teamId náº¿u cĂ³, khĂ´ng lá»c cá»©ng theo categoryId
         const visibleAwards = awards.filter((award: any) => (
           (!storedTeam?.teamId || award.teamId === storedTeam.teamId)
           && award.isPublished
@@ -753,7 +870,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [activeTeamContext?.eventId, currentPage]);
 
   useEffect(() => {
-    if (currentPage !== "submissions" || !activeTeamContext?.categoryId) {
+    if ((currentPage !== "submissions" && currentPage !== "results") || !activeTeamContext?.categoryId) {
       setSubmissionRounds([]);
       setAllSubmissionRounds([]);
       setSubmissionHistory([]);
@@ -789,6 +906,15 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       cancelled = true;
     };
   }, [activeTeamContext?.categoryId, currentPage]);
+
+  useEffect(() => {
+    if (currentPage === "submissions" && submissionForm.teamId && activeTeamContext?.teamId !== submissionForm.teamId) {
+      const matchedTeam = submissionTeams.find(t => t.teamId === submissionForm.teamId);
+      if (matchedTeam) {
+        setActiveTeamContext(matchedTeam);
+      }
+    }
+  }, [currentPage, submissionForm.teamId, submissionTeams, activeTeamContext?.teamId]);
 
   const loadSubmissionHistory = useCallback(async () => {
     if (currentPage !== "submissions" || !submissionForm.teamId) {
@@ -1185,48 +1311,76 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     && !submissionEligibility.loading
     && !submissionEligibility.canSubmit;
 
-  const renderSubmissionTeamSelector = () => (
-    <Card className="p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-        <label className="block">
-          <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
-            <Users size={14} /> Team
-          </span>
-          <select
-            value={submissionForm.teamId}
-            onChange={event => selectSubmissionTeam(event.target.value)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-            disabled={submissionTeamsLoading || submissionTeams.length === 0}
-          >
-            {submissionTeamsLoading && <option value="">Loading your teams...</option>}
-            {!submissionTeamsLoading && submissionTeams.length === 0 && <option value="">No teams available</option>}
-            {submissionTeams.map(team => (
-              <option key={team.teamId} value={team.teamId}>
-                {team.teamName ?? team.teamId}
-              </option>
-            ))}
-          </select>
-        </label>
+  const renderSubmissionTeamSelector = () => {
+    const groupedTeams = submissionTeams.reduce((acc, team) => {
+      const evName = team.eventName || "Other Events";
+      if (!acc[evName]) acc[evName] = [];
+      acc[evName].push(team);
+      return acc;
+    }, {} as Record<string, ActiveTeamContext[]>);
+
+    return (
+      <Card className="p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+          <label className="block">
+            <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
+              <Users size={14} /> Team
+            </span>
+            <Select
+              value={activeTeamContext?.teamId || submissionForm.teamId || "none"}
+              onValueChange={value => selectSubmissionTeam(value)}
+              disabled={submissionTeamsLoading || submissionTeams.length === 0}
+            >
+              <SelectTrigger
+                className="w-full px-3 py-2 rounded-lg outline-none"
+                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+              >
+                <SelectValue placeholder={submissionTeamsLoading ? "Loading your teams..." : "Select a team..."} />
+              </SelectTrigger>
+              <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                {!submissionTeamsLoading && submissionTeams.length === 0 && (
+                  <div className="p-2 text-sm text-center text-muted-foreground">No teams available</div>
+                )}
+                {Object.entries(groupedTeams).map(([evName, teams]) => (
+                  <SelectGroup key={evName}>
+                    <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    {teams.map(team => {
+                      const categoryInfo = team.categoryName ? ` - ${team.categoryName}` : "";
+                      return (
+                        <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>
+                          {team.teamName ?? team.teamId}{categoryInfo}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </label>
         <label className="block">
           <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
             <Clock size={14} /> Round
           </span>
-          <select
+          <Select
             value={submissionForm.roundId}
-            onChange={event => selectSubmissionRound(event.target.value)}
-            className="w-full px-3 py-2 rounded-lg outline-none"
-            style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            onValueChange={value => selectSubmissionRound(value)}
             disabled={submissionRoundsLoading}
           >
-            <option value="" disabled hidden>Select a round...</option>
-            {submissionRoundsLoading && <option value="">Loading rounds...</option>}
-            {!submissionRoundsLoading && submissionRounds.length === 0 && <option value="">No official rounds available</option>}
-            {submissionRounds.map(round => (
-              <option key={round.roundId} value={round.roundId}>{round.roundName}</option>
-            ))}
-          </select>
-          {selectedSubmissionRound ? (
+            <SelectTrigger
+              className="w-full px-3 py-2 rounded-lg outline-none"
+              style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+            >
+              <SelectValue placeholder={submissionRoundsLoading ? "Loading rounds..." : "Select a round..."} />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              {submissionRounds.map(round => (
+                <SelectItem key={round.roundId} value={round.roundId} style={{ color: COLORS.textPrimary }}>
+                  {round.roundName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedSubmissionRound && currentPage !== "results" ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {selectedSubmissionRoundLocked ? (
                 <StatusBadge status="locked" />
@@ -1247,7 +1401,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </label>
       </div>
     </Card>
-  );
+    );
+  };
 
   const renderSubmissionHistory = () => {
     const roundById = new Map(allSubmissionRounds.map(round => [round.roundId, round]));
@@ -1328,6 +1483,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        icon={<Eye size={13} />}
+                        onClick={() => setViewResultsTarget({ submissionId: submission.submissionId, roundId: submission.roundId })}
+                      >
+                        View Results
+                      </Button>
                       <Button
                         variant={canUpdateSubmission ? "outline" : "ghost"}
                         size="sm"
@@ -1557,6 +1720,33 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     return fallback || "Registration failed.";
   };
 
+  const openDashboardSubmission = (team: TeamResponse, deadline?: DashboardTeamDeadline) => {
+    const nextTeam = teamToActiveContext(team, user?.userId);
+    setActiveTeamContext(nextTeam);
+    setSubmissionForm(prev => ({
+      ...prev,
+      teamId: nextTeam.teamId,
+      roundId: deadline?.roundId ?? prev.roundId,
+    }));
+    localStorage.setItem(ACTIVE_TEAM_STORAGE_KEY, JSON.stringify(nextTeam));
+    if (deadline?.roundId) {
+      setStoredSubmissionRound(nextTeam.teamId, deadline.roundId);
+    }
+    onNavigate("submissions");
+  };
+
+  const openDashboardTeam = (team: TeamResponse) => {
+    setTeamInitialEventId("");
+    setTeamInitialTeamId(team.teamId);
+    onNavigate("team");
+  };
+
+  const handleDashboardTeamKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, team: TeamResponse) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openDashboardTeam(team);
+  };
+
   const renderDashboard = () => (
     <>
       <SectionHeader
@@ -1569,20 +1759,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         <StatCard title="Team Score" value="N/A" icon={<Star size={22} />} color={COLORS.accent} />
         <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5 col-span-1">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
             <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Team Status</span>
-            <StatusBadge status={teamMembers.length > 0 ? "active" : "pending"} />
           </div>
-          {teamMembers.length > 0 ? (
-            <>
-              <div className="mb-3">
-                <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>My Team</div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{teamMembers.length} members</div>
-              </div>
-              <AvatarGroup names={teamMembers.map(m => m.name)} max={5} />
-            </>
+          {submissionTeamsLoading ? (
+            <div className="rounded-xl p-4 flex items-center gap-2" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+              <Loader size={14} className="animate-spin" />
+              Loading team status...
+            </div>
+          ) : dashboardTeams.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {dashboardTeams.map(team => {
+                const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName ?? team.statusName ?? team.status);
+                return (
+                  <div
+                    key={team.teamId}
+                    role="button"
+                    tabIndex={0}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 transition-colors"
+                    style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, cursor: "pointer" }}
+                    onClick={() => openDashboardTeam(team)}
+                    onKeyDown={event => handleDashboardTeamKeyDown(event, team)}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {team.teamName || "Unnamed team"}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {team.activeMemberCount ?? team.members.length} members
+                      </div>
+                    </div>
+                    <StatusBadge status={status.badge} />
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
               No team data is available for your account yet.
@@ -1591,162 +1804,441 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </Card>
 
         <Card className="p-5 col-span-1">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertCircle size={18} style={{ color: COLORS.error }} />
-            <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Upcoming Deadline</span>
+          <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18} style={{ color: COLORS.error }} />
+              <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Upcoming Deadline</span>
+            </div>
+            {dashboardDeadlinesLoading && <Loader size={14} className="animate-spin" style={{ color: COLORS.textSecondary }} />}
           </div>
-          <div className="rounded-xl p-4 mb-4" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30` }}>
-            <div style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{apiEvents[0]?.eventName ?? "No active event"}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: COLORS.textPrimary, margin: "8px 0" }}>{apiEvents[0]?.registrationEnd ? "Deadline available" : "N/A"}</div>
-            <div style={{ fontSize: 12, color: COLORS.textSecondary }}>Deadline: {apiEvents[0]?.registrationEnd || "No deadline data"}</div>
-          </div>
-          <Button variant="primary" size="sm" className="mt-4 w-full" icon={<ExternalLink size={14} />} onClick={() => onNavigate("submissions")}>
-            Open Submission
-          </Button>
-        </Card>
-
-        <Card className="p-5 col-span-1">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Recent Activity</div>
-          <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
-            No recent activity is available.
-          </div>
+          {dashboardTeams.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              {dashboardTeams.map(team => {
+                const deadline = dashboardDeadlines[team.teamId];
+                const eventName = apiEvents.find(event => event.eventId === team.eventId)?.eventName ?? "Unknown event";
+                return (
+                  <div
+                    key={team.teamId}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3"
+                    style={{ background: `${COLORS.error}08`, border: `1px solid ${COLORS.error}20` }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {eventName}
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
+                        {deadline?.roundName ?? "No official round"}
+                      </div>
+                    </div>
+                    <div className="text-right" style={{ flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: deadline?.status === "closed" ? COLORS.error : COLORS.textPrimary }}>
+                        {deadline?.deadline ? formatSubmissionDate(deadline.deadline) : "No deadline"}
+                      </div>
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <StatusBadge status={deadline?.status ?? "unavailable"} />
+                        {deadline?.canSubmit && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={<ExternalLink size={13} />}
+                            onClick={() => openDashboardSubmission(team, deadline)}
+                          >
+                            Submit
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
+          ) : (
+            <div className="rounded-xl p-4" style={{ background: COLORS.bg, color: COLORS.textSecondary, fontSize: 13 }}>
+              No deadline data is available for your teams yet.
+            </div>
+          )}
         </Card>
       </div>
     </>
   );
+
+  const handleTeamPanelChange = useCallback((team: TeamResponse | null) => {
+    if (teamInitialTeamId && team?.teamId === teamInitialTeamId) return;
+    handleTeamChange(team);
+  }, [teamInitialTeamId, handleTeamChange]);
 
   const renderTeam = () => (
     <div className="flex flex-col gap-6">
-      <TeamApiPanel initialEventId={teamInitialEventId} onNavigate={onNavigate} onTeamChange={handleTeamChange} />
-      {activeTeamContext?.teamId && renderLeaderboard()}
+      <TeamApiPanel
+        initialEventId={teamInitialEventId}
+        initialTeamId={teamInitialTeamId}
+        initialTeamShouldPersist={!teamInitialTeamId}
+        isVisible={currentPage === "team"}
+        onNavigate={onNavigate}
+        onTeamChange={handleTeamPanelChange}
+      />
     </div>
   );
 
-  const renderEvents = () => (
-    <>
-      <SectionHeader title="Browse Events" subtitle="Discover and register for hackathon events" />
-      {eventsError && (
-        <Card className="p-4">
-          <div className="flex items-center gap-2" style={{ color: COLORS.error, fontSize: 13, fontWeight: 600 }}>
-            <AlertCircle size={15} />
-            {eventsError}
+  const renderEvents = () => {
+    if (selectedEventDetailId) {
+      const targetEvent = apiEvents.find(ev => ev.eventId === selectedEventDetailId);
+      const userTeamForEvent = submissionTeams.find(t => t.eventId === selectedEventDetailId)
+        || (activeTeamContext?.eventId === selectedEventDetailId ? activeTeamContext : null);
+      const eventRounds = leaderboardRounds || [];
+
+      return (
+        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setSelectedEventDetailId(null)}>
+              Back to Events
+            </Button>
+            <StatusBadge status={targetEvent?.eventStatus ?? (targetEvent as any)?.status ?? "ACTIVE"} />
           </div>
-        </Card>
-      )}
-      {apiEvents.length === 0 && (
-        <Card className="p-5">
-          <div style={{ fontSize: 14, color: COLORS.textSecondary }}>
-            {eventsError ? "Events could not be loaded." : "No events are available."}
+
+          <div className="rounded-2xl p-6 shadow-sm space-y-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            <div className="flex justify-between items-start border-b pb-4" style={{ borderColor: COLORS.border }}>
+              <div>
+                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.textPrimary }}>
+                  {targetEvent?.eventName ?? (targetEvent as any)?.name} - Event Dashboard
+                </h1>
+                <p style={{ fontSize: 14, color: COLORS.textSecondary }}>
+                  {targetEvent?.description || "Comprehensive event dashboard for active participants."}
+                </p>
+              </div>
+            </div>
+
+            {/* Event Team Overview */}
+            {userTeamForEvent && (
+              <Card className="p-5 bg-primary/5 border border-primary/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
+                    Manage Team
+                  </Button>
+                </div>
+              </Card>
+            )}
+
+            {/* Rounds & Timeline Section */}
+            <div className="space-y-4">
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                <Clock size={20} style={{ color: COLORS.primary }} /> Event Rounds & Deadlines
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {eventRounds.length > 0 ? (
+                  eventRounds.map((r: any) => (
+                    <Card key={r.roundId} className="p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
+                        <StatusBadge status={r.roundStatusName ?? r.status ?? "OPEN"} />
+                      </div>
+                      <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1">
+                        <div><strong style={{ color: COLORS.textPrimary }}>Start:</strong> {r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</div>
+                        <div><strong style={{ color: COLORS.textPrimary }}>Deadline:</strong> {r.endDate ? new Date(r.endDate).toLocaleString() : "TBD"}</div>
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
+                    No round schedules published yet.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Leaderboard Section inside Event Dashboard */}
+            <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+              {renderLeaderboard()}
+            </div>
           </div>
-        </Card>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {apiEvents.map(ev => {
-          const participation = participations[ev.eventId];
-          const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
-          const blocksTeamRegistration = participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED";
-          const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
-          const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
-          const unavailableReason = registrationUnavailableReason(ev);
-          const isSelected = selectedEventDetailId === ev.eventId;
-          const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
-          const isPendingParticipant = participantStatus === "PENDING";
-          const isRejectedParticipant = participantStatus === "REJECTED";
-          return (
-            <Card key={ev.eventId} className="p-5">
-              <div className="flex items-start justify-between mb-3">
+        </div>
+      );
+    }
+
+    if (viewingEventDetail) {
+      const ev = viewingEventDetail;
+      const participation = participations[ev.eventId];
+      const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
+      const blocksTeamRegistration = participantStatus !== "NOT_REGISTERED" && participantStatus !== "REJECTED";
+      const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
+      const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+      const unavailableReason = registrationUnavailableReason(ev);
+      const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
+      const isPendingParticipant = participantStatus === "PENDING";
+      const isRejectedParticipant = participantStatus === "REJECTED";
+
+      return (
+        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setViewingEventDetail(null)}>
+              Back to Events
+            </Button>
+          </div>
+          <div className="rounded-2xl overflow-hidden shadow-sm" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
+            {ev.bannerImageUrl ? (
+              <img src={ev.bannerImageUrl} alt={ev.eventName} className="w-full h-72 object-cover" />
+            ) : (
+              <div className="w-full h-72 flex flex-col items-center justify-center" style={{ background: `${COLORS.primary}10` }}>
+                <Calendar size={64} style={{ color: COLORS.primary, marginBottom: 16, opacity: 0.5 }} />
+                <span style={{ color: COLORS.textSecondary, fontWeight: 600 }}>No Banner Image</span>
+              </div>
+            )}
+            <div className="p-8">
+              <div className="flex justify-between items-start mb-6">
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary }}>{ev.eventName}</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 2 }}>{ev.description}</div>
+                  <h1 className="text-3xl font-bold mb-3" style={{ color: COLORS.textPrimary }}>{ev.eventName}</h1>
+                  <p className="text-base leading-relaxed" style={{ color: COLORS.textSecondary }}>{ev.description}</p>
                 </div>
                 <StatusBadge status={lifecycleStatus.toLowerCase()} />
               </div>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {[
-                  { label: "Event Status", value: lifecycleStatus, icon: <Info size={13} /> },
-                  { label: "Deadline", value: ev.registrationEnd || "N/A", icon: <Calendar size={13} /> },
-                  { label: "Location", value: ev.location || "N/A", icon: <MapPin size={13} /> },
-                  { label: "Participation", value: statusLabel, icon: <Award size={13} /> },
-                ].map(info => (
-                  <div key={info.label} className="flex items-center gap-2">
-                    <span style={{ color: COLORS.textSecondary }}>{info.icon}</span>
-                    <div>
-                      <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{info.label}</div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{info.value}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {isSelected && (
-                <div className="rounded-xl p-3 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.textPrimary }}>Participation Status</div>
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 4 }}>
-                    {participantStatus === "NOT_REGISTERED" && "You have not registered for this event yet."}
-                    {isPendingParticipant && "Waiting for organizer approval. Team features and competition activities are locked for this event."}
-                    {isActiveParticipant && "You are approved for this event. Team features and competition activities are available."}
-                    {isRejectedParticipant && "Your previous team registration was rejected. You can create or join another team for this event."}
-                    {blocksTeamRegistration && !isPendingParticipant && !isActiveParticipant && restrictedParticipationMessage[participantStatus as Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">]}
-                  </div>
-                  {isRejectedParticipant && (ev.rejectedReason || participation?.rejectedReason) && (
-                    <div style={{ fontSize: 13, color: COLORS.error, marginTop: 6 }}>
-                      Reason: {ev.rejectedReason || participation?.rejectedReason}
-                    </div>
-                  )}
-                  {!isActiveParticipant && (
-                    <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 8 }}>
-                      Competition-only features are hidden until this event participation is approved.
-                    </div>
-                  )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Registration Start</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.registrationStart ? new Date(ev.registrationStart).toLocaleDateString() : "N/A"}</div>
                 </div>
-              )}
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Registration End</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.registrationEnd ? new Date(ev.registrationEnd).toLocaleDateString() : "N/A"}</div>
+                </div>
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Event Start</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.eventStartDate ? new Date(ev.eventStartDate).toLocaleDateString() : "N/A"}</div>
+                </div>
+                <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
+                  <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Event End</div>
+                  <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.eventEndDate ? new Date(ev.eventEndDate).toLocaleDateString() : "N/A"}</div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div className="p-4 rounded-xl flex items-center gap-4" style={{ border: `1px solid ${COLORS.border}` }}>
+                  <div className="w-12 h-12 flex items-center justify-center rounded-full" style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}>
+                    <MapPin size={24} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Location</div>
+                    <div className="text-base font-bold" style={{ color: COLORS.textPrimary }}>{ev.location || "TBA"}</div>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl flex items-center gap-4" style={{ border: `1px solid ${COLORS.border}` }}>
+                  <div className="w-12 h-12 flex items-center justify-center rounded-full" style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}>
+                    <Users size={24} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Team Size</div>
+                    <div className="text-base font-bold" style={{ color: COLORS.textPrimary }}>{ev.minTeamSize} - {ev.maxTeamSize} members</div>
+                  </div>
+                </div>
+              </div>
+
               {eventActionMessage[ev.eventId] && (
-                <div className="rounded-xl px-3 py-2 mb-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 13 }}>
+                <div className="rounded-xl px-4 py-3 mb-6" style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, fontSize: 14, fontWeight: 500 }}>
                   {eventActionMessage[ev.eventId]}
                 </div>
               )}
-              <div className="flex gap-2">
-                {isActiveParticipant ? (
-                  <>
-                    <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>Joined</Button>
-                    <Button variant="primary" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(ev.eventId)}>Enter Event</Button>
-                  </>
-                ) : isPendingParticipant ? (
-                  <Button variant="outline" size="sm" disabled icon={<Clock size={13} />}>Pending Approval</Button>
-                ) : blocksTeamRegistration ? (
-                  <Button variant="outline" size="sm" disabled icon={<CheckCircle size={13} />}>{statusLabel}</Button>
-                ) : unavailableReason ? (
-                  <Button variant="ghost" size="sm" disabled>{unavailableReason}</Button>
-                ) : (
-                  // Team-first: đăng ký sự kiện theo team — tạo/join team trước,
-                  // leader đăng ký cả team ở tab My Team.
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    icon={<PlusCircle size={13} />}
-                    onClick={() => {
-                      setEventActionMessage(prev => ({
-                        ...prev,
-                        [ev.eventId]: "Event registration is per team: create or join a team, then the team leader registers the team in the My Team tab.",
-                      }));
-                      setTeamInitialEventId(ev.eventId);
-                      onNavigate("team");
-                    }}
-                  >
-                    Create/Join Team to Register
-                  </Button>
-                )}
-                <Button variant="ghost" size="sm" icon={<ExternalLink size={13} />} onClick={() => setSelectedEventDetailId(isSelected ? null : ev.eventId)}>Details</Button>
+
+              <div className="pt-6 flex justify-between items-center" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Your Status:</span>
+                  <StatusBadge status={participantStatus.toLowerCase()} />
+                </div>
+                <div className="flex gap-3">
+                  {isActiveParticipant ? (
+                    <>
+                      <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined</Button>
+                      <Button variant="primary" size="md" icon={<ExternalLink size={16} />} onClick={() => { setSelectedEventDetailId(ev.eventId); setLeaderboardEventId(ev.eventId); setLeaderboardRoundId("event"); }}>Enter Event Dashboard</Button>
+                    </>
+                  ) : isPendingParticipant ? (
+                    <Button variant="outline" size="md" disabled icon={<Clock size={16} />}>Pending Approval</Button>
+                  ) : blocksTeamRegistration ? (
+                    <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>{statusLabel}</Button>
+                  ) : unavailableReason ? (
+                    <Button variant="ghost" size="md" disabled>{unavailableReason}</Button>
+                  ) : (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={<PlusCircle size={16} />}
+                      onClick={() => {
+                        setEventActionMessage(prev => ({
+                          ...prev,
+                          [ev.eventId]: "Event registration is per team: create or join a team, then the team leader registers the team in the My Team tab.",
+                        }));
+                        setTeamInitialEventId(ev.eventId);
+                        onNavigate("team");
+                      }}
+                    >
+                      Create/Join Team to Register
+                    </Button>
+                  )}
+                </div>
               </div>
-            </Card>
-          );
-        })}
-      </div>
-    </>
-  );
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const filteredEvents = apiEvents.filter(ev => {
+      const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+      if (eventStatusFilter && eventStatusFilter !== "all" && lifecycleStatus !== eventStatusFilter.toUpperCase()) return false;
+      if (eventSearch && !ev.eventName.toLowerCase().includes(eventSearch.toLowerCase())) return false;
+      if (eventStartDateFilter && ev.eventStartDate && new Date(ev.eventStartDate) < new Date(eventStartDateFilter)) return false;
+      if (eventEndDateFilter && ev.eventEndDate && new Date(ev.eventEndDate) > new Date(eventEndDateFilter)) return false;
+      return true;
+    });
+
+    return (
+      <>
+        <SectionHeader title="Browse Events" subtitle="Discover and register for hackathon events" />
+        
+        {/* Search & Filters */}
+        <div className="flex flex-wrap gap-4 mb-2">
+          <div className="relative flex-1 min-w-[240px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search events..."
+              value={eventSearch}
+              onChange={(e) => setEventSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl text-sm outline-none"
+              style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+            />
+            {eventSearch && (
+              <button onClick={() => setEventSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <Trash2 size={13} />
+              </button>
+            )}
+          </div>
+          <Select value={eventStatusFilter} onValueChange={setEventStatusFilter}>
+            <SelectTrigger className="w-[160px] h-9 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)" }}>
+              <SelectValue placeholder="All Status" />
+            </SelectTrigger>
+            <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="DRAFT">Draft</SelectItem>
+              <SelectItem value="PUBLISHED">Published</SelectItem>
+              <SelectItem value="UPCOMING">Upcoming</SelectItem>
+              <SelectItem value="ONGOING">Ongoing</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={eventStartDateFilter}
+                onChange={(e) => setEventStartDateFilter(e.target.value)}
+                className="pl-9 pr-3 py-1.5 rounded-xl text-sm outline-none"
+                style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+                title="Start Date"
+              />
+            </div>
+            <span style={{ color: COLORS.textSecondary, fontWeight: 500 }}>-</span>
+            <div className="relative">
+              <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <input
+                type="date"
+                value={eventEndDateFilter}
+                onChange={(e) => setEventEndDateFilter(e.target.value)}
+                className="pl-9 pr-3 py-1.5 rounded-xl text-sm outline-none"
+                style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)", color: COLORS.textPrimary }}
+                title="End Date"
+              />
+            </div>
+          </div>
+        </div>
+
+        {eventsError && (
+          <Card className="p-4">
+            <div className="flex items-center gap-2" style={{ color: COLORS.error, fontSize: 13, fontWeight: 600 }}>
+              <AlertCircle size={15} />
+              {eventsError}
+            </div>
+          </Card>
+        )}
+        {filteredEvents.length === 0 && (
+          <Card className="p-10 text-center">
+            <Calendar size={48} className="mx-auto mb-4" style={{ color: COLORS.border }} />
+            <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary }}>No events found</div>
+            <div style={{ fontSize: 14, color: COLORS.textSecondary, marginTop: 4 }}>
+              {apiEvents.length === 0 
+                ? (eventsError ? "Events could not be loaded." : "No events are currently available.")
+                : "Try adjusting your search or filters."}
+            </div>
+          </Card>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredEvents.map(ev => {
+            const participation = participations[ev.eventId];
+            const participantStatus = normalizeParticipationStatus(participation?.participantStatus ?? ev.participantStatus);
+            const statusLabel = participantStatusLabels[participantStatus] ?? participantStatus;
+            const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
+
+            return (
+              <Card 
+                key={ev.eventId} 
+                className="overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md"
+                onClick={() => setViewingEventDetail(ev)}
+                style={{ display: 'flex', flexDirection: 'column' }}
+              >
+                {/* Banner section */}
+                <div className="relative h-32 w-full" style={{ background: `${COLORS.primary}15` }}>
+                  {ev.bannerImageUrl ? (
+                    <img src={ev.bannerImageUrl} alt={ev.eventName} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Calendar size={32} style={{ color: COLORS.primary, opacity: 0.5 }} />
+                    </div>
+                  )}
+                  <div className="absolute top-3 right-3">
+                    <StatusBadge status={lifecycleStatus.toLowerCase()} />
+                  </div>
+                </div>
+
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="mb-3 flex-1">
+                    <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary, marginBottom: 4 }} className="line-clamp-1">{ev.eventName}</div>
+                    <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="line-clamp-2">{ev.description || "No description available."}</div>
+                  </div>
+                  <div className="flex flex-col gap-2 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Calendar size={14} style={{ color: COLORS.textSecondary }} />
+                      <span style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 500 }}>
+                        {ev.eventStartDate ? new Date(ev.eventStartDate).toLocaleDateString() : "TBA"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Award size={14} style={{ color: COLORS.textSecondary }} />
+                      <span style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 500 }}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="pt-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.primary }} className="flex items-center gap-1 group-hover:gap-2 transition-all">
+                      View Details <ChevronRight size={14} />
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </>
+    );
+  };
 
   const renderLeaderboard = () => {
     const leaderboardEvents = apiEvents.filter(ev => submissionTeams.some(t => t.eventId === ev.eventId));
-    const currentEventId = leaderboardEventId || activeTeamContext?.eventId || "";
+    const currentEventId = selectedEventDetailId || leaderboardEventId || activeTeamContext?.eventId || "";
 
     return (
       <>
@@ -1755,43 +2247,32 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           subtitle={leaderboardRoundId === "event" ? "Event leaderboard rankings" : `Round Rankings`} 
           action={
             <div className="flex items-center gap-2">
-              {leaderboardEvents.length > 0 && (
-                <select
-                  value={currentEventId}
-                  onChange={(e) => { setLeaderboardEventId(e.target.value); setLeaderboardRoundId("event"); }}
-                  className="px-3 py-1.5 rounded-md"
-                  style={{
-                    background: COLORS.bg,
-                    border: `1px solid ${COLORS.border}`,
-                    color: COLORS.textPrimary,
-                    outline: "none",
-                    fontSize: 13
-                  }}
-                >
-                  <option value="">Select Event</option>
-                  {leaderboardEvents.map(ev => (
-                    <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
-                  ))}
-                </select>
-              )}
               {leaderboardRounds.length > 0 && (
-                <select
+                <Select
                   value={leaderboardRoundId}
-                  onChange={(e) => setLeaderboardRoundId(e.target.value)}
-                  className="px-3 py-1.5 rounded-md"
-                  style={{
-                    background: COLORS.bg,
-                    border: `1px solid ${COLORS.border}`,
-                    color: COLORS.textPrimary,
-                    outline: "none",
-                    fontSize: 13
-                  }}
+                  onValueChange={(value) => setLeaderboardRoundId(value)}
                 >
-                  <option value="event">Event Ranking</option>
-                  {leaderboardRounds.map(r => (
-                    <option key={r.roundId} value={r.roundId}>{r.roundName}</option>
-                  ))}
-                </select>
+                  <SelectTrigger
+                    className="px-3 py-1.5 rounded-md outline-none"
+                    style={{
+                      background: COLORS.bg,
+                      border: `1px solid ${COLORS.border}`,
+                      color: COLORS.textPrimary,
+                      fontSize: 13,
+                      width: "180px",
+                    }}
+                  >
+                    <SelectValue placeholder="Event Ranking" />
+                  </SelectTrigger>
+                  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                    <SelectItem value="event" style={{ color: COLORS.textPrimary }}>Event Ranking</SelectItem>
+                    {leaderboardRounds.map(r => (
+                      <SelectItem key={r.roundId} value={r.roundId} style={{ color: COLORS.textPrimary }}>
+                        {r.roundName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
           }
@@ -1801,7 +2282,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           <table className="w-full" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: COLORS.bg }}>
-                {["Rank", "Team", "Score", "Category"].concat(leaderboardRoundId !== "event" ? ["Result"] : []).map(h => (
+                {["Rank", "Team", ...(leaderboardRoundId !== "event" ? ["Score"] : []), "Category", ...(leaderboardRoundId !== "event" ? ["Result"] : [])].map(h => (
                   <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                 ))}
               </tr>
@@ -1819,11 +2300,16 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        {(row.rankPosition ?? row.rank) <= 3 ? (
-                          <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][(row.rankPosition ?? row.rank) - 1]}</span>
-                        ) : (
-                          <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{row.rankPosition ?? row.rank}</span>
-                        )}
+                        {(() => {
+                          const rank = row.rankPosition ?? row.rank;
+                          if (!rank || rank <= 0) {
+                            return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
+                          }
+                          if (rank <= 3) {
+                            return <span style={{ fontSize: 16 }}>{["đŸ¥‡", "đŸ¥ˆ", "đŸ¥‰"][rank - 1]}</span>;
+                          }
+                          return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
+                        })()}
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -1831,19 +2317,21 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                         {row.teamName ?? row.teamId ?? row.team}
                       </span>
                     </td>
+                    {leaderboardRoundId !== "event" && (
+                      <td className="px-4 py-3">
+                        <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
+                          {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
+                        </span>
+                      </td>
+                    )}
                     <td className="px-4 py-3">
-                      <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>
-                        {row.finalScore?.toFixed(1) ?? row.totalScore ?? row.score}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "—"}</span>
+                      <span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track ?? "â€”"}</span>
                     </td>
                     {leaderboardRoundId !== "event" && (
                        <td className="px-4 py-3">
                           {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
                           {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
-                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                          {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>â€”</span>}
                        </td>
                     )}
                   </tr>
@@ -1869,7 +2357,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 };
 
   const renderCertificates = () => {
-    // Danh sách events mà user đang tham gia (ACTIVE)
+    // Danh sĂ¡ch events mĂ  user Ä‘ang tham gia (ACTIVE)
     const joinedEvents = apiEvents.filter(ev =>
       normalizeParticipationStatus(participations[ev.eventId]?.participantStatus ?? ev.participantStatus) === "ACTIVE",
     );
@@ -1898,45 +2386,55 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
                 <Calendar size={14} /> Event
               </span>
-              <select
-                value={certificateSelectedEventId}
-                onChange={e => {
-                  setCertificateSelectedEventId(e.target.value);
+              <Select
+                value={certificateSelectedEventId || "none"}
+                onValueChange={value => {
+                  setCertificateSelectedEventId(value === "none" ? "" : value);
                   setCertificateCategoryId("all");
                 }}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
                 disabled={apiEvents.length === 0}
               >
-                <option value="">Select an event...</option>
-                {joinedEvents.map(ev => (
-                  <option key={ev.eventId} value={ev.eventId}>{ev.eventName}</option>
-                ))}
-                {/* Hiển thị thêm các events khác nếu user chưa join */}
-                {apiEvents.filter(ev => !joinedEvents.find(j => j.eventId === ev.eventId)).map(ev => (
-                  <option key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textSecondary }}>
-                    {ev.eventName} (not joined)
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="w-full px-3 py-2 rounded-lg outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="Select an event..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select an event...</SelectItem>
+                  {joinedEvents.map(ev => (
+                    <SelectItem key={ev.eventId} value={ev.eventId} style={{ color: COLORS.textPrimary }}>
+                      {ev.eventName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
 
             <label className="block">
               <span className="flex items-center gap-2 mb-1" style={{ fontSize: 12, fontWeight: 700, color: COLORS.textSecondary }}>
                 <Target size={14} /> Category
               </span>
-              <select
+              <Select
                 value={certificateCategoryId}
-                onChange={event => setCertificateCategoryId(event.target.value)}
-                className="w-full px-3 py-2 rounded-lg outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                onValueChange={value => setCertificateCategoryId(value)}
                 disabled={certificateLoading || !certificateSelectedEventId}
               >
-                <option value="all">All categories</option>
-                {categoryOptions.map(([categoryId, categoryName]) => (
-                  <option key={categoryId} value={categoryId}>{categoryName}</option>
-                ))}
-              </select>
+                <SelectTrigger
+                  className="w-full px-3 py-2 rounded-lg outline-none"
+                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                >
+                  <SelectValue placeholder="All categories" />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="all" style={{ color: COLORS.textPrimary }}>All categories</SelectItem>
+                  {categoryOptions.map(([categoryId, categoryName]) => (
+                    <SelectItem key={categoryId} value={categoryId} style={{ color: COLORS.textPrimary }}>
+                      {categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
         </Card>
@@ -1979,82 +2477,86 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           </Card>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
-          <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
-          <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
-        </div>
+        {certificateSelectedEventId && (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
+              <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
+              <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
+            </div>
 
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: COLORS.bg }}>
-                  {["Award", "Event", "Category", "Published", "Actions"].map(h => (
-                    <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {certificateLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                      Loading certificates...
-                    </td>
-                  </tr>
-                ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
-                  const actionLoading = certificateActionLoading[award.id];
-                  return (
-                    <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
-                      <td className="px-4 py-3">
-                        <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
-                        <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
-                      </td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
-                      <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                        {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            icon={<Eye size={13} />}
-                            disabled={!!actionLoading}
-                            onClick={() => handleCertificateFile(award, "view")}
-                          >
-                            {actionLoading === "view" ? "Opening..." : "View"}
-                          </Button>
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            icon={<Download size={13} />}
-                            disabled={!!actionLoading}
-                            onClick={() => handleCertificateFile(award, "download")}
-                          >
-                            {actionLoading === "download" ? "Downloading..." : "Download"}
-                          </Button>
-                        </div>
-                      </td>
+            <Card>
+              <div className="overflow-x-auto">
+                <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: COLORS.bg }}>
+                      {["Award", "Event", "Category", "Published", "Actions"].map(h => (
+                        <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
+                      ))}
                     </tr>
-                  );
-                }) : (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center">
-                      <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                        No published certificates are available for this category.
-                      </div>
-                      <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                        Certificates will appear here after awards are published by the organizer.
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {certificateLoading ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                          Loading certificates...
+                        </td>
+                      </tr>
+                    ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
+                      const actionLoading = certificateActionLoading[award.id];
+                      return (
+                        <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                          <td className="px-4 py-3">
+                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
+                          </td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                            {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                icon={<Eye size={13} />}
+                                disabled={!!actionLoading}
+                                onClick={() => handleCertificateFile(award, "view")}
+                              >
+                                {actionLoading === "view" ? "Opening..." : "View"}
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                icon={<Download size={13} />}
+                                disabled={!!actionLoading}
+                                onClick={() => handleCertificateFile(award, "download")}
+                              >
+                                {actionLoading === "download" ? "Downloading..." : "Download"}
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center">
+                          <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
+                            No published certificates are available for this category.
+                          </div>
+                          <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                            Certificates will appear here after awards are published by the organizer.
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </>
+        )}
       </>
     );
   };
@@ -2435,6 +2937,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </div>
         )}
         {renderSubmissionHistory()}
+        {viewResultsTarget && (
+          <ScoreDetailsModal
+            submissionId={viewResultsTarget.submissionId}
+            roundId={viewResultsTarget.roundId}
+            studentMode={true}
+            onClose={() => setViewResultsTarget(null)}
+          />
+        )}
       </>
     );
   };
@@ -2501,10 +3011,17 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               />
             </div>
             <div className="flex items-center gap-3 mt-4">
-              <Button variant="primary" size="md" icon={<Save size={14} />} onClick={() => { setProfileSaved(true); setTimeout(() => setProfileSaved(false), 2000); }}>
-                Save Changes
+              <Button 
+                variant="primary" 
+                size="md" 
+                icon={profileSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />} 
+                onClick={handleSaveProfile}
+                disabled={profileSaving}
+              >
+                {profileSaving ? "Saving..." : "Save Changes"}
               </Button>
-              {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>✓ Profile saved!</span>}
+              {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>âœ“ Profile saved!</span>}
+              {profileError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{profileError}</span>}
             </div>
           </Card>
 
@@ -2540,10 +3057,22 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         {currentPage === "events" && renderEvents()}
         {currentPage === "certificates" && renderCertificates()}
         {currentPage === "submissions" && renderSubmissions()}
+        {currentPage === "results" && (
+          <div className="space-y-6">
+            <SectionHeader title="My Results" subtitle="Select a team to view your rankings, judge feedback, and manage appeals for each round." />
+            {renderSubmissionTeamSelector()}
+            {activeTeamContext?.teamId ? (
+               <MemberMyResultsView activeTeamContext={activeTeamContext} round={selectedSubmissionRound} />
+            ) : (
+               <Card className="p-6 text-center text-gray-500">Please select a team above to view your results.</Card>
+            )}
+          </div>
+        )}
         {currentPage === "feedback" && renderFeedback()}
         {currentPage === "requests" && renderRequests()}
         {currentPage === "notifications" && renderNotifications()}
         {currentPage === "profile" && renderProfile()}
+        {currentPage === "appeals" && <MemberAppealsView activeTeamContext={activeTeamContext} />}
         {currentPage === "mentor" && <MyMentor isLeader={isLeader} onNavigate={onNavigate} teamId={activeTeamContext?.teamId} />}
         {currentPage === "consultations" && <TeamConsultations isLeader={isLeader} onNavigate={onNavigate} />}
       </>
@@ -2552,3 +3081,4 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 
   return <div className="p-6 space-y-6">{renderPage()}</div>;
 }
+

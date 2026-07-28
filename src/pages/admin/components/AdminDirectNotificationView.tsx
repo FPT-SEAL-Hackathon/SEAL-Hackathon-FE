@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
@@ -176,31 +177,31 @@ export function AdminDirectNotificationView({ context }: AdminViewProps) {
 
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TARGET TYPE</label>
-              <select
-                value={notificationTargetMode}
-                onChange={e => setNotificationTargetMode(e.target.value as "team" | "user")}
-                className="w-full px-3 py-2 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="team">Team</option>
-                <option value="user">Individual User</option>
-              </select>
+              <Select value={notificationTargetMode || "none"} onValueChange={value => setNotificationTargetMode((value === "none" ? "" : value) as "team" | "user")} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="team" style={{ color: COLORS.textPrimary }}>Team</SelectItem>
+                <SelectItem value="user" style={{ color: COLORS.textPrimary }}>Individual User</SelectItem>
+  </SelectContent>
+</Select>
             </div>
 
             {notificationTargetMode === "team" ? (
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>TEAM</label>
-                <select
-                  value={notificationTeamId}
-                  onChange={e => setNotificationTeamId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                >
-                  <option value="">Select team</option>
+                <Select value={notificationTeamId || "none"} onValueChange={value => setNotificationTeamId((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select team</SelectItem>
                   {apiTeamEligibility.map((team: any) => (
-                    <option key={team.teamId} value={team.teamId}>{team.teamName} ({team.activeMemberCount} members)</option>
+                    <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>{team.teamName} ({team.activeMemberCount} members)</SelectItem>
                   ))}
-                </select>
+  </SelectContent>
+</Select>
                 {apiTeamEligibility.length === 0 && (
                   <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
                     No teams loaded for the selected event.
