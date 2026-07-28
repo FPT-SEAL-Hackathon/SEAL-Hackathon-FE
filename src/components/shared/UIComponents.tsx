@@ -29,7 +29,7 @@ const glassSurface: React.CSSProperties = {
 };
 
 // Status Badge
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, opaque = false }: { status: string; opaque?: boolean }) {
   if (!status) return null;
   const normalizedStatus = status.toLowerCase();
   
@@ -82,12 +82,12 @@ export function StatusBadge({ status }: { status: string }) {
   const cfg = configs[normalizedStatus] || { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: formatLabel(status), border: "rgba(100,70,30,0.14)" };
   return (
     <span
-      className="inline-flex items-center px-2.5 py-0.5 rounded-full"
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${opaque ? "shadow-md backdrop-blur-md" : ""}`}
       style={{
-        background: cfg.bg,
+        background: opaque ? "var(--sidebar-surface, rgba(255, 255, 255, 0.95))" : cfg.bg,
         color: cfg.color,
         fontSize: 11,
-        fontWeight: 600,
+        fontWeight: 700,
         letterSpacing: "0.02em",
         border: `1px solid ${cfg.border}`,
       }}
@@ -159,7 +159,7 @@ type CardProps = React.HTMLAttributes<HTMLDivElement> & {
 
 export function Card({ children, className = "", style = {}, ...rest }: CardProps) {
   return (
-    <div {...rest} className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
+    <div {...rest} className={`rounded-2xl overflow-hidden ui-card-glow ${className}`} style={{ ...glassSurface, ...style }}>
       {children}
     </div>
   );

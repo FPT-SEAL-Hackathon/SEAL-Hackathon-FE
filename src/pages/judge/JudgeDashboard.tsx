@@ -9,6 +9,7 @@ import { JudgeCalibrationView } from "./components/JudgeCalibrationView";
 import { JudgeHistoryView } from "./components/JudgeHistoryView";
 import { JudgeProfileView } from "./components/JudgeProfileView";
 import { JudgeSubmissionsStep } from "./components/JudgeSubmissionsStep";
+import { JudgeOverviewView } from "./components/JudgeOverviewView";
 
 export function JudgeDashboard({ currentPage, onNavigate, navKey = 0 }: { currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number }) {
   const { user } = useAuth();
@@ -58,9 +59,20 @@ export function JudgeDashboard({ currentPage, onNavigate, navKey = 0 }: { curren
   const renderPage = () => {
     return (
       <>
-        {/* Mount JudgeRoundsView if we are on 'rounds', or if we went to 'scoring' from 'rounds' */}
-        {(currentPage === "rounds" || currentPage === "submissions" || (currentPage === "scoring" && sourcePage === "rounds") || (!["rounds", "submissions", "scoring", "calibration", "history", "profile"].includes(currentPage))) && (
-          <div style={{ display: currentPage === "rounds" || !["rounds", "submissions", "scoring", "calibration", "history", "profile"].includes(currentPage) ? "block" : "none" }}>
+        {/* Judge Dashboard Overview */}
+        {(currentPage === "dashboard" || (!["dashboard", "rounds", "submissions", "scoring", "calibration", "history", "profile"].includes(currentPage))) && (
+          <JudgeOverviewView
+            apiRounds={apiRounds}
+            apiSubmissions={apiSubmissions}
+            onNavigate={handleNavigate}
+            onSelectRound={loadRoundData}
+            isLoadingRounds={isFetchingRounds}
+          />
+        )}
+
+        {/* Mount JudgeRoundsView ONLY if we are on 'rounds', or if we went to 'scoring' / 'submissions' from 'rounds' */}
+        {(currentPage === "rounds" || currentPage === "submissions" || (currentPage === "scoring" && sourcePage === "rounds")) && (
+          <div style={{ display: currentPage === "rounds" ? "block" : "none" }}>
             <JudgeRoundsView
               apiRounds={apiRounds}
               apiSubmissions={apiSubmissions}

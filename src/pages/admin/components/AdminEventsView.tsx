@@ -179,7 +179,7 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
                   </div>
                 )}
                 <div className="absolute top-3 right-3 flex gap-2">
-                  <StatusBadge status={status} />
+                  <StatusBadge status={status} opaque />
                   <div onClick={e => e.stopPropagation()}>
                     <button 
                       className="p-1.5 rounded bg-white/90 hover:bg-white text-gray-700 shadow-sm transition-all"
