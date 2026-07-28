@@ -150,6 +150,12 @@ function unwrapTeamResponse(response: RawTeamResponse | BackendEnvelope<RawTeamR
   return response as RawTeamResponse;
 }
 
+function unwrapResponse<T>(response: T | BackendEnvelope<T>): T {
+  if (typeof response === "object" && response !== null && "data" in response && response.data) return response.data;
+  if (typeof response === "object" && response !== null && "content" in response && response.content) return response.content;
+  return response as T;
+}
+
 function unwrapArray<T>(response: T[] | BackendEnvelope<T[]>): T[] {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response.data)) return response.data;
@@ -279,6 +285,22 @@ export interface JoinTeamRequestResponse {
   responseNote: string;
 }
 
+export interface TeamWithdrawalRequestResponse {
+  requestId: string;
+  teamId: string;
+  teamName?: string;
+  eventId?: string;
+  categoryId?: string;
+  reason: string;
+  requestStatus: string;
+  requestedAt: string;
+  requestedById?: string;
+  requestedByName?: string;
+  respondedAt?: string | null;
+  respondedById?: string | null;
+  responseNote?: string | null;
+}
+
 export interface TeamEligibilityMemberResponse {
   teamMemberId: string;
   userId: string;
@@ -380,6 +402,9 @@ export const teamService = {
     api.post<unknown[]>(`/api/v1/teams/${teamId}/register-event`, {}),
   withdrawEvent: (teamId: string) =>
     api.delete<{ success: boolean; message: string }>(`/api/v1/teams/${teamId}/register-event`),
+  requestWithdrawal: (teamId: string, reason: string) =>
+    api.post<TeamWithdrawalRequestResponse | BackendEnvelope<TeamWithdrawalRequestResponse>>(`/api/v1/teams/${teamId}/withdrawal-requests`, { reason })
+      .then(unwrapResponse),
 
   // Admin
   reviewEligibility: (eventId: string) =>
@@ -389,4 +414,12 @@ export const teamService = {
     api.post<EligibilityDecisionResponse>(`/api/v1/admin/teams/${teamId}/eligibility-decision`, { approved, note }),
   disqualify: (teamId: string, reason: string) =>
     api.post<DisqualificationResponse>(`/api/v1/admin/teams/${teamId}/disqualify`, { reason }),
+  getPendingWithdrawalRequests: (eventId: string) =>
+    api.get<TeamWithdrawalRequestResponse[] | BackendEnvelope<TeamWithdrawalRequestResponse[]>>(`/api/v1/admin/events/${eventId}/team-withdrawal-requests`)
+      .then(unwrapArray),
+  handleWithdrawalRequest: (requestId: string, action: "APPROVED" | "REJECTED", responseNote?: string) =>
+    api.put<TeamWithdrawalRequestResponse | BackendEnvelope<TeamWithdrawalRequestResponse>>(
+      `/api/v1/admin/team-withdrawal-requests/${requestId}`,
+      { action, responseNote },
+    ).then(unwrapResponse),
 };

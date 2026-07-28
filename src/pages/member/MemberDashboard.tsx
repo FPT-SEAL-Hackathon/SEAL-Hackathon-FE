@@ -38,7 +38,7 @@ import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestRespo
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
-import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
+import { eventParticipantService, type EventParticipantResponse } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
 import { MemberMyResultsView } from "./components/MemberMyResultsView";
 import { ScoreDetailsModal } from "@/features/events/components/judging/ScoreDetailsModal";
@@ -197,23 +197,21 @@ const participantStatusLabels: Record<EventCardParticipationStatus, string> = {
   ACTIVE: "Approved",
   REJECTED: "Rejected",
   SUSPENDED: "Suspended",
-  TEMPORARY: "Temporary",
-  UNVERIFIED: "Unverified",
+  WITHDRAWN: "Withdrawn",
 };
 
 const restrictedParticipationMessage: Record<Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">, string> = {
   PENDING: "Waiting for organizer approval.",
   REJECTED: "Registration rejected.",
   SUSPENDED: "Your participation in this event is suspended.",
-  TEMPORARY: "Your participation is temporary and awaiting organizer review.",
-  UNVERIFIED: "Your participation is unverified. Please complete the required verification.",
+  WITHDRAWN: "Your team has withdrawn from this event.",
 };
 
 function normalizeParticipationStatus(status?: string | null): EventCardParticipationStatus {
   const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
   if (!value || value === "NOT_REGISTERED") return "NOT_REGISTERED";
   if (value === "PENDING_APPROVAL") return "PENDING";
-  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "TEMPORARY" || value === "UNVERIFIED") {
+  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "WITHDRAWN") {
     return value as EventCardParticipationStatus;
   }
   return "NOT_REGISTERED";
