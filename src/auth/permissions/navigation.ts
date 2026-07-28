@@ -45,6 +45,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "BarChart2", label: "Research & Analytics", key: "reports" },
     { icon: "Bell", label: "Notifications Broadcast", key: "notifications" },
     { icon: "Shield", label: "Audit Logs", key: "audit" },
+    { icon: "Globe", label: "Landing Page Settings", key: "landing-settings" },
     { icon: "Wrench", label: "System Settings", key: "settings" },
     { icon: "User", label: "Profile", key: "profile" },
   ],
@@ -62,6 +63,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "Award", label: "Awards", key: "awards" },
     { icon: "Bell", label: "Notifications Broadcast", key: "notifications" },
     { icon: "Shield", label: "Audit Logs", key: "audit" },
+    { icon: "Globe", label: "Landing Page Settings", key: "landing-settings" },
   ],
   [ROLES.MENTOR]: [
     { icon: "LayoutDashboard", label: "Dashboard", key: "dashboard" },

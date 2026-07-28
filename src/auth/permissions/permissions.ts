@@ -32,6 +32,7 @@ export type PageKey =
   | "awards"
   | "award-patterns"
   | "settings"
+  | "landing-settings"
   | "schedule"
   // Mentor pages
   | "tracks"
@@ -98,6 +99,7 @@ export const PAGE_PERMISSIONS: Record<PageKey, Role[]> = {
   "award-patterns": [...ORGANIZER_ROLES],
   // Cấu hình hệ thống -> Admin.
   settings: [...ADMIN_ROLES],
+  "landing-settings": [...ADMIN_ROLES, ...ORGANIZER_ROLES],
   schedule: [],
   // Mentor pages
   tracks: [...MENTOR_ROLES],
