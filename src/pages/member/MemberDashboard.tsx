@@ -2086,8 +2086,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     }
 
     const filteredEvents = apiEvents.filter(ev => {
-      const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
-      if (eventStatusFilter && eventStatusFilter !== "all" && lifecycleStatus !== eventStatusFilter.toUpperCase()) return false;
+      const lifecycleStatusKey = normalizeEventStatusKey(String(ev.eventStatus || ""));
+      if (eventStatusFilter && eventStatusFilter !== "all" && lifecycleStatusKey !== normalizeEventStatusKey(eventStatusFilter)) return false;
       if (eventSearch && !ev.eventName.toLowerCase().includes(eventSearch.toLowerCase())) return false;
       if (eventStartDateFilter && ev.eventStartDate && new Date(ev.eventStartDate) < new Date(eventStartDateFilter)) return false;
       if (eventEndDateFilter && ev.eventEndDate && new Date(ev.eventEndDate) > new Date(eventEndDateFilter)) return false;
@@ -2117,16 +2117,16 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             )}
           </div>
           <Select value={eventStatusFilter} onValueChange={setEventStatusFilter}>
-            <SelectTrigger className="w-[160px] h-9 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)" }}>
+            <SelectTrigger className="w-[180px] h-9 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)" }}>
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
-              <SelectItem value="PUBLISHED">Published</SelectItem>
-              <SelectItem value="UPCOMING">Upcoming</SelectItem>
-              <SelectItem value="ONGOING">Ongoing</SelectItem>
               <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="ONGOING">Ongoing</SelectItem>
+              <SelectItem value="REGISTRATION_OPEN">Registration Open</SelectItem>
+              <SelectItem value="UPCOMING">Upcoming</SelectItem>
+              <SelectItem value="REGISTRATION_CLOSED">Registration Closed</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2">
