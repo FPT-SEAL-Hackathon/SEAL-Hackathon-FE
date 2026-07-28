@@ -46,6 +46,7 @@ import type { Round } from "@/features/events/types/round";
 import type { RoundRankingDTO } from "@/features/rankings/api/rankingService";
 
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
+const TEAM_WITHDRAWN_SUBMISSION_MESSAGE = "This team has been withdrawn and can no longer submit work.";
 
 type StoredTeam = {
   teamId?: string;
@@ -81,6 +82,10 @@ function isBeforeSubmissionDeadline(round?: Round) {
   if (!round?.submissionDeadline) return true;
   const deadline = new Date(round.submissionDeadline).getTime();
   return Number.isNaN(deadline) || Date.now() <= deadline;
+}
+
+function isWithdrawnTeam(team?: TeamResponse | null) {
+  return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "withdrawn";
 }
 
 function isOfficialSubmissionRound(round: Round) {
@@ -359,6 +364,10 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       setSubmitError("Submission name is required.");
       return;
     }
+    if (isWithdrawnTeam(activeTeam)) {
+      setSubmitError(TEAM_WITHDRAWN_SUBMISSION_MESSAGE);
+      return;
+    }
     if (activeTeam && !isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName)) {
       setSubmitError("Only active teams can submit work. Your team is waiting for organizer approval.");
       return;
@@ -522,10 +531,13 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     const selectedRoundLocked = !!selectedRound
       && !submissionEligibility.loading
       && !submissionEligibility.canSubmit;
+    const teamWithdrawn = isWithdrawnTeam(activeTeam);
+    const teamCanSubmit = !activeTeam || isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName);
     const canSubmitSelectedRound = !!submissionForm.roundId
       && selectedRoundOpen
       && !submissionEligibility.loading
-      && submissionEligibility.canSubmit;
+      && submissionEligibility.canSubmit
+      && teamCanSubmit;
     const roundById = new Map(allSubmissionRounds.map(round => [round.roundId, round]));
 
     return (
@@ -540,7 +552,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <StatusBadge status={getTeamStatusInfo(activeTeam.teamStatusId, activeTeam.teamStatusName).badge} />
               {!isTeamActive(activeTeam.teamStatusId, activeTeam.teamStatusName) && (
                 <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                  Submissions unlock after organizer approval.
+                  {teamWithdrawn ? TEAM_WITHDRAWN_SUBMISSION_MESSAGE : "Submissions unlock after organizer approval."}
                 </span>
               )}
             </div>

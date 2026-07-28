@@ -414,12 +414,7 @@ export const teamService = {
     api.post<EligibilityDecisionResponse>(`/api/v1/admin/teams/${teamId}/eligibility-decision`, { approved, note }),
   disqualify: (teamId: string, reason: string) =>
     api.post<DisqualificationResponse>(`/api/v1/admin/teams/${teamId}/disqualify`, { reason }),
-  getPendingWithdrawalRequests: (eventId: string) =>
+  getEventWithdrawalRequests: (eventId: string) =>
     api.get<TeamWithdrawalRequestResponse[] | BackendEnvelope<TeamWithdrawalRequestResponse[]>>(`/api/v1/admin/events/${eventId}/team-withdrawal-requests`)
       .then(unwrapArray),
-  handleWithdrawalRequest: (requestId: string, action: "APPROVED" | "REJECTED", responseNote?: string) =>
-    api.put<TeamWithdrawalRequestResponse | BackendEnvelope<TeamWithdrawalRequestResponse>>(
-      `/api/v1/admin/team-withdrawal-requests/${requestId}`,
-      { action, responseNote },
-    ).then(unwrapResponse),
 };

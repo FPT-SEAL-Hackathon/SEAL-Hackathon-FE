@@ -1346,17 +1346,22 @@ export function TeamApiPanel({
     if (!selectedTeam || getTeamStatusInfoForTeam(selectedTeam).badge !== "active") return;
     const reason = withdrawalReason.trim();
     if (!reason) {
-      setMessage({ tone: "error", text: "Enter a withdrawal reason before sending the request." });
+      setMessage({ tone: "error", text: "Enter a withdrawal reason before withdrawing your team." });
       return;
     }
     run(
       "withdraw",
-      () => teamService.requestWithdrawal(selectedTeam.teamId, reason),
-      () => {
+      async () => {
+        await teamService.requestWithdrawal(selectedTeam.teamId, reason);
+        return teamService.getById(selectedTeam.teamId);
+      },
+      team => {
+        activateTeam(team);
+        setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
         setWithdrawalDialogOpen(false);
         setWithdrawalReason("");
       },
-      "Withdrawal request sent to the organizer.",
+      "Team withdrawn. The organizer can now view the withdrawal reason.",
       true,
     );
   };
@@ -2117,6 +2122,15 @@ export function TeamApiPanel({
     };
     const renderRegistrationExpiredModal = () => {
       if (!registrationDeadlinePassed || dismissedExpiredTeamId === selectedTeam.teamId) return null;
+      const isDisbandAction = isLeader && canEditRoster;
+      const actionLoading = isDisbandAction ? loading.disband : loading.remove;
+      const actionIcon = actionLoading
+        ? <Loader size={14} className="animate-spin" />
+        : isDisbandAction
+          ? <Trash2 size={14} />
+          : <LogOut size={14} />;
+      const actionLabel = isDisbandAction ? "Disband Team" : "Leave Team";
+      const loadingLabel = isDisbandAction ? "Disbanding..." : "Leaving...";
 
       return renderCenteredModal(
         "Registration Expired",
@@ -2144,7 +2158,7 @@ export function TeamApiPanel({
                   Registration deadline has passed
                 </div>
                 <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 6, lineHeight: 1.6 }}>
-                  This team can no longer request approval for {selectedEventName}. Please leave this team and join or create a team in another event that is still open for registration.
+                  This team can no longer request approval for {selectedEventName}. Please {isDisbandAction ? "disband this team" : "leave this team"} and join or create a team in another event that is still open for registration.
                 </div>
                 {teamEventUnavailableMessage && (
                   <div
@@ -2161,11 +2175,11 @@ export function TeamApiPanel({
             <Button
               variant="danger"
               size="md"
-              icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <LogOut size={14} />}
-              disabled={loading.remove}
-              onClick={leaveTeam}
+              icon={actionIcon}
+              disabled={actionLoading}
+              onClick={isDisbandAction ? disbandTeam : leaveTeam}
             >
-              {loading.remove ? "Leaving..." : "Leave Team"}
+              {actionLoading ? loadingLabel : actionLabel}
             </Button>
           </div>
         </>,
@@ -2832,7 +2846,7 @@ export function TeamApiPanel({
                   setWithdrawalDialogOpen(true);
                 }}
               >
-                {loading.withdraw ? "Sending..." : "Withdraw Team"}
+                {loading.withdraw ? "Withdrawing..." : "Withdraw Team"}
               </Button>
             )}
           </div>
@@ -2845,7 +2859,7 @@ export function TeamApiPanel({
           },
           <>
             <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.7 }}>
-              Send a withdrawal request for {selectedTeam.teamName}. The team stays active until the organizer approves it.
+              Withdraw {selectedTeam.teamName} from this event. The organizer will see your reason, and this action is recorded immediately.
             </div>
             <textarea
               value={withdrawalReason}
@@ -2871,7 +2885,7 @@ export function TeamApiPanel({
                 disabled={loading.withdraw || !withdrawalReason.trim()}
                 onClick={requestTeamWithdrawal}
               >
-                {loading.withdraw ? "Sending..." : "Send Request"}
+                {loading.withdraw ? "Withdrawing..." : "Withdraw Team"}
               </Button>
             </div>
           </>,

@@ -43,7 +43,7 @@ interface EventTeamsSectionProps {
   //categories: Category[];
 }
 
-const WITHDRAWAL_REJECT_NOTE_REQUIRED_MESSAGE = "Response note is required when rejecting a withdrawal request.";
+const WITHDRAWAL_SUBMISSION_RULE_MESSAGE = "For the current Submission Open or Judging round, submitted work that has not been judged is disqualified by the backend when the team withdraws.";
 
 function activeMemberCountForTeam(
   team: TeamEligibilityReviewResponse,
@@ -279,11 +279,9 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const [withdrawalTarget, setWithdrawalTarget] = useState<TeamWithdrawalRequestResponse | null>(null);
   const [decisionNote, setDecisionNote] = useState("");
   const [disqualifyReason, setDisqualifyReason] = useState("");
-  const [withdrawalResponseNote, setWithdrawalResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [withdrawalLoading, setWithdrawalLoading] = useState(false);
   const [actionTeamId, setActionTeamId] = useState("");
-  const [actionWithdrawalRequestId, setActionWithdrawalRequestId] = useState("");
   const [viewTeamId, setViewTeamId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -326,7 +324,10 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     setWithdrawalLoading(true);
     setError("");
     try {
-      setWithdrawalRequests(await teamService.getPendingWithdrawalRequests(eventId));
+      const requests = await teamService.getEventWithdrawalRequests(eventId);
+      setWithdrawalRequests([...requests].sort((left, right) =>
+        new Date(right.requestedAt || 0).getTime() - new Date(left.requestedAt || 0).getTime()
+      ));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Could not load withdrawal requests.");
       setWithdrawalRequests([]);
@@ -587,34 +588,6 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     ?? teams.find(team => team.teamId === request.teamId)?.teamName
     ?? request.teamId;
 
-  const decideWithdrawal = async (action: "APPROVED" | "REJECTED") => {
-    if (!withdrawalTarget) return;
-    if (action === "REJECTED" && !withdrawalResponseNote.trim()) {
-      setError(WITHDRAWAL_REJECT_NOTE_REQUIRED_MESSAGE);
-      return;
-    }
-    setActionWithdrawalRequestId(withdrawalTarget.requestId);
-    setError("");
-    setMessage("");
-    try {
-      await teamService.handleWithdrawalRequest(
-        withdrawalTarget.requestId,
-        action,
-        withdrawalResponseNote.trim() || undefined,
-      );
-      setMessage(action === "APPROVED"
-        ? "Withdrawal request approved. The team has been marked as withdrawn and notified."
-        : "Withdrawal request rejected. The team remains active and has been notified.");
-      setWithdrawalTarget(null);
-      setWithdrawalResponseNote("");
-      await Promise.all([loadWithdrawalRequests(), loadTeams()]);
-    } catch (actionError) {
-      setError(parseApiError(actionError).message || "Could not update withdrawal request.");
-    } finally {
-      setActionWithdrawalRequestId("");
-    }
-  };
-
   return (
     <>
       <Card className="p-5">
@@ -741,10 +714,10 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
           <div>
             <div className="flex items-center gap-2" style={{ fontSize: 16, fontWeight: 800, color: COLORS.textPrimary }}>
               <ClipboardList size={18} style={{ color: COLORS.primary }} />
-              Withdrawal Requests
+              Withdrawn Teams
             </div>
             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
-              {withdrawalRequests.length} pending request(s)
+              {withdrawalRequests.length} withdrawal record(s)
             </div>
           </div>
           <Button
@@ -766,7 +739,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
         {!withdrawalLoading && withdrawalRequests.length === 0 && (
           <div className="rounded-xl p-6 text-center" style={{ border: `1px solid ${COLORS.border}`, color: COLORS.textSecondary }}>
             <CheckCircle size={28} className="mx-auto mb-2" />
-            No pending withdrawal requests.
+            No teams have withdrawn from this event.
           </div>
         )}
         {!withdrawalLoading && withdrawalRequests.length > 0 && (
@@ -782,7 +755,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
               </div>
               <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, textTransform: "uppercase" }}>Leader</div>
               <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, textTransform: "uppercase" }}>Thời gian</div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, textTransform: "uppercase" }}>Action</div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, textTransform: "uppercase" }}>Details</div>
             </div>
             {withdrawalRequests.map((request, index) => (
             <div
@@ -811,17 +784,15 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
                 {request.requestedAt ? new Date(request.requestedAt).toLocaleString() : "-"}
               </div>
               <Button
-                variant="primary"
+                variant="outline"
                 size="sm"
-                icon={actionWithdrawalRequestId === request.requestId ? <Loader size={13} className="animate-spin" /> : <Eye size={13} />}
-                disabled={actionWithdrawalRequestId === request.requestId}
+                icon={<Eye size={13} />}
                 onClick={() => {
                   setError("");
-                  setWithdrawalResponseNote("");
                   setWithdrawalTarget(request);
                 }}
               >
-                Review
+                View
               </Button>
             </div>
             ))}
@@ -859,7 +830,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
               <div className="flex items-center gap-3">
                 <ClipboardList size={22} style={{ color: COLORS.primary }} />
                 <div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Review Withdrawal</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Withdrawal Details</div>
                   <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{getWithdrawalTeamName(withdrawalTarget)}</div>
                 </div>
               </div>
@@ -868,40 +839,38 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
               </button>
             </div>
             <div className="rounded-xl p-4 mt-5" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>STATUS</div>
+                  <StatusBadge status={(withdrawalTarget.requestStatus || "approved").toLowerCase()} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>LEADER</div>
+                  <div style={{ fontSize: 13, color: COLORS.textPrimary, wordBreak: "break-word" }}>
+                    {withdrawalTarget.requestedByName || withdrawalTarget.requestedById || "Leader"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>WITHDRAWN AT</div>
+                  <div style={{ fontSize: 13, color: COLORS.textPrimary }}>
+                    {withdrawalTarget.requestedAt ? new Date(withdrawalTarget.requestedAt).toLocaleString() : "-"}
+                  </div>
+                </div>
+              </div>
               <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 6 }}>TEAM REASON</div>
               <div style={{ fontSize: 13, color: COLORS.textPrimary, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
                 {withdrawalTarget.reason || "No reason provided."}
               </div>
             </div>
-            <textarea
-              value={withdrawalResponseNote}
-              onChange={event => setWithdrawalResponseNote(event.target.value)}
-              placeholder="Response note for the team..."
-              rows={4}
-              className="w-full px-3 py-2.5 rounded-xl outline-none resize-none mt-4"
-              style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textPrimary }}
-            />
+            <div className="rounded-xl p-4 mt-3" style={{ background: `${COLORS.warning}10`, border: `1px solid ${COLORS.warning}33` }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.warning, marginBottom: 6 }}>SUBMISSION IMPACT</div>
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, lineHeight: 1.6 }}>
+                {WITHDRAWAL_SUBMISSION_RULE_MESSAGE}
+              </div>
+            </div>
             {error && <div style={{ color: COLORS.error, fontSize: 12, marginTop: 8 }}>{error}</div>}
             <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" size="sm" onClick={() => setWithdrawalTarget(null)}>Cancel</Button>
-              <Button
-                variant="danger"
-                size="sm"
-                icon={actionWithdrawalRequestId === withdrawalTarget.requestId ? <Loader size={13} className="animate-spin" /> : <XCircle size={13} />}
-                disabled={actionWithdrawalRequestId === withdrawalTarget.requestId || !withdrawalResponseNote.trim()}
-                onClick={() => void decideWithdrawal("REJECTED")}
-              >
-                Reject
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                icon={actionWithdrawalRequestId === withdrawalTarget.requestId ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                disabled={actionWithdrawalRequestId === withdrawalTarget.requestId}
-                onClick={() => void decideWithdrawal("APPROVED")}
-              >
-                Approve
-              </Button>
+              <Button variant="outline" size="sm" onClick={() => setWithdrawalTarget(null)}>Close</Button>
             </div>
           </Card>
         </div>
