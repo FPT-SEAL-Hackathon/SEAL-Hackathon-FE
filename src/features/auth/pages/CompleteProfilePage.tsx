@@ -1,9 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { AlertCircle, BookOpen, Building2, Loader, Phone, User } from "lucide-react";
 import { completeProfile, type CompleteProfileRequest } from "@/features/auth/api/authService";
 import { useAuth } from "@/features/auth/store/authStore";
 import { ApiError, parseApiError } from "@/lib/api/apiClient";
+import { fptStudentCodePrefixService, type FptStudentCodePrefix } from "@/features/users/api/fptStudentCodePrefixService";
+import {
+  getFptStudentCodePrefixInfo,
+  isValidFptStudentCode,
+  MSG_FPT_CODE,
+  normalizeFptStudentCode,
+} from "@/features/users/utils/profileValidation";
 
 type StudentRole = "FPT_STUDENT" | "EXTERNAL_STUDENT";
 
@@ -27,6 +34,20 @@ export function CompleteProfilePage() {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState("");
   const [conflictFields, setConflictFields] = useState<string[] | null>(null);
+  const [fptPrefixes, setFptPrefixes] = useState<FptStudentCodePrefix[]>([]);
+  const prefixInfo = role === "FPT_STUDENT" ? getFptStudentCodePrefixInfo(fptStudentCode, fptPrefixes) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    fptStudentCodePrefixService.list()
+      .then(data => {
+        if (!cancelled) setFptPrefixes(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFptPrefixes([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = async () => {
     setApiError("");
@@ -40,6 +61,10 @@ export function CompleteProfilePage() {
       setApiError("FPT student code is required.");
       return;
     }
+    if (role === "FPT_STUDENT" && !isValidFptStudentCode(fptStudentCode, fptPrefixes)) {
+      setApiError(MSG_FPT_CODE);
+      return;
+    }
     if (role === "EXTERNAL_STUDENT" && (!externalStudentCode.trim() || !universityName.trim())) {
       setApiError("External student code and university name are required.");
       return;
@@ -49,7 +74,7 @@ export function CompleteProfilePage() {
       role,
       fullName: fullName.trim(),
       phone: phone.trim() || undefined,
-      fptStudentCode: role === "FPT_STUDENT" ? fptStudentCode.trim() : undefined,
+      fptStudentCode: role === "FPT_STUDENT" ? normalizeFptStudentCode(fptStudentCode) : undefined,
       externalStudentCode: role === "EXTERNAL_STUDENT" ? externalStudentCode.trim() : undefined,
       universityName: role === "EXTERNAL_STUDENT" ? universityName.trim() : undefined,
     };
@@ -150,7 +175,16 @@ export function CompleteProfilePage() {
           <TextField label="Phone number" icon={<Phone size={15} />} value={phone} onChange={setPhone} placeholder="0912345678" />
 
           {role === "FPT_STUDENT" ? (
-            <TextField label="FPT student code" icon={<BookOpen size={15} />} value={fptStudentCode} onChange={setFptStudentCode} placeholder="FPT2024001" />
+            <>
+              <TextField label="FPT student code" icon={<BookOpen size={15} />} value={fptStudentCode} onChange={setFptStudentCode} placeholder="SE123456" />
+              {prefixInfo && (
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -8, lineHeight: 1.5 }}>
+                  {prefixInfo.prefix} - {prefixInfo.englishName}
+                  <br />
+                  {prefixInfo.majorGroup}{prefixInfo.majorCode ? ` (Major code: ${prefixInfo.majorCode})` : ""}
+                </div>
+              )}
+            </>
           ) : (
             <>
               <TextField label="External student code" icon={<BookOpen size={15} />} value={externalStudentCode} onChange={setExternalStudentCode} placeholder="EXT2024001" />

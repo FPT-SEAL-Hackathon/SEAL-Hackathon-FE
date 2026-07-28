@@ -9,6 +9,13 @@ import { useAuth } from "@/features/auth/store/authStore";
 import { useNavigate } from "react-router";
 import { ApiError, api, parseApiError } from "@/lib/api/apiClient.ts";
 import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService.ts";
+import { fptStudentCodePrefixService, type FptStudentCodePrefix } from "@/features/users/api/fptStudentCodePrefixService";
+import {
+  getFptStudentCodePrefixInfo,
+  isValidFptStudentCode,
+  MSG_FPT_CODE,
+  normalizeFptStudentCode,
+} from "@/features/users/utils/profileValidation";
 
 // ─── Dev bypass credential ───────────────────────────────────────────────────
 const DEV_EMAIL = "dev@seal.dev";
@@ -206,6 +213,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [fptPrefixes, setFptPrefixes] = useState<FptStudentCodePrefix[]>([]);
   // Email đã có tài khoản Google-only (chưa có mật khẩu): backend trả 409
   // ACCOUNT_LINK_REQUIRED + linkingToken — chuyển sang bước xác minh OTP để
   // thiết lập mật khẩu cho CHÍNH tài khoản đó (không tạo user mới).
@@ -214,6 +222,20 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   const [otpInfo, setOtpInfo] = useState("");
   const { setAuth } = useAuth();
   const navigate = useNavigate();
+  const isFptStudent = form.userTypeId === REGISTER_USER_TYPES[0].value;
+  const prefixInfo = isFptStudent ? getFptStudentCodePrefixInfo(form.studentCode, fptPrefixes) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    fptStudentCodePrefixService.list()
+      .then(data => {
+        if (!cancelled) setFptPrefixes(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFptPrefixes([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const set = (k: keyof typeof form, v: string) => {
     setForm(prev => ({ ...prev, [k]: v }));
@@ -229,6 +251,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
     if (form.password !== form.confirmPassword) e.confirmPassword = "Passwords don't match";
     if (!form.phone.match(/^\d{1,10}$/)) e.phone = "Invalid phone (max 10 digits)";
     if (!form.studentCode.trim()) e.studentCode = "Required";
+    else if (isFptStudent && !isValidFptStudentCode(form.studentCode, fptPrefixes)) e.studentCode = MSG_FPT_CODE;
     if (!form.universityName.trim()) e.universityName = "Required";
     if (!form.userTypeId.trim()) e.userTypeId = "Required";
     setErrors(e);
@@ -246,7 +269,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
         password: form.password,
         confirmPassword: form.confirmPassword,
         phone: form.phone,
-        studentCode: form.studentCode,
+        studentCode: isFptStudent ? normalizeFptStudentCode(form.studentCode) : form.studentCode.trim(),
         universityName: form.universityName,
         userTypeId: form.userTypeId,
       });
@@ -434,8 +457,15 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
             </div>
           )}
         </div>
-        <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
+        <GlassInput label="Student Code" placeholder={isFptStudent ? "SE123456" : "EXT2024001"} icon={<BookOpen size={15} />}
           value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
+        {isFptStudent && prefixInfo && (
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -8, lineHeight: 1.5 }}>
+            {prefixInfo.prefix} - {prefixInfo.englishName}
+            <br />
+            {prefixInfo.majorGroup}{prefixInfo.majorCode ? ` (Major code: ${prefixInfo.majorCode})` : ""}
+          </div>
+        )}
         <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
           value={form.universityName} onChange={v => set("universityName", v)} error={errors.universityName} />
 

@@ -6,13 +6,16 @@ import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
 import {
+  getFptStudentCodePrefixInfo,
   MSG_EXTERNAL_CODE,
   MSG_FPT_CODE,
   MSG_PHONE,
   isValidExternalStudentCode,
   isValidFptStudentCode,
   isValidVietnamesePhone,
+  normalizeFptStudentCode,
 } from "@/features/users/utils/profileValidation";
+import { fptStudentCodePrefixService, type FptStudentCodePrefix } from "@/features/users/api/fptStudentCodePrefixService";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
@@ -192,6 +195,7 @@ export function AdminUsersView() {
   const [modal, setModal] = useState<UserModalState>(null);
   const [form, setForm] = useState<UserFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [fptPrefixes, setFptPrefixes] = useState<FptStudentCodePrefix[]>([]);
   const lastWrittenQs = useRef<string>(searchParams.toString());
 
   useEffect(() => {
@@ -201,6 +205,18 @@ export function AdminUsersView() {
     }, 350);
     return () => window.clearTimeout(timer);
   }, [filters.search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fptStudentCodePrefixService.list()
+      .then(data => {
+        if (!cancelled) setFptPrefixes(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFptPrefixes([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // Serialize trạng thái filter -> query string (bỏ giá trị mặc định cho URL gọn).
   const serializeToParams = () => {
@@ -403,7 +419,7 @@ export function AdminUsersView() {
     if (isFptStudentRole(form.role)) {
       const code = form.fptStudentCode.trim();
       if (!code) nextErrors.fptStudentCode = "FPT student code is required.";
-      else if (!isValidFptStudentCode(code)) nextErrors.fptStudentCode = MSG_FPT_CODE;
+      else if (!isValidFptStudentCode(code, fptPrefixes)) nextErrors.fptStudentCode = MSG_FPT_CODE;
     }
     if (isExternalStudentRole(form.role)) {
       const code = form.externalStudentCode.trim();
@@ -428,7 +444,7 @@ export function AdminUsersView() {
     if (role === "FPT_STUDENT") {
       return compactPayload({
         ...base,
-        fptStudentCode: form.fptStudentCode.trim(),
+        fptStudentCode: normalizeFptStudentCode(form.fptStudentCode),
         universityName: form.universityName.trim() || undefined,
       });
     }
@@ -454,7 +470,7 @@ export function AdminUsersView() {
       accountStatus: form.accountStatus,
     };
     if (role === "FPT_STUDENT") {
-      const payload: UpdateUserRequest = compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim() });
+      const payload: UpdateUserRequest = compactPayload({ ...base, fptStudentCode: normalizeFptStudentCode(form.fptStudentCode) });
       payload.universityName = form.universityName.trim();
       return payload;
     }
@@ -825,6 +841,7 @@ export function AdminUsersView() {
           mutating={mutating}
           onClose={closeModal}
           onSubmit={submitForm}
+          fptPrefixes={fptPrefixes}
         />
       )}
     </div>
@@ -839,6 +856,7 @@ function UserFormModal({
   mutating,
   onClose,
   onSubmit,
+  fptPrefixes,
 }: {
   mode: "create" | "edit";
   form: UserFormState;
@@ -847,8 +865,12 @@ function UserFormModal({
   mutating: boolean;
   onClose: () => void;
   onSubmit: () => void;
+  fptPrefixes: FptStudentCodePrefix[];
 }) {
   const role = normalizeRoleValue(form.role);
+  const prefixInfo = role === "FPT_STUDENT"
+    ? getFptStudentCodePrefixInfo(form.fptStudentCode, fptPrefixes)
+    : null;
   const handleRoleChange = (nextRole: string) => {
     const normalizedRole = normalizeRoleValue(nextRole);
     setForm(prev => ({
@@ -904,12 +926,20 @@ function UserFormModal({
           {/* Mã sinh viên KHÔNG còn khóa khi Edit: dữ liệu cũ có nhiều mã sai định dạng,
               khóa lại thì organizer không có đường nào sửa. Định dạng đã được validate. */}
           {role === "FPT_STUDENT" && (
-            <FormInput
-              label="FPT Student Code"
-              value={form.fptStudentCode}
-              error={fieldErrors.fptStudentCode}
-              onChange={value => setForm(prev => ({ ...prev, fptStudentCode: value }))}
-            />
+            <div>
+              <FormInput
+                label="FPT Student Code"
+                value={form.fptStudentCode}
+                error={fieldErrors.fptStudentCode}
+                onChange={value => setForm(prev => ({ ...prev, fptStudentCode: value }))}
+              />
+              {prefixInfo && (
+                <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
+                  {prefixInfo.prefix} - {prefixInfo.englishName}; {prefixInfo.majorGroup}
+                  {prefixInfo.majorCode ? ` (${prefixInfo.majorCode})` : ""}
+                </div>
+              )}
+            </div>
           )}
           {role === "EXTERNAL_STUDENT" && (
             <FormInput
