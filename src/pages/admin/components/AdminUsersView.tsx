@@ -950,10 +950,8 @@ function UserFormModal({
               onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
             />
           )}
-          {/* University hiện cho MỌI role (yêu cầu người dùng); chỉ BẮT BUỘC với
-              External Student — validateForm phản ánh đúng điều đó. */}
           <FormInput
-            label={isExternalStudentRole(role) ? "University Name" : "University Name (optional)"}
+            label="University Name"
             value={form.universityName}
             error={fieldErrors.universityName}
             onChange={value => setForm(prev => ({ ...prev, universityName: value }))}
