@@ -668,7 +668,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setRankingsPublished(true);
     setTimeout(() => {
       setRankingsPublished(false);
-      if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
+      if (window.confirm("Results approved. Send a notification to all participants?")) {
         setBroadcastTitle("Leaderboard Published!");
         setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
         onNavigate("notifications");

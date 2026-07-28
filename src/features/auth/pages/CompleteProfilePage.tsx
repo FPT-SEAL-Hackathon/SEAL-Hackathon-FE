@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { AlertCircle, BookOpen, Building2, Loader, Phone, User } from "lucide-react";
 import { completeProfile, type CompleteProfileRequest } from "@/features/auth/api/authService";
 import { useAuth } from "@/features/auth/store/authStore";
-import { ApiError } from "@/lib/api/apiClient";
+import { ApiError, parseApiError } from "@/lib/api/apiClient";
 
 type StudentRole = "FPT_STUDENT" | "EXTERNAL_STUDENT";
 
@@ -67,7 +67,7 @@ export function CompleteProfilePage() {
         setConflictFields(fields);
         setApiError(err.message);
       } else {
-        setApiError(err instanceof Error ? err.message : "Could not complete your profile.");
+        setApiError(parseApiError(err).message);
       }
     } finally {
       setLoading(false);

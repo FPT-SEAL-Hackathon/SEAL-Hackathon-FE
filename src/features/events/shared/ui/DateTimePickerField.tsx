@@ -184,7 +184,7 @@ export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime,
              )}
              {!draftValue && (
                <div className="text-[11px] text-center text-muted-foreground">
-                 Chọn ngày ở lịch phía trên rồi đặt giờ:phút
+                 Pick a date in the calendar above, then set the hour:minute
                </div>
              )}
              <div className="flex items-center gap-2 justify-center">

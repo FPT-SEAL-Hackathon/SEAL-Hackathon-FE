@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { login, register, REGISTER_USER_TYPES, getGoogleLoginUrl, sendLinkOtp, verifyLinkOtp, setupLocalPassword, type UserResponse } from "@/features/auth/api/authService.ts";
 import { useAuth } from "@/features/auth/store/authStore";
 import { useNavigate } from "react-router";
-import { ApiError, api } from "@/lib/api/apiClient.ts";
+import { ApiError, api, parseApiError } from "@/lib/api/apiClient.ts";
 import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService.ts";
 
 // ─── Dev bypass credential ───────────────────────────────────────────────────
@@ -262,7 +262,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
             await sendLinkOtp(linkingToken);
             setOtpInfo("We sent a 6-digit code to your email.");
           } catch (otpErr) {
-            setApiError(otpErr instanceof Error ? otpErr.message : "Could not send the verification code.");
+            setApiError(parseApiError(otpErr).message);
           }
           return;
         }
@@ -292,7 +292,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       const isTemporary = res.user.accountStatus?.toUpperCase() === "TEMPORARY";
       navigate(isTemporary ? "/complete-profile" : "/", { replace: true });
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }
@@ -305,7 +305,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       await sendLinkOtp(linkSetup.linkingToken);
       setOtpInfo("A new code has been sent to your email.");
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Could not resend the code.");
+      setApiError(parseApiError(err).message);
     }
   };
 
@@ -486,7 +486,7 @@ export function LoginCard({ onLogin, onSwitchToRegister, onBackToLanding }: { on
       const res = await login({ email: normalizedEmail, password });
       onLogin(res.user);
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Login failed. Please check your credentials.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }

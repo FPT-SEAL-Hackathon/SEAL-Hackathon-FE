@@ -2306,7 +2306,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                             return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
                           }
                           if (rank <= 3) {
-                            return <span style={{ fontSize: 16 }}>{["đŸ¥‡", "đŸ¥ˆ", "đŸ¥‰"][rank - 1]}</span>;
+                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
                           }
                           return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
                         })()}

@@ -5,7 +5,14 @@ import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash
 import { toast } from "sonner";
 import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
-import { isValidVietnamesePhone } from "@/features/users/utils/profileValidation";
+import {
+  MSG_EXTERNAL_CODE,
+  MSG_FPT_CODE,
+  MSG_PHONE,
+  isValidExternalStudentCode,
+  isValidFptStudentCode,
+  isValidVietnamesePhone,
+} from "@/features/users/utils/profileValidation";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
@@ -132,7 +139,7 @@ function studentCodeFor(user: UserManagementUser) {
 }
 
 function universityFor(user: UserManagementUser) {
-  return normalizeRoleValue(user.role) === "EXTERNAL_STUDENT" ? user.universityName || "N/A" : "N/A";
+  return user.universityName || "N/A";
 }
 
 function teamLabelFor(user: UserManagementUser) {
@@ -385,14 +392,19 @@ export function AdminUsersView() {
     if (!form.role.trim()) nextErrors.role = "Role is required.";
     if (!form.accountStatus.trim()) nextErrors.accountStatus = "Status is required.";
     if (modal?.mode === "create" && !form.password.trim()) nextErrors.password = "Password is required.";
-    if (!isValidPhone(form.phone.trim())) nextErrors.phone = "Invalid phone number.";
-    if (isFptStudentRole(form.role) && !form.fptStudentCode.trim()) {
-      nextErrors.fptStudentCode = "FPT student code is required.";
+    if (!isValidPhone(form.phone.trim())) nextErrors.phone = MSG_PHONE;
+    // Kiểm ĐỊNH DẠNG chứ không chỉ "có nhập hay chưa" — trước đây mã sai được gửi lên
+    // server rồi mới báo lỗi, khác hẳn phone (chặn ngay tại client).
+    if (isFptStudentRole(form.role)) {
+      const code = form.fptStudentCode.trim();
+      if (!code) nextErrors.fptStudentCode = "FPT student code is required.";
+      else if (!isValidFptStudentCode(code)) nextErrors.fptStudentCode = MSG_FPT_CODE;
     }
-    if (isExternalStudentRole(form.role) && (!form.externalStudentCode.trim() || !form.universityName.trim())) {
-      const message = "External student code and university name are required.";
-      if (!form.externalStudentCode.trim()) nextErrors.externalStudentCode = message;
-      if (!form.universityName.trim()) nextErrors.universityName = message;
+    if (isExternalStudentRole(form.role)) {
+      const code = form.externalStudentCode.trim();
+      if (!code) nextErrors.externalStudentCode = "External student code is required.";
+      else if (!isValidExternalStudentCode(code)) nextErrors.externalStudentCode = MSG_EXTERNAL_CODE;
+      if (!form.universityName.trim()) nextErrors.universityName = "University name is required.";
     }
     setFieldErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -409,7 +421,11 @@ export function AdminUsersView() {
       password: form.password,
     };
     if (role === "FPT_STUDENT") {
-      return compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim() });
+      return compactPayload({
+        ...base,
+        fptStudentCode: form.fptStudentCode.trim(),
+        universityName: form.universityName.trim() || undefined,
+      });
     }
     if (role === "EXTERNAL_STUDENT") {
       return compactPayload({
@@ -421,7 +437,7 @@ export function AdminUsersView() {
     if (role === "GUEST_JUDGE") {
       return compactPayload({ ...base, accountExpiresAt: form.accountExpiresAt.trim() || undefined });
     }
-    return compactPayload(base);
+    return compactPayload({ ...base, universityName: form.universityName.trim() || undefined });
   };
 
   const buildUpdatePayload = (): UpdateUserRequest => {
@@ -433,7 +449,9 @@ export function AdminUsersView() {
       accountStatus: form.accountStatus,
     };
     if (role === "FPT_STUDENT") {
-      return compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim() });
+      const payload: UpdateUserRequest = compactPayload({ ...base, fptStudentCode: form.fptStudentCode.trim() });
+      payload.universityName = form.universityName.trim();
+      return payload;
     }
     if (role === "EXTERNAL_STUDENT") {
       return compactPayload({
@@ -443,9 +461,13 @@ export function AdminUsersView() {
       });
     }
     if (role === "GUEST_JUDGE") {
-      return compactPayload({ ...base, accountExpiresAt: form.accountExpiresAt.trim() || undefined });
+      const payload: UpdateUserRequest = compactPayload({ ...base, accountExpiresAt: form.accountExpiresAt.trim() || undefined });
+      payload.universityName = form.universityName.trim();
+      return payload;
     }
-    return compactPayload(base);
+    const payload: UpdateUserRequest = compactPayload(base);
+    payload.universityName = form.universityName.trim();
+    return payload;
   };
 
   const submitForm = async () => {
@@ -499,11 +521,11 @@ export function AdminUsersView() {
   // Quét account có hồ sơ chưa chuẩn (mã SV/SĐT sai định dạng) và gửi notification nhắc.
   // KHÔNG khóa/chặn account nào — chỉ nhắc để họ tự cập nhật cho đồng bộ dữ liệu.
   const notifyNonCompliant = async () => {
-    if (!window.confirm("Gửi thông báo nhắc cập nhật hồ sơ cho tất cả tài khoản có dữ liệu chưa chuẩn?")) return;
+    if (!window.confirm("Send a profile-update reminder to every account with non-standard data?")) return;
     setMutating(true);
     try {
       const result = await userService.notifyNonCompliant();
-      toast.success(`Đã nhắc ${result.notifiedCount} tài khoản cập nhật hồ sơ.`);
+      toast.success(`Reminded ${result.notifiedCount} account(s) to update their profile.`);
     } catch (err) {
       toast.error(parseApiError(err).message);
     } finally {
@@ -539,8 +561,9 @@ export function AdminUsersView() {
               <Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />} onClick={loadUsers} disabled={loading}>
                 Refresh
               </Button>
-              <Button variant="outline" size="sm" disabled={mutating} onClick={notifyNonCompliant}>
-                Quét & nhắc chuẩn hóa
+              <Button variant="outline" size="sm" disabled={mutating} onClick={notifyNonCompliant}
+                title="Find accounts whose student code or phone is not in the standard format and remind them">
+                Scan &amp; remind
               </Button>
               <Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={openCreate}>
                 Add User
@@ -829,7 +852,8 @@ function UserFormModal({
       accountStatus: defaultStatusForRole(normalizedRole),
       fptStudentCode: normalizedRole === "FPT_STUDENT" ? prev.fptStudentCode : "",
       externalStudentCode: normalizedRole === "EXTERNAL_STUDENT" ? prev.externalStudentCode : "",
-      universityName: normalizedRole === "EXTERNAL_STUDENT" ? prev.universityName : "",
+      // University KHÔNG bị xoá khi đổi role: ô này giờ dùng cho mọi role.
+      universityName: prev.universityName,
       accountExpiresAt: normalizedRole === "GUEST_JUDGE" ? prev.accountExpiresAt : "",
     }));
   };
@@ -872,33 +896,32 @@ function UserFormModal({
               </SelectItem>
             ))}
           </FormSelect>
+          {/* Mã sinh viên KHÔNG còn khóa khi Edit: dữ liệu cũ có nhiều mã sai định dạng,
+              khóa lại thì organizer không có đường nào sửa. Định dạng đã được validate. */}
           {role === "FPT_STUDENT" && (
             <FormInput
               label="FPT Student Code"
               value={form.fptStudentCode}
               error={fieldErrors.fptStudentCode}
-              // Mã sinh viên là định danh — khóa read-only khi Edit để tránh sửa sai quy chiếu.
-              disabled={mode === "edit"}
               onChange={value => setForm(prev => ({ ...prev, fptStudentCode: value }))}
             />
           )}
           {role === "EXTERNAL_STUDENT" && (
-            <>
-              <FormInput
-                label="External Student Code"
-                value={form.externalStudentCode}
-                error={fieldErrors.externalStudentCode}
-                disabled={mode === "edit"}
-                onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
-              />
-              <FormInput
-                label="University Name"
-                value={form.universityName}
-                error={fieldErrors.universityName}
-                onChange={value => setForm(prev => ({ ...prev, universityName: value }))}
-              />
-            </>
+            <FormInput
+              label="External Student Code"
+              value={form.externalStudentCode}
+              error={fieldErrors.externalStudentCode}
+              onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
+            />
           )}
+          {/* University hiện cho MỌI role (yêu cầu người dùng); chỉ BẮT BUỘC với
+              External Student — validateForm phản ánh đúng điều đó. */}
+          <FormInput
+            label={isExternalStudentRole(role) ? "University Name" : "University Name (optional)"}
+            value={form.universityName}
+            error={fieldErrors.universityName}
+            onChange={value => setForm(prev => ({ ...prev, universityName: value }))}
+          />
           {role === "GUEST_JUDGE" && (
             <FormInput
               label="Account Expires At"

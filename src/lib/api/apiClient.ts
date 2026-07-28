@@ -1,3 +1,5 @@
+import { friendlyMessage } from "@/lib/api/errorMessages";
+
 function normalizeApiBaseUrl(value?: string): string {
   const raw = (value ?? "").trim().replace(/\/+$/, "");
   if (!raw) {
@@ -129,10 +131,22 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Chuẩn hoá mọi lỗi thành 1 hình dạng, đồng thời ghi chi tiết kỹ thuật ra console.
+ * Đây là điểm duy nhất cần sửa để cả app có hành vi lỗi giống nhau — mọi nơi hiển thị
+ * lỗi cho người dùng nên đi qua hàm này.
+ */
 export function parseApiError(error: unknown): ParsedApiError {
+  const parsed = normalizeApiError(error);
+  // Lớp thứ hai của mô hình 2 tầng: dev mở DevTools là thấy đủ, người dùng không thấy.
+  logTechnicalDetail(error, parsed);
+  return parsed;
+}
+
+function normalizeApiError(error: unknown): ParsedApiError {
   if (error instanceof ApiError) {
     return {
-      message: messageForStatus(error.status, error.code, error.message),
+      message: friendlyMessage(error.status, error.code, error.message),
       fieldErrors: error.fieldErrors,
       status: error.status,
       code: error.code,
@@ -145,42 +159,67 @@ export function parseApiError(error: unknown): ParsedApiError {
     const fieldErrors = toStringRecord(data?.errors);
     const code = data?.error ?? data?.code;
     return {
-      message: messageForStatus(status, code, data?.message),
+      message: friendlyMessage(status, code, data?.message),
       fieldErrors,
       status,
       code,
     };
   }
 
+  // Lỗi mạng / CORS / offline — fetch ném TypeError.
   if (error instanceof TypeError) {
-    return { message: "Network error. Please check your connection." };
+    return { message: "Cannot reach the server. Please check your connection." };
   }
 
-  if (error instanceof Error) {
-    return { message: error.message || "Request failed." };
-  }
-
-  return { message: "Unexpected error. Please try again." };
+  // Error thường (kể cả lỗi lập trình như "Missing VITE_API_URL"): KHÔNG đưa
+  // error.message ra UI nữa vì đó là chuỗi dành cho dev; chi tiết đã vào console.
+  return { message: friendlyMessage(undefined, undefined, undefined) };
 }
 
-function messageForStatus(status?: number, code?: string, message?: string) {
-  if (status === 401) return message || "Your session has expired. Please login again.";
-  if (status === 403) return message || "You do not have permission to perform this action.";
-  if (status === 409 || code === "REGISTRATION_CONFLICT") return message || "This action conflicts with the current resource state.";
-  if (code === "DUPLICATE_RESOURCE") return message || "Duplicate resource.";
-  if (status === 500) {
-    return message || "Server error. Please try again later.";
+function logTechnicalDetail(raw: unknown, parsed: ParsedApiError) {
+  const detail: Record<string, unknown> = {
+    status: parsed.status,
+    code: parsed.code,
+    shownToUser: parsed.message,
+    fieldErrors: parsed.fieldErrors,
+  };
+  if (raw instanceof ApiError) {
+    detail.backendMessage = raw.message;
+    detail.details = raw.details;
+  } else if (raw instanceof Error) {
+    detail.backendMessage = raw.message;
+    detail.stack = raw.stack;
+  } else {
+    detail.raw = raw;
   }
-  if (code === "BAD_REQUEST") return message || "Bad request.";
-  return message || "Request failed.";
+  console.error("[api-error]", detail);
 }
 
-function apiErrorMessageForStatus(status: number, code?: string, message?: string) {
-  if (status === 401) return message || "Session expired. Please log in again.";
-  if (status === 403) return message || "Forbidden.";
-  if (status === 409 || code === "DUPLICATE_RESOURCE") return message || "Duplicate resource.";
-  if (status === 500) return message || "Server error.";
-  return message || `Request failed (${status})`;
+/**
+ * Dựng ApiError từ một response lỗi. Dùng chung cho request() và requestBlob()
+ * (trước đây hai chỗ copy nguyên khối logic này).
+ *
+ * `message` giữ nguyên chuỗi THÔ của backend — không "làm đẹp" ở đây. Việc chọn câu
+ * cho người dùng là của parseApiError/friendlyMessage; giữ bản thô để console.error
+ * còn thông tin cho dev.
+ */
+async function buildApiError(res: Response): Promise<ApiError> {
+  let message = `Request failed (${res.status})`;
+  let code: string | undefined;
+  let fieldErrors: Record<string, string> | undefined;
+  let details: Record<string, unknown> | undefined;
+  try {
+    const err = await res.json() as BackendErrorBody;
+    code = err.error ?? err.code;
+    fieldErrors = toStringRecord(err.errors);
+    details = err.details;
+    if (err.message && err.message.trim()) message = err.message;
+  } catch (parseError) {
+    // Body không phải JSON (vd advice cũ trả plain text). Đừng nuốt im lặng —
+    // trước đây `catch { /* ignore */ }` khiến lỗi thật biến mất hoàn toàn.
+    console.error("[api-error] response body was not JSON", { status: res.status, parseError });
+  }
+  return new ApiError(res.status, message, { code, fieldErrors, details });
 }
 
 // ─── Internal fetch with auto-refresh ───────────────────────────────────────
@@ -199,10 +238,15 @@ function getJwtExpiryMs(token: string): number | null {
   }
 }
 
+// Refresh sớm trước khi access token hết hạn. Ngưỡng 2 phút phù hợp với access token
+// 60 phút (trước đây token chỉ 2 phút nên ngưỡng 30s là ~25% đời token — quá sát,
+// dễ để request bay ra với token vừa hết hạn).
+const TOKEN_REFRESH_LEEWAY_MS = 120_000;
+
 function tokenNeedsRefresh(token: string): boolean {
   const expiryMs = getJwtExpiryMs(token);
   if (!expiryMs) return false;
-  return expiryMs - Date.now() < 30_000;
+  return expiryMs - Date.now() < TOKEN_REFRESH_LEEWAY_MS;
 }
 
 async function attemptRefresh(): Promise<string | null> {
@@ -286,18 +330,7 @@ export async function request<T>(
   }
 
   if (!res.ok) {
-    let message = `Request failed (${res.status})`;
-    let code: string | undefined;
-    let fieldErrors: Record<string, string> | undefined;
-    let details: Record<string, unknown> | undefined;
-    try {
-      const err = await res.json() as BackendErrorBody;
-      code = err.error ?? err.code;
-      fieldErrors = toStringRecord(err.errors);
-      details = err.details;
-      message = apiErrorMessageForStatus(res.status, code, err.message ?? err.error ?? message);
-    } catch { /* ignore */ }
-    throw new ApiError(res.status, message, { code, fieldErrors, details });
+    throw await buildApiError(res);
   }
 
   // Handle empty responses (204, DELETE, etc.)
@@ -349,18 +382,7 @@ export async function requestBlob(
   }
 
   if (!res.ok) {
-    let message = `Request failed (${res.status})`;
-    let code: string | undefined;
-    let fieldErrors: Record<string, string> | undefined;
-    let details: Record<string, unknown> | undefined;
-    try {
-      const err = await res.json() as BackendErrorBody;
-      code = err.error ?? err.code;
-      fieldErrors = toStringRecord(err.errors);
-      details = err.details;
-      message = apiErrorMessageForStatus(res.status, code, err.message ?? err.error ?? message);
-    } catch { /* ignore */ }
-    throw new ApiError(res.status, message, { code, fieldErrors, details });
+    throw await buildApiError(res);
   }
 
   return res.blob();

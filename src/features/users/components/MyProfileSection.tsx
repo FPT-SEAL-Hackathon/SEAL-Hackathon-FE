@@ -163,7 +163,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
           className="mb-4 px-4 py-3 rounded-xl"
           style={{ background: `${COLORS.warning}12`, border: `1px solid ${COLORS.warning}40`, color: "#92400e" }}
         >
-          <div style={{ fontWeight: 700, fontSize: 13 }}>Hồ sơ chưa đúng định dạng chuẩn — vui lòng cập nhật</div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Your profile does not match the required format — please update it</div>
           <ul style={{ fontSize: 12, marginTop: 6, marginLeft: 16, listStyle: "disc" }}>
             {(profile?.profileIssues ?? []).map((issue, i) => <li key={i}>{issue}</li>)}
           </ul>
