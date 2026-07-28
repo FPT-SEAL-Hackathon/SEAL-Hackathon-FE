@@ -39,6 +39,9 @@ export interface UserResponse {
   fptStudentCode?: string;
   externalStudentCode?: string;
   universityName?: string;
+  bio?: string;
+  github?: string;
+  portfolio?: string;
   createdAt: string;
 }
 
@@ -57,6 +60,9 @@ type RawUserResponse = UserResponse & {
   userType?: string;
   userTypeName?: string;
   studentCode?: string;
+  bio?: string;
+  github?: string;
+  portfolio?: string;
 };
 
 function normalizeAuthUser(raw: RawUserResponse): UserResponse {
@@ -73,6 +79,9 @@ function normalizeAuthUser(raw: RawUserResponse): UserResponse {
     fptStudentCode: raw.fptStudentCode ?? (role === "FPT_STUDENT" ? raw.studentCode : undefined),
     externalStudentCode: raw.externalStudentCode ?? (role === "EXTERNAL_STUDENT" ? raw.studentCode : undefined),
     universityName: raw.universityName,
+    bio: raw.bio,
+    github: raw.github,
+    portfolio: raw.portfolio,
     createdAt: raw.createdAt,
   };
 }
@@ -108,11 +117,19 @@ export async function logout(): Promise<void> {
 
 export async function refreshAccessToken(): Promise<TokenResponse> {
   const refreshToken = getRefreshToken();
-  return api.post<TokenResponse>("/auth/refresh", { refreshToken }, false);
+  const response = await api.post<TokenResponse & { refreshToken?: string }>("/auth/refresh", { refreshToken }, false);
+  if (response.accessToken && refreshToken) {
+    setTokens(response.accessToken, response.refreshToken ?? refreshToken);
+  }
+  return response;
 }
 
-export async function verifyEmail(token: string): Promise<string> {
-  return api.get<string>(`/auth/verify-email?token=${encodeURIComponent(token)}`, false);
+export async function verifyEmail(token: string): Promise<LoginResponse> {
+  const res = await api.get<LoginResponse & { user: RawUserResponse }>(
+    `/auth/verify-email?token=${encodeURIComponent(token)}`,
+    false,
+  );
+  return storeSession(res);
 }
 
 // ─── Google OAuth ────────────────────────────────────────────────────────────
@@ -138,6 +155,53 @@ export async function exchangeOAuthCode(code: string): Promise<LoginResponse> {
   return storeSession(res);
 }
 
+// ─── Account linking (một người = một user; Google & local là 2 phương thức) ─
+
+/**
+ * Hoàn tất gắn định danh Google vào tài khoản hiện có.
+ * Xác minh chủ sở hữu bằng mật khẩu local HOẶC OTP email đã verify trước đó.
+ */
+export async function googleLink(data: { linkingToken: string; password?: string }): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse & { user: RawUserResponse }>(
+    "/api/v1/auth/google/link",
+    data,
+    false,
+  );
+  return storeSession(res);
+}
+
+/** Gỡ liên kết Google khỏi tài khoản hiện tại (yêu cầu mật khẩu local). */
+export async function googleUnlink(password: string): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>("/api/v1/auth/google/unlink", { password });
+}
+
+/** Gửi OTP 6 số tới email của tài khoản đích trong phiên liên kết. */
+export async function sendLinkOtp(linkingToken: string): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>("/api/v1/auth/link/send-otp", { linkingToken }, false);
+}
+
+/** Xác minh OTP cho phiên liên kết. */
+export async function verifyLinkOtp(linkingToken: string, otp: string): Promise<{ success: boolean; message: string }> {
+  return api.post<{ success: boolean; message: string }>("/api/v1/auth/link/verify-otp", { linkingToken, otp }, false);
+}
+
+/**
+ * Email đã có tài khoản Google-only: sau khi verify OTP, thiết lập mật khẩu
+ * local cho CHÍNH user đó (không tạo user mới) và đăng nhập luôn.
+ */
+export async function setupLocalPassword(data: {
+  linkingToken: string;
+  password: string;
+  confirmPassword: string;
+}): Promise<LoginResponse> {
+  const res = await api.post<LoginResponse & { user: RawUserResponse }>(
+    "/api/v1/auth/local/setup-password",
+    data,
+    false,
+  );
+  return storeSession(res);
+}
+
 // ─── Current user / profile ─────────────────────────────────────────────────
 
 export async function getCurrentUser(): Promise<UserResponse> {
@@ -158,6 +222,24 @@ export interface CompleteProfileRequest {
 
 export async function completeProfile(data: CompleteProfileRequest): Promise<UserResponse> {
   const res = await api.put<RawUserResponse>("/api/v1/users/me/complete-profile", data);
+  const normalized = normalizeAuthUser(res);
+  saveUser(normalized);
+  return normalized;
+}
+
+export interface UpdateProfileRequest {
+  fullName: string;
+  phone?: string;
+  universityName?: string;
+  fptStudentCode?: string;
+  externalStudentCode?: string;
+  bio?: string;
+  github?: string;
+  portfolio?: string;
+}
+
+export async function updateProfile(data: UpdateProfileRequest): Promise<UserResponse> {
+  const res = await api.put<RawUserResponse>("/api/v1/users/me/profile", data);
   const normalized = normalizeAuthUser(res);
   saveUser(normalized);
   return normalized;

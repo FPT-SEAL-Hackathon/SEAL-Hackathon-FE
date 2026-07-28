@@ -1,3 +1,5 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
 import {
   Users, Upload, Shield, AlertTriangle, Calendar, BookOpen,
   GitBranch, Star, UserCheck, Trophy, BarChart2, Bell,
@@ -158,6 +160,8 @@ export function AdminAwardsView({ context }: AdminViewProps) {
     !manualAwardForm.categoryId || team.categoryId === manualAwardForm.categoryId
   ));
 
+  const [selectedAward, setSelectedAward] = useState<any>(null);
+
   return (
     <>
       <SectionHeader
@@ -211,32 +215,32 @@ export function AdminAwardsView({ context }: AdminViewProps) {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_140px] gap-4">
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-              <select
-                value={selectedEventId ?? ""}
-                onChange={e => setSelectedEventId(e.target.value || null)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {apiEvents.length === 0 && <option value="">No events found</option>}
+              <Select value={(selectedEventId  ?? "") || "none"} onValueChange={value => setSelectedEventId((value === "none" ? "" : value) || null)} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {apiEvents.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No events found</SelectItem>}
                 {apiEvents.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
+                  <SelectItem key={event.id} value={event.id} style={{ color: COLORS.textPrimary }}>{event.name}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-              <select
-                value={awardPatternCategoryId}
-                onChange={e => setAwardPatternCategoryId(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="">Select category</option>
-                {apiCategories.length === 0 && selectedEventId && <option value="" disabled>No categories found</option>}
+              <Select value={awardPatternCategoryId || "none"} onValueChange={value => setAwardPatternCategoryId((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select category</SelectItem>
+                {apiCategories.length === 0 && selectedEventId && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No categories found</SelectItem>}
                 {apiCategories.map((category: any) => (
-                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                  <SelectItem key={category.categoryId} value={category.categoryId} style={{ color: COLORS.textPrimary }}>{category.categoryName}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TOP N</label>
@@ -312,60 +316,60 @@ export function AdminAwardsView({ context }: AdminViewProps) {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>EVENT</label>
-              <select
-                value={selectedEventId ?? ""}
-                onChange={e => setSelectedEventId(e.target.value || null)}
-                className="w-full px-3 py-2.5 rounded-xl outline-none cursor-pointer"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="" disabled>Select an Event</option>
-                {apiEvents.length === 0 && <option value="">No events found</option>}
+              <Select value={(selectedEventId  ?? "") || "none"} onValueChange={value => setSelectedEventId((value === "none" ? "" : value) || null)} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select an Event</SelectItem>
+                {apiEvents.length === 0 && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No events found</SelectItem>}
                 {apiEvents.map((event: any) => (
-                  <option key={event.id} value={event.id}>{event.name}</option>
+                  <SelectItem key={event.id} value={event.id} style={{ color: COLORS.textPrimary }}>{event.name}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>CATEGORY</label>
-              <select
-                value={manualAwardForm.categoryId}
-                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, categoryId: e.target.value, teamId: "" }))}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="">Any category</option>
+              <Select value={manualAwardForm.categoryId || "none"} onValueChange={value => setManualAwardForm((prev: any) => ({ ...prev, categoryId: (value === "none" ? "" : value), teamId: "" }))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Any category</SelectItem>
                 {apiCategories.map((category: any) => (
-                  <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>
+                  <SelectItem key={category.categoryId} value={category.categoryId} style={{ color: COLORS.textPrimary }}>{category.categoryName}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>TEAM</label>
-              <select
-                value={manualAwardForm.teamId}
-                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, teamId: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                <option value="">Select team</option>
-                {manualAwardTeams.length === 0 && selectedEventId && <option value="" disabled>No teams found</option>}
+              <Select value={manualAwardForm.teamId || "none"} onValueChange={value => setManualAwardForm((prev: any) => ({ ...prev, teamId: (value === "none" ? "" : value) }))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    <SelectItem value="none" style={{ color: COLORS.textPrimary }}>Select team</SelectItem>
+                {manualAwardTeams.length === 0 && selectedEventId && <SelectItem value="none" style={{ color: COLORS.textPrimary }}>No teams found</SelectItem>}
                 {manualAwardTeams.map((team: any) => (
-                  <option key={team.teamId} value={team.teamId}>{team.teamName}</option>
+                  <SelectItem key={team.teamId} value={team.teamId} style={{ color: COLORS.textPrimary }}>{team.teamName}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>AWARD TIER</label>
-              <select
-                value={manualAwardForm.awardTierId}
-                onChange={e => setManualAwardForm((prev: any) => ({ ...prev, awardTierId: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl outline-none"
-                style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              >
-                {AWARD_TIER_OPTIONS.map((tier: any) => (
-                  <option key={tier.value} value={tier.value}>{tier.label}</option>
+              <Select value={manualAwardForm.awardTierId || "none"} onValueChange={value => setManualAwardForm((prev: any) => ({ ...prev, awardTierId: (value === "none" ? "" : value) }))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {AWARD_TIER_OPTIONS.map((tier: any) => (
+                  <SelectItem key={tier.value} value={tier.value} style={{ color: COLORS.textPrimary }}>{tier.label}</SelectItem>
                 ))}
-              </select>
+  </SelectContent>
+</Select>
             </div>
             <div>
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>AWARD TITLE</label>
@@ -434,7 +438,14 @@ export function AdminAwardsView({ context }: AdminViewProps) {
             </div>
           )}
           {apiAwards.map((award: any) => (
-            <div key={award.id} className="flex items-center gap-3 mb-3 p-3 rounded-xl" style={{ background: COLORS.bg }}>
+            <div
+              key={award.id}
+              className="flex items-center gap-3 mb-3 p-3 rounded-xl cursor-pointer"
+              style={{ background: COLORS.bg, transition: "border 0.15s", border: "1px solid transparent" }}
+              onClick={() => setSelectedAward(award)}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.border = `1px solid ${COLORS.primary}40`; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.border = "1px solid transparent"; }}
+            >
               <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 36, height: 36, background: `${COLORS.primary}12`, color: COLORS.primary }}>
                 <Award size={18} />
               </span>
@@ -446,10 +457,97 @@ export function AdminAwardsView({ context }: AdminViewProps) {
                 <div style={{ fontSize: 11, color: COLORS.textPrimary, fontWeight: 700 }}>{award.awardTierName}</div>
                 <div style={{ fontSize: 11, color: COLORS.textSecondary }}>{award.awardTitle}</div>
               </div>
+
             </div>
           ))}
         </Card>
       </div>
+
+      {/* Award Detail Modal */}
+      {selectedAward && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+          onClick={() => setSelectedAward(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl p-6 relative"
+            style={{
+              background: "var(--glass-bg)",
+              backdropFilter: "blur(32px) saturate(180%)",
+              border: "1px solid var(--glass-border)",
+              boxShadow: "0 24px 64px rgba(0,0,0,0.25), 0 4px 16px rgba(244,121,32,0.12)",
+              animation: "awardDetailIn 0.22s ease",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <style>{`@keyframes awardDetailIn { from { opacity:0; transform:translateY(16px) scale(0.97); } to { opacity:1; transform:translateY(0) scale(1); } }`}</style>
+
+            {/* Header */}
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center justify-center rounded-xl" style={{ width: 46, height: 46, background: `${COLORS.primary}14`, color: COLORS.primary }}>
+                  <Trophy size={22} />
+                </span>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 17, color: "var(--text-primary)", lineHeight: 1.2 }}>
+                    {selectedAward.awardTitle || selectedAward.awardTierName}
+                  </div>
+                  <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{selectedAward.awardTierName}</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedAward(null)}
+                className="rounded-xl p-1.5 transition-opacity hover:opacity-70"
+                style={{ background: COLORS.bg, color: COLORS.textSecondary, border: `1px solid ${COLORS.border}` }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Details grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {([
+                { label: "Team", value: selectedAward.teamName },
+                { label: "Event", value: selectedAward.eventName },
+                { label: "Category", value: selectedAward.categoryName },
+                { label: "Rank", value: selectedAward.rankPosition ? `#${selectedAward.rankPosition}` : "—" },
+                { label: "Prize", value: selectedAward.prizeValue ? `${selectedAward.prizeValue} ${selectedAward.prizeCurrency ?? ""}`.trim() : "—" },
+                {
+                  label: "Granted At",
+                  value: selectedAward.awardedAt
+                    ? new Date(selectedAward.awardedAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+                    : "—",
+                },
+              ] as { label: string; value: string }[]).map(item => (
+                <div key={item.label} className="rounded-xl p-3" style={{ background: COLORS.bg }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, letterSpacing: "0.08em", marginBottom: 3 }}>
+                    {item.label.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: COLORS.textPrimary }}>{item.value || "—"}</div>
+                </div>
+              ))}
+            </div>
+
+            {selectedAward.description && (
+              <div className="mt-3 rounded-xl p-3" style={{ background: COLORS.bg }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: COLORS.textSecondary, letterSpacing: "0.08em", marginBottom: 3 }}>
+                  DESCRIPTION
+                </div>
+                <div style={{ fontSize: 13, color: COLORS.textPrimary, lineHeight: 1.6 }}>{selectedAward.description}</div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setSelectedAward(null)}
+              className="mt-5 w-full rounded-xl py-2.5 font-semibold text-sm transition-opacity hover:opacity-80"
+              style={{ background: `linear-gradient(135deg, ${COLORS.primary}, #FF9040)`, color: "white" }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

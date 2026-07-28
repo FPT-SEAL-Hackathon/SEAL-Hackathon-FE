@@ -12,12 +12,17 @@ import { JudgeEventsStep } from "./JudgeEventsStep";
 
 interface JudgeRoundsViewProps {
   apiRounds: RoundResponse[];
+  apiSubmissions?: SubmissionResponse[];
+  apiCriteria?: unknown[];
   onSelectRound: (roundId: string) => void;
+  onSelectSubmission?: (submission: SubmissionResponse) => void;
   onNavigate: (page: string) => void;
   isLoadingRounds?: boolean;
+  selectedRoundId?: string | null;
+  resetKey?: number;
 }
 
-export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadingRounds = false }: JudgeRoundsViewProps) {
+export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadingRounds = false, resetKey }: JudgeRoundsViewProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -169,12 +174,12 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
     });
 
     const sortedEventEntries = Object.entries(eGroups).sort(([, a], [, b]) => {
-      return new Date(b.event?.startDate || 0).getTime() - new Date(a.event?.startDate || 0).getTime();
+      return new Date(b.event?.eventStartDate || 0).getTime() - new Date(a.event?.eventStartDate || 0).getTime();
     });
 
     let visibleEventEntries = [];
     if (searchQuery.trim() === '') {
-      visibleEventEntries = sortedEventEntries.slice(0, 2);
+      visibleEventEntries = sortedEventEntries.slice(0, 3);
     } else {
       const q = searchQuery.toLowerCase();
       visibleEventEntries = sortedEventEntries.filter(([, data]) => 
@@ -190,6 +195,11 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
 
   const [statsLoading, setStatsLoading] = useState(false);
   const fetchedRoundsRef = useRef<Set<string>>(new Set());
+
+  // Clear cache when resetKey changes so it refetches
+  useEffect(() => {
+    fetchedRoundsRef.current.clear();
+  }, [resetKey]);
 
   // Lazy load submissions and scores based on visible events or selected category
   useEffect(() => {
@@ -232,17 +242,16 @@ export function JudgeRoundsView({ apiRounds, onSelectRound, onNavigate, isLoadin
           return subsMap;
         });
         
-        setScores(prev => {
-           if (prev.length === 0 && scoresRes) return scoresRes;
-           return prev;
-        });
+        if (scoresRes) {
+          setScores(scoresRes);
+        }
       } finally {
         setStatsLoading(false);
       }
     };
 
     fetchVisibleStats();
-  }, [selectedCategoryId, apiRounds, categories, user?.userId, visibleEventIds, loading]);
+  }, [selectedCategoryId, apiRounds, categories, user?.userId, visibleEventIds, loading, resetKey]);
 
 
 

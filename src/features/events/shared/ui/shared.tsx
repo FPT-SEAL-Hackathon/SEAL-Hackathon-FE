@@ -4,6 +4,10 @@ import { Upload, X, Search } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents"
 import type { EventCriteria } from "../../types/eventCriteria";
 import { ImportEventCriteriaRequest, RoundCriteria, UpdateRoundCriterionRequest } from "../../types/round";
+import { RoundCriterionRow } from "../../components/round/RoundCriteriaRow";
+
+export * from "./DatePickerField";
+export * from "./DateTimePickerField";
 
 // ── Form primitives ────────────────────────────────────────────────────────
 
@@ -224,7 +228,7 @@ export function CriteriaImportPanel({
     roundCriterionId: string,
     body: UpdateRoundCriterionRequest
   ) => void;
-  onRemoveRoundCriteria: (roundCriterionId: string) => void;
+  onRemoveRoundCriteria: (roundCriterion: RoundCriteria) => void;
 }) {
   const [showImport, setShowImport] = useState(false);
   const importedIds = new Set(roundCriteria.map(rc => rc.eventCriterionId));
@@ -267,48 +271,12 @@ export function CriteriaImportPanel({
       ) : (
         <div className="space-y-2">
           {roundCriteria.map(c => (
-            <div key={c.eventCriterionId} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: "var(--surface-bg)", border: `1px solid ${COLORS.border}` }}>
-              <span style={{ flex: 1, fontSize: 13, fontWeight: 500, color: COLORS.textPrimary }}>{c.criterionName}</span>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <span style={{ fontSize: 11, color: COLORS.textSecondary }}>Weight</span>
-                  <input
-                    type="number"
-                    value={c.weight}
-                    onChange={e =>
-                      onUpdateRoundCriteria(
-                        c.eventCriterionId,
-                        {
-                          weight: Number(e),
-                          maxScore: c.maxScore
-                        }
-                      )}
-                    className="rounded-lg px-2 py-1 outline-none"
-                    style={{ width: 60, fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, textAlign: "center" }}
-                  />
-                </div>
-                <div className="flex items-center gap-1">
-                  <span style={{ fontSize: 11, color: COLORS.textSecondary }}>Max</span>
-                  <input
-                    type="number"
-                    value={c.maxScore}
-                    onChange={e =>
-                      onUpdateRoundCriteria(
-                        c.roundCriterionId,
-                        {
-                          weight: c.weight,
-                          maxScore: Number(e)
-                        }
-                      )}
-                    className="rounded-lg px-2 py-1 outline-none"
-                    style={{ width: 60, fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, textAlign: "center" }}
-                  />
-                </div>
-                <button onClick={() => onRemoveRoundCriteria(c.roundCriterionId)} className="p-1 rounded-lg transition-colors hover:bg-red-50" style={{ color: COLORS.error }}>
-                  <X size={13} />
-                </button>
-              </div>
-            </div>
+            <RoundCriterionRow 
+              key={c.roundCriterionId}
+              criterion={c}
+              onUpdate={onUpdateRoundCriteria}
+              onDelete={onRemoveRoundCriteria}
+            />
           ))}
         </div>
       )}

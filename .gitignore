@@ -35,4 +35,8 @@ dist-ssr
 
 # AI tool local config
 .ai/
+.claude/
 
+ 
+# Vite
+.vite/

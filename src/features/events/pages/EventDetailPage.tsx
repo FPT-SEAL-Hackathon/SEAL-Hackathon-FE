@@ -1,47 +1,88 @@
-import { useEffect, useState, Children } from "react";
-import { ArrowLeft, Calendar, Star, BookOpen, GitBranch, Users } from "lucide-react";
-import { StatusBadge, COLORS } from "../../../components/shared/UIComponents";
+import { useEffect, useState } from "react";
+import { Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy, Clock } from "lucide-react";
+import { COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../shared/components/OverviewTab";
 import { CriteriaTab } from "../components/criteria/EventCriteriaTab";
 import { CategoriesTab } from "../components/category/CategoryTab";
+import { AssignMentorsTab } from "../components/category/AssignMentorsTab";
 import { RoundsTab } from "../components/round/RoundTab";
-import { useEventCriteria } from "../hooks/useEventCriteria";
+import { AssignJudgesTab } from "../components/round/AssignJudgesTab";
 import { EventResponse } from "../api/eventService";
-import { useCategories } from "../hooks/useCategories";
-import { useRounds } from "../hooks/useRounds";
 import { EventTeamsSection } from "../components/EventTeamsSection";
+import { EventJudgingApprovalTab } from "../components/judging/EventJudgingApprovalTab";
+import { EventLeaderboardsTab } from "../components/judging/EventLeaderboardsTab";
 import { CategoryProvider } from "../context/CategoryContext";
 import { RoundProvider } from "../context/RoundContext";
 import { EventDetailHeader } from "../shared/components/EventDetailHeader";
+import { EventCriteriaProvider } from "../context/EventCriteriaContext";
+import { ScheduleTab } from "../components/timeline/ScheduleTab";
+import { useEventActions } from "../hooks/useEventActions";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { EVENT_ACTION_CONFIG } from "../constants/eventActions";
+import { ApiError } from "@/lib/api/apiClient";
 
-type TabKey = "overview" | "criteria" | "categories" | "rounds" | "teams";
+type TabKey = "overview" | "schedule" | "criteria" | "categories" | "rounds" | "teams" | "assign-judges" | "assign-mentors" | "judging-approval" | "leaderboards";
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "overview",    label: "Overview",    icon: <Calendar size={14} /> },
-  { key: "criteria",    label: "Criteria",    icon: <Star size={14} /> },
-  { key: "categories",  label: "Categories",  icon: <BookOpen size={14} /> },
-  { key: "rounds",      label: "Rounds",      icon: <GitBranch size={14} /> },
-  { key: "teams",       label: "Team Management", icon: <Users size={14} /> },
+  { key: "overview",        label: "Overview",        icon: <Calendar size={14} /> },
+  { key: "schedule",        label: "Schedule",        icon: <Clock size={14} /> },
+  { key: "criteria",        label: "Criteria",        icon: <Star size={14} /> },
+  { key: "categories",      label: "Categories",      icon: <BookOpen size={14} /> },
+  { key: "rounds",          label: "Rounds",          icon: <GitBranch size={14} /> },
+  { key: "assign-judges",   label: "Assign Judges",   icon: <Shield size={14} /> },
+  { key: "assign-mentors",  label: "Assign Mentors",  icon: <UserCheck size={14} /> },
+  { key: "teams",           label: "Team Management", icon: <Users size={14} /> },
+  { key: "judging-approval",label: "Judging Approval", icon: <CheckCircle size={14} /> },
+  { key: "leaderboards",    label: "Leaderboards",    icon: <Trophy size={14} /> },
 ];
 
-export function EventDetailPage({ event, onBack }: { event: EventResponse; onBack: () => void }) {
+export function EventDetailPage({ event, onBack, onEdit }: { event: EventResponse; onBack: () => void; onEdit?: () => void }) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
-  const {
-    criteriaTemplates,
-    selectedTemplates,
-    setSelectedTemplates,
-
-    eventCriteria,
-    loadEventCriteria,
-    importCriteria,
-    updateEventCriteria,
-    removeEventCriteria
-  } = useEventCriteria(event.eventId);
-
   // ── Shared state lifted here so all tabs can read/write ──────────────────
+  const [currentEvent, setCurrentEvent] = useState(event);
+  const [error, setError] = useState("");
 
   const [totalPrize, setTotalPrize] = useState<{ amount: number; currency: string } | null>(null);
+
+  type ConfirmAction = "publish" | "cancel" | "delete" | null;
+
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const {
+    loading,
+    publishEvent,
+  } = useEventActions();
+
+  const handleConfirm = async () => {
+    if (!confirmAction) return;
+
+    setConfirmLoading(true);
+
+    try {
+        switch (confirmAction) {
+            case "publish": {
+                const updatedEvent = await publishEvent(currentEvent.eventId);
+
+                setCurrentEvent(updatedEvent);
+
+                setConfirmAction(null);
+
+                break;
+            }
+        }
+    } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+            setError("Failed to publish event.");
+        }
+    } finally {
+        setConfirmLoading(false);
+    }
+    };
 
   useEffect(() => {
     import("../../awards/api/awardService").then(({ awardService }) => {
@@ -55,76 +96,125 @@ export function EventDetailPage({ event, onBack }: { event: EventResponse; onBac
     });
   }, [event.eventId]);
 
+  useEffect(() => {
+    setCurrentEvent(event);
+  }, [event]);
+
   return (
-    <div className="p-6 space-y-6">    
-      <CategoryProvider eventId={event.eventId}>
-        <RoundProvider eventId={event.eventId}>
+    <div className="p-6 space-y-6">   
+      <EventCriteriaProvider eventId={event.eventId}>
 
-          {/* Header */}
-          <EventDetailHeader 
-            event={event}
-            totalPrize={totalPrize}
-            onBack={onBack}
-          />
-          {/* Tab bar */}
-          <div
-            className="flex gap-1 p-1 rounded-2xl"
-            style={{ background: "var(--surface-bg)", border: `1px solid ${COLORS.border}`, width: "fit-content" }}
-          >
-            {TABS.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-orange-100"
-                style={{
-                  fontSize: 13,
-                  fontWeight: activeTab === tab.key ? 600 : 400,
-                  color: activeTab === tab.key ? "#fff" : COLORS.textSecondary,
-                  ...(activeTab === tab.key && {
-                    background: COLORS.primary, 
-                  }),
-                  boxShadow: activeTab === tab.key ? `0 2px 12px ${COLORS.primary}40` : "none",
-                }}
-              >
-                {tab.icon}
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        <CategoryProvider eventId={event.eventId}>
+          <RoundProvider eventId={event.eventId}>
 
-          {/* Tab content */}
-          {activeTab === "overview" && (
-            <OverviewTab 
-              event={event} 
-              eventCriteria={eventCriteria}
+            {/* Header */}
+            <EventDetailHeader 
+              event={event}
               totalPrize={totalPrize}
-              onOpenTeamManagement={() => setActiveTab("teams")}
-            />
-          )}
+              onBack={onBack}
 
-          {activeTab === "criteria" && (
-            <CriteriaTab
-              templates={criteriaTemplates}
-              eventCriteria={eventCriteria}
-              onImport={importCriteria}
-              onUpdate={updateEventCriteria}
-              onRemove={removeEventCriteria}
+              onPublish={() => {
+                setError("");
+                setConfirmAction("publish");
+              }}
+              onCancel={() => {
+                setError("");
+                setConfirmAction("cancel");
+              }}
+              onDelete={() => {
+                setError("");
+                setConfirmAction("delete");
+              }}
+              onEdit={onEdit}
             />
-          )}
+            {/* Tab bar */}
+            <div
+              className="flex gap-1 p-1 rounded-2xl"
+              style={{ background: "var(--surface-bg)", border: `1px solid ${COLORS.border}`, width: "fit-content" }}
+            >
+              {TABS.map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all hover:-translate-y-0.5 hover:shadow-md hover:bg-orange-100"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: activeTab === tab.key ? 600 : 400,
+                    color: activeTab === tab.key ? "#fff" : COLORS.textSecondary,
+                    ...(activeTab === tab.key && {
+                      background: COLORS.primary, 
+                    }),
+                    boxShadow: activeTab === tab.key ? `0 2px 12px ${COLORS.primary}40` : "none",
+                  }}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          {activeTab === "categories" && (
-            <CategoriesTab />
-          )}
-      
-          {activeTab === "rounds" && (
-            <RoundsTab />
-          )}
+            {/* Tab content */}
+            {activeTab === "overview" && (
+              <OverviewTab 
+                event={event} 
+                totalPrize={totalPrize}
+                onOpenTeamManagement={() => setActiveTab("teams")}
+                onEdit={onEdit}
+              />
+            )}
+
+            {activeTab === "schedule" && (
+              <ScheduleTab event={event} />
+            )}
+
+            {activeTab === "criteria" && (
+              <CriteriaTab />
+            )}
+
+            {activeTab === "categories" && (
+              <CategoriesTab />
+            )}
         
-          {activeTab === "teams" && (
-            <EventTeamsSection eventId={event.eventId} />
-          )}       
-        </RoundProvider>
-      </CategoryProvider>
+            {activeTab === "rounds" && (
+              <RoundsTab event={event} />
+            )}
+
+            {activeTab === "assign-judges" && (
+              <AssignJudgesTab />
+            )}
+
+            {activeTab === "assign-mentors" && (
+              <AssignMentorsTab />
+            )}
+          
+            {activeTab === "teams" && (
+              <EventTeamsSection eventId={event.eventId} event={event} />
+            )}       
+            
+            {activeTab === "judging-approval" && (
+              <EventJudgingApprovalTab eventId={event.eventId} />
+            )}
+
+            {activeTab === "leaderboards" && (
+              <EventLeaderboardsTab eventId={event.eventId} />
+            )}
+            {
+              confirmAction && (
+                  <ConfirmDialog
+                      title={EVENT_ACTION_CONFIG[confirmAction].title}
+                      message={EVENT_ACTION_CONFIG[confirmAction].message}
+                      confirmText={EVENT_ACTION_CONFIG[confirmAction].confirmText}
+                      confirmVariant={EVENT_ACTION_CONFIG[confirmAction].variant}
+                      loading={confirmLoading}
+                      error={error}
+                      onConfirm={handleConfirm}
+                      onCancel={() => setConfirmAction(null)}                    
+                  />
+              )
+            }
+          </RoundProvider>
+        </CategoryProvider>
+      </EventCriteriaProvider> 
     </div>
   );
 }

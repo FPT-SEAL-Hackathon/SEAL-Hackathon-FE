@@ -1,9 +1,13 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { X, Calendar, MapPin, Users, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { eventService, type EventResponse, type CreateEventRequest } from "@/features/events/api/eventService";
 import { ApiError } from "@/lib/api/apiClient";
 import { COLORS } from "@/components/shared/UIComponents";
+import { DatePickerField, DateTimePickerField } from "../shared/ui/shared";
+import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
+import { uploadImageToCloudinary } from "@/utils/cloudinary";
 
 interface Props {
   event?: EventResponse | null;
@@ -19,6 +23,8 @@ const STATUS_OPTIONS = [
   { label: "Ongoing", value: "30000000-0000-0000-0000-000000000003" },
   { label: "Completed", value: "30000000-0000-0000-0000-000000000004" },
   { label: "Cancelled", value: "30000000-0000-0000-0000-000000000005" },
+  { label: "Upcoming", value: "30000000-0000-0000-0000-000000000006"},
+  { label: "Registration Closed", value: "30000000-0000-0000-0000-000000000007"}
 ];
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -44,7 +50,9 @@ function Input({ value, onChange, placeholder, type = "text" }: { value: string;
 }
 
 const formatDateTime = (value: string) => {
-    return value ? `${value}:00` : undefined;
+    if (!value) return undefined;
+    if (value.length === 16) return `${value}:00`;
+    return value;
 };
 
 export function EventModal({ event, onClose, onSaved }: Props) {
@@ -54,7 +62,6 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     description: event?.description ?? "",
     location: event?.location ?? "",
     bannerImageUrl: event?.bannerImageUrl ?? "",
-    eventStatusId: typeof event?.eventStatus === 'object' ? event?.eventStatus?.eventStatusId : (event?.eventStatus ?? STATUS_OPTIONS[0].value),
     registrationStart: event?.registrationStart?.slice(0, 16) ?? "",
     registrationEnd: event?.registrationEnd?.slice(0, 16) ?? "",
     eventStartDate: event?.eventStartDate ?? "",
@@ -72,9 +79,9 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       location: event.location ?? "",
       bannerImageUrl: event.bannerImageUrl ?? "",
 
-      eventStatusId:
-        (typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus) ??
-        STATUS_OPTIONS[0].value,
+      // eventStatusId:
+      //   (typeof event.eventStatus === 'object' ? event.eventStatus?.eventStatusId : event.eventStatus) ??
+      //   STATUS_OPTIONS[0].value,
 
       registrationStart:
         event.registrationStart?.slice(0,16) ?? "",
@@ -99,19 +106,64 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageSrc, setImageSrc] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        setImageSrc(reader.result?.toString() || "");
+        setCropperOpen(true);
+      });
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    }
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropperOpen(false);
+    setUploadingImage(true);
+    try {
+      const url = await uploadImageToCloudinary(croppedBlob);
+      set("bannerImageUrl", url);
+    } catch (err: any) {
+      setError(err.message || "Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const set = (k: keyof typeof form, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const handleSave = async () => {
     if (!form.eventName.trim()) { setError("Event name is required."); return; }
+    
+    if (form.registrationStart && form.registrationEnd && form.registrationStart >= form.registrationEnd) {
+      setError("Registration End time must be after Registration Start time.");
+      return;
+    }
+    if (form.eventStartDate && form.eventEndDate && form.eventStartDate > form.eventEndDate) {
+      setError("Event End Date must be after or equal to Event Start Date.");
+      return;
+    }
+    if (form.registrationEnd && form.eventStartDate) {
+      const regEndDate = form.registrationEnd.substring(0, 10);
+      if (regEndDate > form.eventStartDate) {
+        setError("Registration End date must be on or before Event Start Date.");
+        return;
+      }
+    }
+
     setLoading(true); setError("");
     try {
-      const payload: CreateEventRequest = {
+      const payload: any = {
         eventName: form.eventName,
         description: form.description || "",
         location: form.location || "",
         bannerImageUrl: form.bannerImageUrl || "",
-        eventStatusId: form.eventStatusId,
         registrationStart: formatDateTime(form.registrationStart) ?? "",
         registrationEnd: formatDateTime(form.registrationEnd) ?? "",
         eventStartDate: form.eventStartDate || "",
@@ -120,11 +172,18 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         minTeamSize: parseInt(form.minTeamSize) || 2,
       };
       const result = isEdit
-        ? await eventService.update(event!.eventId, { ...payload, eventName: payload.eventName, eventStatusId: payload.eventStatusId! })
+        ? await eventService.update(event!.eventId, payload )
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
+        const errorMessages = Object.entries(err.fieldErrors)
+          .map(([field, msg]) => `• ${msg}`)
+          .join("\n");
+        setError(err.message + "\n" + errorMessages);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Save failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -135,7 +194,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         className="fixed inset-0 z-50 flex items-center justify-center p-4"
         style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)" }}
-        onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      >
         <motion.div initial={{ opacity: 0, scale: 0.95, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full rounded-2xl overflow-hidden"
           style={{ maxWidth: 620, background: COLORS.bg, boxShadow: "0 24px 64px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto" }}>
@@ -151,7 +210,7 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
           <div className="p-6 space-y-4">
             {error && (
-              <div className="px-4 py-3 rounded-xl text-sm" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
+              <div className="px-4 py-3 rounded-xl text-sm whitespace-pre-wrap" style={{ background: `${COLORS.error}10`, border: `1px solid ${COLORS.error}30`, color: COLORS.error }}>
                 {error}
               </div>
             )}
@@ -171,30 +230,62 @@ export function EventModal({ event, onClose, onSaved }: Props) {
               <Field label="Location">
                 <Input value={form.location} onChange={v => set("location", v)} placeholder="FPT University, Hanoi" />
               </Field>
-              <Field label="Status">
-                <select value={form.eventStatusId} onChange={e => set("eventStatusId", e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </Field>
+              {isEdit && (
+                <Field label="Current Status">
+                  <div
+                    className="px-3 py-2.5 rounded-xl"
+                    style={{
+                      border: `1px solid ${COLORS.border}`,
+                      background: `${COLORS.primary}10`,
+                      color: COLORS.primary,
+                      fontSize: 14,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {typeof event?.eventStatus === "object"
+                      ? event.eventStatus.eventStatusName
+                      : event?.eventStatus}
+                  </div>
+                </Field>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Registration Start">
-                <Input type="datetime-local" value={form.registrationStart} onChange={v => set("registrationStart", v)} />
+                <DateTimePickerField
+                  value={form.registrationStart}
+                  onChange={v => set("registrationStart", v)}
+                  minDateTime={!isEdit ? new Date() : undefined}
+                  maxDateTime={form.registrationEnd || undefined}
+                  strictMax={!!form.registrationEnd}
+                />
               </Field>
               <Field label="Registration End">
-                <Input type="datetime-local" value={form.registrationEnd} onChange={v => set("registrationEnd", v)} />
+                <DateTimePickerField
+                  value={form.registrationEnd}
+                  onChange={v => set("registrationEnd", v)}
+                  minDateTime={form.registrationStart || (!isEdit ? new Date() : undefined)}
+                  strictMin={!!form.registrationStart}
+                  maxDateTime={undefined}
+                />
               </Field>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Event Start Date">
-                <Input type="date" value={form.eventStartDate} onChange={v => set("eventStartDate", v)} />
+                <DatePickerField
+                  value={form.eventStartDate}
+                  onChange={v => set("eventStartDate", v)}
+                  minDate={!isEdit ? new Date() : undefined}
+                  maxDate={form.eventEndDate}
+                />
               </Field>
               <Field label="Event End Date">
-                <Input type="date" value={form.eventEndDate} onChange={v => set("eventEndDate", v)} />
+                <DatePickerField
+                  value={form.eventEndDate}
+                  onChange={v => set("eventEndDate", v)}
+                  minDate={form.eventStartDate || (!isEdit ? new Date() : undefined)}
+                />
               </Field>
             </div>
 
@@ -207,11 +298,35 @@ export function EventModal({ event, onClose, onSaved }: Props) {
               </Field>
             </div>
 
-            <Field label="Banner Image URL">
-              <Input value={form.bannerImageUrl} onChange={v => set("bannerImageUrl", v)} placeholder="https://..." />
+            <Field label="Banner Image">
+              <div className="flex items-center gap-4">
+                {form.bannerImageUrl ? (
+                  <div className="relative w-32 h-16 rounded overflow-hidden" style={{ border: `1px solid ${COLORS.border}` }}>
+                    <img src={form.bannerImageUrl} alt="Banner" className="w-full h-full object-cover" />
+                    <button onClick={() => set("bannerImageUrl", "")} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1" type="button">
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center w-32 h-16 rounded cursor-pointer border-2 border-dashed transition-colors" style={{ borderColor: COLORS.border, background: `${COLORS.primary}10`, color: COLORS.primary }}>
+                    {uploadingImage ? <Loader className="animate-spin" size={20} /> : <span className="text-xs font-semibold">Upload</span>}
+                    <input type="file" accept="image/*" className="hidden" onChange={onFileChange} disabled={uploadingImage} />
+                  </label>
+                )}
+                <div className="flex-1">
+                  <Input value={form.bannerImageUrl} onChange={v => set("bannerImageUrl", v)} placeholder="Or paste image URL here..." />
+                </div>
+              </div>
             </Field>
           </div>
 
+<ImageCropperModal
+              isOpen={cropperOpen}
+              onClose={() => setCropperOpen(false)}
+              imageSrc={imageSrc}
+              onCropComplete={handleCropComplete}
+              aspectRatio={16 / 9}
+            />
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
             <button onClick={onClose} className="px-4 py-2 rounded-xl text-sm font-medium transition-colors"

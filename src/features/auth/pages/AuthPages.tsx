@@ -4,7 +4,9 @@ import {
   User, BookOpen, Building2, Phone, AlertCircle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { login, register, REGISTER_USER_TYPES, getGoogleLoginUrl, type UserResponse } from "@/features/auth/api/authService.ts";
+import { login, register, REGISTER_USER_TYPES, getGoogleLoginUrl, sendLinkOtp, verifyLinkOtp, setupLocalPassword, type UserResponse } from "@/features/auth/api/authService.ts";
+import { useAuth } from "@/features/auth/store/authStore";
+import { useNavigate } from "react-router";
 import { ApiError, api } from "@/lib/api/apiClient.ts";
 import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService.ts";
 
@@ -204,6 +206,14 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  // Email đã có tài khoản Google-only (chưa có mật khẩu): backend trả 409
+  // ACCOUNT_LINK_REQUIRED + linkingToken — chuyển sang bước xác minh OTP để
+  // thiết lập mật khẩu cho CHÍNH tài khoản đó (không tạo user mới).
+  const [linkSetup, setLinkSetup] = useState<{ linkingToken: string; email: string } | null>(null);
+  const [otp, setOtp] = useState("");
+  const [otpInfo, setOtpInfo] = useState("");
+  const { setAuth } = useAuth();
+  const navigate = useNavigate();
 
   const set = (k: keyof typeof form, v: string) => {
     setForm(prev => ({ ...prev, [k]: v }));
@@ -243,11 +253,110 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
       setSuccess(true);
       setTimeout(onSwitchToLogin, 2500);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "ACCOUNT_LINK_REQUIRED") {
+        const linkingToken = typeof err.details?.linkingToken === "string" ? err.details.linkingToken : "";
+        if (linkingToken) {
+          setLinkSetup({ linkingToken, email: form.email.trim() });
+          setApiError("");
+          try {
+            await sendLinkOtp(linkingToken);
+            setOtpInfo("We sent a 6-digit code to your email.");
+          } catch (otpErr) {
+            setApiError(otpErr instanceof Error ? otpErr.message : "Could not send the verification code.");
+          }
+          return;
+        }
+      }
       setApiError(err instanceof ApiError ? err.message : "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleVerifyOtpAndSetupPassword = async () => {
+    if (!linkSetup) return;
+    if (otp.trim().length !== 6) {
+      setApiError("Please enter the 6-digit code.");
+      return;
+    }
+    setLoading(true);
+    setApiError("");
+    try {
+      await verifyLinkOtp(linkSetup.linkingToken, otp.trim());
+      const res = await setupLocalPassword({
+        linkingToken: linkSetup.linkingToken,
+        password: form.password,
+        confirmPassword: form.confirmPassword,
+      });
+      setAuth(res.user);
+      const isTemporary = res.user.accountStatus?.toUpperCase() === "TEMPORARY";
+      navigate(isTemporary ? "/complete-profile" : "/", { replace: true });
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendLinkOtp = async () => {
+    if (!linkSetup) return;
+    setApiError("");
+    try {
+      await sendLinkOtp(linkSetup.linkingToken);
+      setOtpInfo("A new code has been sent to your email.");
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : "Could not resend the code.");
+    }
+  };
+
+  if (linkSetup) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 24, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+        className="w-full rounded-3xl p-8"
+        style={{ background: "var(--glass-bg)", backdropFilter: "blur(32px) saturate(180%)", border: "1px solid var(--glass-border)", boxShadow: "var(--glass-shadow-lg)" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.025em" }}>
+          This email already has an account
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 8, lineHeight: 1.7 }}>
+          <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{linkSetup.email}</span>{" "}
+          already signs in with Google. Verify the code we emailed you and we&apos;ll add your new
+          password to the <strong>same account</strong> — no duplicate account will be created.
+        </p>
+
+        <div className="mt-6 space-y-4">
+          {apiError && <ErrorBanner message={apiError} />}
+          {otpInfo && !apiError && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-2xl"
+              style={{ background: "rgba(0,148,68,0.08)", border: "1px solid rgba(0,148,68,0.25)", color: "var(--fpt-green, #009444)" }}>
+              <Mail size={15} />
+              <span style={{ fontSize: 13 }}>{otpInfo}</span>
+            </div>
+          )}
+
+          <GlassInput label="6-digit code" placeholder="123456" icon={<Lock size={15} />}
+            value={otp} onChange={v => setOtp(v.replace(/\D/g, "").slice(0, 6))} />
+
+          <motion.button onClick={handleVerifyOtpAndSetupPassword} disabled={loading}
+            whileHover={{ scale: loading ? 1 : 1.02, y: loading ? 0 : -1 }} whileTap={{ scale: 0.97 }}
+            className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl font-semibold"
+            style={{ background: "linear-gradient(135deg, #F47920, #FF9040)", color: "white", fontSize: 14, boxShadow: "0 8px 24px rgba(244,121,32,0.4)", opacity: loading ? 0.7 : 1, cursor: loading ? "wait" : "pointer" }}>
+            {loading ? <><Loader size={15} className="animate-spin" /> Verifying...</> : <>Verify & set password <ArrowRight size={15} /></>}
+          </motion.button>
+
+          <div className="flex items-center justify-between">
+            <button type="button" onClick={handleResendLinkOtp}
+              style={{ fontSize: 13, color: "#F47920", fontWeight: 600, background: "none", border: "none", cursor: "pointer" }}>
+              Resend code
+            </button>
+            <button type="button" onClick={() => { setLinkSetup(null); setOtp(""); setOtpInfo(""); setApiError(""); }}
+              style={{ fontSize: 13, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>
+              Back to registration
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   if (success) {
     return (

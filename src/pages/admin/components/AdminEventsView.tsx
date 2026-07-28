@@ -157,29 +157,81 @@ export function AdminEventsView({ context, onViewEvent }: AdminViewProps) {
         subtitle="Create and manage hackathon events"
         action={<Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={() => setEventModal({ open: true })}>New Event</Button>}
       />
-      <div className="space-y-3">
-        {apiEvents.map((ev: any) => (
-          <Card key={ev.id} className="p-5">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>{ev.name}</span>
-                  <StatusBadge status={ev.status} />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {apiEvents.map((ev: any) => {
+          const visibleTeamCount = ev.visibleTeamCount ?? ev.teams ?? 0;
+          const status = (ev.status || "UNKNOWN").toLowerCase();
+
+          return (
+            <Card
+              key={ev.id || ev.eventId}
+              className="overflow-hidden cursor-pointer transition-all hover:-translate-y-1 hover:shadow-md"
+              style={{ display: 'flex', flexDirection: 'column', boxShadow: "none", border: `1px solid ${COLORS.border}` }}
+              onClick={() => onViewEvent(ev)}
+            >
+              {/* Banner section */}
+              <div className="relative h-32 w-full" style={{ background: `${COLORS.primary}15` }}>
+                {ev.bannerImageUrl ? (
+                  <img src={ev.bannerImageUrl} alt={ev.name || ev.eventName} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Calendar size={32} style={{ color: COLORS.primary, opacity: 0.5 }} />
+                  </div>
+                )}
+                <div className="absolute top-3 right-3 flex gap-2">
+                  <StatusBadge status={status} opaque />
+                  <div onClick={e => e.stopPropagation()}>
+                    <button 
+                      className="p-1.5 rounded bg-white/90 hover:bg-white text-gray-700 shadow-sm transition-all"
+                      title="Edit Event"
+                      onClick={() => setEventModal({ open: true, edit: ev })}
+                    >
+                      <Edit size={14} />
+                    </button>
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: COLORS.textSecondary }}>{ev.description} • {ev.teamCount ?? 0} teams • {ev.roundCount ?? 0} rounds • Deadline: {ev.eventEndDate}</div>
               </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.success }}>{ev.prize}</span>
-                <Button variant="ghost" size="sm" icon={<Eye size={13} />} 
-                    onClick={() => onViewEvent(ev)}>View</Button>
-                <Button variant="ghost" size="sm" icon={<Edit size={13}/>} 
-                    onClick={() => setEventModal({open: true, edit: ev})}>Edit</Button>
-                {ev.status === "upcoming" && <Button variant="danger" size="sm" icon={<Trash2 size={13} />}>Delete</Button>}
+
+              <div className="p-5 flex-1 flex flex-col">
+                <div className="mb-3 flex-1">
+                  <div style={{ fontWeight: 700, fontSize: 16, color: COLORS.textPrimary, marginBottom: 4 }} className="line-clamp-1">{ev.name || ev.eventName}</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="line-clamp-2">{ev.description || "No description available."}</div>
+                </div>
+                
+                <div className="flex flex-col gap-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={14} style={{ color: COLORS.textSecondary }} />
+                    <span style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 500 }}>
+                      {ev.eventStartDate ? new Date(ev.eventStartDate).toLocaleDateString() : "TBA"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users size={14} style={{ color: COLORS.textSecondary }} />
+                    <span style={{ fontSize: 13, color: COLORS.textPrimary, fontWeight: 500 }}>
+                      {visibleTeamCount} Teams • {ev.roundCount ?? ev.rounds ?? 0} Rounds
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="pt-4 flex justify-between items-center" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.primary }} className="flex items-center gap-1 group-hover:gap-2 transition-all">
+                    Manage Event <Eye size={14} />
+                  </span>
+                  
+                  {status === "upcoming" && (
+                    <div onClick={e => e.stopPropagation()}>
+                       <Button variant="ghost" size="sm" icon={<Trash2 size={13} style={{color: COLORS.error}} />} onClick={() => {
+                         // implement delete later or call existing handler
+                       }}></Button>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </>
   );
 }
+

@@ -4,6 +4,10 @@ import { Card, Button, COLORS } from "../../../../components/shared/UIComponents
 import { CategoryForm } from "./CategoryForm";
 import { CategoryCard } from "./CategoryCard";
 import { useCategoryContext } from "../../context/CategoryContext";
+import { Category, CategoryMentor } from "../../types/category";
+import { ConfirmDialog } from "@/components/shared/ConfirmDialog";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +25,12 @@ export function CategoriesTab() {
   } = useCategoryContext();
 
   const [showForm, setShowForm] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+
+  const [removingMentor, setRemovingMentor] = useState<{
+    category: Category;
+    mentor: CategoryMentor;
+  } | null>(null);
 
   return (
     <div className="space-y-4">
@@ -41,11 +51,16 @@ export function CategoriesTab() {
           initial={{
             categoryName: "",
             description: "",
-            sortOrder: categories.length + 1,
+            sortOrder: categories.length === 0 ? 1 : Math.max(...categories.map(c => c.sortOrder)) + 1,
           }}
           onSave={async (data) => {
-            await createCategory(data);
-            setShowForm(false);
+            try {
+              await createCategory(data);
+              toast.success("Category created successfully.");
+              setShowForm(false);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to create category");
+            }
           }}
           onCancel={() => setShowForm(false)}
         />
@@ -79,11 +94,52 @@ export function CategoriesTab() {
               mentors={categoryMentors[category.categoryId] ?? []}
               loadCategoryMentors={loadCategoryMentors}
               onAssignMentor={assignMentors}
-              onRemoveMentor={removeMentor}
+              onRemoveMentor={(category, mentor) => 
+                setRemovingMentor({category, mentor})
+              }
               onUpdate={updateCategory}
-              onDelete={deleteCategory}
+              onDelete={setDeletingCategory}
             />
           ))
+      )}
+      {deletingCategory && (
+        <ConfirmDialog 
+          title="Delete Category"
+          message={`Are you sure you want to delete "${deletingCategory.categoryName}"? This action cannot be undone.`}
+          confirmText="Delete"
+          confirmVariant="danger"
+          onCancel={() => setDeletingCategory(null)}
+          onConfirm={async () => {
+            try {
+              await deleteCategory(deletingCategory.categoryId);
+              toast.success("Category deleted.");
+              setDeletingCategory(null);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to delete category");
+            }
+          }}
+        />
+      )}
+      {removingMentor && (
+        <ConfirmDialog 
+          title="Remove Mentor"
+          message={`Remove "${removingMentor.mentor.fullName}" from "${removingMentor.category.categoryName}"?`}
+          confirmText="Remove"
+          confirmVariant="danger"
+          onCancel={() => setRemovingMentor(null)}
+          onConfirm={async () => {
+            try {
+              await removeMentor(
+                removingMentor?.category.categoryId,
+                removingMentor?.mentor.mentorId
+              );
+              toast.success("Mentor removed.");
+              setRemovingMentor(null);
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to remove mentor");
+            }
+          }}
+        />
       )}
     </div>
   );

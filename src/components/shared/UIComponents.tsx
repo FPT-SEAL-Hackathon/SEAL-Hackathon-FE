@@ -29,9 +29,14 @@ const glassSurface: React.CSSProperties = {
 };
 
 // Status Badge
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, opaque = false }: { status: string; opaque?: boolean }) {
+  if (!status) return null;
+  const normalizedStatus = status.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  
   const configs: Record<string, { bg: string; color: string; label: string; border: string }> = {
+    forming:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Forming", border: "rgba(244,121,32,0.22)" },
     active:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Active",       border: "rgba(0,148,68,0.22)" },
+    inactive:      { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Inactive",     border: "rgba(100,70,30,0.14)" },
     pending_approval: { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Pending Approval", border: "rgba(245,158,11,0.22)" },
     temporary:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Temporary", border: "rgba(244,121,32,0.22)" },
     unverified:    { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Unverified", border: "rgba(100,70,30,0.14)" },
@@ -40,29 +45,51 @@ export function StatusBadge({ status }: { status: string }) {
     submitted:     { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Submitted",    border: "rgba(244,121,32,0.22)" },
     approved:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Approved",     border: "rgba(0,148,68,0.22)" },
     rejected:      { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Rejected",     border: "rgba(229,62,46,0.2)" },
+    cancelled:     { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Cancelled",    border: "rgba(100,70,30,0.14)" },
     in_progress:   { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "In Progress",  border: "rgba(244,121,32,0.22)" },
+    accepted:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Accepted",     border: "rgba(0,148,68,0.22)" },
+    resolved:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Resolved",     border: "rgba(0,148,68,0.22)" },
     completed:     { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Completed",    border: "rgba(0,148,68,0.22)" },
     draft:         { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Draft",        border: "rgba(100,70,30,0.14)" },
+    scored:        { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Scored",       border: "rgba(0,148,68,0.22)" },
+    under_review:  { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Under Review", border: "rgba(245,158,11,0.22)" },
     disqualified:  { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Disqualified", border: "rgba(229,62,46,0.2)" },
     withdrawn:     { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Withdrawn",    border: "rgba(100,70,30,0.14)" },
     finalist:      { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Finalist",     border: "rgba(245,158,11,0.22)" },
     winner:        { bg: "rgba(244,121,32,0.12)", color: "#c06010", label: "Winner",      border: "rgba(244,121,32,0.3)" },
     open:          { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Open",         border: "rgba(0,148,68,0.22)" },
-    closed:        { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Closed",       border: "rgba(100,70,30,0.14)" },
+    closed:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Closed",       border: "rgba(229,62,46,0.2)" },
+    advanced:      { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Advanced",     border: "rgba(0,148,68,0.22)" },
+    locked:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Locked",       border: "rgba(229,62,46,0.2)" },
     scoring:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Scoring",      border: "rgba(244,121,32,0.22)" },
     calibration:   { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Calibration",  border: "rgba(245,158,11,0.22)" },
     scheduled:     { bg: "rgba(244,121,32,0.08)", color: "#b25310", label: "Scheduled",   border: "rgba(244,121,32,0.18)" },
     upcoming:      { bg: "rgba(0,148,68,0.08)",  color: "#007535", label: "Upcoming",     border: "rgba(0,148,68,0.18)" },
+    published:     { bg: "rgba(0,148,68,0.08)",  color: "#007535", label: "Published",    border: "rgba(0,148,68,0.18)" },
+    ongoing:       { bg: "rgba(244,121,32,0.1)", color: "#b25310", label: "Ongoing",      border: "rgba(244,121,32,0.22)" },
+    late:          { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Late",         border: "rgba(229,62,46,0.2)" },
+    evaluated:     { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Evaluated",    border: "rgba(0,148,68,0.22)" },
+    urgent:        { bg: "rgba(229,62,46,0.1)",  color: "#c0392b", label: "Urgent",       border: "rgba(229,62,46,0.2)" },
+    high:          { bg: "rgba(244,121,32,0.12)", color: "#c06010", label: "High",        border: "rgba(244,121,32,0.3)" },
+    medium:        { bg: "rgba(245,158,11,0.1)", color: "#b45309", label: "Medium",       border: "rgba(245,158,11,0.22)" },
+    low:           { bg: "rgba(0,148,68,0.1)",   color: "#007535", label: "Low",          border: "rgba(0,148,68,0.22)" },
+    not_registered:{ bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: "Not Registered", border: "rgba(100,70,30,0.14)" },
   };
-  const cfg = configs[status] || { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: status, border: "rgba(100,70,30,0.14)" };
+  
+  const formatLabel = (s: string) => {
+    if (!s) return "";
+    return s.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  };
+
+  const cfg = configs[normalizedStatus] || { bg: "rgba(100,70,30,0.07)", color: "#7a5c3a", label: formatLabel(status), border: "rgba(100,70,30,0.14)" };
   return (
     <span
-      className="inline-flex items-center px-2.5 py-0.5 rounded-full"
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${opaque ? "shadow-md backdrop-blur-md" : ""}`}
       style={{
-        background: cfg.bg,
+        background: opaque ? "var(--sidebar-surface, rgba(255, 255, 255, 0.95))" : cfg.bg,
         color: cfg.color,
         fontSize: 11,
-        fontWeight: 600,
+        fontWeight: 700,
         letterSpacing: "0.02em",
         border: `1px solid ${cfg.border}`,
       }}
@@ -126,9 +153,15 @@ export function StatCard({ title, value, trend, icon, color = COLORS.primary, su
 }
 
 // Card
-export function Card({ children, className = "", style = {} }: { children: ReactNode; className?: string; style?: React.CSSProperties }) {
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  children: ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+};
+
+export function Card({ children, className = "", style = {}, ...rest }: CardProps) {
   return (
-    <div className={`rounded-2xl overflow-hidden ${className}`} style={{ ...glassSurface, ...style }}>
+    <div {...rest} className={`rounded-2xl overflow-hidden ui-card-glow ${className}`} style={{ ...glassSurface, ...style }}>
       {children}
     </div>
   );
@@ -136,7 +169,7 @@ export function Card({ children, className = "", style = {} }: { children: React
 
 // Button
 interface ButtonProps {
-  children: ReactNode;
+  children?: ReactNode;
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger";
   size?: "sm" | "md" | "lg";
   onClick?: () => void;
@@ -145,8 +178,9 @@ interface ButtonProps {
   icon?: ReactNode;
   fullWidth?: boolean;
   style?: React.CSSProperties;
+  title?: string;
 }
-export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style }: ButtonProps) {
+export function Button({ children, variant = "primary", size = "md", onClick, disabled, className = "", icon, fullWidth, style, title }: ButtonProps) {
   const sizes = {
     sm: { padding: "6px 12px", fontSize: 12 },
     md: { padding: "8px 16px", fontSize: 13 },
@@ -186,6 +220,7 @@ export function Button({ children, variant = "primary", size = "md", onClick, di
     <motion.button
       onClick={onClick}
       disabled={disabled}
+      title={title}
       whileHover={disabled ? {} : { scale: 1.02, y: -1 }}
       whileTap={disabled ? {} : { scale: 0.97 }}
       className={`inline-flex items-center gap-2 rounded-xl font-medium transition-all duration-150 cursor-pointer ${fullWidth ? "w-full justify-center" : ""} ${className}`}
@@ -236,8 +271,9 @@ export function DataTable({ columns, data }: { columns: Column[]; data: Record<s
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="text-left px-4 py-3.5"
+                className="px-4 py-3.5"
                 style={{
+                  textAlign: col.key === "action" ? "center" : "left",
                   fontSize: 10,
                   fontWeight: 700,
                   color: "#a07850",
@@ -258,7 +294,11 @@ export function DataTable({ columns, data }: { columns: Column[]; data: Record<s
               style={{ borderBottom: i < data.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none" }}
             >
               {columns.map((col) => (
-                <td key={col.key} className="px-4 py-3.5" style={{ fontSize: 13.5, color: COLORS.textPrimary }}>
+                <td
+                  key={col.key}
+                  className="px-4 py-3.5"
+                  style={{ fontSize: 13.5, color: COLORS.textPrimary, textAlign: col.key === "action" ? "center" : "left" }}
+                >
                   {col.render ? col.render(row[col.key], row) : row[col.key]}
                 </td>
               ))}

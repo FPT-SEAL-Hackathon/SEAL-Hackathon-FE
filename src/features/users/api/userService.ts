@@ -42,22 +42,42 @@ export interface UserManagementUser {
   accountStatus: string;
   accountStatusName?: string | null;
   emailVerified?: boolean;
+  /** Soft-deleted (isDeleted=1) — hiển thị mờ, readonly, chỉ cho Delete Forever. */
+  deleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface UserQueryParams {
   search?: string;
-  role?: string;
+  /** Multi-select: mảng mã canonical (FPT_STUDENT, ORGANIZER...) — OR trong nhóm. */
+  role?: string | string[];
   teamId?: string;
   teamName?: string;
+  /** Multi-select account status (ACTIVE, SUSPENDED...) — BE nhận param "status". */
+  status?: string | string[];
+  /** @deprecated dùng `status`; giữ để tương thích chỗ gọi cũ (BE nhận alias). */
   accountStatus?: string;
   joinedFrom?: string;
   joinedTo?: string;
+  /** Admin: trả về cả account soft-deleted (BE default false). */
+  includeDeleted?: boolean;
   page?: number;
   size?: number;
   sortBy?: string;
   sortDir?: "asc" | "desc";
+}
+
+export interface UserFacetOption {
+  code: string;
+  name: string;
+  count: number;
+}
+
+export interface UserFacetsResponse {
+  total: number;
+  roles: UserFacetOption[];
+  statuses: UserFacetOption[];
 }
 
 export interface CreateUserRequest {
@@ -85,11 +105,26 @@ export interface UpdateUserRequest {
 }
 
 export interface UpdateUserStatusRequest {
-  accountStatus: string;
+  // BE endpoint PATCH /users/{id}/status nhận field "status" (UpdateUserStatusRequest.status).
+  status: string;
 }
 
 export interface UpdateUserRoleRequest {
   role: string;
+}
+
+export interface HardDeleteUserResponse {
+  success: boolean;
+  message: string;
+  deletedAccounts: number;
+}
+
+// Kết quả deactivate: team đã tự chuyển quyền leader + cảnh báo cần xử lý tay.
+export interface DeactivateUserResponse {
+  success: boolean;
+  message: string;
+  transferredTeams: string[];
+  warnings: string[];
 }
 
 export interface PaginatedUsersResponse {
@@ -124,6 +159,7 @@ type BackendUser = {
   accountStatusName?: string;
   emailVerified?: boolean;
   isEmailVerified?: boolean;
+  deleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -165,6 +201,7 @@ function normalizeUser(raw: BackendUser): UserManagementUser {
     accountStatus: raw.accountStatus ?? raw.status ?? raw.accountStatusName ?? "UNKNOWN",
     accountStatusName: raw.accountStatusName ?? null,
     emailVerified: raw.emailVerified ?? raw.isEmailVerified,
+    deleted: raw.deleted ?? false,
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
   };
@@ -221,13 +258,28 @@ function toQuery(params: UserQueryParams) {
   const allowedSortFields = new Set(["createdAt", "updatedAt", "fullName", "email", "role", "accountStatus"]);
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).trim() !== "") {
-      if (key === "sortBy" && !allowedSortFields.has(String(value))) return;
-      query.set(key, String(value));
+    // Multi-select: mảng nối bằng dấu phẩy (OR trong nhóm) — theo chuẩn facet của dự án.
+    const serialized = Array.isArray(value) ? value.filter(Boolean).join(",") : value;
+    if (serialized !== undefined && serialized !== null && String(serialized).trim() !== "") {
+      if (key === "sortBy" && !allowedSortFields.has(String(serialized))) return;
+      query.set(key, String(serialized));
     }
   });
   if (!query.has("sortBy")) query.set("sortBy", "createdAt");
   if (!query.has("sortDir")) query.set("sortDir", "desc");
+  return query.toString();
+}
+
+function toFacetQuery(params: UserQueryParams) {
+  // Facets không cần page/sort — chỉ gửi các filter.
+  const { page, size, sortBy, sortDir, ...filters } = params;
+  const query = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    const serialized = Array.isArray(value) ? value.filter(Boolean).join(",") : value;
+    if (serialized !== undefined && serialized !== null && String(serialized).trim() !== "") {
+      query.set(key, String(serialized));
+    }
+  });
   return query.toString();
 }
 
@@ -242,6 +294,12 @@ export const userService = {
     return unwrapUsers(await api.get<BackendUser[] | BackendPage<BackendUser>>(
       `/api/v1/users${qs ? `?${qs}` : ""}`,
     ));
+  },
+
+  // Facet counts (drill-down) cho panel filter: count cạnh mỗi option + total preview.
+  getUserFacets: async (params: UserQueryParams = {}) => {
+    const qs = toFacetQuery(params);
+    return api.get<UserFacetsResponse>(`/api/v1/users/facets${qs ? `?${qs}` : ""}`);
   },
 
   getUserById: async (userId: string) =>
@@ -266,7 +324,20 @@ export const userService = {
     unwrapUser(await api.patch<BackendUser | { data?: BackendUser }>(`/api/v1/users/${userId}/role`, payload)),
 
   deleteUser: (userId: string) =>
-    api.delete<void>(`/api/v1/users/${userId}`),
+    api.delete<DeactivateUserResponse>(`/api/v1/users/${userId}`),
+
+  // Organizer quét account có hồ sơ chưa chuẩn và gửi notification nhắc cập nhật (không khóa).
+  notifyNonCompliant: () =>
+    api.post<{ success: boolean; notifiedCount: number; message: string }>("/api/v1/users/notify-noncompliant", {}),
+
+  // Xóa CỨNG mọi tài khoản trùng email (dev tool, không thể hoàn tác).
+  // BE giữ dữ liệu tập thể (submission gán lại cho leader) và cho phép
+  // đăng ký lại bằng chính email này ngay lập tức.
+  hardDeleteUser: (email: string, reason?: string) => {
+    const query = new URLSearchParams({ email });
+    if (reason && reason.trim()) query.set("reason", reason.trim());
+    return api.delete<HardDeleteUserResponse>(`/api/v1/users/hard-delete?${query.toString()}`);
+  },
 };
 
 // ─── Self-service profile (any authenticated user) ────────────────────────────
@@ -275,6 +346,9 @@ export interface UpdateMyProfileRequest {
   fullName?: string;
   phone?: string;
   universityName?: string;
+  // Học sinh tự sửa mã SV để chuẩn hóa (theo role).
+  fptStudentCode?: string;
+  externalStudentCode?: string;
 }
 
 export interface MyProfileResponse {
@@ -288,6 +362,9 @@ export interface MyProfileResponse {
   externalStudentCode?: string;
   accountStatus: string;
   createdAt?: string;
+  // Chuẩn hóa hồ sơ: false = hồ sơ chưa đúng định dạng → FE hiện banner nhắc.
+  profileCompliant?: boolean;
+  profileIssues?: string[];
 }
 
 export const meService = {

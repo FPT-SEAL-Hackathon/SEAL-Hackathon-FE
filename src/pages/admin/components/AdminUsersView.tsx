@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { AlertTriangle, Edit, Loader, PlusCircle, RefreshCw, Save, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router";
 import { parseApiError } from "@/lib/api/apiClient";
+import { isValidVietnamesePhone } from "@/features/users/utils/profileValidation";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
+import { FacetGroup, FacetOptionRow, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import {
   userService,
   type CreateUserRequest,
   type UpdateUserRequest,
+  type UserFacetsResponse,
   type UserManagementUser,
   type UserQueryParams,
 } from "@/features/users/api/userService";
@@ -15,6 +20,7 @@ import {
 const ROLE_OPTIONS = [
   { label: "FPT Student", value: "FPT_STUDENT" },
   { label: "External Student", value: "EXTERNAL_STUDENT" },
+  { label: "Admin", value: "ADMIN" },
   { label: "Organizer", value: "ORGANIZER" },
   { label: "Internal Judge", value: "INTERNAL_JUDGE" },
   { label: "Guest Judge", value: "GUEST_JUDGE" },
@@ -23,7 +29,7 @@ const ROLE_OPTIONS = [
 ];
 
 const STATUS_OPTIONS = [
-  { label: "Pending Approval", value: "PENDING_APPROVAL" },
+  // "Pending Approval" đã bỏ: duyệt nay ở cấp TEAM (team status PENDING), không duyệt từng học sinh.
   { label: "Active", value: "ACTIVE" },
   { label: "Rejected", value: "REJECTED" },
   { label: "Suspended", value: "SUSPENDED" },
@@ -85,11 +91,8 @@ function isValidEmail(value: string) {
 }
 
 function isValidPhone(value: string) {
-  return !value || /^[+()\d\s.-]{8,20}$/.test(value);
-}
-
-function dangerousStatus(accountStatus: string) {
-  return ["REJECTED", "SUSPENDED"].includes(accountStatus.toUpperCase());
+  // SĐT optional; nếu có thì phải là số di động VN (khớp BE ProfileValidation).
+  return !value || isValidVietnamesePhone(value);
 }
 
 function normalizeRoleValue(role?: string) {
@@ -136,21 +139,39 @@ function teamLabelFor(user: UserManagementUser) {
   return isStudentRole(user.role) ? user.teamName || "No team" : "N/A";
 }
 
+// "FPT_STUDENT,ORGANIZER" (URL) <-> ["FPT_STUDENT","ORGANIZER"] (state)
+function parseCsvParam(value: string | null): string[] {
+  if (!value) return [];
+  return value.split(",").map(item => item.trim()).filter(Boolean);
+}
+
 export function AdminUsersView() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [users, setUsers] = useState<UserManagementUser[]>([]);
-  const [filters, setFilters] = useState<UserQueryParams>({
-    search: "",
-    role: "",
-    teamName: "",
-    accountStatus: "",
-    joinedFrom: "",
-    joinedTo: "",
-    page: 0,
-    size: 10,
-    sortBy: "createdAt",
-    sortDir: "desc",
+  // Khởi tạo từ URL: share link / F5 / back-forward khôi phục đúng bộ lọc.
+  const [filters, setFilters] = useState<UserQueryParams>(() => ({
+    search: searchParams.get("q") ?? "",
+    teamName: searchParams.get("team") ?? "",
+    joinedFrom: searchParams.get("from") ?? "",
+    joinedTo: searchParams.get("to") ?? "",
+    page: Math.max(Number(searchParams.get("page") ?? 0) || 0, 0),
+    size: Number(searchParams.get("size") ?? 10) || 10,
+    sortBy: searchParams.get("sortBy") ?? "createdAt",
+    sortDir: searchParams.get("sortDir") === "asc" ? "asc" : "desc",
+  }));
+  // Facet multi-select: OR trong nhóm, AND giữa nhóm (mã canonical trong URL).
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(() => parseCsvParam(searchParams.get("role")));
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => parseCsvParam(searchParams.get("status")));
+  const [facets, setFacets] = useState<UserFacetsResponse | null>(null);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<{ role: boolean; status: boolean; date: boolean; sort: boolean }>({
+    role: true,
+    status: true,
+    date: false,
+    sort: false,
   });
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("q") ?? "");
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -159,6 +180,7 @@ export function AdminUsersView() {
   const [modal, setModal] = useState<UserModalState>(null);
   const [form, setForm] = useState<UserFormState>(emptyForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const lastWrittenQs = useRef<string>(searchParams.toString());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -168,19 +190,83 @@ export function AdminUsersView() {
     return () => window.clearTimeout(timer);
   }, [filters.search]);
 
+  // Serialize trạng thái filter -> query string (bỏ giá trị mặc định cho URL gọn).
+  const serializeToParams = () => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    if (selectedRoles.length > 0) params.set("role", selectedRoles.join(","));
+    if (selectedStatuses.length > 0) params.set("status", selectedStatuses.join(","));
+    if (filters.teamName) params.set("team", String(filters.teamName));
+    if (filters.joinedFrom) params.set("from", String(filters.joinedFrom));
+    if (filters.joinedTo) params.set("to", String(filters.joinedTo));
+    if ((filters.page ?? 0) > 0) params.set("page", String(filters.page));
+    if ((filters.size ?? 10) !== 10) params.set("size", String(filters.size));
+    if (filters.sortBy && filters.sortBy !== "createdAt") params.set("sortBy", String(filters.sortBy));
+    if (filters.sortDir && filters.sortDir !== "desc") params.set("sortDir", String(filters.sortDir));
+    return params;
+  };
+
+  // Ghi trạng thái vào URL (History API, replace để không spam lịch sử).
+  useEffect(() => {
+    const params = serializeToParams();
+    const qs = params.toString();
+    if (qs !== searchParams.toString()) {
+      lastWrittenQs.current = qs;
+      setSearchParams(params, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    debouncedSearch,
+    selectedRoles,
+    selectedStatuses,
+    filters.teamName,
+    filters.joinedFrom,
+    filters.joinedTo,
+    filters.page,
+    filters.size,
+    filters.sortBy,
+    filters.sortDir,
+  ]);
+
+  // Đọc lại khi URL đổi từ bên ngoài (back/forward) — guard tránh vòng lặp.
+  useEffect(() => {
+    const qs = searchParams.toString();
+    if (qs === lastWrittenQs.current) return;
+    lastWrittenQs.current = qs;
+    setFilters({
+      search: searchParams.get("q") ?? "",
+      teamName: searchParams.get("team") ?? "",
+      joinedFrom: searchParams.get("from") ?? "",
+      joinedTo: searchParams.get("to") ?? "",
+      page: Math.max(Number(searchParams.get("page") ?? 0) || 0, 0),
+      size: Number(searchParams.get("size") ?? 10) || 10,
+      sortBy: searchParams.get("sortBy") ?? "createdAt",
+      sortDir: searchParams.get("sortDir") === "asc" ? "asc" : "desc",
+    });
+    setSelectedRoles(parseCsvParam(searchParams.get("role")));
+    setSelectedStatuses(parseCsvParam(searchParams.get("status")));
+    setDebouncedSearch(searchParams.get("q") ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const buildQuery = (): UserQueryParams => ({
+    ...filters,
+    search: debouncedSearch || undefined,
+    role: selectedRoles.length > 0 ? selectedRoles : undefined,
+    status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+    accountStatus: undefined,
+    teamName: filters.teamName || undefined,
+    joinedFrom: filters.joinedFrom || undefined,
+    joinedTo: filters.joinedTo || undefined,
+    // Admin xem cả account soft-deleted (hiển thị mờ, readonly, chỉ cho Delete Forever).
+    includeDeleted: true,
+  });
+
   const loadUsers = async () => {
     setLoading(true);
     setError("");
     try {
-      const page = await userService.getUsers({
-        ...filters,
-        search: debouncedSearch || undefined,
-        role: filters.role || undefined,
-        teamName: filters.teamName || undefined,
-        accountStatus: filters.accountStatus || undefined,
-        joinedFrom: filters.joinedFrom || undefined,
-        joinedTo: filters.joinedTo || undefined,
-      });
+      const page = await userService.getUsers(buildQuery());
       setUsers(page.content);
       setTotalElements(page.totalElements);
       setTotalPages(Math.max(page.totalPages, 1));
@@ -204,9 +290,9 @@ export function AdminUsersView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     debouncedSearch,
-    filters.role,
+    selectedRoles,
+    selectedStatuses,
     filters.teamName,
-    filters.accountStatus,
     filters.joinedFrom,
     filters.joinedTo,
     filters.page,
@@ -215,9 +301,52 @@ export function AdminUsersView() {
     filters.sortDir,
   ]);
 
+  // Facet counts (drill-down) cập nhật theo bộ lọc — dùng cho số cạnh option + preview CTA.
+  useEffect(() => {
+    let cancelled = false;
+    userService.getUserFacets(buildQuery())
+      .then(data => {
+        if (!cancelled) setFacets(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFacets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch, selectedRoles, selectedStatuses, filters.teamName, filters.joinedFrom, filters.joinedTo]);
+
   const setFilter = (key: keyof UserQueryParams, value: string | number) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key === "page" ? Number(value) : 0 }));
   };
+
+  // Tick/untick một option trong nhóm facet — reset page về 0 như đổi filter.
+  const toggleRole = (code: string) => {
+    setSelectedRoles(prev => prev.includes(code) ? prev.filter(item => item !== code) : [...prev, code]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const toggleStatus = (code: string) => {
+    setSelectedStatuses(prev => prev.includes(code) ? prev.filter(item => item !== code) : [...prev, code]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const clearAllFacets = () => {
+    setSelectedRoles([]);
+    setSelectedStatuses([]);
+    setFilters(prev => ({ ...prev, page: 0 }));
+  };
+
+  const facetCount = (group: "roles" | "statuses", code: string): number | null => {
+    const option = facets?.[group]?.find(item => item.code === code);
+    return option ? option.count : null;
+  };
+
+  const activeFilterCount = selectedRoles.length
+    + selectedStatuses.length
+    + (filters.joinedFrom ? 1 : 0)
+    + (filters.joinedTo ? 1 : 0);
 
   const openCreate = () => {
     setFieldErrors({});
@@ -342,42 +471,23 @@ export function AdminUsersView() {
     }
   };
 
-  const changeStatus = async (user: UserManagementUser, accountStatus: string) => {
-    if (!accountStatus || accountStatus === user.accountStatus) return;
-    if (dangerousStatus(accountStatus) && !window.confirm(`Change ${user.fullName} status to ${labelValue(accountStatus)}?`)) return;
-    setMutating(true);
-    try {
-      await userService.updateUserStatus(user.userId, { accountStatus });
-      toast.success("User status updated.");
-      await loadUsers();
-    } catch (err) {
-      toast.error(parseApiError(err).message);
-    } finally {
-      setMutating(false);
-    }
-  };
-
-  const changeRole = async (user: UserManagementUser, role: string) => {
-    if (!role || role === user.role) return;
-    if (!window.confirm(`Change ${user.fullName} role to ${labelValue(role)}?`)) return;
-    setMutating(true);
-    try {
-      await userService.updateUserRole(user.userId, { role });
-      toast.success("User role updated.");
-      await loadUsers();
-    } catch (err) {
-      toast.error(parseApiError(err).message);
-    } finally {
-      setMutating(false);
-    }
-  };
-
+  // Deactivate (reversible): BE khóa đăng nhập (status Suspended) + thu hồi session,
+  // GIỮ ghế trong team và tự chuyển quyền leader nếu cần để team không bị đóng băng.
+  // Bật lại bằng Edit → Status → Active. Hiện tóm tắt tác động (team chuyển leader,
+  // cảnh báo judge/organizer) cho organizer nắm.
   const deleteUser = async (user: UserManagementUser) => {
-    if (!window.confirm(`Deactivate ${user.fullName}?`)) return;
+    if (!window.confirm(
+      `Deactivate ${user.fullName}?\n\n` +
+      "The account is locked from logging in but stays on the team (seat kept). " +
+      "If this user is a team leader, leadership is transferred automatically so the " +
+      "team can keep competing. Reactivate anytime via Edit → Status → Active.",
+    )) return;
     setMutating(true);
     try {
-      await userService.deleteUser(user.userId);
-      toast.success("User deactivated.");
+      const result = await userService.deleteUser(user.userId);
+      toast.success("User deactivated. Reactivate via Edit → Status → Active.");
+      (result?.transferredTeams ?? []).forEach(t => toast.info(`Leader transferred: ${t}`));
+      (result?.warnings ?? []).forEach(w => toast.warning(w));
       await loadUsers();
     } catch (err) {
       toast.error(parseApiError(err).message);
@@ -385,17 +495,52 @@ export function AdminUsersView() {
       setMutating(false);
     }
   };
+
+  // Quét account có hồ sơ chưa chuẩn (mã SV/SĐT sai định dạng) và gửi notification nhắc.
+  // KHÔNG khóa/chặn account nào — chỉ nhắc để họ tự cập nhật cho đồng bộ dữ liệu.
+  const notifyNonCompliant = async () => {
+    if (!window.confirm("Gửi thông báo nhắc cập nhật hồ sơ cho tất cả tài khoản có dữ liệu chưa chuẩn?")) return;
+    setMutating(true);
+    try {
+      const result = await userService.notifyNonCompliant();
+      toast.success(`Đã nhắc ${result.notifiedCount} tài khoản cập nhật hồ sơ.`);
+    } catch (err) {
+      toast.error(parseApiError(err).message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  // Mở khóa account Suspended: đổi status về Active qua endpoint sẵn có.
+  const reactivateUser = async (user: UserManagementUser) => {
+    if (!window.confirm(`Reactivate ${user.fullName}? The account will be able to log in again.`)) return;
+    setMutating(true);
+    try {
+      await userService.updateUserStatus(user.userId, { status: "ACTIVE" });
+      toast.success("User reactivated.");
+      await loadUsers();
+    } catch (err) {
+      toast.error(parseApiError(err).message);
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  // Hard delete ("Delete Forever") đã gỡ khỏi UI — chức năng còn ở backend nhưng
+  // tạm không dùng. Deactivate (reversible) là thao tác vô hiệu hóa tài khoản chính.
 
   return (
-    <div className="h-full min-h-0 overflow-hidden flex flex-col gap-5">
+    <div className="h-full min-h-0 overflow-hidden flex flex-col gap-3">
       <div className="flex-shrink-0">
         <SectionHeader
           title="User Management"
-          subtitle={`${totalElements} user(s)`}
           action={
             <div className="flex gap-2">
               <Button variant="outline" size="sm" icon={loading ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />} onClick={loadUsers} disabled={loading}>
                 Refresh
+              </Button>
+              <Button variant="outline" size="sm" disabled={mutating} onClick={notifyNonCompliant}>
+                Quét & nhắc chuẩn hóa
               </Button>
               <Button variant="primary" size="sm" icon={<PlusCircle size={14} />} onClick={openCreate}>
                 Add User
@@ -406,7 +551,9 @@ export function AdminUsersView() {
       </div>
 
       <Card className="p-5 flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        {/* Ngoài trang chỉ giữ search text; mọi thuộc tính CHỌN (ngày, sort, facet)
+            nằm trong panel "Filter and sort" để không che bảng danh sách. */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <FilterInput
             label="Search"
             value={filters.search ?? ""}
@@ -414,30 +561,37 @@ export function AdminUsersView() {
             placeholder="Name, email, phone"
             icon={<Search size={14} />}
           />
-          <FilterSelect label="Role" value={filters.role ?? ""} onChange={value => setFilter("role", value)}>
-            <option value="">All roles</option>
-            {ROLE_OPTIONS.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
-          </FilterSelect>
           <FilterInput label="Team" value={filters.teamName ?? ""} onChange={value => setFilter("teamName", value)} placeholder="Team name" />
-          <FilterSelect label="Status" value={filters.accountStatus ?? ""} onChange={value => setFilter("accountStatus", value)}>
-            <option value="">All statuses</option>
-            {STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-          </FilterSelect>
-          <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
-          <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
-          <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
-            <option value="createdAt">Joined</option>
-            <option value="updatedAt">Updated</option>
-            <option value="fullName">Name</option>
-            <option value="email">Email</option>
-            <option value="role">Role</option>
-            <option value="accountStatus">Status</option>
-          </FilterSelect>
-          <FilterSelect label="Direction" value={filters.sortDir ?? "desc"} onChange={value => setFilter("sortDir", value as "asc" | "desc")}>
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </FilterSelect>
+          <div className="flex items-end">
+            <FilterSortButton activeCount={activeFilterCount} onClick={() => setFilterPanelOpen(true)} />
+          </div>
         </div>
+
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {selectedRoles.map(code => (
+              <FilterChip
+                key={`role-${code}`}
+                label={`Role: ${ROLE_OPTIONS.find(option => option.value === code)?.label ?? code}`}
+                onRemove={() => toggleRole(code)}
+              />
+            ))}
+            {selectedStatuses.map(code => (
+              <FilterChip
+                key={`status-${code}`}
+                label={`Status: ${STATUS_OPTIONS.find(option => option.value === code)?.label ?? code}`}
+                onRemove={() => toggleStatus(code)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={clearAllFacets}
+              style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
+            >
+              Clear All Filters
+            </button>
+          </div>
+        )}
       </Card>
 
       {error && (
@@ -475,8 +629,20 @@ export function AdminUsersView() {
                   </td>
                 </tr>
               )}
-              {!loading && users.map((user, index) => (
-                <tr key={user.userId} style={{ borderBottom: index < users.length - 1 ? `1px solid ${COLORS.border}` : "none" }}>
+              {!loading && users.map((user, index) => {
+                // Suspended: readonly, chỉ Reactivate + Delete Forever.
+                // Deleted (isDeleted=1, gồm cả xác account đã merge): readonly
+                // tuyệt đối, KHÔNG restore — chỉ Delete Forever để dọn hẳn.
+                const isRemoved = user.deleted === true;
+                const isSuspended = !isRemoved && normalizeBadgeValue(user.accountStatus) === "suspended";
+                return (
+                <tr
+                  key={user.userId}
+                  style={{
+                    borderBottom: index < users.length - 1 ? `1px solid ${COLORS.border}` : "none",
+                    opacity: isRemoved ? 0.45 : isSuspended ? 0.6 : 1,
+                  }}
+                >
                   <Td>
                     <div style={{ fontWeight: 700, color: COLORS.textPrimary }}>{user.fullName}</div>
                     <div style={{ fontSize: 12, color: COLORS.textSecondary }}>{user.email}</div>
@@ -484,33 +650,19 @@ export function AdminUsersView() {
                   </Td>
                   <Td>{studentCodeFor(user)}</Td>
                   <Td>{universityFor(user)}</Td>
-                  <Td>
-                    <select
-                      value={normalizeRoleValue(user.role)}
-                      disabled={mutating}
-                      onChange={event => changeRole(user, event.target.value)}
-                      className="px-2 py-1 rounded-xl outline-none"
-                      style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-                    >
-                      <option value={normalizeRoleValue(user.role)}>{labelValue(user.role)}</option>
-                      {ROLE_OPTIONS.filter(role => role.value !== normalizeRoleValue(user.role)).map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
-                    </select>
-                  </Td>
+                  {/* Role/Status chỉ hiển thị read-only: mọi thay đổi đi qua modal Edit
+                      (có Save + validation) để tránh đổi nhầm do click/scroll trong bảng. */}
+                  <Td>{labelValue(user.role)}</Td>
                   <Td>{teamLabelFor(user)}</Td>
                   <Td>
                     <div className="flex flex-col gap-2 items-start">
                       <StatusBadge status={normalizeBadgeValue(user.accountStatus)} />
-                      <select
-                        value={user.accountStatus}
-                        disabled={mutating}
-                        onChange={event => changeStatus(user, event.target.value)}
-                        className="px-2 py-1 rounded-xl outline-none"
-                        style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-                      >
-                        <option value={user.accountStatus}>{labelValue(user.accountStatusName ?? user.accountStatus)}</option>
-                        {STATUS_OPTIONS.filter(status => status.value !== user.accountStatus).map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-                      </select>
-                      {user.emailVerified !== undefined && (
+                      {isRemoved && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.error }}>
+                          Deleted
+                        </span>
+                      )}
+                      {!isRemoved && user.emailVerified !== undefined && (
                         <span style={{ fontSize: 11, color: user.emailVerified ? COLORS.success : COLORS.warning }}>
                           {user.emailVerified ? "Email verified" : "Email not verified"}
                         </span>
@@ -520,30 +672,40 @@ export function AdminUsersView() {
                   <Td>{formatDate(user.createdAt)}</Td>
                   <Td>
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => openEdit(user)}>
-                        Edit
-                      </Button>
-                      <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
-                        Deactivate
-                      </Button>
+                      {!isRemoved && !isSuspended && (
+                        <>
+                          <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => openEdit(user)}>
+                            Edit
+                          </Button>
+                          <Button variant="danger" size="sm" icon={<Trash2 size={12} />} disabled={mutating} onClick={() => deleteUser(user)}>
+                            Deactivate
+                          </Button>
+                        </>
+                      )}
+                      {isSuspended && (
+                        <Button variant="primary" size="sm" icon={<RefreshCw size={12} />} disabled={mutating} onClick={() => reactivateUser(user)}>
+                          Reactivate
+                        </Button>
+                      )}
                     </div>
                   </Td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
         <div className="flex-shrink-0 flex items-center justify-between px-4 py-3" style={{ borderTop: `1px solid ${COLORS.border}` }}>
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Rows</span>
-            <select
-              value={String(filters.size ?? 10)}
-              onChange={event => setFilter("size", Number(event.target.value))}
-              className="px-2 py-1 rounded-xl outline-none"
-              style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 12 }}
-            >
-              {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
-            </select>
+            <Select value={String(filters.size ?? 10) || "none"} onValueChange={value => setFilter("size", Number((value === "none" ? "" : value)))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {PAGE_SIZE_OPTIONS.map(size => <SelectItem key={size} value={String(size)} style={{ color: COLORS.textPrimary }}>{size}</SelectItem>)}
+  </SelectContent>
+</Select>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" disabled={(filters.page ?? 0) <= 0 || loading} onClick={() => setFilter("page", Math.max((filters.page ?? 0) - 1, 0))}>
@@ -556,6 +718,75 @@ export function AdminUsersView() {
           </div>
         </div>
       </Card>
+
+      <FilterSortPanel
+        open={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        onClearAll={clearAllFacets}
+        hasActive={activeFilterCount > 0}
+        ctaLabel={facets ? `Show ${facets.total} user${facets.total === 1 ? "" : "s"}` : "Apply Filters"}
+      >
+        <FacetGroup
+          title="Role"
+          open={openGroups.role}
+          hasActive={selectedRoles.length > 0}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, role: !prev.role }))}
+        >
+          {ROLE_OPTIONS.map(option => (
+            <FacetOptionRow
+              key={option.value}
+              label={option.label}
+              count={facetCount("roles", option.value)}
+              checked={selectedRoles.includes(option.value)}
+              onToggle={() => toggleRole(option.value)}
+            />
+          ))}
+        </FacetGroup>
+        <FacetGroup
+          title="Account Status"
+          open={openGroups.status}
+          hasActive={selectedStatuses.length > 0}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, status: !prev.status }))}
+        >
+          {STATUS_OPTIONS.map(option => (
+            <FacetOptionRow
+              key={option.value}
+              label={option.label}
+              count={facetCount("statuses", option.value)}
+              checked={selectedStatuses.includes(option.value)}
+              onToggle={() => toggleStatus(option.value)}
+            />
+          ))}
+        </FacetGroup>
+        <FacetGroup
+          title="Joined Date"
+          open={openGroups.date}
+          hasActive={Boolean(filters.joinedFrom || filters.joinedTo)}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, date: !prev.date }))}
+        >
+          <FilterInput label="Joined From" type="date" value={filters.joinedFrom ?? ""} onChange={value => setFilter("joinedFrom", value)} />
+          <FilterInput label="Joined To" type="date" value={filters.joinedTo ?? ""} onChange={value => setFilter("joinedTo", value)} />
+        </FacetGroup>
+        <FacetGroup
+          title="Sort By"
+          open={openGroups.sort}
+          hasActive={filters.sortBy !== "createdAt" || filters.sortDir !== "desc"}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, sort: !prev.sort }))}
+        >
+          <FilterSelect label="Sort By" value={filters.sortBy ?? "createdAt"} onChange={value => setFilter("sortBy", value)}>
+            <option value="createdAt">Joined</option>
+            <option value="updatedAt">Updated</option>
+            <option value="fullName">Name</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+            <option value="accountStatus">Status</option>
+          </FilterSelect>
+          <FilterSelect label="Direction" value={filters.sortDir ?? "desc"} onChange={value => setFilter("sortDir", value as "asc" | "desc")}>
+            <option value="desc">Descending</option>
+            <option value="asc">Ascending</option>
+          </FilterSelect>
+        </FacetGroup>
+      </FilterSortPanel>
 
       {modal && (
         <UserFormModal
@@ -628,16 +859,26 @@ function UserFormModal({
           )}
           <FormInput label="Phone" value={form.phone} error={fieldErrors.phone} onChange={value => setForm(prev => ({ ...prev, phone: value }))} />
           <FormSelect label="Role" value={role} error={fieldErrors.role} onChange={handleRoleChange}>
-            {ROLE_OPTIONS.map(role => <option key={role.value} value={role.value}>{role.label}</option>)}
+            {ROLE_OPTIONS.map(role => (
+              <SelectItem key={role.value} value={role.value} style={{ color: COLORS.textPrimary }}>
+                {role.label}
+              </SelectItem>
+            ))}
           </FormSelect>
           <FormSelect label="Status" value={form.accountStatus} error={fieldErrors.accountStatus} onChange={value => setForm(prev => ({ ...prev, accountStatus: value }))}>
-            {STATUS_OPTIONS.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+            {STATUS_OPTIONS.map(status => (
+              <SelectItem key={status.value} value={status.value} style={{ color: COLORS.textPrimary }}>
+                {status.label}
+              </SelectItem>
+            ))}
           </FormSelect>
           {role === "FPT_STUDENT" && (
             <FormInput
               label="FPT Student Code"
               value={form.fptStudentCode}
               error={fieldErrors.fptStudentCode}
+              // Mã sinh viên là định danh — khóa read-only khi Edit để tránh sửa sai quy chiếu.
+              disabled={mode === "edit"}
               onChange={value => setForm(prev => ({ ...prev, fptStudentCode: value }))}
             />
           )}
@@ -647,6 +888,7 @@ function UserFormModal({
                 label="External Student Code"
                 value={form.externalStudentCode}
                 error={fieldErrors.externalStudentCode}
+                disabled={mode === "edit"}
                 onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
               />
               <FormInput
@@ -685,6 +927,9 @@ function UserFormModal({
   );
 }
 
+// FilterChip/FacetGroup/FacetOptionRow chuyển sang shared FilterSortPanel.tsx
+// để dùng chung với màn Event Participants.
+
 function FilterInput({
   label,
   value,
@@ -722,14 +967,14 @@ function FilterSelect({ label, value, onChange, children }: { label: string; val
   return (
     <label className="block">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13 }}
-      >
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent className="z-[90]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
     </label>
   );
 }
@@ -755,14 +1000,14 @@ function FormSelect({ label, value, onChange, error, children }: { label: string
   return (
     <label className="block">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select
-        value={value}
-        onChange={event => onChange(event.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ border: `1px solid ${error ? COLORS.error : COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13 }}
-      >
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent className="z-[100]" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
       {error && <span style={{ display: "block", marginTop: 5, color: COLORS.error, fontSize: 12 }}>{error}</span>}
     </label>
   );

@@ -1,8 +1,10 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { CheckCircle, Loader, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
+import { FacetGroup, FilterChip, FilterSortButton, FilterSortPanel } from "@/components/shared/FilterSortPanel";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
 import {
@@ -84,6 +86,14 @@ export function AdminEventParticipantsView() {
   const [bulkStatus, setBulkStatus] = useState<EventParticipantStatus>("ACTIVE");
   const [rejectTarget, setRejectTarget] = useState<{ ids: string[]; status: EventParticipantStatus } | null>(null);
   const [rejectedReason, setRejectedReason] = useState("");
+  // Panel "Filter and sort": mọi thuộc tính CHỌN nằm trong panel, ngoài chỉ giữ keyword.
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [openGroups, setOpenGroups] = useState<{ event: boolean; status: boolean; university: boolean; sort: boolean }>({
+    event: true,
+    status: true,
+    university: false,
+    sort: false,
+  });
 
   const allVisibleSelected = rows.length > 0 && rows.every(row => selectedIds.includes(getEventParticipantId(row)));
   const selectedCount = selectedIds.length;
@@ -96,6 +106,21 @@ export function AdminEventParticipantsView() {
   const setFilter = (key: keyof typeof filters, value: string | number) => {
     setFilters(prev => ({ ...prev, [key]: value, page: key === "page" ? Number(value) : 0 }));
   };
+
+  const activeFilterCount = (filters.eventId ? 1 : 0)
+    + (filters.categoryId ? 1 : 0)
+    + (filters.status ? 1 : 0)
+    + (filters.university ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setFilters(prev => ({ ...prev, eventId: "", categoryId: "", status: "", university: "", page: 0 }));
+  };
+
+  const eventNameFor = (eventId: string) =>
+    events.find(event => event.eventId === eventId)?.eventName ?? eventId;
+
+  const categoryNameFor = (categoryId: string) =>
+    categories.find((category: any) => category.categoryId === categoryId)?.categoryName ?? categoryId;
 
   const loadParticipants = async () => {
     setLoading(true);
@@ -197,7 +222,53 @@ export function AdminEventParticipantsView() {
       </div>
 
       <Card className="p-5 flex-shrink-0">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+        {/* Ngoài trang chỉ giữ ô keyword; mọi thuộc tính CHỌN (event/category/status/
+            university/sort/page size) nằm trong panel "Filter and sort". */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FilterInput label="Keyword" value={filters.keyword} onChange={value => setFilter("keyword", value)} placeholder="Name, email, code" />
+          <div className="flex items-end">
+            <FilterSortButton activeCount={activeFilterCount} onClick={() => setFilterPanelOpen(true)} />
+          </div>
+        </div>
+
+        {activeFilterCount > 0 && (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            {filters.eventId && (
+              <FilterChip label={`Event: ${eventNameFor(filters.eventId)}`} onRemove={() => setFilters(prev => ({ ...prev, eventId: "", categoryId: "", page: 0 }))} />
+            )}
+            {filters.categoryId && (
+              <FilterChip label={`Category: ${categoryNameFor(filters.categoryId)}`} onRemove={() => setFilter("categoryId", "")} />
+            )}
+            {filters.status && (
+              <FilterChip label={`Status: ${labelStatus(filters.status)}`} onRemove={() => setFilter("status", "")} />
+            )}
+            {filters.university && (
+              <FilterChip label={`University: ${filters.university}`} onRemove={() => setFilter("university", "")} />
+            )}
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary, textDecoration: "underline", background: "none", border: "none", cursor: "pointer" }}
+            >
+              Clear All Filters
+            </button>
+          </div>
+        )}
+      </Card>
+
+      <FilterSortPanel
+        open={filterPanelOpen}
+        onClose={() => setFilterPanelOpen(false)}
+        onClearAll={clearAllFilters}
+        hasActive={activeFilterCount > 0}
+        ctaLabel={`Show ${totalElements} participant${totalElements === 1 ? "" : "s"}`}
+      >
+        <FacetGroup
+          title="Event & Category"
+          open={openGroups.event}
+          hasActive={Boolean(filters.eventId || filters.categoryId)}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, event: !prev.event }))}
+        >
           <FilterSelect label="Event" value={filters.eventId} onChange={value => setFilter("eventId", value)}>
             <option value="">All events</option>
             {events.map(event => <option key={event.eventId} value={event.eventId}>{event.eventName}</option>)}
@@ -206,20 +277,35 @@ export function AdminEventParticipantsView() {
             <option value="">All categories</option>
             {categories.map((category: any) => <option key={category.categoryId} value={category.categoryId}>{category.categoryName}</option>)}
           </FilterSelect>
+        </FacetGroup>
+        <FacetGroup
+          title="Status"
+          open={openGroups.status}
+          hasActive={Boolean(filters.status)}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, status: !prev.status }))}
+        >
           <FilterSelect label="Status" value={filters.status} onChange={value => setFilter("status", value)}>
             <option value="">All statuses</option>
             {EVENT_PARTICIPANT_STATUSES.map(status => <option key={status} value={status}>{labelStatus(status)}</option>)}
           </FilterSelect>
+        </FacetGroup>
+        <FacetGroup
+          title="University"
+          open={openGroups.university}
+          hasActive={Boolean(filters.university)}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, university: !prev.university }))}
+        >
           <FilterSelect label="University" value={filters.university} onChange={value => setFilter("university", value)}>
             <option value="">All universities</option>
             {universities.map(university => <option key={university} value={university}>{university}</option>)}
           </FilterSelect>
-          <FilterInput label="Keyword" value={filters.keyword} onChange={value => setFilter("keyword", value)} placeholder="Name, email, code" />
-          <FilterSelect label="Page Size" value={String(filters.size)} onChange={value => setFilter("size", Number(value))}>
-            {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
-          </FilterSelect>
-        </div>
-        <div className="flex flex-wrap gap-3 mt-4">
+        </FacetGroup>
+        <FacetGroup
+          title="Sort & Page Size"
+          open={openGroups.sort}
+          hasActive={filters.sortBy !== "appliedAt" || filters.sortDirection !== "desc" || filters.size !== 10}
+          onToggle={() => setOpenGroups(prev => ({ ...prev, sort: !prev.sort }))}
+        >
           <FilterSelect label="Sort By" value={filters.sortBy} onChange={value => setFilter("sortBy", value)}>
             <option value="appliedAt">Applied At</option>
             <option value="approvedAt">Approved At</option>
@@ -231,8 +317,11 @@ export function AdminEventParticipantsView() {
             <option value="desc">Descending</option>
             <option value="asc">Ascending</option>
           </FilterSelect>
-        </div>
-      </Card>
+          <FilterSelect label="Page Size" value={String(filters.size)} onChange={value => setFilter("size", Number(value))}>
+            {PAGE_SIZE_OPTIONS.map(size => <option key={size} value={size}>{size}</option>)}
+          </FilterSelect>
+        </FacetGroup>
+      </FilterSortPanel>
 
       <Card className="p-4 flex-shrink-0">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
@@ -383,9 +472,14 @@ function FilterSelect({ label, value, onChange, children, disabled }: { label: s
   return (
     <label className="block min-w-[150px]">
       <span style={{ display: "block", fontSize: 11, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 5 }}>{label.toUpperCase()}</span>
-      <select disabled={disabled} value={value} onChange={event => onChange(event.target.value)} className="w-full px-3 py-2 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary, fontSize: 13, opacity: disabled ? 0.5 : 1 }}>
-        {children}
-      </select>
+      <Select value={value || "none"} onValueChange={value => onChange((value === "none" ? "" : value))} disabled={disabled}>
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {children}
+  </SelectContent>
+</Select>
     </label>
   );
 }

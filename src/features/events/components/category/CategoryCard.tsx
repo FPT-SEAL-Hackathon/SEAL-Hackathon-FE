@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Edit, Trash2, X, ChevronDown, ChevronRight, BookOpen, Users } from "lucide-react";
+import { Edit, Trash2, X, ChevronDown, ChevronRight, BookOpen, Users, User, Mail } from "lucide-react";
 import { Card, Button, COLORS } from "../../../../components/shared/UIComponents";
 import { AssignModal } from "../../shared/ui/shared";
 import type { AssignMentorsRequest, Category, CategoryMentor, CategoryRequest, Mentor } from "../../types/category";
 import { CategoryForm } from "./CategoryForm";
+import { toast } from "sonner";
+import { parseApiError } from "@/lib/api/apiClient";
 
 // ── Category card ──────────────────────────────────────────────────────────
 
@@ -13,12 +15,12 @@ interface Props {
     mentors: CategoryMentor[];
     loadCategoryMentors: (categoryId: string) => Promise<void>;
     onUpdate: (id: string, data: CategoryRequest) => Promise<void>;
-    onDelete: (id: string) => void; 
+    onDelete: (category: Category) => void; 
     onAssignMentor: (
         categoryId: string,
         mentorIds: AssignMentorsRequest
     ) => Promise<void>;
-    onRemoveMentor: (categoryId: string, mentorId: string) => Promise<void>;
+    onRemoveMentor: (category: Category, mentor: CategoryMentor) => void;
 }
 export function CategoryCard({
   category,
@@ -34,13 +36,22 @@ export function CategoryCard({
   const [showMentorModal, setShowMentorModal] = useState(false);
 
   const handleAssignMentor = async (mentor: Mentor) => {
-    await onAssignMentor(category.categoryId, {
+    try {
+      await onAssignMentor(category.categoryId, {
         mentorIds: [mentor.id]
-    });
+      });
+      toast.success("Mentor assigned successfully.");
+    } catch (error) {
+      toast.error(parseApiError(error).message || "Failed to assign mentor");
+    }
   };
 
   const handleRemoveMentor = async (mentorId: string) => {
-    await onRemoveMentor(category.categoryId, mentorId);
+    const mentor = mentors.find(m => m.mentorId === mentorId);
+
+    if (!mentor) return;
+
+    onRemoveMentor(category, mentor);
   };
 
   if (editing) {
@@ -52,11 +63,13 @@ export function CategoryCard({
             sortOrder: category.sortOrder
         }}
         onSave={ async data => { 
-            await onUpdate(
-                category.categoryId,
-                data
-            ); 
-            setEditing(false); 
+            try {
+              await onUpdate(category.categoryId, data); 
+              toast.success("Category updated successfully.");
+              setEditing(false); 
+            } catch (error) {
+              toast.error(parseApiError(error).message || "Failed to update category");
+            }
         }}
 
         onCancel={() => setEditing(false)}
@@ -97,7 +110,7 @@ export function CategoryCard({
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
             <Button variant="ghost" size="sm" icon={<Edit size={12} />} onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="ghost" size="sm" icon={<Users size={12} />} onClick={() => setShowMentorModal(true)}>Mentors</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => onDelete(category.categoryId)}>Delete</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={12} />} onClick={() => onDelete(category)}>Delete</Button>
           </div>
           {expanded
             ? <ChevronDown size={15} style={{ color: COLORS.textSecondary, flexShrink: 0 }} />
@@ -125,16 +138,60 @@ export function CategoryCard({
                   No mentors assigned
                 </div>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-3">
                   {mentors.map(m => (
                     <div
                       key={m.categoryMentorId}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-                      style={{ background: `${COLORS.secondary}10`, border: `1px solid ${COLORS.secondary}25` }}
+                      className="flex items-start justify-between gap-3 min-w-[250px] max-w-[300px] px-4 py-3 rounded-xl"
+                      style={{
+                        background: `${COLORS.secondary}08`,
+                        border: `1px solid ${COLORS.secondary}20`,
+                      }}
                     >
-                      <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.secondary }}>{m.fullName}</span>
-                      <button onClick={() => handleRemoveMentor(m.mentorId)} style={{ color: COLORS.secondary }}>
-                        <X size={11} />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <User
+                            size={14}
+                            style={{ color: COLORS.secondary }}
+                          />
+                          <div
+                            style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: COLORS.secondary,
+                            }}
+                          >
+                            {m.fullName}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Mail
+                            size={13}
+                            style={{ color: COLORS.textSecondary }}
+                          />
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: COLORS.textSecondary,
+                              marginTop: 2,
+                            }}
+                          >
+                            {m.email}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => onRemoveMentor(category, m)}
+                        className="p-1 rounded-md transition-colors duration-200 hover:bg-red-50"
+                        title="Remove mentor"
+                      >
+                        <X
+                          size={14}
+                          className="transition-colors duration-200 hover:text-red-600"
+                          style={{ color: COLORS.textSecondary }}
+                        />
                       </button>
                     </div>
                   ))}

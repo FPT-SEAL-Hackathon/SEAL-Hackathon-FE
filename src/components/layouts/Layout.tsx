@@ -9,7 +9,7 @@ import {
   GitBranch, Clock, Award, Zap, BookOpen,
   LogOut, Search, ChevronDown,
   UserCheck, FolderOpen, UserPlus,
-  Target, TrendingUp, MessageSquare, User, Wrench
+  Target, TrendingUp, MessageSquare, User, Wrench, AlertCircle
 } from "lucide-react";
 import { COLORS } from "@/components/shared/UIComponents";
 
@@ -20,6 +20,7 @@ const roleColors: Record<string, string> = {
   ROLE_MENTOR: COLORS.success,
   ROLE_EXPERT: COLORS.success,
   ROLE_ORGANIZER: COLORS.error,
+  ROLE_ADMIN: COLORS.textPrimary,
 };
 
 export { COLORS, roleColors };
@@ -44,6 +45,8 @@ interface LayoutProps {
   onRoleChange: () => void;
   children: React.ReactNode;
   userName?: string;
+  /** Called when "Mark all read" is triggered from the dropdown, so child pages can sync their own notification state */
+  onMarkAllRead?: () => void;
 }
 
 /** Reusable toggle row used inside the App Settings panel. */
@@ -80,7 +83,7 @@ function SettingsToggle({
   );
 }
 
-export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson" }: LayoutProps) {
+export function Layout({ role, currentPage, onNavigate, onRoleChange, children, userName = "Alex Johnson", onMarkAllRead }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [hoveredNavKey, setHoveredNavKey] = useState<string | null>(null);
@@ -98,7 +101,9 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   });
 
   const accentColor = roleColors[role] || COLORS.primary;
-  const lockRouteScroll = role === "ROLE_ORGANIZER" && (currentPage === "users" || currentPage === "event-participants");
+  // User Management (nay thuoc Admin) va Event Participants co bang dai tu cuon ben trong.
+  const lockRouteScroll = (role === "ROLE_ORGANIZER" || role === "ROLE_ADMIN")
+    && (currentPage === "users" || currentPage === "event-participants");
 
   // Hover-delay: open sidebar only after cursor lingers 200ms to avoid accidental triggers
   const sidebarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -123,7 +128,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
     GitBranch, Clock, Award, Zap, BookOpen,
     LogOut, Search, ChevronDown,
     UserCheck, FolderOpen, UserPlus,
-    Target, TrendingUp, MessageSquare, User, Wrench,
+    Target, TrendingUp, MessageSquare, User, Wrench, AlertCircle
   };
 
   // ── Notifications ─────────────────────────────────────────────────────────
@@ -132,51 +137,86 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   useEffect(() => {
     let cancelled = false;
-    notificationService.getMyNotifications(0, 10)
-      .then(page => {
-        if (cancelled) return;
-        setNotifications(page.content.map(item => ({
-          id: item.notificationId,
-          title: item.title,
-          body: item.body,
-          time: formatNotificationTime(item.createdAt),
-          read: item.read,
-        })));
-      })
-      .catch(() => {
-        if (!cancelled) setNotifications([]);
+    let stream: EventSource | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout>;
+
+    const loadNotifications = () => {
+      notificationService.getMyNotifications(0, 10)
+        .then(page => {
+          if (cancelled) return;
+          setNotifications(page.content.map(item => ({
+            id: item.notificationId,
+            title: item.title,
+            body: item.body,
+            time: formatNotificationTime(item.createdAt),
+            read: item.read,
+          })));
+        })
+        .catch(() => {
+          if (!cancelled) setNotifications([]);
+        });
+    };
+
+    const connectStream = () => {
+      if (cancelled) return;
+      if (stream) {
+        stream.close();
+      }
+
+      stream = notificationService.createStream();
+      if (!stream) return;
+
+      stream.addEventListener("message", event => {
+        try {
+          const item = JSON.parse(event.data);
+          setNotifications(prev => [{
+            id: item.notificationId ?? item.id,
+            title: item.title ?? "Notification",
+            body: item.body ?? "",
+            time: formatNotificationTime(item.createdAt ?? item.sentAt),
+            read: Boolean(item.read ?? item.isRead),
+          }, ...prev].slice(0, 10));
+        } catch {
+          // Ignore malformed SSE payloads.
+        }
       });
 
-    const stream = notificationService.createStream();
-    stream?.addEventListener("message", event => {
-      try {
-        const item = JSON.parse(event.data);
-        setNotifications(prev => [{
-          id: item.notificationId ?? item.id,
-          title: item.title ?? "Notification",
-          body: item.body ?? "",
-          time: formatNotificationTime(item.createdAt ?? item.sentAt),
-          read: Boolean(item.read ?? item.isRead),
-        }, ...prev].slice(0, 10));
-      } catch {
-        // Ignore malformed SSE payloads.
-      }
-    });
+      stream.addEventListener("error", () => {
+        if (stream?.readyState === EventSource.CLOSED) {
+          // Trigger a dummy API call to refresh the token if it expired, then reconnect
+          notificationService.getMyNotifications(0, 1)
+            .then(() => {
+              if (cancelled) return;
+              clearTimeout(retryTimeout);
+              retryTimeout = setTimeout(connectStream, 2000);
+            })
+            .catch(() => {
+              // If completely unauthenticated, stop retrying aggressively
+            });
+        }
+      });
+    };
+
+    loadNotifications();
+    connectStream();
 
     return () => {
       cancelled = true;
+      clearTimeout(retryTimeout);
       stream?.close();
     };
   }, []);
 
   const markAllNotificationsRead = () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    notificationService.markAllAsRead().catch(() => {});
+    notificationService.markAllAsRead().catch(() => { });
+    // Notify parent dashboard pages to re-sync their own notification state
+    onMarkAllRead?.();
   };
 
   const markNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    notificationService.markAsRead(id).catch(() => {});
+    notificationService.markAsRead(id).catch(() => { });
   };
 
   // ── User avatar ───────────────────────────────────────────────────────────
@@ -190,6 +230,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
   // Maps role to the profile page key used in navigation
   const roleProfileKey: Record<string, string> = {
     ROLE_ORGANIZER: "profile",
+    ROLE_ADMIN: "profile",
     ROLE_MEMBER: "profile",
     ROLE_LEADER: "profile",
     ROLE_JUDGE: "profile",
@@ -203,9 +244,30 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
 
   return (
     <div
-      className="flex h-screen overflow-hidden"
+      className="flex h-screen overflow-hidden relative"
       style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif" }}
     >
+      {/* Option 2: Cyber Dot-Grid Pattern Layer */}
+      <div className="fixed inset-0 bg-dot-pattern pointer-events-none z-0 opacity-40" />
+
+      {/* Option 1: Ambient Glow Orbs */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden" aria-hidden="true">
+        {/* Top-Right Glow Orb (Orange) */}
+        <div 
+          className="absolute -top-[200px] -right-[200px] w-[600px] h-[600px] rounded-full blur-[140px] opacity-[0.14] dark:opacity-[0.22] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #F47920 0%, rgba(244,121,32,0) 70%)" }}
+        />
+        {/* Bottom-Left Glow Orb (AI Violet) */}
+        <div 
+          className="absolute -bottom-[250px] -left-[150px] w-[650px] h-[650px] rounded-full blur-[150px] opacity-[0.12] dark:opacity-[0.18] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #8B5CF6 0%, rgba(139,92,246,0) 70%)" }}
+        />
+        {/* Center-Right Glow Orb (FPT Green / Emerald) */}
+        <div 
+          className="absolute top-[40%] right-[15%] w-[450px] h-[450px] rounded-full blur-[130px] opacity-[0.08] dark:opacity-[0.14] transition-all duration-700"
+          style={{ background: "radial-gradient(circle, #009444 0%, rgba(0,148,68,0) 70%)" }}
+        />
+      </div>
       {/* 64px placeholder â€” holds space in flex layout, never changes */}
       <div className="relative flex-shrink-0" style={{ width: 64, zIndex: 35 }}>
 
@@ -454,9 +516,10 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 8, scale: 0.95 }}
                     transition={{ duration: 0.18 }}
-                    className="absolute right-0 top-12 rounded-2xl z-50 overflow-hidden"
+                    className="absolute right-0 top-12 rounded-2xl z-50 flex flex-col"
                     style={{
-                      width: 320,
+                      width: 340,
+                      maxHeight: 480,
                       background: "var(--panel-surface)",
                       backdropFilter: "blur(32px) saturate(180%)",
                       WebkitBackdropFilter: "blur(32px) saturate(180%)",
@@ -464,45 +527,58 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
                       boxShadow: "0 24px 64px rgba(180,100,20,0.18), inset 0 1px 0 rgba(255,255,255,1)",
                     }}
                   >
-                    <div className="px-4 py-3.5 flex items-center justify-between" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
+                    {/* Header — fixed, never scrolls */}
+                    <div className="px-4 py-3.5 flex items-center justify-between flex-shrink-0" style={{ borderBottom: "1px solid var(--glass-border-subtle)" }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: "var(--text-primary)" }}>Notifications</span>
-                      {notifCount > 0 && (
+                      <div className="flex items-center gap-3">
+                        {notifCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllNotificationsRead}
+                            style={{ fontSize: 11, color: accentColor, fontWeight: 700 }}
+                          >
+                            Mark all read
+                          </button>
+                        )}
                         <button
                           type="button"
-                          onClick={markAllNotificationsRead}
-                          style={{ fontSize: 11, color: accentColor, fontWeight: 700 }}
+                          onClick={() => { setNotifOpen(false); onNavigate("notifications"); }}
+                          style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}
                         >
-                          Mark all read
+                          See all
                         </button>
-                      )}
-                    </div>
-                    {notifications.length === 0 && (
-                      <div className="px-4 py-5" style={{ fontSize: 13, color: "var(--text-muted)" }}>
-                        No notifications yet.
                       </div>
-                    )}
-                    {notifications.map((n, i) => (
-                      <motion.div
-                        key={n.id}
-                        whileHover={{ background: "rgba(244,121,32,0.04)" }}
-                        className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
-                        onClick={() => markNotificationRead(n.id)}
-                        style={{
-                          borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
-                          background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
-                        }}
-                      >
-                        <span
-                          className="rounded-full"
-                          style={{ width: 7, height: 7, marginTop: 6, flexShrink: 0, background: n.read ? "var(--text-muted)" : accentColor }}
-                        />
-                        <div className="min-w-0">
-                          <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>{n.title}</div>
-                          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.35 }}>{n.body}</div>
-                          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{n.time}</div>
+                    </div>
+                    {/* Scrollable list */}
+                    <div className="overflow-y-auto flex-1" style={{ overscrollBehavior: "contain" }}>
+                      {notifications.length === 0 && (
+                        <div className="px-4 py-5" style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                          No notifications yet.
                         </div>
-                      </motion.div>
-                    ))}
+                      )}
+                      {notifications.map((n, i) => (
+                        <motion.div
+                          key={n.id}
+                          whileHover={{ background: "rgba(244,121,32,0.04)" }}
+                          className="px-4 py-3.5 cursor-pointer flex gap-3 transition-colors"
+                          onClick={() => markNotificationRead(n.id)}
+                          style={{
+                            borderBottom: i < notifications.length - 1 ? "1px solid rgba(244,121,32,0.07)" : "none",
+                            background: n.read ? "transparent" : "rgba(244,121,32,0.06)",
+                          }}
+                        >
+                          <span
+                            className="rounded-full flex-shrink-0"
+                            style={{ width: 7, height: 7, marginTop: 6, background: n.read ? "var(--text-muted)" : accentColor }}
+                          />
+                          <div className="min-w-0">
+                            <div style={{ fontSize: 13, fontWeight: n.read ? 500 : 600, color: "var(--text-primary)" }}>{n.title}</div>
+                            <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2, lineHeight: 1.4, wordBreak: "break-word" }}>{n.body}</div>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 3 }}>{n.time}</div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -4,10 +4,20 @@ import {
   Trophy, Star, Crown, Flame, Zap, Users, Calendar,
   ArrowRight, Award, Target, Clock, MapPin, Shield, Hash, Loader
 } from "lucide-react";
-import { api } from "@/lib/api/apiClient";
-import { eventService, type EventResponse } from "@/features/events/api/eventService";
-import { awardService, type TotalPrizeSummary } from "@/features/awards/api/awardService";
+import { type TotalPrizeSummary } from "@/features/awards/api/awardService";
+import { publicSummaryService } from "@/features/public/api/publicSummaryService";
 
+/**
+ * Giao diện Landing Page (Trang chủ công khai).
+ * 
+ * Tối ưu & Kiến trúc (BFF/Aggregate):
+ * Thay vì gọi 4-5 API riêng biệt để lấy danh sách giải thưởng, danh sách sự kiện, tổng số đội,
+ * Component này sử dụng một API duy nhất (`publicSummaryService.getLandingSummary`) để fetch
+ * toàn bộ dữ liệu cần thiết trong một lần tải trang. Việc này giúp:
+ * - Tránh lỗi N+1 request ở Frontend.
+ * - Loại bỏ hiện tượng chớp màn hình (waterfall loading).
+ * - Cải thiện tốc độ load (SEO & Performance).
+ */
 interface Props {
   onGoToLogin: () => void;
   onGoToRegister: () => void;
@@ -75,20 +85,20 @@ const RANK_META = [
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "ongoing") return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-orange-500/15 text-orange-600 border border-orange-500/30">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white/90 dark:bg-black/90 text-orange-600 border border-orange-500/40 shadow-sm backdrop-blur-md">
       <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
       Live
     </span>
   );
   if (status === "completed") return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
-      <Trophy size={10} />
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white/90 dark:bg-black/90 text-emerald-600 border border-emerald-500/40 shadow-sm backdrop-blur-md">
+      <Trophy size={11} />
       Completed
     </span>
   );
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-500/15 text-blue-600 border border-blue-500/30">
-      <Clock size={10} />
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-white/90 dark:bg-black/90 text-blue-600 border border-blue-500/40 shadow-sm backdrop-blur-md">
+      <Clock size={11} />
       Upcoming
     </span>
   );
@@ -279,10 +289,7 @@ function normalizeDateTime(date: string): string {
   return date.includes(" ") ? date.replace(" ", "T") : date;
 }
 
-async function getPublicTeamCount() {
-  const response = await api.get<TeamCountResponse>("/api/v1/public/teams/count", false);
-  return response.totalTeams;
-}
+
 
 function formatPrizeMoney(summary: TotalPrizeSummary): string {
   const { totalPrize, currency } = summary;
@@ -324,52 +331,43 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
     return () => clearInterval(timer);
   }, [competitions.length]);
 
+  // ─── Fetch All Landing Data via 1 Aggregate API Call ───────────────────────
   useEffect(() => {
-    eventService.getPublic()
+    setCompetitionsLoading(true);
+    setHofLoading(true);
+    
+    publicSummaryService.getLandingSummary()
       .then(data => {
-        const mapped = pickLandingCompetitions(data).map(toCompetition);
+        // 1. Set Competitions & Events Stats
+        const mapped = pickLandingCompetitions(data.events).map(toCompetition);
         setCompetitions(mapped);
-        setStats(prev => ({ ...prev, events: String(data.length) }));
+        setStats(prev => ({ ...prev, events: String(data.events.length) }));
         setCompetitionsError("");
         setActiveCompetition(0);
+        
+        // 2. Set Teams Stats
+        setStats(prev => ({ ...prev, teams: String(data.totalTeams) }));
+        
+        // 3. Set Prize Stats
+        setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(data.totalPrize) }));
+        
+        // 4. Set Hall of Fame
+        setHofGroups(groupHallOfFame(data.hallOfFame));
+        setStats(prev => ({ ...prev, topProjects: String(data.hallOfFame.length) }));
       })
-      .catch((error) => {
-        console.error("Failed to load landing events", error);
+      .catch(error => {
+        console.error("Failed to load landing summary", error);
         setCompetitionsError(error instanceof Error ? error.message : "Failed to load events.");
         setCompetitions([]);
-        setStats(prev => ({ ...prev, events: "N/A" }));
+        setStats(prev => ({ 
+          ...prev, 
+          events: "N/A", teams: "N/A", prizeMoney: "N/A"
+        }));
       })
-      .finally(() => setCompetitionsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    getPublicTeamCount()
-      .then(teamCount => setStats(prev => ({ ...prev, teams: String(teamCount) })))
-      .catch(() => setStats(prev => ({ ...prev, teams: "N/A" })));
-  }, []);
-
-  // Fetch total prize money across all events (public endpoint, no auth needed)
-  useEffect(() => {
-    awardService.getTotalPrize()
-      .then(summary => {
-        console.log("[LandingPage] getTotalPrize raw summary:", summary);
-        setStats(prev => ({ ...prev, prizeMoney: formatPrizeMoney(summary) }));
-      })
-      .catch((err) => {
-        console.error("[LandingPage] getTotalPrize error:", err);
-        setStats(prev => ({ ...prev, prizeMoney: "N/A" }));
+      .finally(() => {
+        setCompetitionsLoading(false);
+        setHofLoading(false);
       });
-  }, []);
-
-  // Fetch Hall of Fame from real API
-  useEffect(() => {
-    api.get<HallOfFameResponse[]>("/api/v1/public/hall-of-fame", false)
-      .then(data => {
-        setHofGroups(groupHallOfFame(data));
-        setStats(prev => ({ ...prev, topProjects: String(data.length) }));
-      })
-      .catch(() => { /* keep empty, show fallback */ })
-      .finally(() => setHofLoading(false));
   }, []);
 
   const currentCompetition = competitions[activeCompetition];
@@ -734,37 +732,7 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                     })()}
                   </div>
 
-                  {(hofGroups[activeHof]?.specialAwards?.length ?? 0) > 0 && (
-                    <div className="mt-10 max-w-4xl mx-auto">
-                      <div className="flex items-center justify-center gap-2 mb-4">
-                        <Star size={15} style={{ color: "#F47920" }} />
-                        <div className="text-sm font-semibold" style={{ color: "#F47920" }}>Special Awards</div>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-3">
-                        {hofGroups[activeHof].specialAwards.map((award: any) => {
-                          const initials = award.teamName.split(" ").map((w: any) => w[0]).join("").slice(0, 2).toUpperCase();
-                          return (
-                            <motion.div
-                              key={award.entryKey}
-                              initial={{ opacity: 0, y: 16 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="glass rounded-2xl border border-orange-400/25 p-4 flex items-center gap-4"
-                            >
-                              <div className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
-                                style={{ background: "linear-gradient(135deg, #F47920, #FFD700)" }}>
-                                {initials}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-xs text-muted-foreground mb-0.5">{award.awardTierName}</div>
-                                <div className="text-sm font-semibold truncate">{award.awardTitle}</div>
-                                <div className="text-xs text-muted-foreground truncate">{award.teamName}</div>
-                              </div>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+
                 </motion.div>
               </AnimatePresence>
             </>
@@ -777,10 +745,10 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", sub: "from API", color: "#F47920" },
-              { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", sub: "from API", color: "#FF8C2A" },
-              { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", sub: "from Hall of Fame", color: "#7C3AED" },
-              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", sub: "from API", color: "#0EA5E9" },
+              { id: "stats-competitions", icon: Trophy, value: stats.events, label: "Competitions", color: "#F47920" },
+              { id: "stats-teams", icon: Users, value: stats.teams, label: "Teams", color: "#FF8C2A" },
+              { id: "stats-projects", icon: Star, value: stats.topProjects, label: "Projects", color: "#7C3AED" },
+              { id: "stats-prize", icon: Award, value: stats.prizeMoney, label: "Prize Money", color: "#0EA5E9" },
             ].map((s, i) => (
               <motion.div key={s.id} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }} transition={{ delay: i * 0.1 }}
@@ -788,7 +756,6 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
                 <s.icon size={28} className="mx-auto mb-3" style={{ color: s.color }} />
                 <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
                 <div style={{ fontWeight: 600, fontSize: "0.9rem" }} className="mt-0.5">{s.label}</div>
-                {s.sub && <div className="text-xs text-muted-foreground">{s.sub}</div>}
               </motion.div>
             ))}
           </div>

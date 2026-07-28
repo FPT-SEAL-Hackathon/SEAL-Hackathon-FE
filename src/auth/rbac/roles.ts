@@ -1,6 +1,7 @@
 export const ROLES = {
   FPT_STUDENT: "ROLE_FPT_STUDENT",
   EXTERNAL_STUDENT: "ROLE_EXTERNAL_STUDENT",
+  ADMIN: "ROLE_ADMIN",
   ORGANIZER: "ROLE_ORGANIZER",
   INTERNAL_JUDGE: "ROLE_INTERNAL_JUDGE",
   GUEST_JUDGE: "ROLE_GUEST_JUDGE",
@@ -16,6 +17,8 @@ export const ALL_ROLES: Role[] = Object.values(ROLES);
 export const STUDENT_ROLES: Role[] = [ROLES.FPT_STUDENT, ROLES.EXTERNAL_STUDENT];
 export const JUDGE_ROLES: Role[] = [ROLES.INTERNAL_JUDGE, ROLES.GUEST_JUDGE, ROLES.EXPERT];
 export const ORGANIZER_ROLES: Role[] = [ROLES.ORGANIZER];
+// Admin = quản trị hệ thống (user/settings/template), KHÔNG vận hành cuộc thi.
+export const ADMIN_ROLES: Role[] = [ROLES.ADMIN];
 export const MENTOR_ROLES: Role[] = [ROLES.MENTOR, ROLES.EXPERT];
 export const LEADER_ROLES: Role[] = [ROLES.LEADER];
 export const MEMBER_ROLES: Role[] = [ROLES.MEMBER];
@@ -27,6 +30,7 @@ const ROLE_ALIASES: Record<string, Role> = {
   EXTERNAL_STUDENT: ROLES.EXTERNAL_STUDENT,
   EXTERNALSTUDENT: ROLES.EXTERNAL_STUDENT,
   STUDENT_EXTERNAL: ROLES.EXTERNAL_STUDENT,
+  ADMIN: ROLES.ADMIN,
   ORGANIZER: ROLES.ORGANIZER,
   INTERNAL_JUDGE: ROLES.INTERNAL_JUDGE,
   INTERNALJUDGE: ROLES.INTERNAL_JUDGE,
@@ -59,9 +63,14 @@ export function isOrganizer(role?: Role | null): boolean {
   return role === ROLES.ORGANIZER;
 }
 
-export function getRoleRouteSegment(role: Role): "student" | "judge" | "organizer" | "mentor" | "leader" | "member" {
+export function isAdmin(role?: Role | null): boolean {
+  return role === ROLES.ADMIN;
+}
+
+export function getRoleRouteSegment(role: Role): "student" | "judge" | "organizer" | "admin" | "mentor" | "leader" | "member" {
   if (isStudent(role)) return "student";
   if (isJudge(role)) return "judge";
+  if (role === ROLES.ADMIN) return "admin";
   if (role === ROLES.MENTOR || role === ROLES.EXPERT) return "mentor";
   if (role === ROLES.LEADER) return "leader";
   if (role === ROLES.MEMBER) return "member";
@@ -74,6 +83,8 @@ export function getRoleLabel(role: Role): string {
       return "FPT Student";
     case ROLES.EXTERNAL_STUDENT:
       return "External Student";
+    case ROLES.ADMIN:
+      return "Admin";
     case ROLES.ORGANIZER:
       return "Organizer";
     case ROLES.INTERNAL_JUDGE:

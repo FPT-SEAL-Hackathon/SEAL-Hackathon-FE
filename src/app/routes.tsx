@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, useParams } from "react-router";
 import { DEFAULT_PAGE_BY_ROLE, canAccessPage } from "@/auth/permissions/permissions";
-import { getRoleRouteSegment, isJudge, isOrganizer, isStudent, normalizeRole, type Role, ROLES } from "@/auth/rbac/roles";
+import { getRoleRouteSegment, isAdmin, isJudge, isOrganizer, isStudent, normalizeRole, type Role, ROLES } from "@/auth/rbac/roles";
 import { useAuth } from "@/features/auth/store/authStore";
 import { AuthPages } from "@/features/auth/pages/AuthPages";
 import { VerifyEmailPage } from "@/features/auth/pages/VerifyEmailPage";
 import { OAuthSuccessPage } from "@/features/auth/pages/OAuthSuccessPage";
 import { CompleteProfilePage } from "@/features/auth/pages/CompleteProfilePage";
 import { LinkAccountPage } from "@/features/auth/pages/LinkAccountPage";
+import { LinkGooglePage } from "@/features/auth/pages/LinkGooglePage";
 import { ForgotPasswordPage } from "@/features/auth/pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "@/features/auth/pages/ResetPasswordPage";
 import { LandingPage } from "@/pages/landing/LandingPage";
@@ -16,19 +17,12 @@ import { MemberDashboard } from "@/pages/member/MemberDashboard";
 import { JudgeDashboard } from "@/pages/judge/JudgeDashboard";
 import { AdminDashboard } from "@/pages/admin/AdminDashboard";
 import { MentorDashboard } from "@/pages/mentor/MentorDashboard";
-import { LeaderDashboard } from "@/pages/leader/LeaderDashboard";
 import { ForbiddenPage } from "@/pages/ForbiddenPage";
-import { DevHub } from "@/pages/dev/DevHub";
+
 
 function RequireAuth() {
   const { isAuthenticated, role, user } = useAuth();
   const location = useLocation();
-  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
-
-  // In dev mode, allow access without real auth (roles are injected by DevRoute handleNavigate)
-  if (isDevMode && !isAuthenticated) {
-    return <Outlet />;
-  }
 
   if (!isAuthenticated || !role) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -45,11 +39,6 @@ function RequireAuth() {
 function RequireAuthOnly() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
-
-  if (isDevMode && !isAuthenticated) {
-    return <Outlet />;
-  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
@@ -58,44 +47,6 @@ function RequireAuthOnly() {
   return <Outlet />;
 }
 
-// ─── Dev Hub guard ──────────────────────────────────────────────────────────
-const DEV_ROLE_MAP: Record<string, string> = {
-  member: "ROLE_MEMBER",
-  leader: "ROLE_LEADER",
-  judge: "ROLE_INTERNAL_JUDGE",
-  mentor: "ROLE_MENTOR",
-  admin: "ROLE_ORGANIZER",
-};
-
-function DevRoute() {
-  const navigate = useNavigate();
-  const { setAuth } = useAuth();
-  const isDevMode = localStorage.getItem("seal_dev_mode") === "true";
-  if (!isDevMode) return <Navigate to="/login" replace />;
-
-  const handleNavigate = (roleName: string, page: string) => {
-    // Inject mock user so auth guards pass
-    const roleCode = DEV_ROLE_MAP[roleName] ?? "ROLE_MEMBER";
-    setAuth({
-      userId: "dev-user-id",
-      fullName: `Dev ${roleName.charAt(0).toUpperCase() + roleName.slice(1)}`,
-      email: "dev@seal.dev",
-      role: roleCode,
-      phone: "",
-      studentCode: "DEV001",
-      universityName: "FPT University",
-      accountStatus: "ACTIVE",
-    } as any);
-    navigate(`/${roleName}/${page}`);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("seal_dev_mode");
-    navigate("/", { replace: true });
-  };
-
-  return <DevHub onNavigate={handleNavigate} onLogout={handleLogout} />;
-}
 
 function getValidRedirectPath(role: Role, fromPath?: string): string {
   const defaultPath = getDefaultPath(role);
@@ -146,11 +97,7 @@ function AuthRoute({ mode }: { mode: "login" | "register" }) {
       mode={mode}
       onBackToLanding={() => navigate("/", { replace: true })}
       onLogin={(loginPayload) => {
-        // Dev bypass shortcut
-        if (loginPayload === "__dev__") {
-          navigate("/dev", { replace: true });
-          return;
-        }
+
         if (typeof loginPayload === "string") {
           const nextRole = roleFromUser(loginPayload);
           navigate(from || getDefaultPath(nextRole), { replace: true });
@@ -205,6 +152,8 @@ function MainLayout() {
     navigate("/login", { replace: true, state: null });
   };
 
+  const [markAllReadKey, setMarkAllReadKey] = useState(0);
+
   return (
     <Layout
       role={role}
@@ -212,13 +161,14 @@ function MainLayout() {
       onNavigate={handlePageNavigate}
       onRoleChange={handleLogout}
       userName={user?.fullName ?? "User"}
+      onMarkAllRead={() => setMarkAllReadKey(k => k + 1)}
     >
-      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} navKey={navKey} />
+      <DashboardByRole role={role} currentPage={page} onNavigate={handlePageNavigate} navKey={navKey} markAllReadKey={markAllReadKey} />
     </Layout>
   );
 }
 
-function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role; currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number }) {
+function DashboardByRole({ role, currentPage, onNavigate, navKey, markAllReadKey }: { role: Role; currentPage: string; onNavigate: (page: string, options?: { state?: any }) => void; navKey?: number; markAllReadKey?: number }) {
   if (role === ROLES.EXPERT) {
     const mentorPages = ["dashboard", "categories", "tracks", "teams", "consultations", "progress", "schedule"];
     if (mentorPages.includes(currentPage)) {
@@ -227,19 +177,21 @@ function DashboardByRole({ role, currentPage, onNavigate, navKey }: { role: Role
     return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
   }
   if (isStudent(role)) {
-    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} markAllReadKey={markAllReadKey} />;
   }
   if (isJudge(role)) {
     return <JudgeDashboard currentPage={currentPage} onNavigate={onNavigate} navKey={navKey} />;
   }
-  if (isOrganizer(role)) {
+  // Admin dùng chung container AdminDashboard (nơi cung cấp viewContext cho các view),
+  // nhưng URL (/admin/...) và menu lấy theo role nên hai khu vực vẫn tách biệt.
+  if (isOrganizer(role) || isAdmin(role)) {
     return <AdminDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   if (role === ROLES.MENTOR) {
     return <MentorDashboard currentPage={currentPage} onNavigate={onNavigate} />;
   }
   if (role === ROLES.LEADER || role === ROLES.MEMBER) {
-    return <LeaderDashboard currentPage={currentPage} onNavigate={onNavigate} />;
+    return <MemberDashboard currentPage={currentPage} onNavigate={onNavigate} markAllReadKey={markAllReadKey} />;
   }
   return null;
 }
@@ -260,10 +212,11 @@ export const router = createBrowserRouter([
   { path: "/register", element: <AuthRoute mode="register" /> },
   { path: "/verify-email", element: <VerifyEmailPage /> },
   { path: "/oauth2/success", element: <OAuthSuccessPage /> },
+  { path: "/link-google", element: <LinkGooglePage /> },
   { path: "/forgot-password", element: <ForgotPasswordPage /> },
   { path: "/reset-password", element: <ResetPasswordPage /> },
   { path: "/403", element: <ForbiddenPage /> },
-  { path: "/dev", element: <DevRoute /> },
+
   {
     path: "/",
     element: <RequireAuthOnly />,

@@ -168,7 +168,9 @@ function messageForStatus(status?: number, code?: string, message?: string) {
   if (status === 403) return message || "You do not have permission to perform this action.";
   if (status === 409 || code === "REGISTRATION_CONFLICT") return message || "This action conflicts with the current resource state.";
   if (code === "DUPLICATE_RESOURCE") return message || "Duplicate resource.";
-  if (status === 500) return "Server error. Please try again later.";
+  if (status === 500) {
+    return message || "Server error. Please try again later.";
+  }
   if (code === "BAD_REQUEST") return message || "Bad request.";
   return message || "Request failed.";
 }
@@ -373,6 +375,16 @@ export const api = {
     request<T>(path, { method: "PUT", body: bodyIsFormData(body as RequestInit["body"]) ? body as BodyInit : JSON.stringify(body) }, auth),
   patch: <T>(path: string, body?: unknown, auth = true) =>
     request<T>(path, { method: "PATCH", body: bodyIsFormData(body as RequestInit["body"]) ? body as BodyInit : body ? JSON.stringify(body) : undefined }, auth),
-  delete: <T>(path: string, auth = true) => request<T>(path, { method: "DELETE" }, auth),
+  delete: <T>(path: string, authOrBody: boolean | unknown = true, maybeAuth = true) => {
+    const hasBody = typeof authOrBody !== "boolean";
+    return request<T>(
+      path,
+      {
+        method: "DELETE",
+        body: hasBody ? JSON.stringify(authOrBody) : undefined,
+      },
+      hasBody ? maybeAuth : authOrBody,
+    );
+  },
   blob: (path: string, auth = true) => requestBlob(path, { method: "GET" }, auth),
 };

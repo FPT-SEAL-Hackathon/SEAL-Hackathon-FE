@@ -1,23 +1,42 @@
-import { BookOpen, Star, Users, UserCheck } from "lucide-react";
-import { Card, COLORS } from "../../../../components/shared/UIComponents";
+import { useEffect, useState } from "react";
+import { BookOpen, Star, Users, UserCheck, Edit } from "lucide-react";
+import { Card, COLORS, Button } from "../../../../components/shared/UIComponents";
 import { Field, Input } from "../ui/shared";
 import type { EventResponse } from "../../api/eventService";
 import type { EventCriteria } from "../../types/eventCriteria";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
-import { EventTeamsSummaryCard } from "../../components/EventTeamsSection";
+import { EventTeamsSummaryCard, getVisibleEventTeams } from "../../components/EventTeamsSection";
+import { useEventCriteriaContext } from "../../context/EventCriteriaContext";
 
 interface Props {
   event: EventResponse;
-  eventCriteria: EventCriteria[];
   totalPrize: { amount: number; currency: string } | null;
   onOpenTeamManagement: () => void;
+  onEdit?: () => void;
 }
 
-export function OverviewTab({ event, eventCriteria, totalPrize, onOpenTeamManagement }: Props) {
+export function OverviewTab({ event, totalPrize, onOpenTeamManagement, onEdit }: Props) {
   
+  const { eventCriteria } = useEventCriteriaContext();
   const { categories, categoryMentors } = useCategoryContext();
   const { roundJudges } = useRoundContext();
+  const [visibleTeamCount, setVisibleTeamCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setVisibleTeamCount(null);
+    getVisibleEventTeams(event.eventId, event)
+      .then(teams => {
+        if (!cancelled) setVisibleTeamCount(teams.length);
+      })
+      .catch(() => {
+        if (!cancelled) setVisibleTeamCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [event]);
 
   const mentorCount = new Set(
     Object.values(categoryMentors)
@@ -40,7 +59,7 @@ export function OverviewTab({ event, eventCriteria, totalPrize, onOpenTeamManage
             <Field label="Event Name"><Input value={event.eventName} disabled /></Field>
             <Field label="Status"><Input value={event.eventStatusName} disabled /></Field>
             <Field label="Total Prize"><Input value={totalPrize ? `${totalPrize.amount} ${totalPrize.currency}` : 'N/A'} disabled /></Field>
-            <Field label="Teams Registered"><Input value={String(event.teamCount ?? 0)} disabled /></Field>
+            <Field label="Teams Registered"><Input value={visibleTeamCount === null ? "..." : String(visibleTeamCount)} disabled /></Field>
             <Field label="Registration Deadline"><Input value={event.registrationEnd} disabled /></Field>
             <Field label="Event End"><Input value={event.eventEndDate} disabled /></Field>           
             <Field label="Category">
@@ -82,6 +101,13 @@ export function OverviewTab({ event, eventCriteria, totalPrize, onOpenTeamManage
               </div>
             </Field>
           </div>
+          {onEdit && (
+            <div className="flex justify-end mt-4 pt-4" style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <Button variant="primary" size="sm" icon={<Edit size={13} />} onClick={onEdit}>
+                Edit Event
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
 
@@ -103,7 +129,7 @@ export function OverviewTab({ event, eventCriteria, totalPrize, onOpenTeamManage
             </div>
           ))}
         </Card>
-        <EventTeamsSummaryCard eventId={event.eventId} onOpen={onOpenTeamManagement} />
+        <EventTeamsSummaryCard eventId={event.eventId} event={event} onOpen={onOpenTeamManagement} />
       </div>
     </div>
   );

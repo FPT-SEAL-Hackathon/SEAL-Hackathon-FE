@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
 import { X, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -97,11 +98,14 @@ export function RoundModal({ categoryId, round, onClose, onSaved }: Props) {
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, display: "block", marginBottom: 6, letterSpacing: "0.06em" }}>STATUS</label>
-                <select value={form.roundStatusId} onChange={e => set("roundStatusId", e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl outline-none"
-                  style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  {ROUND_STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
+                <Select value={form.roundStatusId || "none"} onValueChange={value => set("roundStatusId", (value === "none" ? "" : value))} >
+  <SelectTrigger className="w-full px-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+    <SelectValue placeholder="Select..." />
+  </SelectTrigger>
+  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+    {ROUND_STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value} style={{ color: COLORS.textPrimary }}>{s.label}</SelectItem>)}
+  </SelectContent>
+</Select>
               </div>
             </div>
 

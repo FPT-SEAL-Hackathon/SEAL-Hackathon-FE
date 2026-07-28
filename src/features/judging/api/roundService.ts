@@ -8,11 +8,14 @@ export interface RoundResponse {
   roundOrder: number;
   roundStatusId: string;
   roundStatusName?: string;
-  submissionDeadline: string;
-  judgingDeadline: string;
-  startDate: string;
-  endDate: string;
-  advancementTopN: number;
+  submissionDeadline: string | null;
+  judgingDeadline: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  // Cửa sổ appeal (khiếu nại) — có ở BE RoundResponse và type Round; timeline dùng để vẽ.
+  appealStartTime?: string | null;
+  appealEndTime?: string | null;
+  advancementTopN: number | null;
   isCalibrationRound: boolean;
 }
 
@@ -27,6 +30,8 @@ export interface CreateRoundRequest {
   endDate?: string;
   advancementTopN?: number;
   isCalibrationRound?: boolean;
+  appealStartTime?: string;
+  appealEndTime?: string;
 }
 
 export interface RoundCriterionResponse {
