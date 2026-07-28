@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, XCircle, Eye, Loader, CheckSquare, X } from "lucide-react";
+import { toast } from "sonner";
 import { Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
-import { api } from "@/lib/api/apiClient";
+import { api, parseApiError } from "@/lib/api/apiClient";
 import {
   getSubmissionStatusLabel,
   SUBMISSION_STATUS_IDS,
@@ -95,6 +96,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
       ));
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to update score approval.");
     } finally {
       setApprovingId(null);
     }
@@ -115,6 +117,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
       fetchSubmissions();
     } catch (e) {
       console.error(e);
+      toast.error(parseApiError(e).message || "Failed to reject score.");
     } finally {
       setApprovingId(null);
     }
