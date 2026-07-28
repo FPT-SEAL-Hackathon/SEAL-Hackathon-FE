@@ -883,58 +883,7 @@ export function TeamApiPanel({
     const storedTeam = getStoredActiveTeam(currentUserId);
     const teamId = initialTeamId || storedTeam?.teamId;
 
-    if (events.length === 0) {
-      setMessage({
-        tone: "info",
-        text: "Loading events before checking your teams...",
-      });
-      return;
-    }
-
     teamDiscoveryAttemptedRef.current = true;
-
-    if (!teamId) {
-      setTeamDiscoveryDone(false);
-      run(
-        "discover",
-        discoverUserTeamsFromEvents,
-        teams => {
-          if (!autoLoadTeam) {
-            if (selectedTeam && !teams.some(team => team.teamId === selectedTeam.teamId)) {
-              setSelectedTeam(null);
-              setField("teamId", "");
-              try {
-                localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-              } catch {
-                // Ignore storage failures.
-              }
-            } else {
-              setField("teamId", selectedTeam?.teamId ?? "");
-            }
-            if (teams.length === 0) {
-              setMessage({
-                tone: "info",
-                text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
-              });
-            }
-            return;
-          }
-          if (teams[0]) {
-            if (teamPanelModeRef.current !== "current") return;
-            activateTeam(teams[0], true, "current", teams);
-            return;
-          }
-          setMessage({
-            tone: "info",
-            text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
-          });
-        },
-        "",
-      ).finally(() => {
-        setTeamDiscoveryDone(true);
-      });
-      return;
-    }
 
     setTeamDiscoveryDone(false);
     run(
@@ -948,10 +897,11 @@ export function TeamApiPanel({
         return userBelongsToTeam(team, currentUserId) && !isTeamRejected(team) ? [team] : [] as TeamResponse[];
       },
       teams => {
-        const selected = teams.find(team => team.teamId === teamId) ?? teams[0];
+        const selected = (teamId ? teams.find(team => team.teamId === teamId) : null) ?? teams[0];
+        setUserTeams(teams);
+        saveStoredUserTeams(teams, currentUserId);
+
         if (!autoLoadTeam) {
-          setUserTeams(teams);
-          saveStoredUserTeams(teams, currentUserId);
           if (selectedTeam && !teams.some(team => team.teamId === selectedTeam.teamId)) {
             setSelectedTeam(null);
             setField("teamId", "");
@@ -964,11 +914,6 @@ export function TeamApiPanel({
             setField("teamId", selectedTeam?.teamId ?? "");
           }
           if (teams.length === 0) {
-            try {
-              localStorage.removeItem(ACTIVE_TEAM_STORAGE_KEY);
-            } catch {
-              // Ignore storage failures.
-            }
             setMessage({
               tone: "info",
               text: "No teams found yet. Create a team or join one from the Join Another Event tab.",
@@ -976,10 +921,9 @@ export function TeamApiPanel({
           }
           return;
         }
+
         if (selected) {
-          setUserTeams(teams);
-          saveStoredUserTeams(teams, currentUserId);
-          if (teamPanelModeRef.current !== "current") return;
+          setTeamPanelMode("current");
           activateTeam(selected, true, "current", teams);
           return;
         }
@@ -1002,12 +946,14 @@ export function TeamApiPanel({
   };
 
   useEffect(() => {
-    if (teamPanelMode !== "current" || loading.discover || teamDiscoveryAttemptedRef.current) {
+    if (!isVisible || !currentUserId || loading.discover || teamDiscoveryAttemptedRef.current) {
       return;
     }
-    discoverUserTeams();
+    if (initialEventId || initialTeamId) {
+      discoverUserTeams();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events.length, loading.discover, teamPanelMode, userTeams.length]);
+  }, [isVisible, currentUserId, loading.discover, initialEventId, initialTeamId]);
 
   const loadTeamsByEvent = () => {
     run(
@@ -1599,7 +1545,7 @@ export function TeamApiPanel({
               setTeamPanelMode("current");
               setTeamFlow(null);
               setMessage(null);
-              discoverUserTeams(true, false);
+              discoverUserTeams(true, true);
             }}
           >
             View My Teams

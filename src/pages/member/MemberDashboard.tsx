@@ -240,7 +240,9 @@ function mapEvent(event: EventResponse): MemberEvent {
     registrationStart: event.registrationStart,
     registrationEnd: event.registrationEnd,
     location: event.location,
-    eventStatus: typeof event.eventStatus === "object" ? event.eventStatus.eventStatusName : event.eventStatusName,
+    eventStatus: typeof event.eventStatus === "object"
+      ? (event.eventStatus?.eventStatusName || event.eventStatusName || "")
+      : (event.eventStatusName || event.eventStatus || ""),
     participants: "N/A",
     tracks: "N/A",
     prizePool: "N/A",
@@ -485,7 +487,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             .map(participation => [participation.eventId, participation]),
         );
         setParticipations(participationByEvent);
-        setApiEvents(data.map(event => mergeEventParticipation(mapEvent(event), participationByEvent[event.eventId])));
+
+        const eventsByEventId = new Map<string, MemberEvent>();
+        data.forEach(rawEvent => {
+          const mapped = mapEvent(rawEvent);
+          if (mapped.eventId) {
+            eventsByEventId.set(mapped.eventId, mergeEventParticipation(mapped, participationByEvent[mapped.eventId]));
+          }
+        });
+
+        myParticipations.forEach(part => {
+          if (part.eventId && !eventsByEventId.has(part.eventId)) {
+            const syntheticEvent: MemberEvent = {
+              eventId: part.eventId,
+              eventName: part.eventName || "Joined Event",
+              description: "",
+              eventStartDate: "",
+              eventEndDate: "",
+              registrationStart: "",
+              registrationEnd: "",
+              location: "",
+              eventStatus: part.eventStatus || "REGISTRATION_CLOSED",
+              participants: "N/A",
+              tracks: "N/A",
+              prizePool: "N/A",
+              participantStatus: normalizeParticipationStatus(part.participantStatus),
+              bannerImageUrl: "",
+              eventParticipantId: part.eventParticipantId,
+              rejectedReason: part.rejectedReason,
+              appliedAt: part.appliedAt,
+              approvedAt: part.approvedAt,
+            };
+            eventsByEventId.set(part.eventId, syntheticEvent);
+          }
+        });
+
+        const mergedEvents = Array.from(eventsByEventId.values());
+        setApiEvents(mergedEvents);
         if (myParticipations.length > 0 || !hasToken) setEventsError("");
       })
       .catch(error => {
@@ -696,7 +734,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
   useEffect(() => {
-    if (!user?.userId || apiEvents.length === 0) {
+    if (!user?.userId) {
       setSubmissionTeams([]);
       setDashboardTeams([]);
       return;
