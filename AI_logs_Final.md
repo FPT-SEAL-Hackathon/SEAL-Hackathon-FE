@@ -40,8 +40,9 @@
 - **Root Cause**: `EventJudgingApprovalTab.tsx` passed a mock object `[{ team: "No submissions ready for approval", status: "draft" }]` to `DataTable` when `submissions.length === 0`. Because this mock object lacked `submissionId` or `id`, `subId` was `undefined`. Condition `rejectingId === subId` evaluated `undefined === undefined` to `true`, rendering the Rejection input box on an empty/fake row. Clicking "Confirm Reject" called `rejectScore(undefined)`, which checked `if (!submissionId) return;` and returned silently without sending an API request.
 - **Fix**: Removed mock object, added dedicated empty state `<Card className="p-8 text-center text-gray-500">No submissions ready for approval in this round.</Card>`, and added `if (!subId) return null;` in `ACTIONS` renderer.
 
-### 6. Mentor Dashboard Team Status Badge & Final System Update
+### 6. Mentor Dashboard Team Status Badge & AI Mentor Prompt Refinement
 - **Mentor Dashboard Team Status Badge Fix (FE):** Cập nhật `MentorDashboard.tsx` thay thế badge trạng thái hardcode `status="active"` thành trạng thái động `status={(team.teamStatusName || team.teamStatusId || "active") as any}` ở danh sách đội thi bên trái, giúp hiển thị đúng các trạng thái như `Withdrawn` hoặc `Inactive`.
+- **AI Mentor Prompt Refinement & Model Config (BE):** Cập nhật `GeminiServiceImpl.java` tự động fallback endpoint sang `gemini-2.0-flash` (khắc phục lỗi 404 Not Found do model `gemini-3.1-pro` không tồn tại). Đồng thời tinh chỉnh System Prompt của AI Mentor với bộ quy tắc trùng khớp nghiêm ngặt (Strict Matching Rules): Nếu sinh viên hỏi chi tiết chuyên sâu, hỏi đào sâu hoặc báo đã biết câu trả lời chung chung (`"I know but..."`), AI Mentor bắt buộc trả về `UNKNOWN` để kích hoạt cơ chế chuyển tiếp câu hỏi cho Mentor người thật hỗ trợ.
 - **[SYSTEM]:** 
-  - FE commits: `5f974027`, `a1544468`, `f50a9c9e`, `0780faab`, `a6d8875d` — Branch `mentor_AI`.
-  - BE commits: `4d93373`, `0495cac`, `fad6451` — Branch `mentor_AI`.
+  - FE commits: `5f974027`, `a1544468`, `f50a9c9e`, `0780faab`, `a6d8875d`, `ab03f1c5` — Branch `mentor_AI`.
+  - BE commits: `4d93373`, `0495cac`, `fad6451`, `e0ad34a`, `4b51d35`, `b99dceb` — Branch `mentor_AI`.
