@@ -79,6 +79,10 @@ export interface SubmissionResponse {
   notes: string;
   isScoreApproved?: boolean;
   isSampleSubmission?: boolean;
+  activeDisqualificationId?: string;
+  activeDisqualificationReason?: string;
+  activeDisqualifiedById?: string;
+  activeDisqualifiedAt?: string;
 }
 
 export const SUBMISSION_STATUS_IDS = {
@@ -117,6 +121,8 @@ export function normalizeSubmissionStatusName(statusName?: string | null): strin
 }
 
 export function getSubmissionStatusKey(submission?: Partial<SubmissionResponse> | null): SubmissionStatusKey | null {
+  if (submission?.activeDisqualificationId) return "DISQUALIFIED";
+
   const statusId = String(submission?.submissionStatusId ?? "").toLowerCase();
   const idMatch = (Object.entries(SUBMISSION_STATUS_IDS) as [SubmissionStatusKey, string][])
     .find(([, id]) => id.toLowerCase() === statusId);

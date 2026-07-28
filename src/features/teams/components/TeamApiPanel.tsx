@@ -51,7 +51,6 @@ import {
   saveStoredUserTeams,
   userBelongsToTeam,
 } from "@/features/teams/api/userTeamDiscovery";
-import { userService } from "@/features/users/api/userService";
 
 type ActionKey =
   | "create"
@@ -218,27 +217,6 @@ function saveActiveTeam(team: TeamResponse, currentUserId?: string) {
   rememberUserTeam(team, currentUserId);
 }
 
-function memberDetailFromUser(
-  member: TeamMemberResponse,
-  user: Awaited<ReturnType<typeof userService.getUserById>>,
-): TeamMemberDetailResponse {
-  return {
-    teamMemberId: member.teamMemberId,
-    teamId: user.teamId ?? "",
-    userId: user.userId,
-    fullName: user.fullName,
-    email: user.email,
-    phone: user.phone ?? "",
-    fptStudentCode: user.fptStudentCode ?? "",
-    externalStudentCode: user.externalStudentCode ?? "",
-    universityName: user.universityName ?? "",
-    userTypeName: user.roleName ?? user.role,
-    accountStatusName: user.accountStatusName ?? user.accountStatus,
-    joinedAt: member.joinedAt,
-    active: member.active,
-  };
-}
-
 type TeamMemberWithProfile = TeamMemberResponse & {
   fullName?: string;
   name?: string;
@@ -299,8 +277,9 @@ function getMemberStatusLabel(member: TeamMemberResponse) {
 function getMemberStatusColor(status: string) {
   const normalized = status.trim().toLowerCase();
   if (normalized === "active" || normalized === "approved") return COLORS.success;
-  if (normalized === "suspended" || normalized === "rejected" || normalized === "inactive") return COLORS.error;
-  if (normalized === "pending" || normalized === "temporary" || normalized === "unverified") return COLORS.warning;
+  if (normalized === "withdrawn") return "#7a5c3a";
+  if (normalized === "pending" || normalized === "pending_approval") return COLORS.warning;
+  if (normalized === "disqualified" || normalized === "suspended" || normalized === "rejected" || normalized === "inactive") return COLORS.error;
   return COLORS.textSecondary;
 }
 
@@ -362,7 +341,6 @@ function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
     { label: "University", value: displayValue(detail.universityName) },
     { label: "User Type", value: displayValue(detail.userTypeName) },
     { label: "Account Status", value: displayValue(detail.accountStatusName) },
-    { label: "Participant Status", value: formatStatusLabel(detail.participantStatusName ?? detail.participantStatus) || "-" },
     { label: "Joined At", value: detail.joinedAt ? new Date(detail.joinedAt).toLocaleString() : "-" },
     { label: "Active", value: detail.active ? "Yes" : "No" },
   ];
@@ -440,6 +418,8 @@ export function TeamApiPanel({
   const [selectedMemberDetailUserId, setSelectedMemberDetailUserId] = useState<string | null>(null);
   const [removeMemberName, setRemoveMemberName] = useState("");
   const [removeMemberReason, setRemoveMemberReason] = useState("");
+  const [withdrawalReason, setWithdrawalReason] = useState("");
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
   const [newLeaderUserId, setNewLeaderUserId] = useState("");
   const [joinTeamName, setJoinTeamName] = useState("");
   const [joinCategoryId, setJoinCategoryId] = useState("");
@@ -536,10 +516,7 @@ export function TeamApiPanel({
       }
     }
 
-    const userProfileDetail = await userService.getUserById(member.userId)
-      .then(userProfile => memberDetailFromUser(member, userProfile))
-      .catch(() => null);
-    return userProfileDetail && hasDisplayableMemberDetail(userProfileDetail) ? userProfileDetail : null;
+    return null;
   };
 
   const loadTeamMemberDetails = async (team: TeamResponse, knownTeams = userTeams) => {
@@ -834,6 +811,8 @@ export function TeamApiPanel({
     setJoinRequestsLoaded(false);
     setRemoveMemberName("");
     setRemoveMemberReason("");
+    setWithdrawalReason("");
+    setWithdrawalDialogOpen(false);
     setNewLeaderUserId("");
     setSelectedMemberDetailUserId(null);
     setField("responseNote", "");
@@ -1359,6 +1338,30 @@ export function TeamApiPanel({
         setJoinRequestsLoaded(false);
       },
       "Approval request withdrawn. Your team is back to forming.",
+    );
+  };
+
+  const requestTeamWithdrawal = () => {
+    if (!selectedTeam || getTeamStatusInfoForTeam(selectedTeam).badge !== "active") return;
+    const reason = withdrawalReason.trim();
+    if (!reason) {
+      setMessage({ tone: "error", text: "Enter a withdrawal reason before withdrawing your team." });
+      return;
+    }
+    run(
+      "withdraw",
+      async () => {
+        await teamService.requestWithdrawal(selectedTeam.teamId, reason);
+        return teamService.getById(selectedTeam.teamId);
+      },
+      team => {
+        activateTeam(team);
+        setTeams(prev => [team, ...prev.filter(item => item.teamId !== team.teamId)]);
+        setWithdrawalDialogOpen(false);
+        setWithdrawalReason("");
+      },
+      "Team withdrawn. The organizer can now view the withdrawal reason.",
+      true,
     );
   };
 
@@ -1956,11 +1959,14 @@ export function TeamApiPanel({
         ? COLORS.success
       : teamStatus.badge === "rejected" || teamStatus.badge === "disqualified"
         ? COLORS.error
+      : teamStatus.badge === "withdrawn"
+        ? "#7a5c3a"
         : COLORS.textPrimary;
     const isTeamLoadMessage = message?.text.toLowerCase().includes("team loaded");
     const currentUserRole = isLeader ? "Leader" : "Member";
     const canEditRoster = teamStatus.badge === "forming";
     const canWithdrawApprovalRequest = isLeader && teamStatus.badge === "pending_approval";
+    const canRequestWithdrawal = isLeader && teamStatus.badge === "active";
     const teamEvent = events.find(event => event.eventId === selectedTeam.eventId);
     const teamEventUnavailableMessage = registrationUnavailableMessage(teamEvent);
     const teamEventRegistrationOpen = !teamEventUnavailableMessage;
@@ -2115,6 +2121,15 @@ export function TeamApiPanel({
     };
     const renderRegistrationExpiredModal = () => {
       if (!registrationDeadlinePassed || dismissedExpiredTeamId === selectedTeam.teamId) return null;
+      const isDisbandAction = isLeader && canEditRoster;
+      const actionLoading = isDisbandAction ? loading.disband : loading.remove;
+      const actionIcon = actionLoading
+        ? <Loader size={14} className="animate-spin" />
+        : isDisbandAction
+          ? <Trash2 size={14} />
+          : <LogOut size={14} />;
+      const actionLabel = isDisbandAction ? "Disband Team" : "Leave Team";
+      const loadingLabel = isDisbandAction ? "Disbanding..." : "Leaving...";
 
       return renderCenteredModal(
         "Registration Expired",
@@ -2142,7 +2157,7 @@ export function TeamApiPanel({
                   Registration deadline has passed
                 </div>
                 <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 6, lineHeight: 1.6 }}>
-                  This team can no longer request approval for {selectedEventName}. Please leave this team and join or create a team in another event that is still open for registration.
+                  This team can no longer request approval for {selectedEventName}. Please {isDisbandAction ? "disband this team" : "leave this team"} and join or create a team in another event that is still open for registration.
                 </div>
                 {teamEventUnavailableMessage && (
                   <div
@@ -2159,11 +2174,11 @@ export function TeamApiPanel({
             <Button
               variant="danger"
               size="md"
-              icon={loading.remove ? <Loader size={14} className="animate-spin" /> : <LogOut size={14} />}
-              disabled={loading.remove}
-              onClick={leaveTeam}
+              icon={actionIcon}
+              disabled={actionLoading}
+              onClick={isDisbandAction ? disbandTeam : leaveTeam}
             >
-              {loading.remove ? "Leaving..." : "Leave Team"}
+              {actionLoading ? loadingLabel : actionLabel}
             </Button>
           </div>
         </>,
@@ -2782,7 +2797,7 @@ export function TeamApiPanel({
           {renderRegistrationExpiredModal()}
         </Card>
 
-        {isLeader && (canEditRoster || canWithdrawApprovalRequest) && (
+        {isLeader && (canEditRoster || canWithdrawApprovalRequest || canRequestWithdrawal) && (
           <div className="flex justify-end gap-2">
             {canEditRoster && (
               <Button
@@ -2795,29 +2810,84 @@ export function TeamApiPanel({
                 {loading.disband ? "Disbanding..." : "Disband Team"}
               </Button>
             )}
-            {canWithdrawApprovalRequest ? (
+            {(canEditRoster || canWithdrawApprovalRequest) && (
+              canWithdrawApprovalRequest ? (
+                <Button
+                  variant="outline"
+                  size="md"
+                  icon={loading.withdraw ? <Loader size={14} className="animate-spin" /> : <Undo2 size={14} />}
+                  disabled={loading.withdraw}
+                  onClick={withdrawTeamApprovalRequest}
+                >
+                  {loading.withdraw ? "Withdrawing..." : "Withdraw Request"}
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="lg"
+                  style={{ minWidth: 180, justifyContent: "center" }}
+                  icon={loading.register ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
+                  disabled={!canSubmitForApproval || loading.register}
+                  onClick={submitTeamForApproval}
+                >
+                  {loading.register ? "Sending..." : "Request Approval"}
+                </Button>
+              )
+            )}
+            {canRequestWithdrawal && (
               <Button
-                variant="outline"
+                variant="danger"
                 size="md"
-                icon={loading.withdraw ? <Loader size={14} className="animate-spin" /> : <Undo2 size={14} />}
+                icon={loading.withdraw ? <Loader size={14} className="animate-spin" /> : <LogOut size={14} />}
                 disabled={loading.withdraw}
-                onClick={withdrawTeamApprovalRequest}
+                onClick={() => {
+                  setMessage(null);
+                  setWithdrawalDialogOpen(true);
+                }}
               >
-                {loading.withdraw ? "Withdrawing..." : "Withdraw Request"}
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                size="lg"
-                style={{ minWidth: 180, justifyContent: "center" }}
-                icon={loading.register ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
-                disabled={!canSubmitForApproval || loading.register}
-                onClick={submitTeamForApproval}
-              >
-                {loading.register ? "Sending..." : "Request Approval"}
+                {loading.withdraw ? "Withdrawing..." : "Withdraw Team"}
               </Button>
             )}
           </div>
+        )}
+
+        {withdrawalDialogOpen && renderCenteredModal(
+          "Withdraw Team",
+          () => {
+            if (!loading.withdraw) setWithdrawalDialogOpen(false);
+          },
+          <>
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, lineHeight: 1.7 }}>
+              Withdraw {selectedTeam.teamName} from this event. The organizer will see your reason, and this action is recorded immediately.
+            </div>
+            <textarea
+              value={withdrawalReason}
+              onChange={event => setWithdrawalReason(event.target.value)}
+              placeholder="Explain why your team cannot continue..."
+              rows={5}
+              className="w-full px-3 py-2.5 rounded-xl outline-none resize-none mt-4"
+              style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}`, color: COLORS.textPrimary }}
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={loading.withdraw}
+                onClick={() => setWithdrawalDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                icon={loading.withdraw ? <Loader size={13} className="animate-spin" /> : <LogOut size={13} />}
+                disabled={loading.withdraw || !withdrawalReason.trim()}
+                onClick={requestTeamWithdrawal}
+              >
+                {loading.withdraw ? "Withdrawing..." : "Withdraw Team"}
+              </Button>
+            </div>
+          </>,
         )}
 
         {confirmAction && (() => {
