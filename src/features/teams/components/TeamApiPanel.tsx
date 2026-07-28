@@ -341,7 +341,6 @@ function visibleMemberDetailRows(detail: TeamMemberDetailResponse) {
     { label: "University", value: displayValue(detail.universityName) },
     { label: "User Type", value: displayValue(detail.userTypeName) },
     { label: "Account Status", value: displayValue(detail.accountStatusName) },
-    { label: "Participant Status", value: formatStatusLabel(detail.participantStatusName ?? detail.participantStatus) || "-" },
     { label: "Joined At", value: detail.joinedAt ? new Date(detail.joinedAt).toLocaleString() : "-" },
     { label: "Active", value: detail.active ? "Yes" : "No" },
   ];

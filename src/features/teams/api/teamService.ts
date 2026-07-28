@@ -10,6 +10,28 @@ export interface TeamMemberResponse {
   participantStatusName?: string;
 }
 
+export interface TeamStatusReasonMetadata {
+  reason?: string;
+  note?: string;
+  actorUserId?: string;
+  withdrawnById?: string;
+  withdrawnByName?: string;
+  withdrawnByEmail?: string;
+  withdrawnAt?: string;
+  createdAt?: string;
+}
+
+export interface DisqualificationResponse {
+  disqualificationId: string;
+  teamId: string;
+  reason: string;
+  disqualifiedById: string;
+  disqualifiedByName?: string;
+  disqualifiedByEmail?: string;
+  disqualifiedAt: string;
+  reversed: boolean;
+}
+
 export interface TeamResponse {
   teamId: string;
   eventId: string;
@@ -31,6 +53,25 @@ export interface TeamResponse {
   membersInfoComplete?: boolean;
   canRequestApproval?: boolean;
   approvalIssues?: string[];
+  withdrawalReason?: string;
+  withdrawnReason?: string;
+  withdrawReason?: string;
+  withdrawalNote?: string;
+  withdrawnAt?: string;
+  withdrawnById?: string;
+  withdrawnByName?: string;
+  withdrawnByEmail?: string;
+  disqualificationReason?: string;
+  disqualifiedReason?: string;
+  disqualifyReason?: string;
+  disqualifiedAt?: string;
+  disqualifiedById?: string;
+  disqualifiedByName?: string;
+  disqualifiedByEmail?: string;
+  disqualification?: DisqualificationResponse;
+  latestDisqualification?: DisqualificationResponse;
+  withdrawal?: TeamStatusReasonMetadata;
+  latestWithdrawal?: TeamStatusReasonMetadata;
 }
 
 type RawTeamResponse = TeamResponse & {
@@ -203,6 +244,25 @@ function normalizeTeamResponse(response: RawTeamResponse | BackendEnvelope<RawTe
     membersInfoComplete: raw.membersInfoComplete,
     canRequestApproval: raw.canRequestApproval,
     approvalIssues: raw.approvalIssues ?? [],
+    withdrawalReason: raw.withdrawalReason,
+    withdrawnReason: raw.withdrawnReason,
+    withdrawReason: raw.withdrawReason,
+    withdrawalNote: raw.withdrawalNote,
+    withdrawnAt: raw.withdrawnAt,
+    withdrawnById: raw.withdrawnById,
+    withdrawnByName: raw.withdrawnByName,
+    withdrawnByEmail: raw.withdrawnByEmail,
+    disqualificationReason: raw.disqualificationReason,
+    disqualifiedReason: raw.disqualifiedReason,
+    disqualifyReason: raw.disqualifyReason,
+    disqualifiedAt: raw.disqualifiedAt,
+    disqualifiedById: raw.disqualifiedById,
+    disqualifiedByName: raw.disqualifiedByName,
+    disqualifiedByEmail: raw.disqualifiedByEmail,
+    disqualification: raw.disqualification,
+    latestDisqualification: raw.latestDisqualification,
+    withdrawal: raw.withdrawal,
+    latestWithdrawal: raw.latestWithdrawal,
   };
 }
 
@@ -338,15 +398,25 @@ export interface TeamEligibilityReviewResponse {
   approvalIssues?: string[];
   teamStatusName?: string;
   members: TeamEligibilityMemberResponse[];
-}
-
-export interface DisqualificationResponse {
-  disqualificationId: string;
-  teamId: string;
-  reason: string;
-  disqualifiedById: string;
-  disqualifiedAt: string;
-  reversed: boolean;
+  withdrawalReason?: string;
+  withdrawnReason?: string;
+  withdrawReason?: string;
+  withdrawalNote?: string;
+  withdrawnAt?: string;
+  withdrawnById?: string;
+  withdrawnByName?: string;
+  withdrawnByEmail?: string;
+  disqualificationReason?: string;
+  disqualifiedReason?: string;
+  disqualifyReason?: string;
+  disqualifiedAt?: string;
+  disqualifiedById?: string;
+  disqualifiedByName?: string;
+  disqualifiedByEmail?: string;
+  disqualification?: DisqualificationResponse;
+  latestDisqualification?: DisqualificationResponse;
+  withdrawal?: TeamStatusReasonMetadata;
+  latestWithdrawal?: TeamStatusReasonMetadata;
 }
 
 export interface EligibilityDecisionResponse {
