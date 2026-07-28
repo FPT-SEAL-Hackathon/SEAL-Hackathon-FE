@@ -17,9 +17,22 @@ export function useEventActions() {
             setLoading(false);
         }
     };
+
+    const cancelEvent = async (
+        eventId: string
+    ): Promise<EventResponse> => {
+        setLoading(true);
+
+        try {
+        return await eventService.cancelEvent(eventId);
+        } finally {
+        setLoading(false);
+        }
+    };
     
     return {
         loading,
         publishEvent,
+        cancelEvent,
     };
 }
