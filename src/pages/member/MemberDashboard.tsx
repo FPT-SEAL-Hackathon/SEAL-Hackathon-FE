@@ -31,17 +31,22 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService, type RoundRankingDTO } from "@/features/rankings/api/rankingService";
-import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
+import {
+  getSubmissionStatusLabel,
+  isSubmissionStatus,
+  submissionService,
+  type SubmissionHistoryResponse,
+  type SubmissionResponse,
+} from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
-import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
+import { eventParticipantService, type EventParticipantResponse } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
 import { MemberMyResultsView } from "./components/MemberMyResultsView";
-import { ScoreDetailsModal } from "@/features/events/components/judging/ScoreDetailsModal";
 
 
 
@@ -51,6 +56,7 @@ const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
 const ACTIVE_SUBMISSION_ROUND_STORAGE_KEY = "seal_active_submission_round";
 const EVENTS_RELOAD_MIN_INTERVAL_MS = 15_000;
+const TEAM_WITHDRAWN_SUBMISSION_MESSAGE = "This team has been withdrawn and can no longer submit work.";
 
 type ActiveTeamContext = {
   teamId: string;
@@ -99,6 +105,11 @@ function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById
 
 function isActiveTeamContext(team?: ActiveTeamContext | null) {
   return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "active";
+}
+
+function isWithdrawnSubmissionContext(team?: ActiveTeamContext | null, participantStatus?: string | null) {
+  return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "withdrawn"
+    || participantStatus?.trim().toUpperCase() === "WITHDRAWN";
 }
 
 function removeStoredActiveTeam(teamId?: string) {
@@ -197,23 +208,21 @@ const participantStatusLabels: Record<EventCardParticipationStatus, string> = {
   ACTIVE: "Approved",
   REJECTED: "Rejected",
   SUSPENDED: "Suspended",
-  TEMPORARY: "Temporary",
-  UNVERIFIED: "Unverified",
+  WITHDRAWN: "Withdrawn",
 };
 
 const restrictedParticipationMessage: Record<Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">, string> = {
   PENDING: "Waiting for organizer approval.",
   REJECTED: "Registration rejected.",
   SUSPENDED: "Your participation in this event is suspended.",
-  TEMPORARY: "Your participation is temporary and awaiting organizer review.",
-  UNVERIFIED: "Your participation is unverified. Please complete the required verification.",
+  WITHDRAWN: "Your team has withdrawn from this event.",
 };
 
 function normalizeParticipationStatus(status?: string | null): EventCardParticipationStatus {
   const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
   if (!value || value === "NOT_REGISTERED") return "NOT_REGISTERED";
   if (value === "PENDING_APPROVAL") return "PENDING";
-  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "TEMPORARY" || value === "UNVERIFIED") {
+  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "WITHDRAWN") {
     return value as EventCardParticipationStatus;
   }
   return "NOT_REGISTERED";
@@ -647,11 +656,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
+  const [submissionHistoryError, setSubmissionHistoryError] = useState("");
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [handlingRequestId, setHandlingRequestId] = useState<string | null>(null);
-  const [viewResultsTarget, setViewResultsTarget] = useState<{ submissionId: string, roundId: string } | null>(null);
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -919,22 +928,51 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const loadSubmissionHistory = useCallback(async () => {
     if (currentPage !== "submissions" || !submissionForm.teamId) {
       setSubmissionHistory([]);
+      setSubmissionHistoryError("");
       return;
     }
 
     setSubmissionHistoryLoading(true);
+    setSubmissionHistoryError("");
     try {
-      const historyResults = allSubmissionRounds.length > 0
-        ? await Promise.all(
-          allSubmissionRounds.map(round =>
-            submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId)
-              .catch(() => []),
-          ),
-        )
-        : [];
+      const roundsToQuery = allSubmissionRounds.length > 0
+        ? allSubmissionRounds
+        : submissionForm.roundId
+          ? [{ roundId: submissionForm.roundId } as Round]
+          : [];
+      const historyResults = await Promise.all(
+        roundsToQuery.map(round =>
+          submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId),
+        ),
+      );
+      const currentSubmissionResults = await Promise.allSettled(
+        roundsToQuery.map(round =>
+          submissionService.getByTeamAndRound(submissionForm.teamId, round.roundId),
+        ),
+      );
+      const currentSubmissionById = new Map<string, SubmissionResponse>();
+      currentSubmissionResults.forEach(result => {
+        if (result.status === "fulfilled" && result.value?.submissionId) {
+          currentSubmissionById.set(result.value.submissionId, result.value);
+        }
+      });
 
       setSubmissionHistory(
         historyResults.flat()
+          .map(history => {
+            const currentSubmission = currentSubmissionById.get(history.submissionId);
+            return currentSubmission
+              ? {
+                  ...history,
+                  submissionStatusId: currentSubmission.submissionStatusId,
+                  submissionStatusName: currentSubmission.submissionStatusName,
+                  activeDisqualificationId: currentSubmission.activeDisqualificationId,
+                  activeDisqualificationReason: currentSubmission.activeDisqualificationReason,
+                  activeDisqualifiedById: currentSubmission.activeDisqualifiedById,
+                  activeDisqualifiedAt: currentSubmission.activeDisqualifiedAt,
+                }
+              : history;
+          })
           .sort((a, b) => {
             const aVersion = a.versionNumber ?? 0;
             const bVersion = b.versionNumber ?? 0;
@@ -944,6 +982,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             return bTime - aTime;
           }),
       );
+    } catch (error) {
+      setSubmissionHistory([]);
+      setSubmissionHistoryError(parseApiError(error).message || "Could not load submission history.");
     } finally {
       setSubmissionHistoryLoading(false);
     }
@@ -1072,12 +1113,15 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     submissionService.getHistoryByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
       .then(history => {
         if (cancelled) return;
+        setSubmissionHistoryError("");
         setSubmissionHistory(prev => [
           ...history,
           ...prev.filter(item => item.roundId !== submissionForm.roundId),
         ]);
       })
-      .catch(() => {})
+      .catch(error => {
+        if (!cancelled) setSubmissionHistoryError(parseApiError(error).message || "Could not load submission history.");
+      })
       .finally(() => {
         if (!cancelled) setSubmissionLookupLoading(false);
       });
@@ -1102,6 +1146,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   };
 
   const handleSubmitWork = async () => {
+    if (isWithdrawnSubmissionContext(activeTeamContext, submissionParticipation?.participantStatus)) {
+      setSubmissionStatus(TEAM_WITHDRAWN_SUBMISSION_MESSAGE);
+      return;
+    }
     if (activeTeamContext?.eventId && !isApprovedParticipationStatus(submissionParticipation?.participantStatus)) {
       setSubmissionStatus("You must be approved by the organizer before accessing competition activities.");
       return;
@@ -1217,6 +1265,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   };
 
   const handlePrepareSubmissionUpdate = (submission: SubmissionHistoryResponse) => {
+    if (isSubmissionStatus(submission, "DISQUALIFIED")) {
+      setSubmissionStatus("Disqualified submissions cannot be updated.");
+      return;
+    }
     const round = allSubmissionRounds.find(item => item.roundId === submission.roundId);
     if (!round || !isOfficialSubmissionRound(round)) {
       setSubmissionStatus("Only official competition rounds can be updated from Submission Center.");
@@ -1433,7 +1485,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           </Button>
         </div>
 
-        {submissionHistoryLoading ? (
+        {submissionHistoryError ? (
+          <div className="rounded-lg px-4 py-5" style={{ border: `1px dashed ${COLORS.error}`, color: COLORS.error, fontSize: 14 }}>
+            {submissionHistoryError}
+          </div>
+        ) : submissionHistoryLoading ? (
           <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Loading submission history...</div>
         ) : visibleSubmissionHistory.length === 0 ? (
           <div className="rounded-lg px-4 py-5" style={{ border: `1px dashed ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14 }}>
@@ -1445,8 +1501,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           <div className="space-y-3">
             {visibleSubmissionHistory.map(submission => {
               const round = roundById.get(submission.roundId);
+              const submissionStatusLabel = getSubmissionStatusLabel(submission);
               const canUpdateSubmission = isSubmissionLeader
                 && getSubmissionRoundState(round).canSubmit
+                && !isSubmissionStatus(submission, "DISQUALIFIED")
                 && (submission.roundId !== submissionForm.roundId || selectedSubmissionRoundCanSubmit);
               const links = [
                 { label: "Repo", url: submission.repositoryUrl, icon: <Github size={13} /> },
@@ -1478,19 +1536,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                         <span className="inline-flex items-center gap-1">
                           <Calendar size={13} /> Deadline: {formatSubmissionDate(round?.submissionDeadline)}
                         </span>
-                        {submission.submissionStatusName && <StatusBadge status={submission.submissionStatusName.toLowerCase()} />}
+                        <StatusBadge status={submissionStatusLabel.toLowerCase()} />
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        icon={<Eye size={13} />}
-                        onClick={() => setViewResultsTarget({ submissionId: submission.submissionId, roundId: submission.roundId })}
-                      >
-                        View Results
-                      </Button>
                       <Button
                         variant={canUpdateSubmission ? "outline" : "ghost"}
                         size="sm"
@@ -2800,6 +2850,37 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       );
     }
 
+    if (isWithdrawnSubmissionContext(activeTeamContext, submissionParticipation?.participantStatus)) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Team withdrawn" />
+          {renderSubmissionTeamSelector()}
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.error}14`, color: COLORS.error }}
+                >
+                  <AlertCircle size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Team withdrawn</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    {TEAM_WITHDRAWN_SUBMISSION_MESSAGE}
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" size="md" icon={<Users size={14} />} onClick={() => onNavigate("team")}>
+                Back to My Team
+              </Button>
+            </div>
+          </Card>
+          {renderSubmissionHistory()}
+        </>
+      );
+    }
+
     if (activeTeamContext.eventId && !isApprovedParticipationStatus(submissionParticipation?.participantStatus)) {
       return (
         <>
@@ -2937,14 +3018,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </div>
         )}
         {renderSubmissionHistory()}
-        {viewResultsTarget && (
-          <ScoreDetailsModal
-            submissionId={viewResultsTarget.submissionId}
-            roundId={viewResultsTarget.roundId}
-            studentMode={true}
-            onClose={() => setViewResultsTarget(null)}
-          />
-        )}
       </>
     );
   };

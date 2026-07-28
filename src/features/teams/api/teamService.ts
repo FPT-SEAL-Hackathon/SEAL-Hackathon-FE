@@ -10,6 +10,28 @@ export interface TeamMemberResponse {
   participantStatusName?: string;
 }
 
+export interface TeamStatusReasonMetadata {
+  reason?: string;
+  note?: string;
+  actorUserId?: string;
+  withdrawnById?: string;
+  withdrawnByName?: string;
+  withdrawnByEmail?: string;
+  withdrawnAt?: string;
+  createdAt?: string;
+}
+
+export interface DisqualificationResponse {
+  disqualificationId: string;
+  teamId: string;
+  reason: string;
+  disqualifiedById: string;
+  disqualifiedByName?: string;
+  disqualifiedByEmail?: string;
+  disqualifiedAt: string;
+  reversed: boolean;
+}
+
 export interface TeamResponse {
   teamId: string;
   eventId: string;
@@ -31,6 +53,25 @@ export interface TeamResponse {
   membersInfoComplete?: boolean;
   canRequestApproval?: boolean;
   approvalIssues?: string[];
+  withdrawalReason?: string;
+  withdrawnReason?: string;
+  withdrawReason?: string;
+  withdrawalNote?: string;
+  withdrawnAt?: string;
+  withdrawnById?: string;
+  withdrawnByName?: string;
+  withdrawnByEmail?: string;
+  disqualificationReason?: string;
+  disqualifiedReason?: string;
+  disqualifyReason?: string;
+  disqualifiedAt?: string;
+  disqualifiedById?: string;
+  disqualifiedByName?: string;
+  disqualifiedByEmail?: string;
+  disqualification?: DisqualificationResponse;
+  latestDisqualification?: DisqualificationResponse;
+  withdrawal?: TeamStatusReasonMetadata;
+  latestWithdrawal?: TeamStatusReasonMetadata;
 }
 
 type RawTeamResponse = TeamResponse & {
@@ -150,6 +191,12 @@ function unwrapTeamResponse(response: RawTeamResponse | BackendEnvelope<RawTeamR
   return response as RawTeamResponse;
 }
 
+function unwrapResponse<T>(response: T | BackendEnvelope<T>): T {
+  if (typeof response === "object" && response !== null && "data" in response && response.data) return response.data;
+  if (typeof response === "object" && response !== null && "content" in response && response.content) return response.content;
+  return response as T;
+}
+
 function unwrapArray<T>(response: T[] | BackendEnvelope<T[]>): T[] {
   if (Array.isArray(response)) return response;
   if (Array.isArray(response.data)) return response.data;
@@ -197,6 +244,25 @@ function normalizeTeamResponse(response: RawTeamResponse | BackendEnvelope<RawTe
     membersInfoComplete: raw.membersInfoComplete,
     canRequestApproval: raw.canRequestApproval,
     approvalIssues: raw.approvalIssues ?? [],
+    withdrawalReason: raw.withdrawalReason,
+    withdrawnReason: raw.withdrawnReason,
+    withdrawReason: raw.withdrawReason,
+    withdrawalNote: raw.withdrawalNote,
+    withdrawnAt: raw.withdrawnAt,
+    withdrawnById: raw.withdrawnById,
+    withdrawnByName: raw.withdrawnByName,
+    withdrawnByEmail: raw.withdrawnByEmail,
+    disqualificationReason: raw.disqualificationReason,
+    disqualifiedReason: raw.disqualifiedReason,
+    disqualifyReason: raw.disqualifyReason,
+    disqualifiedAt: raw.disqualifiedAt,
+    disqualifiedById: raw.disqualifiedById,
+    disqualifiedByName: raw.disqualifiedByName,
+    disqualifiedByEmail: raw.disqualifiedByEmail,
+    disqualification: raw.disqualification,
+    latestDisqualification: raw.latestDisqualification,
+    withdrawal: raw.withdrawal,
+    latestWithdrawal: raw.latestWithdrawal,
   };
 }
 
@@ -279,6 +345,22 @@ export interface JoinTeamRequestResponse {
   responseNote: string;
 }
 
+export interface TeamWithdrawalRequestResponse {
+  requestId: string;
+  teamId: string;
+  teamName?: string;
+  eventId?: string;
+  categoryId?: string;
+  reason: string;
+  requestStatus: string;
+  requestedAt: string;
+  requestedById?: string;
+  requestedByName?: string;
+  respondedAt?: string | null;
+  respondedById?: string | null;
+  responseNote?: string | null;
+}
+
 export interface TeamEligibilityMemberResponse {
   teamMemberId: string;
   userId: string;
@@ -316,15 +398,25 @@ export interface TeamEligibilityReviewResponse {
   approvalIssues?: string[];
   teamStatusName?: string;
   members: TeamEligibilityMemberResponse[];
-}
-
-export interface DisqualificationResponse {
-  disqualificationId: string;
-  teamId: string;
-  reason: string;
-  disqualifiedById: string;
-  disqualifiedAt: string;
-  reversed: boolean;
+  withdrawalReason?: string;
+  withdrawnReason?: string;
+  withdrawReason?: string;
+  withdrawalNote?: string;
+  withdrawnAt?: string;
+  withdrawnById?: string;
+  withdrawnByName?: string;
+  withdrawnByEmail?: string;
+  disqualificationReason?: string;
+  disqualifiedReason?: string;
+  disqualifyReason?: string;
+  disqualifiedAt?: string;
+  disqualifiedById?: string;
+  disqualifiedByName?: string;
+  disqualifiedByEmail?: string;
+  disqualification?: DisqualificationResponse;
+  latestDisqualification?: DisqualificationResponse;
+  withdrawal?: TeamStatusReasonMetadata;
+  latestWithdrawal?: TeamStatusReasonMetadata;
 }
 
 export interface EligibilityDecisionResponse {
@@ -380,6 +472,9 @@ export const teamService = {
     api.post<unknown[]>(`/api/v1/teams/${teamId}/register-event`, {}),
   withdrawEvent: (teamId: string) =>
     api.delete<{ success: boolean; message: string }>(`/api/v1/teams/${teamId}/register-event`),
+  requestWithdrawal: (teamId: string, reason: string) =>
+    api.post<TeamWithdrawalRequestResponse | BackendEnvelope<TeamWithdrawalRequestResponse>>(`/api/v1/teams/${teamId}/withdrawal-requests`, { reason })
+      .then(unwrapResponse),
 
   // Admin
   reviewEligibility: (eventId: string) =>
@@ -389,4 +484,7 @@ export const teamService = {
     api.post<EligibilityDecisionResponse>(`/api/v1/admin/teams/${teamId}/eligibility-decision`, { approved, note }),
   disqualify: (teamId: string, reason: string) =>
     api.post<DisqualificationResponse>(`/api/v1/admin/teams/${teamId}/disqualify`, { reason }),
+  getEventWithdrawalRequests: (eventId: string) =>
+    api.get<TeamWithdrawalRequestResponse[] | BackendEnvelope<TeamWithdrawalRequestResponse[]>>(`/api/v1/admin/events/${eventId}/team-withdrawal-requests`)
+      .then(unwrapArray),
 };

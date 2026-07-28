@@ -5,16 +5,14 @@ export type EventParticipantStatus =
   | "ACTIVE"
   | "REJECTED"
   | "SUSPENDED"
-  | "TEMPORARY"
-  | "UNVERIFIED";
+  | "WITHDRAWN";
 
 export const EVENT_PARTICIPANT_STATUSES: EventParticipantStatus[] = [
   "PENDING",
   "ACTIVE",
   "REJECTED",
   "SUSPENDED",
-  "TEMPORARY",
-  "UNVERIFIED",
+  "WITHDRAWN",
 ];
 
 export interface EventParticipantResponse {
