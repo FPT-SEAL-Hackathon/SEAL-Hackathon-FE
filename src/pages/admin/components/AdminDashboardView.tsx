@@ -9,6 +9,7 @@ import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
   ProgressBar, Button, DataTable, TimelineItem
 } from "@/components/shared/UIComponents";
+import { isSubmissionStatus } from "@/features/submissions/api/submissionService";
 
 interface AdminViewProps {
   context: any;
@@ -227,10 +228,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
               )}
               {dashboardRounds.map((r: any) => {
                 const roundSubmissions = adminSubmissions.filter((submission: any) => submission.roundId === r.roundId);
-                const scored = roundSubmissions.filter((submission: any) => {
-                  const status = String(submission.submissionStatusName ?? "").toUpperCase();
-                  return status.includes("SCORED") || status.includes("REVIEWED");
-                }).length;
+                const scored = roundSubmissions.filter((submission: any) => isSubmissionStatus(submission, "SCORED")).length;
                 const status = r.roundStatusName ?? r.status ?? "OPEN";
                 return (
                 <div key={r.roundId} className="mb-4 last:mb-0">

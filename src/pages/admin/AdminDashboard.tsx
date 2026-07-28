@@ -11,7 +11,7 @@ import { awardService, type AwardResponse } from "@/features/awards/api/awardSer
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { researchService } from "@/features/research/api/researchService";
 import { settingsService } from "@/features/settings/api/settingsService";
-import { submissionService, type SubmissionResponse } from "@/features/submissions/api/submissionService";
+import { submissionService, SUBMISSION_STATUS_IDS, type SubmissionResponse } from "@/features/submissions/api/submissionService";
 import { userService, type UserManagementUser } from "@/features/users/api/userService";
 import { getAccessToken } from "@/lib/api/apiClient";
 import { EventModal } from "@/features/events/components/EventModal";
@@ -440,7 +440,11 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       await submissionService.disqualify(submissionDisqualifyTarget.submissionId, submissionDisqualifyReason.trim());
       setAdminSubmissions(prev => prev.map(submission =>
         submission.submissionId === submissionDisqualifyTarget.submissionId
-          ? { ...submission, submissionStatusName: "Disqualified" }
+          ? {
+              ...submission,
+              submissionStatusId: SUBMISSION_STATUS_IDS.DISQUALIFIED,
+              submissionStatusName: "Disqualified",
+            }
           : submission
       ));
       setSubmissionActionMessage("Submission disqualified successfully.");

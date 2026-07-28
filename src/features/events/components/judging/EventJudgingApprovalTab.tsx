@@ -6,6 +6,10 @@ import { Card, Button, StatusBadge, COLORS, DataTable } from "@/components/share
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
 import { rankingService } from "@/features/rankings/api/rankingService";
+import {
+  getSubmissionStatusLabel,
+  SUBMISSION_STATUS_IDS,
+} from "@/features/submissions/api/submissionService";
 
 export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
   const { categories } = useCategoryContext();
@@ -109,7 +113,12 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     try {
       await api.post(`/api/v1/admin/submissions/${submissionId}/approve`, { approve: !currentStatus });
       setSubmissions(prev => prev.map(s => 
-        s.submissionId === submissionId ? { ...s, isScoreApproved: !currentStatus } : s
+        s.submissionId === submissionId ? {
+          ...s,
+          isScoreApproved: !currentStatus,
+          submissionStatusId: !currentStatus ? SUBMISSION_STATUS_IDS.SCORED : SUBMISSION_STATUS_IDS.IN_PROGRESS,
+          submissionStatusName: !currentStatus ? "Scored" : "In Progress",
+        } : s
       ));
     } catch (e) {
       console.error(e);
@@ -228,7 +237,7 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
           <DataTable
             columns={[
               { key: "team", label: "TEAM", render: (_, row) => <span className="font-medium text-sm">{row.teamName}</span> },
-              { key: "status", label: "STATUS", render: (_, row) => <StatusBadge status={row.submissionStatusName?.toLowerCase()} /> },
+              { key: "status", label: "STATUS", render: (_, row) => <StatusBadge status={getSubmissionStatusLabel(row)} /> },
               ...judgesList.map(judge => ({
                 key: judge,
                 label: judge.split(' ').pop() || judge,
