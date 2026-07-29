@@ -35,7 +35,9 @@ export interface DisqualificationResponse {
 export interface TeamResponse {
   teamId: string;
   eventId: string;
+  eventName?: string;
   categoryId: string;
+  categoryName?: string;
   teamName: string;
   rawTeamName?: string;
   teamStatusId: string;
