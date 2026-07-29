@@ -31,7 +31,7 @@ export function MyMentor({ onNavigate, isLeader, teamId }: { onNavigate?: (p: st
         setMentors(res);
       }
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load mentors.");
+      setError(e?.message || e?.response?.data?.message || "Failed to load mentors.");
     }
     setLoading(false);
   };
@@ -56,7 +56,7 @@ export function MyMentor({ onNavigate, isLeader, teamId }: { onNavigate?: (p: st
       setCreateForm({ title: "", description: "", priority: "MEDIUM" });
       if (onNavigate) onNavigate("consultations");
     } catch (e: any) {
-      alert(e?.response?.data?.message || "Failed to create request");
+      alert(e?.message || e?.response?.data?.message || "Failed to create request");
     }
   };
 

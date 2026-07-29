@@ -22,6 +22,7 @@ import {
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
 import { updateProfile } from "@/features/auth/api/authService";
+import { isOptionalHttpUrl } from "@/features/users/utils/profileValidation";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { roundService } from "@/features/events/service/roundService";
@@ -31,17 +32,22 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { rankingService, type RoundRankingDTO } from "@/features/rankings/api/rankingService";
-import { submissionService, type SubmissionHistoryResponse } from "@/features/submissions/api/submissionService";
+import {
+  getSubmissionStatusLabel,
+  isSubmissionStatus,
+  submissionService,
+  type SubmissionHistoryResponse,
+  type SubmissionResponse,
+} from "@/features/submissions/api/submissionService";
 import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlErrors } from "@/features/submissions/utils/urlValidation";
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
 import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
-import { eventParticipantService, type EventParticipantResponse, type EventParticipantStatus } from "@/features/eventParticipants/api/eventParticipantService";
+import { eventParticipantService, type EventParticipantResponse } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
 import { MemberMyResultsView } from "./components/MemberMyResultsView";
-import { ScoreDetailsModal } from "@/features/events/components/judging/ScoreDetailsModal";
 
 
 
@@ -51,6 +57,7 @@ const avatarColors = ["#4F46E5", "#06B6D4", "#8B5CF6", "#22C55E", "#F59E0B"];
 const ACTIVE_TEAM_STORAGE_KEY = "seal_active_team";
 const ACTIVE_SUBMISSION_ROUND_STORAGE_KEY = "seal_active_submission_round";
 const EVENTS_RELOAD_MIN_INTERVAL_MS = 15_000;
+const TEAM_WITHDRAWN_SUBMISSION_MESSAGE = "This team has been withdrawn and can no longer submit work.";
 
 type ActiveTeamContext = {
   teamId: string;
@@ -99,6 +106,11 @@ function teamToActiveContext(team: Awaited<ReturnType<typeof teamService.getById
 
 function isActiveTeamContext(team?: ActiveTeamContext | null) {
   return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "active";
+}
+
+function isWithdrawnSubmissionContext(team?: ActiveTeamContext | null, participantStatus?: string | null) {
+  return getTeamStatusInfo(team?.teamStatusId, team?.teamStatusName).badge === "withdrawn"
+    || participantStatus?.trim().toUpperCase() === "WITHDRAWN";
 }
 
 function removeStoredActiveTeam(teamId?: string) {
@@ -197,23 +209,21 @@ const participantStatusLabels: Record<EventCardParticipationStatus, string> = {
   ACTIVE: "Approved",
   REJECTED: "Rejected",
   SUSPENDED: "Suspended",
-  TEMPORARY: "Temporary",
-  UNVERIFIED: "Unverified",
+  WITHDRAWN: "Withdrawn",
 };
 
 const restrictedParticipationMessage: Record<Exclude<EventCardParticipationStatus, "ACTIVE" | "NOT_REGISTERED">, string> = {
   PENDING: "Waiting for organizer approval.",
   REJECTED: "Registration rejected.",
   SUSPENDED: "Your participation in this event is suspended.",
-  TEMPORARY: "Your participation is temporary and awaiting organizer review.",
-  UNVERIFIED: "Your participation is unverified. Please complete the required verification.",
+  WITHDRAWN: "Your team has withdrawn from this event.",
 };
 
 function normalizeParticipationStatus(status?: string | null): EventCardParticipationStatus {
   const value = String(status ?? "").trim().replace(/[-\s]+/g, "_").toUpperCase();
   if (!value || value === "NOT_REGISTERED") return "NOT_REGISTERED";
   if (value === "PENDING_APPROVAL") return "PENDING";
-  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "TEMPORARY" || value === "UNVERIFIED") {
+  if (value === "PENDING" || value === "ACTIVE" || value === "REJECTED" || value === "SUSPENDED" || value === "WITHDRAWN") {
     return value as EventCardParticipationStatus;
   }
   return "NOT_REGISTERED";
@@ -230,7 +240,9 @@ function mapEvent(event: EventResponse): MemberEvent {
     registrationStart: event.registrationStart,
     registrationEnd: event.registrationEnd,
     location: event.location,
-    eventStatus: typeof event.eventStatus === "object" ? event.eventStatus.eventStatusName : event.eventStatusName,
+    eventStatus: typeof event.eventStatus === "object"
+      ? (event.eventStatus?.eventStatusName || event.eventStatusName || "")
+      : (event.eventStatusName || event.eventStatus || ""),
     participants: "N/A",
     tracks: "N/A",
     prizePool: "N/A",
@@ -366,6 +378,10 @@ function isOfficialSubmissionRound(round: Round) {
   return !round.isCalibrationRound;
 }
 
+function isNotFoundApiError(error: unknown) {
+  return parseApiError(error).status === 404;
+}
+
 function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadline, "teamId"> {
   const officialRounds = rounds
     .filter(round => isOfficialSubmissionRound(round) && round.submissionDeadline)
@@ -471,7 +487,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             .map(participation => [participation.eventId, participation]),
         );
         setParticipations(participationByEvent);
-        setApiEvents(data.map(event => mergeEventParticipation(mapEvent(event), participationByEvent[event.eventId])));
+
+        const eventsByEventId = new Map<string, MemberEvent>();
+        data.forEach(rawEvent => {
+          const mapped = mapEvent(rawEvent);
+          if (mapped.eventId) {
+            eventsByEventId.set(mapped.eventId, mergeEventParticipation(mapped, participationByEvent[mapped.eventId]));
+          }
+        });
+
+        myParticipations.forEach(part => {
+          if (part.eventId && !eventsByEventId.has(part.eventId)) {
+            const syntheticEvent: MemberEvent = {
+              eventId: part.eventId,
+              eventName: part.eventName || "Joined Event",
+              description: "",
+              eventStartDate: "",
+              eventEndDate: "",
+              registrationStart: "",
+              registrationEnd: "",
+              location: "",
+              eventStatus: part.eventStatus || "REGISTRATION_CLOSED",
+              participants: "N/A",
+              tracks: "N/A",
+              prizePool: "N/A",
+              participantStatus: normalizeParticipationStatus(part.participantStatus),
+              bannerImageUrl: "",
+              eventParticipantId: part.eventParticipantId,
+              rejectedReason: part.rejectedReason,
+              appliedAt: part.appliedAt,
+              approvedAt: part.approvedAt,
+            };
+            eventsByEventId.set(part.eventId, syntheticEvent);
+          }
+        });
+
+        const mergedEvents = Array.from(eventsByEventId.values());
+        setApiEvents(mergedEvents);
         if (myParticipations.length > 0 || !hasToken) setEventsError("");
       })
       .catch(error => {
@@ -550,14 +602,33 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     email: user?.email ?? "",
     phone: user?.phone ?? "",
     github: user?.github ?? "", portfolio: user?.portfolio ?? "",
+    universityName: (user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT") ? "FPT University" : (user?.universityName ?? ""),
     bio: user?.bio ?? "", major: "",
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileFieldErrors, setProfileFieldErrors] = useState<{ github?: string; portfolio?: string }>({});
+
   const handleSaveProfile = async () => {
-    setProfileSaving(true);
     setProfileError(null);
+    setProfileFieldErrors({});
+
+    const fieldErrs: { github?: string; portfolio?: string } = {};
+    if (profileForm.github.trim() && !isOptionalHttpUrl(profileForm.github.trim())) {
+      fieldErrs.github = "URL GitHub phải bắt đầu bằng http:// hoặc https://";
+    }
+    if (profileForm.portfolio.trim() && !isOptionalHttpUrl(profileForm.portfolio.trim())) {
+      fieldErrs.portfolio = "URL Portfolio phải bắt đầu bằng http:// hoặc https://";
+    }
+
+    if (Object.keys(fieldErrs).length > 0) {
+      setProfileFieldErrors(fieldErrs);
+      toast.error("Vui lòng kiểm tra lại định dạng URL GitHub / Portfolio");
+      return;
+    }
+
+    setProfileSaving(true);
     try {
       const isFpt = user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT";
       const isExternal = user?.role === "EXTERNAL_STUDENT" || user?.role === "ROLE_EXTERNAL_STUDENT";
@@ -565,9 +636,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       const updatedUser = await updateProfile({
         fullName: profileForm.fullName.trim(),
         phone: profileForm.phone.trim() || undefined,
-        fptStudentCode: isFpt ? profileForm.studentId.trim() || undefined : undefined,
-        externalStudentCode: isExternal ? profileForm.studentId.trim() || undefined : undefined,
-        universityName: isExternal ? user?.universityName : undefined,
+        fptStudentCode: isFpt ? (user?.fptStudentCode || studentCode || profileForm.studentId.trim()) || undefined : undefined,
+        externalStudentCode: isExternal ? (user?.externalStudentCode || studentCode || profileForm.studentId.trim()) || undefined : undefined,
+        universityName: isFpt ? "FPT University" : (isExternal ? profileForm.universityName.trim() || undefined : user?.universityName),
         bio: profileForm.bio.trim() || undefined,
         github: profileForm.github.trim() || undefined,
         portfolio: profileForm.portfolio.trim() || undefined,
@@ -647,11 +718,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
+  const [submissionHistoryError, setSubmissionHistoryError] = useState("");
   const [problemDownloadLoading, setProblemDownloadLoading] = useState<"csv" | "zip" | null>(null);
   const [pendingRequests, setPendingRequests] = useState<JoinTeamRequestResponse[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [handlingRequestId, setHandlingRequestId] = useState<string | null>(null);
-  const [viewResultsTarget, setViewResultsTarget] = useState<{ submissionId: string, roundId: string } | null>(null);
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
@@ -663,7 +734,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
   useEffect(() => {
-    if (!user?.userId || apiEvents.length === 0) {
+    if (!user?.userId) {
       setSubmissionTeams([]);
       setDashboardTeams([]);
       return;
@@ -919,22 +990,57 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const loadSubmissionHistory = useCallback(async () => {
     if (currentPage !== "submissions" || !submissionForm.teamId) {
       setSubmissionHistory([]);
+      setSubmissionHistoryError("");
       return;
     }
 
     setSubmissionHistoryLoading(true);
+    setSubmissionHistoryError("");
     try {
-      const historyResults = allSubmissionRounds.length > 0
-        ? await Promise.all(
-          allSubmissionRounds.map(round =>
-            submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId)
-              .catch(() => []),
-          ),
-        )
-        : [];
+      const roundsToQuery = allSubmissionRounds.length > 0
+        ? allSubmissionRounds
+        : submissionForm.roundId
+          ? [{ roundId: submissionForm.roundId } as Round]
+          : [];
+      const historyResults = await Promise.all(
+        roundsToQuery.map(round =>
+          submissionService.getHistoryByTeamAndRound(submissionForm.teamId, round.roundId)
+            .catch(error => {
+              if (isNotFoundApiError(error)) return [] as SubmissionHistoryResponse[];
+              throw error;
+            }),
+        ),
+      );
+      const historyByRound = historyResults.flat();
+      const submittedRoundIds = [...new Set(historyByRound.map(history => history.roundId).filter(Boolean))];
+      const currentSubmissionResults = await Promise.allSettled(
+        submittedRoundIds.map(roundId =>
+          submissionService.getByTeamAndRound(submissionForm.teamId, roundId),
+        ),
+      );
+      const currentSubmissionById = new Map<string, SubmissionResponse>();
+      currentSubmissionResults.forEach(result => {
+        if (result.status === "fulfilled" && result.value?.submissionId) {
+          currentSubmissionById.set(result.value.submissionId, result.value);
+        }
+      });
 
       setSubmissionHistory(
-        historyResults.flat()
+        historyByRound
+          .map(history => {
+            const currentSubmission = currentSubmissionById.get(history.submissionId);
+            return currentSubmission
+              ? {
+                  ...history,
+                  submissionStatusId: currentSubmission.submissionStatusId,
+                  submissionStatusName: currentSubmission.submissionStatusName,
+                  activeDisqualificationId: currentSubmission.activeDisqualificationId,
+                  activeDisqualificationReason: currentSubmission.activeDisqualificationReason,
+                  activeDisqualifiedById: currentSubmission.activeDisqualifiedById,
+                  activeDisqualifiedAt: currentSubmission.activeDisqualifiedAt,
+                }
+              : history;
+          })
           .sort((a, b) => {
             const aVersion = a.versionNumber ?? 0;
             const bVersion = b.versionNumber ?? 0;
@@ -944,6 +1050,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             return bTime - aTime;
           }),
       );
+    } catch (error) {
+      setSubmissionHistory([]);
+      setSubmissionHistoryError(parseApiError(error).message || "Could not load submission history.");
     } finally {
       setSubmissionHistoryLoading(false);
     }
@@ -1070,14 +1179,45 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     let cancelled = false;
     setSubmissionLookupLoading(true);
     submissionService.getHistoryByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
-      .then(history => {
+      .catch(error => {
+        if (isNotFoundApiError(error)) return [] as SubmissionHistoryResponse[];
+        throw error;
+      })
+      .then(async history => {
         if (cancelled) return;
+        setSubmissionHistoryError("");
+        const currentSubmission = history.length > 0
+          ? await submissionService.getByTeamAndRound(submissionForm.teamId, submissionForm.roundId)
+              .catch(error => {
+                if (isNotFoundApiError(error)) return null;
+                throw error;
+              })
+          : null;
+        if (cancelled) return;
+        const currentSubmissionById = currentSubmission?.submissionId
+          ? new Map([[currentSubmission.submissionId, currentSubmission]])
+          : new Map<string, SubmissionResponse>();
         setSubmissionHistory(prev => [
-          ...history,
+          ...history.map(item => {
+            const latest = currentSubmissionById.get(item.submissionId);
+            return latest
+              ? {
+                  ...item,
+                  submissionStatusId: latest.submissionStatusId,
+                  submissionStatusName: latest.submissionStatusName,
+                  activeDisqualificationId: latest.activeDisqualificationId,
+                  activeDisqualificationReason: latest.activeDisqualificationReason,
+                  activeDisqualifiedById: latest.activeDisqualifiedById,
+                  activeDisqualifiedAt: latest.activeDisqualifiedAt,
+                }
+              : item;
+          }),
           ...prev.filter(item => item.roundId !== submissionForm.roundId),
         ]);
       })
-      .catch(() => {})
+      .catch(error => {
+        if (!cancelled) setSubmissionHistoryError(parseApiError(error).message || "Could not load submission history.");
+      })
       .finally(() => {
         if (!cancelled) setSubmissionLookupLoading(false);
       });
@@ -1102,6 +1242,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   };
 
   const handleSubmitWork = async () => {
+    if (isWithdrawnSubmissionContext(activeTeamContext, submissionParticipation?.participantStatus)) {
+      setSubmissionStatus(TEAM_WITHDRAWN_SUBMISSION_MESSAGE);
+      return;
+    }
     if (activeTeamContext?.eventId && !isApprovedParticipationStatus(submissionParticipation?.participantStatus)) {
       setSubmissionStatus("You must be approved by the organizer before accessing competition activities.");
       return;
@@ -1185,9 +1329,13 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       }));
       setSubmissionFieldErrors({});
       await loadSubmissionHistory();
-      setSubmissionStatus(`Current status: ${submission.submissionStatusName ?? "Loaded"}.`);
+      setSubmissionStatus(`Current status: ${getSubmissionStatusLabel(submission)}.`);
     } catch (error) {
-      setSubmissionStatus(error instanceof Error ? error.message : "Could not load current submission.");
+      if (isNotFoundApiError(error)) {
+        setSubmissionStatus("No submission has been saved for this round yet.");
+        return;
+      }
+      setSubmissionStatus(parseApiError(error).message || "Could not load current submission.");
     } finally {
       setSubmissionLookupLoading(false);
     }
@@ -1217,6 +1365,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   };
 
   const handlePrepareSubmissionUpdate = (submission: SubmissionHistoryResponse) => {
+    if (isSubmissionStatus(submission, "DISQUALIFIED")) {
+      setSubmissionStatus("Disqualified submissions cannot be updated.");
+      return;
+    }
     const round = allSubmissionRounds.find(item => item.roundId === submission.roundId);
     if (!round || !isOfficialSubmissionRound(round)) {
       setSubmissionStatus("Only official competition rounds can be updated from Submission Center.");
@@ -1433,7 +1585,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           </Button>
         </div>
 
-        {submissionHistoryLoading ? (
+        {submissionHistoryError ? (
+          <div className="rounded-lg px-4 py-5" style={{ border: `1px dashed ${COLORS.error}`, color: COLORS.error, fontSize: 14 }}>
+            {submissionHistoryError}
+          </div>
+        ) : submissionHistoryLoading ? (
           <div style={{ fontSize: 14, color: COLORS.textSecondary }}>Loading submission history...</div>
         ) : visibleSubmissionHistory.length === 0 ? (
           <div className="rounded-lg px-4 py-5" style={{ border: `1px dashed ${COLORS.border}`, color: COLORS.textSecondary, fontSize: 14 }}>
@@ -1445,8 +1601,10 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
           <div className="space-y-3">
             {visibleSubmissionHistory.map(submission => {
               const round = roundById.get(submission.roundId);
+              const submissionStatusLabel = getSubmissionStatusLabel(submission);
               const canUpdateSubmission = isSubmissionLeader
                 && getSubmissionRoundState(round).canSubmit
+                && !isSubmissionStatus(submission, "DISQUALIFIED")
                 && (submission.roundId !== submissionForm.roundId || selectedSubmissionRoundCanSubmit);
               const links = [
                 { label: "Repo", url: submission.repositoryUrl, icon: <Github size={13} /> },
@@ -1478,19 +1636,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                         <span className="inline-flex items-center gap-1">
                           <Calendar size={13} /> Deadline: {formatSubmissionDate(round?.submissionDeadline)}
                         </span>
-                        {submission.submissionStatusName && <StatusBadge status={submission.submissionStatusName.toLowerCase()} />}
+                        <StatusBadge status={submissionStatusLabel.toLowerCase()} />
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 lg:justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        icon={<Eye size={13} />}
-                        onClick={() => setViewResultsTarget({ submissionId: submission.submissionId, roundId: submission.roundId })}
-                      >
-                        View Results
-                      </Button>
                       <Button
                         variant={canUpdateSubmission ? "outline" : "ghost"}
                         size="sm"
@@ -2086,8 +2236,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     }
 
     const filteredEvents = apiEvents.filter(ev => {
-      const lifecycleStatus = String(ev.eventStatus || "UNKNOWN").toUpperCase();
-      if (eventStatusFilter && eventStatusFilter !== "all" && lifecycleStatus !== eventStatusFilter.toUpperCase()) return false;
+      const lifecycleStatusKey = normalizeEventStatusKey(String(ev.eventStatus || ""));
+      if (eventStatusFilter && eventStatusFilter !== "all" && lifecycleStatusKey !== normalizeEventStatusKey(eventStatusFilter)) return false;
       if (eventSearch && !ev.eventName.toLowerCase().includes(eventSearch.toLowerCase())) return false;
       if (eventStartDateFilter && ev.eventStartDate && new Date(ev.eventStartDate) < new Date(eventStartDateFilter)) return false;
       if (eventEndDateFilter && ev.eventEndDate && new Date(ev.eventEndDate) > new Date(eventEndDateFilter)) return false;
@@ -2117,16 +2267,16 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             )}
           </div>
           <Select value={eventStatusFilter} onValueChange={setEventStatusFilter}>
-            <SelectTrigger className="w-[160px] h-9 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)" }}>
+            <SelectTrigger className="w-[180px] h-9 rounded-xl outline-none" style={{ border: `1px solid ${COLORS.border}`, background: "var(--surface-input, #f9f6f1)" }}>
               <SelectValue placeholder="All Status" />
             </SelectTrigger>
             <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
               <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="DRAFT">Draft</SelectItem>
-              <SelectItem value="PUBLISHED">Published</SelectItem>
-              <SelectItem value="UPCOMING">Upcoming</SelectItem>
-              <SelectItem value="ONGOING">Ongoing</SelectItem>
               <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="ONGOING">Ongoing</SelectItem>
+              <SelectItem value="REGISTRATION_OPEN">Registration Open</SelectItem>
+              <SelectItem value="UPCOMING">Upcoming</SelectItem>
+              <SelectItem value="REGISTRATION_CLOSED">Registration Closed</SelectItem>
             </SelectContent>
           </Select>
           <div className="flex items-center gap-2">
@@ -2306,7 +2456,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                             return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
                           }
                           if (rank <= 3) {
-                            return <span style={{ fontSize: 16 }}>{["đŸ¥‡", "đŸ¥ˆ", "đŸ¥‰"][rank - 1]}</span>;
+                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
                           }
                           return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
                         })()}
@@ -2800,6 +2950,37 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       );
     }
 
+    if (isWithdrawnSubmissionContext(activeTeamContext, submissionParticipation?.participantStatus)) {
+      return (
+        <>
+          <SectionHeader title="Submission Center" subtitle="Team withdrawn" />
+          {renderSubmissionTeamSelector()}
+          <Card className="p-8">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <div
+                  className="flex items-center justify-center rounded-xl"
+                  style={{ width: 44, height: 44, background: `${COLORS.error}14`, color: COLORS.error }}
+                >
+                  <AlertCircle size={22} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: COLORS.textPrimary }}>Team withdrawn</div>
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 3 }}>
+                    {TEAM_WITHDRAWN_SUBMISSION_MESSAGE}
+                  </div>
+                </div>
+              </div>
+              <Button variant="outline" size="md" icon={<Users size={14} />} onClick={() => onNavigate("team")}>
+                Back to My Team
+              </Button>
+            </div>
+          </Card>
+          {renderSubmissionHistory()}
+        </>
+      );
+    }
+
     if (activeTeamContext.eventId && !isApprovedParticipationStatus(submissionParticipation?.participantStatus)) {
       return (
         <>
@@ -2937,14 +3118,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         </div>
         )}
         {renderSubmissionHistory()}
-        {viewResultsTarget && (
-          <ScoreDetailsModal
-            submissionId={viewResultsTarget.submissionId}
-            roundId={viewResultsTarget.roundId}
-            studentMode={true}
-            onClose={() => setViewResultsTarget(null)}
-          />
-        )}
       </>
     );
   };
@@ -2982,23 +3155,50 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Personal Information</div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: "Full Name", key: "fullName" },
-                { label: "Student ID", key: "studentId" },
-                { label: "Email", key: "email" },
-                { label: "Phone", key: "phone" },
-                { label: "GitHub", key: "github" },
-                { label: "Portfolio", key: "portfolio" },
-              ].map(field => (
-                <div key={field.key}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
-                  <input
-                    value={profileForm[field.key as keyof typeof profileForm]}
-                    onChange={e => setProfileForm(p => ({ ...p, [field.key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg outline-none"
-                    style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  />
-                </div>
-              ))}
+                { label: "Full Name", key: "fullName", disabled: false },
+                { label: "Student ID", key: "studentId", disabled: true },
+                { label: "Email", key: "email", disabled: true },
+                { label: "Phone", key: "phone", disabled: false },
+                { label: "University", key: "universityName", disabled: user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT", placeholder: "e.g. Greenwich University" },
+                { label: "GitHub", key: "github", disabled: false, placeholder: "https://github.com/username" },
+                { label: "Portfolio", key: "portfolio", disabled: false, placeholder: "https://yourportfolio.com" },
+              ].map(field => {
+                const isFieldDisabled = field.disabled;
+                const fieldErr = profileFieldErrors[field.key as keyof typeof profileFieldErrors];
+                return (
+                  <div key={field.key}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>
+                      {field.label}
+                    </label>
+                    <input
+                      value={profileForm[field.key as keyof typeof profileForm]}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setProfileForm(p => ({ ...p, [field.key]: val }));
+                        if (profileFieldErrors[field.key as keyof typeof profileFieldErrors]) {
+                          setProfileFieldErrors(p => ({ ...p, [field.key]: undefined }));
+                        }
+                      }}
+                      disabled={isFieldDisabled}
+                      placeholder={field.placeholder}
+                      className="w-full px-3 py-2 rounded-lg outline-none"
+                      style={{
+                        fontSize: 14,
+                        border: `1px solid ${fieldErr ? COLORS.error : COLORS.border}`,
+                        background: COLORS.bg,
+                        color: COLORS.textPrimary,
+                        opacity: isFieldDisabled ? 0.6 : 1,
+                        cursor: isFieldDisabled ? "not-allowed" : "text",
+                      }}
+                    />
+                    {fieldErr && (
+                      <span style={{ fontSize: 12, color: COLORS.error, marginTop: 4, display: "block" }}>
+                        {fieldErr}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <div className="mt-4">
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Bio</label>
@@ -3020,7 +3220,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               >
                 {profileSaving ? "Saving..." : "Save Changes"}
               </Button>
-              {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>âœ“ Profile saved!</span>}
+              {profileSaved && (
+                <span className="inline-flex items-center gap-1" style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>
+                  <CheckCircle size={14} /> Profile saved!
+                </span>
+              )}
               {profileError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{profileError}</span>}
             </div>
           </Card>

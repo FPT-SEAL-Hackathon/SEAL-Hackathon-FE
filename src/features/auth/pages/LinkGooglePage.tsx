@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { AlertCircle, Eye, EyeOff, KeyRound, Loader, Lock, Mail } from "lucide-react";
 import { googleLink, sendLinkOtp, verifyLinkOtp } from "@/features/auth/api/authService";
+import { parseApiError } from "@/lib/api/apiClient";
 import { useAuth } from "@/features/auth/store/authStore";
 
 type VerifyMode = "password" | "otp";
@@ -47,7 +48,7 @@ export function LinkGooglePage() {
       const res = await googleLink({ linkingToken, password });
       finishLogin(res.user);
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Could not link your Google account.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }
@@ -62,7 +63,7 @@ export function LinkGooglePage() {
       setOtpSent(true);
       setInfoMessage("A 6-digit code has been sent to your account email.");
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Could not send the verification code.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }
@@ -83,7 +84,7 @@ export function LinkGooglePage() {
       const res = await googleLink({ linkingToken });
       finishLogin(res.user);
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+      setApiError(parseApiError(err).message);
     } finally {
       setLoading(false);
     }

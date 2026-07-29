@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { consultationService, ConsultationRequestResponse, ConsultationMessageResponse, ConsultationPriority } from "@/features/consultation/api/consultationService";
 import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Send, ArrowLeft, XCircle, Search, SlidersHorizontal, X, BrainCircuit } from "lucide-react";
+import { MessageSquare, Send, ArrowLeft, XCircle, Search, SlidersHorizontal, X, BrainCircuit, Sparkles, Bot } from "lucide-react";
 import { useAuth } from "@/features/auth/store/authStore";
 
 const PRIORITY_OPTIONS: { label: string; value: ConsultationPriority | "none" }[] = [
@@ -319,25 +319,49 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
                 const isAi = m.content?.startsWith("[AI Mentor]") || m.senderName === "null" || !m.senderId;
                 const isMentor = !isAi && m.senderId !== user?.userId;
                 const isMe = !isAi && !isMentor;
-                return (
-                  <div key={i} className={`flex flex-col ${!isMe ? "items-start" : "items-end"}`}>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
-                      {isAi && <BrainCircuit size={12} style={{ color: COLORS.primary }} />}
-                      {isAi ? "AI Mentor" : m.senderName} {isMentor ? "(Mentor)" : ""} • {new Date(m.createdAt).toLocaleString()}
+
+                if (isAi) {
+                  return (
+                    <div key={i} className="flex flex-col items-start my-2">
+                      <div style={{ fontSize: 11, marginBottom: 4 }} className="flex items-center gap-1.5 font-semibold text-purple-700">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                          <Sparkles size={11} className="text-purple-600 animate-pulse" /> AI Assistant
+                        </span>
+                        <span style={{ fontSize: 11, color: COLORS.textSecondary }}>• {new Date(m.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div
+                        className="px-4 py-3 rounded-2xl max-w-[85%] break-words whitespace-pre-wrap shadow-sm"
+                        style={{
+                          background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
+                          color: "#3b0764",
+                          border: "1px solid #c084fc",
+                          borderLeft: "4px solid #8b5cf6",
+                        }}
+                      >
+                        {m.content?.replace("[AI Mentor]: ", "")}
+                      </div>
                     </div>
-                    <div className="px-4 py-2 rounded-2xl max-w-[80%] break-words whitespace-pre-wrap" style={{
-                      background: isAi ? `${COLORS.primary}15` : (isMentor ? COLORS.bg : COLORS.primary),
-                      color: !isMe && !isAi ? COLORS.textPrimary : (isAi ? COLORS.textPrimary : "#fff"),
-                      border: isAi ? `1px solid ${COLORS.primary}40` : (isMentor ? `1px solid ${COLORS.border}` : "none"),
+                  );
+                }
+
+                return (
+                  <div key={i} className={`flex flex-col ${isMe ? "items-end" : "items-start"} my-1`}>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
+                      <span className="font-semibold">{m.senderName}</span> {isMentor ? "(Mentor)" : "(Leader)"} • {new Date(m.createdAt).toLocaleString()}
+                    </div>
+                    <div className="px-4 py-2.5 rounded-2xl max-w-[80%] break-words whitespace-pre-wrap shadow-sm" style={{
+                      background: isMe ? COLORS.primary : (isMentor ? "#f0fdf4" : "#ffffff"),
+                      color: isMe ? "#ffffff" : COLORS.textPrimary,
+                      border: isMe ? "none" : (isMentor ? "1px solid #86efac" : `1px solid ${COLORS.border}`),
                     }}>
-                      {m.content?.replace("[AI Mentor]: ", "")}
+                      {m.content}
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {["PENDING", "ACCEPTED", "IN_PROGRESS"].includes(selectedRequest.status) && (
+            {["ACCEPTED", "IN_PROGRESS"].includes(selectedRequest.status) && (
               <div className="p-4 border-t flex gap-2" style={{ borderColor: COLORS.border }}>
                 <input
                   type="text" value={messageInput} onChange={e => setMessageInput(e.target.value)}
@@ -345,6 +369,12 @@ export function TeamConsultations({ isLeader, onNavigate, hideHeader }: { isLead
                   onKeyDown={e => e.key === "Enter" && sendMessage()}
                 />
                 <Button variant="primary" size="md" icon={<Send size={14} />} onClick={sendMessage}>Send</Button>
+              </div>
+            )}
+
+            {selectedRequest.status === "PENDING" && (
+              <div className="p-3 border-t text-center text-sm font-medium" style={{ borderColor: COLORS.border, background: `${COLORS.warning}10`, color: "#b45309" }}>
+                ⏳ Waiting for an expert to accept this request before messaging.
               </div>
             )}
 

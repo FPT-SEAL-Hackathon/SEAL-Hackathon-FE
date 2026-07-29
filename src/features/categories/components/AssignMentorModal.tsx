@@ -3,6 +3,8 @@ import { X, Search, UserCheck, Loader } from "lucide-react";
 import { Button, COLORS } from "@/components/shared/UIComponents";
 import { categoryService } from "@/features/categories/api/categoryService";
 import { userService } from "@/features/users/api/userService";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 
 interface AssignMentorModalProps {
   categoryId: string;
@@ -39,7 +41,9 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
       loadAssigned();
       onAssigned();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove expert");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setRemovingId(null);
     }
@@ -54,7 +58,11 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
         const mentors = (res.content ?? []).filter(isAssignableRole);
         setAllMentors(mentors);
       })
-      .catch(() => setError("Failed to load mentors"))
+      .catch((err) => {
+        const errMsg = parseApiError(err).message || "Failed to load mentors";
+        setError(errMsg);
+        toast.error(errMsg);
+      })
       .finally(() => setLoadingAll(false));
   }, []);
 
@@ -105,7 +113,9 @@ export function AssignMentorModal({ categoryId, onClose, onAssigned }: AssignMen
       loadAssigned();
       onAssigned();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to assign experts");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setAssigning(false);
     }

@@ -10,7 +10,7 @@ import { SectionHeader, Card, Button, StatusBadge, COLORS } from "@/components/s
 import {
   MessageSquare, Send, CheckCircle, XCircle,
   PlayCircle, ArrowLeft, Search, SlidersHorizontal, X,
-  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users, BrainCircuit
+  Target, FileText, PlusCircle, Trash2, Circle, Save, Loader, Users, BrainCircuit, Sparkles, Bot
 } from "lucide-react";
 import { aiService } from "@/features/ai/api/aiService";
 import { useAuth } from "@/features/auth/store/authStore";
@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 type RequestAction = "ACCEPT" | "REJECT" | "IN_PROGRESS" | "RESOLVE";
 
-const MESSAGEABLE_STATUSES = ["PENDING", "ACCEPTED", "IN_PROGRESS"];
+const MESSAGEABLE_STATUSES = ["ACCEPTED", "IN_PROGRESS"];
 const CLOSED_STATUSES = ["RESOLVED", "REJECTED", "CANCELLED"];
 
 const PRIORITY_COLORS: Record<ConsultationPriority, string> = {
@@ -72,7 +72,7 @@ const selectStyle: React.CSSProperties = {
 };
 
 // ─── Milestone panel ───────────────────────────────────────────────────────────
-function MilestonePanel({ requestId, onToggle }: { requestId: string; onToggle?: () => void }) {
+function MilestonePanel({ requestId, onToggle, canEdit = true }: { requestId: string; onToggle?: () => void; canEdit?: boolean }) {
   const [milestones, setMilestones] = useState<MilestoneResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [newText, setNewText] = useState("");
@@ -87,7 +87,7 @@ function MilestonePanel({ requestId, onToggle }: { requestId: string; onToggle?:
 
   const addMilestone = async () => {
     const label = newText.trim();
-    if (!label) return;
+    if (!label || !canEdit) return;
     try {
       const created = await milestoneService.create(requestId, label);
       setMilestones(prev => [...prev, created]);
@@ -158,25 +158,31 @@ function MilestonePanel({ requestId, onToggle }: { requestId: string; onToggle?:
       </div>
 
       {/* Add input */}
-      <div className="flex gap-2 mt-3">
-        <input
-          value={newText}
-          onChange={e => setNewText(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && addMilestone()}
-          placeholder="Add milestone..."
-          className="flex-1 px-2.5 py-1.5 rounded-lg outline-none"
-          style={{ fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-        />
-        <Button variant="outline" size="sm" icon={<PlusCircle size={12} />} onClick={addMilestone} disabled={!newText.trim()}>
-          Add
-        </Button>
-      </div>
+      {canEdit ? (
+        <div className="flex gap-2 mt-3">
+          <input
+            value={newText}
+            onChange={e => setNewText(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addMilestone()}
+            placeholder="Add milestone..."
+            className="flex-1 px-2.5 py-1.5 rounded-lg outline-none"
+            style={{ fontSize: 12, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+          />
+          <Button variant="outline" size="sm" icon={<PlusCircle size={12} />} onClick={addMilestone} disabled={!newText.trim()}>
+            Add
+          </Button>
+        </div>
+      ) : (
+        <div className="mt-3 text-xs italic" style={{ color: COLORS.textSecondary }}>
+          Accept request to add milestones.
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Note panel ────────────────────────────────────────────────────────────────
-function NotePanel({ requestId }: { requestId: string }) {
+function NotePanel({ requestId, canEdit = true }: { requestId: string; canEdit?: boolean }) {
   const [noteText, setNoteText] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -191,6 +197,7 @@ function NotePanel({ requestId }: { requestId: string }) {
   }, [requestId]);
 
   const saveNote = async () => {
+    if (!canEdit) return;
     setSaving(true);
     try {
       await consultationService.updateTeamNote(requestId, noteText);
@@ -209,9 +216,9 @@ function NotePanel({ requestId }: { requestId: string }) {
       <textarea
         value={loading ? "Loading..." : noteText}
         onChange={e => setNoteText(e.target.value)}
-        disabled={loading}
+        disabled={loading || !canEdit}
         rows={6}
-        placeholder="Add private notes for this team..."
+        placeholder={canEdit ? "Add private notes for this team..." : "Accept request to add notes."}
         className="w-full px-3 py-2 rounded-xl outline-none resize-none"
         style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
       />
@@ -220,11 +227,12 @@ function NotePanel({ requestId }: { requestId: string }) {
           variant="primary" size="sm"
           icon={saving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
           onClick={saveNote}
-          disabled={saving || loading}
+          disabled={saving || loading || !canEdit}
         >
           {saving ? "Saving..." : "Save Note"}
         </Button>
         {saved && <span style={{ fontSize: 12, color: COLORS.success, fontWeight: 600 }}>✓ Saved!</span>}
+        {!canEdit && <span style={{ fontSize: 12, color: COLORS.textSecondary, fontStyle: "italic" }}>Accept request to edit note.</span>}
       </div>
     </div>
   );
@@ -422,21 +430,45 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
               {messages.map((m, i) => {
                 const isAi = m.content?.startsWith("[AI Mentor]") || m.senderName === "null" || !m.senderId;
                 const isMe = !isAi && m.senderId === user?.userId;
-                return (
-                  <div key={m.id || i} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
-                      {isAi && <BrainCircuit size={12} style={{ color: COLORS.primary }} />}
-                      {isAi ? "AI Mentor" : m.senderName || "System"} · {new Date(m.createdAt).toLocaleString()}
-                    </div>
-                    <div className={`flex items-center gap-2 max-w-[80%] ${isMe ? "flex-row-reverse" : ""}`}>
-                      <div className="px-4 py-2 rounded-2xl break-words whitespace-pre-wrap" style={{
-                        background: isAi ? `${COLORS.primary}15` : (isMe ? COLORS.primary : COLORS.bg),
-                        color: isMe && !isAi ? "#fff" : COLORS.textPrimary,
-                        border: isAi ? `1px solid ${COLORS.primary}40` : (isMe ? "none" : `1px solid ${COLORS.border}`)
-                      }}>
+
+                if (isAi) {
+                  return (
+                    <div key={m.id || i} className="flex flex-col items-start my-2">
+                      <div style={{ fontSize: 11, marginBottom: 4 }} className="flex items-center gap-1.5 font-semibold text-purple-700">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                          <Sparkles size={11} className="text-purple-600 animate-pulse" /> AI Assistant
+                        </span>
+                        <span style={{ fontSize: 11, color: COLORS.textSecondary }}>• {new Date(m.createdAt).toLocaleString()}</span>
+                      </div>
+                      <div
+                        className="px-4 py-3 rounded-2xl max-w-[85%] break-words whitespace-pre-wrap shadow-sm"
+                        style={{
+                          background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
+                          color: "#3b0764",
+                          border: "1px solid #c084fc",
+                          borderLeft: "4px solid #8b5cf6",
+                        }}
+                      >
                         {m.content?.replace("[AI Mentor]: ", "")}
                       </div>
-                      {isMe && !isAi && (
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={m.id || i} className={`flex flex-col ${isMe ? "items-end" : "items-start"} my-1`}>
+                    <div style={{ fontSize: 11, color: COLORS.textSecondary, marginBottom: 4 }} className="flex items-center gap-1">
+                      <span className="font-semibold">{m.senderName || "User"}</span> {isMe ? "(You)" : ""} • {new Date(m.createdAt).toLocaleString()}
+                    </div>
+                    <div className={`flex items-center gap-2 max-w-[80%] ${isMe ? "flex-row-reverse" : ""}`}>
+                      <div className="px-4 py-2.5 rounded-2xl break-words whitespace-pre-wrap shadow-sm" style={{
+                        background: isMe ? COLORS.primary : "#ffffff",
+                        color: isMe ? "#fff" : COLORS.textPrimary,
+                        border: isMe ? "none" : `1px solid ${COLORS.border}`,
+                      }}>
+                        {m.content}
+                      </div>
+                      {isMe && (
                         <button 
                           onClick={() => setTeachAiModal({ open: true, standardAnswer: m.content })}
                           className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400 hover:text-primary transition-colors flex-shrink-0"
@@ -459,6 +491,12 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
                   onKeyDown={e => e.key === "Enter" && sendMessage()}
                 />
                 <Button variant="primary" size="md" icon={<Send size={14} />} onClick={sendMessage}>Send</Button>
+              </div>
+            )}
+
+            {selectedRequest.status === "PENDING" && (
+              <div className="p-3 border-t text-center text-sm font-medium" style={{ borderColor: COLORS.border, background: `${COLORS.warning}10`, color: "#b45309" }}>
+                👉 Accept this consultation request to start messaging with the team.
               </div>
             )}
 
@@ -517,12 +555,12 @@ export function MentorConsultations({ onNavigate: _onNavigate }: { onNavigate?: 
 
             {/* Milestones */}
             <Card className="p-4 flex-shrink-0">
-              <MilestonePanel requestId={selectedRequest.id} onToggle={reloadMessages} />
+              <MilestonePanel requestId={selectedRequest.id} onToggle={reloadMessages} canEdit={["ACCEPTED", "IN_PROGRESS"].includes(selectedRequest.status)} />
             </Card>
 
             {/* Note */}
             <Card className="p-4 flex-shrink-0">
-              <NotePanel requestId={selectedRequest.id} />
+              <NotePanel requestId={selectedRequest.id} canEdit={["ACCEPTED", "IN_PROGRESS"].includes(selectedRequest.status)} />
             </Card>
           </div>
         </div>

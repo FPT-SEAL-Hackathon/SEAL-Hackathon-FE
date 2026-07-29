@@ -62,9 +62,18 @@ export function AdminRankingsView({ context }: AdminViewProps) {
       return;
     }
     roundService.getByCategory(localCategoryId).then(data => {
-      setLocalRounds(data);
-      if (data.length > 0) setLocalRoundId(data[0].roundId);
-    }).catch(() => setLocalRounds([]));
+      // Exclude calibration rounds for rankings & approvals
+      const filtered = (data || []).filter((r: any) => !r.isCalibrationRound);
+      setLocalRounds(filtered);
+      if (filtered.length > 0) {
+        setLocalRoundId(filtered[0].roundId);
+      } else {
+        setLocalRoundId("");
+      }
+    }).catch(() => {
+      setLocalRounds([]);
+      setLocalRoundId("");
+    });
   }, [localCategoryId]);
 
   // Fetch existing rankings when filters change

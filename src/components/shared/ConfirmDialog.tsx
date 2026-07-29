@@ -4,10 +4,10 @@ import { Button, Card, COLORS } from "./UIComponents";
 
 type ConfirmTone = "primary" | "warning" | "danger";
 
+type ConfirmStep = "confirm" | "verify";
+
 interface Props {
-
   title: string;
-
   message: string;
 
   icon?: ReactNode;
@@ -24,13 +24,24 @@ interface Props {
 
   error?: string;
 
+  step?: ConfirmStep;
+
+  verifyLabel?: string;
+
+  verifyPlaceholder?: string;
+
+  expectedValue?: string;
+
+  verifyValue?: string;
+
+  onVerifyChange?: (value: string) => void;
+
   onConfirm: () => Promise<void> | void;
 
   onCancel: () => void;
 }
 
 export function ConfirmDialog({
-
   title,
   message,
 
@@ -47,10 +58,22 @@ export function ConfirmDialog({
 
   error,
 
+  step = "confirm",
+
+  verifyLabel,
+
+  verifyPlaceholder,
+
+  expectedValue,
+
+  verifyValue = "",
+
+  onVerifyChange,
+
   onConfirm,
+
   onCancel,
 }: Props) {
-
   const toneColor =
     tone === "primary"
       ? COLORS.primary
@@ -65,9 +88,13 @@ export function ConfirmDialog({
       ? `${COLORS.warning}15`
       : `${COLORS.error}15`;
 
+  const verifyMatched =
+    step === "confirm" ||
+    !expectedValue ||
+    verifyValue.trim() === expectedValue;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4">
-
       <Card
         className="w-full max-w-md rounded-2xl shadow-2xl"
         style={{
@@ -76,11 +103,8 @@ export function ConfirmDialog({
         }}
       >
         <div className="p-6">
-
           <div className="flex items-start justify-between">
-
             <div className="flex items-center gap-3">
-
               <div
                 className="w-11 h-11 rounded-xl flex items-center justify-center"
                 style={{
@@ -95,20 +119,15 @@ export function ConfirmDialog({
                 )}
               </div>
 
-              <div>
-
-                <h2
-                  style={{
-                    fontSize: 18,
-                    fontWeight: 700,
-                    color: COLORS.textPrimary,
-                  }}
-                >
-                  {title}
-                </h2>
-
-              </div>
-
+              <h2
+                style={{
+                  fontSize: 18,
+                  fontWeight: 700,
+                  color: COLORS.textPrimary,
+                }}
+              >
+                {title}
+              </h2>
             </div>
 
             <button
@@ -121,7 +140,6 @@ export function ConfirmDialog({
                 color={COLORS.textSecondary}
               />
             </button>
-
           </div>
 
           <p
@@ -133,6 +151,49 @@ export function ConfirmDialog({
           >
             {message}
           </p>
+
+          {step === "verify" && (
+            <div className="mt-5 space-y-3">
+              <div
+                style={{
+                  fontSize: 13,
+                  color: COLORS.textPrimary,
+                  fontWeight: 600,
+                }}
+              >
+                {verifyLabel}
+              </div>
+
+              <input
+                value={verifyValue}
+                onChange={(e) => onVerifyChange?.(e.target.value)}
+                placeholder={verifyPlaceholder}
+                className="w-full rounded-xl px-3 py-2.5 outline-none"
+                style={{
+                  border: `1px solid ${COLORS.border}`,
+                  background: COLORS.bg,
+                }}
+              />
+
+              <div
+                style={{
+                  fontSize: 12,
+                  color: COLORS.textSecondary,
+                }}
+              >
+                Expected:
+                <div
+                  style={{
+                    marginTop: 4,
+                    fontWeight: 700,
+                    color: COLORS.textPrimary,
+                  }}
+                >
+                  {expectedValue}
+                </div>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div
@@ -150,7 +211,6 @@ export function ConfirmDialog({
           )}
 
           <div className="flex justify-end gap-3 mt-8">
-
             <Button
               variant="ghost"
               onClick={onCancel}
@@ -162,7 +222,7 @@ export function ConfirmDialog({
             <Button
               variant={confirmVariant}
               onClick={onConfirm}
-              disabled={loading}
+              disabled={loading || !verifyMatched}
               icon={
                 loading ? (
                   <Loader2
@@ -174,12 +234,9 @@ export function ConfirmDialog({
             >
               {loading ? "Processing..." : confirmText}
             </Button>
-
           </div>
-
         </div>
       </Card>
-
     </div>
   );
 }

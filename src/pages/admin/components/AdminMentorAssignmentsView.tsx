@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { PlusCircle, Loader, User, Mail, Trash2 } from "lucide-react";
 import { SectionHeader, Card, Button, COLORS, StatusBadge } from "@/components/shared/UIComponents";
 import { categoryService, type CategoryMentorResponse } from "@/features/categories/api/categoryService";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 
 interface AdminViewProps {
   context: any;
@@ -32,7 +34,9 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
       const updatedMentors = await categoryService.getMentors(selectedCategoryId);
       setMentors(updatedMentors);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to remove mentor");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setRemovingId(null);
     }
@@ -58,7 +62,11 @@ export function AdminMentorAssignmentsView({ context }: AdminViewProps) {
     setError("");
     categoryService.getMentors(selectedCategoryId)
       .then(setMentors)
-      .catch(err => setError(err instanceof Error ? err.message : "Failed to load mentors"))
+      .catch(err => {
+        const errMsg = parseApiError(err).message;
+        setError(errMsg);
+        toast.error(errMsg);
+      })
       .finally(() => setLoading(false));
   }, [selectedCategoryId, context.mentorAssignmentReloadKey]);
 
