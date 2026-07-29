@@ -1,6 +1,7 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect } from "react";
-import { api } from "@/lib/api/apiClient";
+import { api, ApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 import { CheckCircle, XCircle, Eye, Loader, CheckSquare, Lock } from "lucide-react";
 import { Card, Button, StatusBadge, COLORS, DataTable } from "@/components/shared/UIComponents";
 import { useCategoryContext } from "../../context/CategoryContext";
@@ -125,7 +126,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
         } : s
       ));
     } catch (e) {
-      console.error(e);
+      const msg = e instanceof ApiError ? e.message : "Failed to update score approval.";
+      toast.error(msg);
     } finally {
       setApprovingId(null);
     }
@@ -144,7 +146,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
       }));
       fetchSubmissions();
     } catch (e) {
-      console.error(e);
+      const msg = e instanceof ApiError ? e.message : "Failed to approve all submissions.";
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -163,7 +166,8 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
       setRejectReason("");
       fetchSubmissions();
     } catch (e) {
-      console.error(e);
+      const msg = e instanceof ApiError ? e.message : "Failed to reject score.";
+      toast.error(msg);
     } finally {
       setApprovingId(null);
     }
