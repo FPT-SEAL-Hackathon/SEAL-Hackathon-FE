@@ -8,7 +8,8 @@ import {
 import { type TotalPrizeSummary } from "@/features/awards/api/awardService";
 import { type EventResponse } from "@/features/events/api/eventService";
 import { publicSummaryService } from "@/features/public/api/publicSummaryService";
-import { loadLandingSettings, type LandingPageSettingsData } from "@/pages/admin/components/AdminLandingSettingsView";
+import { type LandingPageSettingsData, DEFAULT_LANDING_SETTINGS } from "@/pages/admin/components/AdminLandingSettingsView";
+import { landingSettingsService } from "@/lib/api/landingSettingsService";
 
 /**
  * Giao diện Landing Page (Trang chủ công khai).
@@ -466,16 +467,24 @@ export function LandingPage({ onGoToLogin, onGoToRegister }: Props) {
   const [hofGroups, setHofGroups] = useState<HofGroup[]>([]);
   const [hofLoading, setHofLoading] = useState(true);
   const [selectedGalleryImage, setSelectedGalleryImage] = useState<GalleryItem | null>(null);
-  const [landingSettings, setLandingSettings] = useState<LandingPageSettingsData>(loadLandingSettings);
+  const [landingSettings, setLandingSettings] = useState<LandingPageSettingsData>(DEFAULT_LANDING_SETTINGS);
   const [activePolicyModal, setActivePolicyModal] = useState<"privacy" | "terms" | "security" | null>(null);
 
   useEffect(() => {
-    const syncSettings = () => setLandingSettings(loadLandingSettings());
+    let mounted = true;
+    const fetchSettings = async () => {
+      const data = await landingSettingsService.getLandingSettings();
+      if (mounted) setLandingSettings(data);
+    };
+    fetchSettings();
+
+    const syncSettings = () => {
+      fetchSettings();
+    };
     window.addEventListener("seal_landing_settings_updated", syncSettings);
-    window.addEventListener("storage", syncSettings);
     return () => {
+      mounted = false;
       window.removeEventListener("seal_landing_settings_updated", syncSettings);
-      window.removeEventListener("storage", syncSettings);
     };
   }, []);
 
