@@ -482,7 +482,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
             )}
           </div>
 
-          <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
+          <GlassInput label="Student Code" placeholder="SE123456" icon={<BookOpen size={15} />}
             value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
           <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
             disabled={form.userTypeId === REGISTER_USER_TYPES[0].value || form.userTypeId === "FPT_STUDENT"}
