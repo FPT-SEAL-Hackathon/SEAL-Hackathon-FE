@@ -21,7 +21,7 @@ export function JudgeConsensusMatrix({ roundId }: { roundId: string }) {
       })
       .catch(err => {
         console.error("Failed to load consensus matrix", err);
-        setError("Không thể tải Ma trận Đồng thuận.");
+        setError("Could not load the consensus matrix.");
       })
       .finally(() => setLoading(false));
   }, [roundId]);
@@ -56,15 +56,15 @@ export function JudgeConsensusMatrix({ roundId }: { roundId: string }) {
     <Card className="mt-6 overflow-hidden">
       <div className="p-4 border-b flex justify-between items-center bg-white">
         <div>
-          <h3 className="font-bold text-gray-900 text-lg">Ma trận Đồng thuận (Consensus Matrix)</h3>
-          <p className="text-sm text-gray-500">Phân tích mức độ phân tán điểm số giữa các giám khảo</p>
+          <h3 className="font-bold text-gray-900 text-lg">Consensus Matrix</h3>
+          <p className="text-sm text-gray-500">Score dispersion across judges</p>
         </div>
         <button
           onClick={handleExportCsv}
           className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg transition-colors"
         >
           <Download size={16} />
-          Xuất CSV Pivot
+          Export Pivot CSV
         </button>
       </div>
 
@@ -72,11 +72,11 @@ export function JudgeConsensusMatrix({ roundId }: { roundId: string }) {
         <table className="w-full text-sm text-left">
           <thead className="bg-gray-50 text-gray-600 font-medium text-xs uppercase tracking-wider">
             <tr>
-              <th className="px-6 py-4">Tiêu chí</th>
-              <th className="px-6 py-4">Trung vị</th>
-              <th className="px-6 py-4 font-bold text-gray-800">Khoảng điểm (Min-Max)</th>
-              <th className="px-6 py-4 font-bold text-gray-800">Độ lệch (SD)</th>
-              <th className="px-6 py-4">Trạng thái</th>
+              <th className="px-6 py-4">Criterion</th>
+              <th className="px-6 py-4">Median</th>
+              <th className="px-6 py-4 font-bold text-gray-800">Score range (min–max)</th>
+              <th className="px-6 py-4 font-bold text-gray-800">Deviation (SD)</th>
+              <th className="px-6 py-4">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -97,7 +97,7 @@ export function JudgeConsensusMatrix({ roundId }: { roundId: string }) {
                 
                 deviationText = (
                   <div className={`mt-1 text-xs font-medium px-2 py-0.5 rounded-md inline-block ${isHighDeviation ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
-                    Bạn chấm: {myScore} | Lệch: {sign}{diff.toFixed(1)}
+                    Your score: {myScore} | Δ {sign}{diff.toFixed(1)}
                   </div>
                 );
               }

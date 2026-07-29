@@ -5,16 +5,14 @@ export type EventParticipantStatus =
   | "ACTIVE"
   | "REJECTED"
   | "SUSPENDED"
-  | "TEMPORARY"
-  | "UNVERIFIED";
+  | "WITHDRAWN";
 
 export const EVENT_PARTICIPANT_STATUSES: EventParticipantStatus[] = [
   "PENDING",
   "ACTIVE",
   "REJECTED",
   "SUSPENDED",
-  "TEMPORARY",
-  "UNVERIFIED",
+  "WITHDRAWN",
 ];
 
 export interface EventParticipantResponse {
@@ -220,11 +218,14 @@ function unwrapPage(response: RawParticipantRecord[] | BackendEnvelope<EventPart
   throw new Error(response.message ?? "Unexpected event participants response from server.");
 }
 
-function normalizeSingle(response: RawParticipantRecord | BackendEnvelope<RawParticipantRecord>) {
+function normalizeSingle(response: RawParticipantRecord | BackendEnvelope<RawParticipantRecord>): EventParticipantResponse | null {
+  if (!response || (Array.isArray(response) && response.length === 0)) return null;
+  if ("data" in response && Array.isArray(response.data) && response.data.length === 0) return null;
   const participant = "data" in response && response.data && !Array.isArray(response.data)
     ? response.data
     : response as EventParticipantResponse;
 
+  if (!participant || typeof participant !== "object" || Array.isArray(participant)) return null;
   return normalizeParticipant(participant);
 }
 
@@ -236,11 +237,13 @@ export const eventParticipantService = {
     ));
   },
 
-  updateStatus: async (eventParticipantId: string, status: EventParticipantStatus, rejectedReason?: string) =>
-    normalizeSingle(await api.patch<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(`/api/v1/organizer/event-participants/${eventParticipantId}/status`, {
+  updateStatus: async (eventParticipantId: string, status: EventParticipantStatus, rejectedReason?: string) => {
+    const res = await api.patch<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(`/api/v1/organizer/event-participants/${eventParticipantId}/status`, {
       status,
       rejectedReason: rejectedReason?.trim() || undefined,
-    })),
+    });
+    return normalizeSingle(res) ?? normalizeParticipant({} as RawParticipantRecord);
+  },
 
   bulkUpdateStatus: (participantIds: string[], status: EventParticipantStatus, rejectedReason?: string) =>
     api.patch<void>("/api/v1/organizer/event-participants/status", {
@@ -249,20 +252,24 @@ export const eventParticipantService = {
       rejectedReason: rejectedReason?.trim() || undefined,
     }),
 
-  registerForEvent: async (eventId: string) =>
-    normalizeSingle(await request<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(
+  registerForEvent: async (eventId: string) => {
+    const res = await request<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(
       `/api/v1/events/${eventId}/participants/register`,
       { method: "POST" },
-    )),
+    );
+    return normalizeSingle(res) ?? normalizeParticipant({} as RawParticipantRecord);
+  },
 
   register: async (eventId: string) =>
     eventParticipantService.registerForEvent(eventId),
 
   getMyParticipation: async (eventId: string) => {
     try {
-      return normalizeSingle(await api.get<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(
+      const raw = await api.get<RawParticipantRecord | BackendEnvelope<RawParticipantRecord>>(
         `/api/v1/events/${eventId}/participants/me`,
-      ));
+      );
+      if (!raw || (Array.isArray(raw) && raw.length === 0)) return null;
+      return normalizeSingle(raw);
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;
       throw error;

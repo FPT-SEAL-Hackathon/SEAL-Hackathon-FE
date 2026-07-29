@@ -20,8 +20,7 @@ export type UserParticipationStatus =
   | "ACTIVE"
   | "REJECTED"
   | "SUSPENDED"
-  | "TEMPORARY"
-  | "UNVERIFIED";
+  | "WITHDRAWN";
 
 export interface EventResponse {
   eventId: string;
@@ -86,8 +85,7 @@ const PARTICIPANT_STATUSES = new Set([
   "ACTIVE",
   "REJECTED",
   "SUSPENDED",
-  "TEMPORARY",
-  "UNVERIFIED",
+  "WITHDRAWN",
 ]);
 
 function isRecord(value: unknown): value is RawEventRecord {
@@ -203,4 +201,5 @@ export const eventService = {
   delete: (id: string) => api.delete(`/api/v1/event/${id}`),
   getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/event/organizer"))),
   publishEvent: (id: string) => api.post<EventResponse>(`/api/v1/event/publish/${id}`, {}),
+  cancelEvent: (id: string) => api.patch<EventResponse>(`/api/v1/event/cancel/${id}`),
 };

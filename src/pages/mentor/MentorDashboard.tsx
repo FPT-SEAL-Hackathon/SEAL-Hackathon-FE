@@ -313,7 +313,7 @@ export function MentorDashboard({
                       <span className="truncate pr-2" style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
                         {team.teamName}
                       </span>
-                      <StatusBadge status="active" />
+                      <StatusBadge status={(team.teamStatusName || team.teamStatusId || "active") as any} />
                     </div>
                     <div style={{ fontSize: 12, color: COLORS.textSecondary }}>
                       {categories.find(c => c.categoryId === team.categoryId)?.categoryName}

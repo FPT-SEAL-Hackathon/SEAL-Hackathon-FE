@@ -13,6 +13,7 @@ import {
   XCircle,
   Search,
   Filter,
+  Info,
 } from "lucide-react";
 import { Button, Card, COLORS, StatusBadge } from "@/components/shared/UIComponents";
 import {
@@ -32,6 +33,7 @@ import {
   type EventParticipantResponse,
   type EventParticipantStatus,
 } from "@/features/eventParticipants/api/eventParticipantService";
+import { judgingService, type EvaluationAuditLogDTO } from "@/features/judging/api/judgingService";
 import { userService, type UserManagementUser } from "@/features/users/api/userService";
 
 interface EventTeamsSectionProps {
@@ -82,6 +84,25 @@ function teamResponseToEligibilityReview(
     issues: team.approvalIssues ?? [],
     canRequestApproval: team.canRequestApproval,
     approvalIssues: team.approvalIssues,
+    withdrawalReason: team.withdrawalReason,
+    withdrawnReason: team.withdrawnReason,
+    withdrawReason: team.withdrawReason,
+    withdrawalNote: team.withdrawalNote,
+    withdrawnAt: team.withdrawnAt,
+    withdrawnById: team.withdrawnById,
+    withdrawnByName: team.withdrawnByName,
+    withdrawnByEmail: team.withdrawnByEmail,
+    disqualificationReason: team.disqualificationReason,
+    disqualifiedReason: team.disqualifiedReason,
+    disqualifyReason: team.disqualifyReason,
+    disqualifiedAt: team.disqualifiedAt,
+    disqualifiedById: team.disqualifiedById,
+    disqualifiedByName: team.disqualifiedByName,
+    disqualifiedByEmail: team.disqualifiedByEmail,
+    disqualification: team.disqualification,
+    latestDisqualification: team.latestDisqualification,
+    withdrawal: team.withdrawal,
+    latestWithdrawal: team.latestWithdrawal,
     members: team.members.map(member => ({
       teamMemberId: member.teamMemberId,
       userId: member.userId,
@@ -118,6 +139,25 @@ function mergeReviewAndEventTeams(
       ...team,
       teamStatusId: eventTeam?.teamStatusId ?? team.teamStatusId,
       teamStatusName: eventTeam?.teamStatusName ?? team.teamStatusName,
+      withdrawalReason: eventTeam?.withdrawalReason ?? team.withdrawalReason,
+      withdrawnReason: eventTeam?.withdrawnReason ?? team.withdrawnReason,
+      withdrawReason: eventTeam?.withdrawReason ?? team.withdrawReason,
+      withdrawalNote: eventTeam?.withdrawalNote ?? team.withdrawalNote,
+      withdrawnAt: eventTeam?.withdrawnAt ?? team.withdrawnAt,
+      withdrawnById: eventTeam?.withdrawnById ?? team.withdrawnById,
+      withdrawnByName: eventTeam?.withdrawnByName ?? team.withdrawnByName,
+      withdrawnByEmail: eventTeam?.withdrawnByEmail ?? team.withdrawnByEmail,
+      disqualificationReason: eventTeam?.disqualificationReason ?? team.disqualificationReason,
+      disqualifiedReason: eventTeam?.disqualifiedReason ?? team.disqualifiedReason,
+      disqualifyReason: eventTeam?.disqualifyReason ?? team.disqualifyReason,
+      disqualifiedAt: eventTeam?.disqualifiedAt ?? team.disqualifiedAt,
+      disqualifiedById: eventTeam?.disqualifiedById ?? team.disqualifiedById,
+      disqualifiedByName: eventTeam?.disqualifiedByName ?? team.disqualifiedByName,
+      disqualifiedByEmail: eventTeam?.disqualifiedByEmail ?? team.disqualifiedByEmail,
+      disqualification: eventTeam?.disqualification ?? team.disqualification,
+      latestDisqualification: eventTeam?.latestDisqualification ?? team.latestDisqualification,
+      withdrawal: eventTeam?.withdrawal ?? team.withdrawal,
+      latestWithdrawal: eventTeam?.latestWithdrawal ?? team.latestWithdrawal,
       activeMemberCount,
       members: mergeTeamMemberParticipantStatuses(team.members, eventTeam),
     });
@@ -138,13 +178,126 @@ function labelParticipantStatus(status?: EventParticipantStatus | string | null)
   if (value === "ACTIVE") return "Active";
   if (value === "REJECTED") return "Rejected";
   if (value === "SUSPENDED") return "Suspended";
-  if (value === "TEMPORARY") return "Temporary";
-  if (value === "UNVERIFIED") return "Unverified";
+  if (value === "WITHDRAWN") return "Withdrawn";
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
 }
 
 function sameId(left?: string | null, right?: string | null) {
   return Boolean(left && right && left.trim().toLowerCase() === right.trim().toLowerCase());
+}
+
+type StatusDetailBadge = "withdrawn" | "disqualified";
+
+function getWithdrawalReason(team: TeamEligibilityReviewResponse) {
+  return team.withdrawalReason
+    ?? team.withdrawnReason
+    ?? team.withdrawReason
+    ?? team.withdrawalNote
+    ?? team.withdrawal?.reason
+    ?? team.latestWithdrawal?.reason
+    ?? "";
+}
+
+function getDisqualificationReason(team: TeamEligibilityReviewResponse) {
+  return team.disqualificationReason
+    ?? team.disqualifiedReason
+    ?? team.disqualifyReason
+    ?? team.disqualification?.reason
+    ?? team.latestDisqualification?.reason
+    ?? "";
+}
+
+function statusDetailLabel(status: StatusDetailBadge) {
+  return status === "disqualified" ? "Disqualified" : "Withdrawn";
+}
+
+function getStatusDetailReason(team: TeamEligibilityReviewResponse, status: StatusDetailBadge, auditLog?: EvaluationAuditLogDTO | null) {
+  const directReason = status === "disqualified" ? getDisqualificationReason(team) : getWithdrawalReason(team);
+  return directReason || auditLog?.reason || "";
+}
+
+function getStatusDetailAt(team: TeamEligibilityReviewResponse, status: StatusDetailBadge, auditLog?: EvaluationAuditLogDTO | null) {
+  if (status === "disqualified") {
+    return team.disqualifiedAt
+      ?? team.disqualification?.disqualifiedAt
+      ?? team.latestDisqualification?.disqualifiedAt
+      ?? auditLog?.createdAt
+      ?? "";
+  }
+  return team.withdrawnAt
+    ?? team.withdrawal?.withdrawnAt
+    ?? team.withdrawal?.createdAt
+    ?? team.latestWithdrawal?.withdrawnAt
+    ?? team.latestWithdrawal?.createdAt
+    ?? auditLog?.createdAt
+    ?? "";
+}
+
+function formatStatusActor(name?: string, email?: string, id?: string) {
+  const displayName = name?.trim();
+  const displayEmail = email?.trim();
+  if (displayName && displayEmail) return `${displayName} (${displayEmail})`;
+  return displayName || displayEmail || id || "";
+}
+
+function getStatusDetailActor(team: TeamEligibilityReviewResponse, status: StatusDetailBadge, auditLog?: EvaluationAuditLogDTO | null) {
+  if (status === "disqualified") {
+    return formatStatusActor(team.disqualifiedByName, team.disqualifiedByEmail, team.disqualifiedById)
+      || formatStatusActor(
+        team.disqualification?.disqualifiedByName,
+        team.disqualification?.disqualifiedByEmail,
+        team.disqualification?.disqualifiedById,
+      )
+      || formatStatusActor(
+        team.latestDisqualification?.disqualifiedByName,
+        team.latestDisqualification?.disqualifiedByEmail,
+        team.latestDisqualification?.disqualifiedById,
+      )
+      || auditLog?.actorUserId
+      || "";
+  }
+  return formatStatusActor(team.withdrawnByName, team.withdrawnByEmail, team.withdrawnById)
+    || formatStatusActor(
+      team.withdrawal?.withdrawnByName,
+      team.withdrawal?.withdrawnByEmail,
+      team.withdrawal?.withdrawnById ?? team.withdrawal?.actorUserId,
+    )
+    || formatStatusActor(
+      team.latestWithdrawal?.withdrawnByName,
+      team.latestWithdrawal?.withdrawnByEmail,
+      team.latestWithdrawal?.withdrawnById ?? team.latestWithdrawal?.actorUserId,
+    )
+    || auditLog?.actorUserId
+    || "";
+}
+
+function findTeamStatusAuditLog(logs: EvaluationAuditLogDTO[], teamId: string, status: StatusDetailBadge) {
+  const statusText = status.toUpperCase();
+  return logs
+    .filter(log => log.teamId === teamId)
+    .filter(log => {
+      const haystack = [
+        log.actionType,
+        log.oldValue,
+        log.newValue,
+        log.reason,
+      ].join(" ").toUpperCase();
+      return status === "disqualified"
+        ? haystack.includes("DISQUAL")
+        : haystack.includes("WITHDRAW");
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]
+    ?? logs
+      .filter(log => log.teamId === teamId && log.newValue?.toUpperCase().includes(statusText))
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0]
+    ?? null;
+}
+
+function formatTeamDateTime(value?: string | null) {
+  if (!value) return "None";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 }
 
 function mergeTeamMemberParticipantStatuses(
@@ -270,12 +423,18 @@ export function EventTeamsSummaryCard({ eventId, event, onOpen }: { eventId: str
 export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const [teams, setTeams] = useState<TeamEligibilityReviewResponse[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamEligibilityReviewResponse | null>(null);
+  const [statusInfoTarget, setStatusInfoTarget] = useState<{
+    team: TeamEligibilityReviewResponse;
+    status: StatusDetailBadge;
+    auditLog?: EvaluationAuditLogDTO | null;
+  } | null>(null);
   const [disqualifyTarget, setDisqualifyTarget] = useState<TeamEligibilityReviewResponse | null>(null);
   const [decisionNote, setDecisionNote] = useState("");
   const [disqualifyReason, setDisqualifyReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionTeamId, setActionTeamId] = useState("");
   const [viewTeamId, setViewTeamId] = useState("");
+  const [statusInfoTeamId, setStatusInfoTeamId] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const { categories } = useCategoryContext();
@@ -446,25 +605,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
     const fetchedMembers = await Promise.all(
       Array.from(sourceMembersByUserId.values()).map(async member => {
         const detail = await teamService.getMemberDetail(latestTeam.teamId, member.userId)
-          .catch(() => userService.getUserById(member.userId)
-            .then(userProfile => ({
-              teamMemberId: member.teamMemberId,
-              teamId: latestTeam.teamId,
-              userId: userProfile.userId,
-              fullName: userProfile.fullName,
-              email: userProfile.email,
-              phone: userProfile.phone ?? "",
-              fptStudentCode: userProfile.fptStudentCode ?? "",
-              externalStudentCode: userProfile.externalStudentCode ?? "",
-              universityName: userProfile.universityName ?? "",
-              userTypeName: userProfile.roleName ?? userProfile.role,
-              accountStatusName: userProfile.accountStatusName ?? userProfile.accountStatus,
-              participantStatus: undefined,
-              participantStatusName: undefined,
-              joinedAt: member.joinedAt,
-              active: member.active,
-            }))
-            .catch(() => null));
+          .catch(() => null);
         return toEligibilityMember(member, detail);
       }),
     );
@@ -494,6 +635,25 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       ...team,
       teamStatusId: eventTeam?.teamStatusId ?? latestTeam.teamStatusId,
       teamStatusName: eventTeam?.teamStatusName ?? latestTeam.teamStatusName ?? team.teamStatusName,
+      withdrawalReason: eventTeam?.withdrawalReason ?? latestTeam.withdrawalReason ?? team.withdrawalReason,
+      withdrawnReason: eventTeam?.withdrawnReason ?? latestTeam.withdrawnReason ?? team.withdrawnReason,
+      withdrawReason: eventTeam?.withdrawReason ?? latestTeam.withdrawReason ?? team.withdrawReason,
+      withdrawalNote: eventTeam?.withdrawalNote ?? latestTeam.withdrawalNote ?? team.withdrawalNote,
+      withdrawnAt: eventTeam?.withdrawnAt ?? latestTeam.withdrawnAt ?? team.withdrawnAt,
+      withdrawnById: eventTeam?.withdrawnById ?? latestTeam.withdrawnById ?? team.withdrawnById,
+      withdrawnByName: eventTeam?.withdrawnByName ?? latestTeam.withdrawnByName ?? team.withdrawnByName,
+      withdrawnByEmail: eventTeam?.withdrawnByEmail ?? latestTeam.withdrawnByEmail ?? team.withdrawnByEmail,
+      disqualificationReason: eventTeam?.disqualificationReason ?? latestTeam.disqualificationReason ?? team.disqualificationReason,
+      disqualifiedReason: eventTeam?.disqualifiedReason ?? latestTeam.disqualifiedReason ?? team.disqualifiedReason,
+      disqualifyReason: eventTeam?.disqualifyReason ?? latestTeam.disqualifyReason ?? team.disqualifyReason,
+      disqualifiedAt: eventTeam?.disqualifiedAt ?? latestTeam.disqualifiedAt ?? team.disqualifiedAt,
+      disqualifiedById: eventTeam?.disqualifiedById ?? latestTeam.disqualifiedById ?? team.disqualifiedById,
+      disqualifiedByName: eventTeam?.disqualifiedByName ?? latestTeam.disqualifiedByName ?? team.disqualifiedByName,
+      disqualifiedByEmail: eventTeam?.disqualifiedByEmail ?? latestTeam.disqualifiedByEmail ?? team.disqualifiedByEmail,
+      disqualification: eventTeam?.disqualification ?? latestTeam.disqualification ?? team.disqualification,
+      latestDisqualification: eventTeam?.latestDisqualification ?? latestTeam.latestDisqualification ?? team.latestDisqualification,
+      withdrawal: eventTeam?.withdrawal ?? latestTeam.withdrawal ?? team.withdrawal,
+      latestWithdrawal: eventTeam?.latestWithdrawal ?? latestTeam.latestWithdrawal ?? team.latestWithdrawal,
       activeMemberCount,
       teamSizeEligible,
       membersInfoComplete,
@@ -520,6 +680,27 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       setError(loadError instanceof Error ? loadError.message : "Could not load latest team members.");
     } finally {
       setViewTeamId("");
+    }
+  };
+
+  const openStatusInfo = async (team: TeamEligibilityReviewResponse, status: StatusDetailBadge) => {
+    setError("");
+    setStatusInfoTarget({ team, status });
+    setStatusInfoTeamId(team.teamId);
+    try {
+      const [mergedTeam, auditLogs] = await Promise.all([
+        mergeLatestTeamMembers(team),
+        judgingService.getAuditLogs(eventId).catch(() => [] as EvaluationAuditLogDTO[]),
+      ]);
+      setStatusInfoTarget({
+        team: mergedTeam,
+        status,
+        auditLog: findTeamStatusAuditLog(auditLogs, team.teamId, status),
+      });
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : `Could not load latest ${statusDetailLabel(status).toLowerCase()} team details.`);
+    } finally {
+      setStatusInfoTeamId("");
     }
   };
 
@@ -622,18 +803,19 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
             <div className="relative min-w-[160px]">
               <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
               <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
-  <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-    <SelectValue placeholder="Select..." />
-  </SelectTrigger>
-  <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-    <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
+                <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                  <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
                 <SelectItem value="pending_approval" style={{ color: COLORS.textPrimary }}>Pending</SelectItem>
                 <SelectItem value="active" style={{ color: COLORS.textPrimary }}>Approved (Active)</SelectItem>
                 <SelectItem value="rejected" style={{ color: COLORS.textPrimary }}>Rejected</SelectItem>
-                <SelectItem value="suspended" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
-                <SelectItem value="default" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
-  </SelectContent>
-</Select>
+                  <SelectItem value="disqualified" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
+                  <SelectItem value="withdrawn" style={{ color: COLORS.textPrimary }}>Withdrawn</SelectItem>
+                  <SelectItem value="forming" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
@@ -649,6 +831,9 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
           {filteredTeams.map(team => {
             const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
             const isActive = status.badge === "active";
+            const isWithdrawn = status.badge === "withdrawn";
+            const isDisqualified = status.badge === "disqualified";
+            const detailStatus = isDisqualified ? "disqualified" : isWithdrawn ? "withdrawn" : null;
             return (
               <div
                 key={team.teamId}
@@ -687,6 +872,18 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
                       Disqualify
                     </Button>
                   )}
+                  {detailStatus && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={statusInfoTeamId === team.teamId ? <Loader size={13} className="animate-spin" /> : <Info size={13} />}
+                      disabled={statusInfoTeamId === team.teamId}
+                      onClick={() => void openStatusInfo(team, detailStatus)}
+                      title={`View ${statusDetailLabel(detailStatus).toLowerCase()} details and reason`}
+                    >
+                      Details
+                    </Button>
+                  )}
                 </div>
               </div>
             );
@@ -709,6 +906,16 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
           }}
           onApprove={() => void decide(true)}
           onReject={() => void decide(false)}
+        />
+      )}
+
+      {statusInfoTarget && (
+        <TeamStatusInfoDialog
+          team={statusInfoTarget.team}
+          status={statusInfoTarget.status}
+          auditLog={statusInfoTarget.auditLog}
+          categoryName={categoryName(statusInfoTarget.team.categoryId)}
+          onClose={() => setStatusInfoTarget(null)}
         />
       )}
 
@@ -756,6 +963,87 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
         </div>
       )}
     </>
+  );
+}
+
+function TeamStatusInfoDialog({
+  team,
+  status,
+  auditLog,
+  categoryName,
+  onClose,
+}: {
+  team: TeamEligibilityReviewResponse;
+  status: StatusDetailBadge;
+  auditLog?: EvaluationAuditLogDTO | null;
+  categoryName: string;
+  onClose: () => void;
+}) {
+  const currentStatus = getTeamStatusInfo(team.teamStatusId, team.teamStatusName);
+  const label = statusDetailLabel(status);
+  const reason = getStatusDetailReason(team, status, auditLog);
+  const details: Array<[string, string | number | undefined]> = [
+    ["Category", categoryName],
+    ["Members", `${team.activeMemberCount}/${team.minTeamSize}-${team.maxTeamSize}`],
+    [`${label} At`, formatTeamDateTime(getStatusDetailAt(team, status, auditLog))],
+    [`${label} By`, getStatusDetailActor(team, status, auditLog)],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-4" style={{ background: "rgba(35,20,10,0.3)" }}>
+      <Card
+        className="p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        style={{ background: "var(--surface-bg)", backdropFilter: "none", WebkitBackdropFilter: "none" }}
+        role="dialog"
+        aria-modal="true"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Info size={20} style={{ color: status === "disqualified" ? COLORS.error : "#7a5c3a" }} />
+              <div style={{ fontSize: 20, fontWeight: 800, color: COLORS.textPrimary }}>{label} Team Details</div>
+              <StatusBadge status={currentStatus.badge} />
+            </div>
+            <div style={{ fontSize: 13, color: COLORS.textSecondary, marginTop: 5 }}>{team.teamName}</div>
+          </div>
+          <button type="button" aria-label="Close" onClick={onClose} style={{ color: COLORS.textSecondary }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+          {details.map(([label, value]) => (
+            <div key={label} className="rounded-xl px-3 py-2.5" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>{label.toUpperCase()}</div>
+              <div style={{ fontSize: 13, color: COLORS.textPrimary, marginTop: 4, wordBreak: "break-word" }}>{value || "None"}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="rounded-xl p-4 mt-4" style={{ background: "rgba(100,70,30,0.05)", border: "1px solid rgba(100,70,30,0.12)" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: COLORS.textSecondary, marginBottom: 8 }}>{label.toUpperCase()} REASON</div>
+          <div style={{ fontSize: 14, color: COLORS.textPrimary, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {reason || `No ${label.toLowerCase()} reason returned by the server.`}
+          </div>
+        </div>
+
+        {auditLog && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            <div className="rounded-xl px-3 py-2.5" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>AUDIT ACTION</div>
+              <div style={{ fontSize: 13, color: COLORS.textPrimary, marginTop: 4, wordBreak: "break-word" }}>{auditLog.actionType || "None"}</div>
+            </div>
+            <div className="rounded-xl px-3 py-2.5" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: COLORS.textSecondary }}>STATUS CHANGE</div>
+              <div style={{ fontSize: 13, color: COLORS.textPrimary, marginTop: 4, wordBreak: "break-word" }}>
+                {[auditLog.oldValue, auditLog.newValue].filter(Boolean).join(" -> ") || "None"}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </Card>
+    </div>
   );
 }
 

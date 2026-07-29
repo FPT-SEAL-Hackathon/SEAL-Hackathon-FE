@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { AlertCircle, Eye, EyeOff, Lock, Loader, Mail } from "lucide-react";
 import { getLinkCandidates, linkLocalAccount, type LinkCandidate } from "@/features/auth/api/authService";
 import { useAuth } from "@/features/auth/store/authStore";
-import { ApiError } from "@/lib/api/apiClient";
+import { ApiError, parseApiError } from "@/lib/api/apiClient";
 
 /**
  * Liên kết tài khoản OAuth tạm vào tài khoản local có sẵn.
@@ -51,7 +51,7 @@ export function LinkAccountPage() {
         setMergeBlocked(true);
         setApiError(err.message);
       } else {
-        setApiError(err instanceof Error ? err.message : "Could not link your account.");
+        setApiError(parseApiError(err).message);
       }
     } finally {
       setLoading(false);
@@ -66,7 +66,7 @@ export function LinkAccountPage() {
       <section className="glass-strong w-full max-w-md rounded-3xl p-8">
         <h1 style={{ color: "var(--text-primary)", fontSize: 26, fontWeight: 800 }}>Link to existing account</h1>
         <p className="mt-2" style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.7 }}>
-          Thông tin tài khoản có thể đã tồn tại. Bạn có thể liên kết tài khoản sau khi xác minh mật khẩu bên dưới.
+          An account with this information may already exist. You can link the accounts after verifying your password below.
         </p>
 
         {!loadingCandidates && candidates.length > 0 && (

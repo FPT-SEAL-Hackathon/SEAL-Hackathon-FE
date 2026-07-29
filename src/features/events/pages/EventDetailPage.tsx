@@ -46,14 +46,18 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
   const [totalPrize, setTotalPrize] = useState<{ amount: number; currency: string } | null>(null);
 
   type ConfirmAction = "publish" | "cancel" | "delete" | null;
+  type ConfirmStep = "confirm" | "verify";
 
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
+  const [confirmStep, setConfirmStep] = useState<ConfirmStep>("confirm");
+  const [confirmInput, setConfirmInput] = useState("");
 
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   const {
     loading,
     publishEvent,
+    cancelEvent,
   } = useEventActions();
 
   const handleConfirm = async () => {
@@ -72,12 +76,22 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
 
                 break;
             }
+            case "cancel": {
+              if (confirmStep === "confirm") {
+                setConfirmStep("verify");
+                return;
+              }
+              const updatedEvent = await cancelEvent(currentEvent.eventId);
+              setCurrentEvent(updatedEvent);
+              setConfirmAction(null);
+              break;
+            }
         }
     } catch (err) {
         if (err instanceof ApiError) {
           setError(err.message);
         } else {
-            setError("Failed to publish event.");
+            setError("Operation failed");
         }
     } finally {
         setConfirmLoading(false);
@@ -109,20 +123,26 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
 
             {/* Header */}
             <EventDetailHeader 
-              event={event}
+              event={currentEvent}
               totalPrize={totalPrize}
               onBack={onBack}
 
               onPublish={() => {
                 setError("");
+                setConfirmStep("confirm");
+                setConfirmInput("");
                 setConfirmAction("publish");
               }}
               onCancel={() => {
                 setError("");
+                setConfirmStep("confirm");
+                setConfirmInput("");
                 setConfirmAction("cancel");
               }}
               onDelete={() => {
                 setError("");
+                setConfirmStep("confirm");
+                setConfirmInput("");
                 setConfirmAction("delete");
               }}
               onEdit={onEdit}
@@ -156,7 +176,7 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             {/* Tab content */}
             {activeTab === "overview" && (
               <OverviewTab 
-                event={event} 
+                event={currentEvent} 
                 totalPrize={totalPrize}
                 onOpenTeamManagement={() => setActiveTab("teams")}
                 onEdit={onEdit}
@@ -164,7 +184,7 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             )}
 
             {activeTab === "schedule" && (
-              <ScheduleTab event={event} />
+              <ScheduleTab event={currentEvent} />
             )}
 
             {activeTab === "criteria" && (
@@ -176,7 +196,7 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             )}
         
             {activeTab === "rounds" && (
-              <RoundsTab event={event} />
+              <RoundsTab event={currentEvent} />
             )}
 
             {activeTab === "assign-judges" && (
@@ -188,7 +208,7 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             )}
           
             {activeTab === "teams" && (
-              <EventTeamsSection eventId={event.eventId} event={event} />
+              <EventTeamsSection eventId={currentEvent.eventId} event={currentEvent} />
             )}       
             
             {activeTab === "judging-approval" && (
@@ -201,14 +221,29 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
             {
               confirmAction && (
                   <ConfirmDialog
-                      title={EVENT_ACTION_CONFIG[confirmAction].title}
-                      message={EVENT_ACTION_CONFIG[confirmAction].message}
-                      confirmText={EVENT_ACTION_CONFIG[confirmAction].confirmText}
-                      confirmVariant={EVENT_ACTION_CONFIG[confirmAction].variant}
-                      loading={confirmLoading}
-                      error={error}
-                      onConfirm={handleConfirm}
-                      onCancel={() => setConfirmAction(null)}                    
+                    title={EVENT_ACTION_CONFIG[confirmAction].title}
+                    message={EVENT_ACTION_CONFIG[confirmAction].message}
+                    confirmText={
+                      confirmAction === "cancel" && confirmStep === "confirm"
+                        ? "Continue"
+                        : EVENT_ACTION_CONFIG[confirmAction].confirmText
+                    }
+                    confirmVariant={EVENT_ACTION_CONFIG[confirmAction].variant}
+                    loading={confirmLoading}
+                    error={error}
+                    step={confirmStep}
+                    verifyLabel="Type the event name to confirm cancellation"
+                    verifyPlaceholder="Enter event name"
+                    expectedValue={currentEvent.eventName}
+                    verifyValue={confirmInput}
+                    onVerifyChange={setConfirmInput}
+                    onConfirm={handleConfirm}
+                    onCancel={() => {
+                      setConfirmAction(null);
+                      setConfirmStep("confirm");
+                      setConfirmInput("");
+                      setError("");
+                    }}
                   />
               )
             }

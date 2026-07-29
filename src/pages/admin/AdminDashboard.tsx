@@ -39,6 +39,7 @@ import { AdminAppealsView } from "./components/AdminAppealsView";
 import { AdminAuditView } from "./components/AdminAuditView";
 import { AdminProfileView } from "./components/AdminProfileView";
 import { AdminSettingsView } from "./components/AdminSettingsView";
+import { AdminLandingSettingsView } from "./components/AdminLandingSettingsView";
 import { AdminAwardsView } from "./components/AdminAwardsView";
 import { AdminAwardPatternsView } from "./components/AdminAwardPatternsView";
 import { AdminSubmissionRepositoriesView } from "./components/AdminSubmissionRepositoriesView";
@@ -668,7 +669,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setRankingsPublished(true);
     setTimeout(() => {
       setRankingsPublished(false);
-      if (window.confirm("Kết quả đã được duyệt! Bạn có muốn gửi Notification báo cho toàn bộ thí sinh không?")) {
+      if (window.confirm("Results approved. Send a notification to all participants?")) {
         setBroadcastTitle("Leaderboard Published!");
         setBroadcastMessage("The official results for the event have been published. Check out the leaderboard!");
         onNavigate("notifications");
@@ -1036,6 +1037,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       case "appeals": return <AdminAppealsView />;
       case "submission-repositories": return <AdminSubmissionRepositoriesView />;
       case "settings": return <AdminSettingsView context={viewContext} />;
+      case "landing-settings": return <AdminLandingSettingsView context={viewContext} />;
       case "profile": return <AdminProfileView context={viewContext} />;
       default: return <AdminDashboardView context={viewContext} />;
 

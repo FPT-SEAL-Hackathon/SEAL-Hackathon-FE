@@ -4,14 +4,17 @@ import { toast } from "sonner";
 import { Button, Card, COLORS, SectionHeader, StatusBadge } from "@/components/shared/UIComponents";
 import { parseApiError, saveUser } from "@/lib/api/apiClient";
 import { meService, type MyProfileResponse } from "@/features/users/api/userService";
+import { fptStudentCodePrefixService, type FptStudentCodePrefix } from "@/features/users/api/fptStudentCodePrefixService";
 import { useAuth } from "@/features/auth/store/authStore";
 import {
+  getFptStudentCodePrefixInfo,
   isValidExternalStudentCode,
   isValidFptStudentCode,
   isValidVietnamesePhone,
   MSG_EXTERNAL_CODE,
   MSG_FPT_CODE,
   MSG_PHONE,
+  normalizeFptStudentCode,
 } from "@/features/users/utils/profileValidation";
 
 const MAX_NAME_LENGTH = 200;
@@ -53,6 +56,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
   const [universityName, setUniversityName] = useState("");
   const [fptStudentCode, setFptStudentCode] = useState("");
   const [externalStudentCode, setExternalStudentCode] = useState("");
+  const [fptPrefixes, setFptPrefixes] = useState<FptStudentCodePrefix[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,6 +79,18 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fptStudentCodePrefixService.list()
+      .then(data => {
+        if (!cancelled) setFptPrefixes(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFptPrefixes([]);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const validate = () => {
     const errors: Record<string, string> = {};
     if (!fullName.trim()) errors.fullName = "Full name is required.";
@@ -82,7 +98,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
     if (phone.trim() && !isValidVietnamesePhone(phone.trim())) errors.phone = MSG_PHONE;
     // Enforce-on-change: chỉ báo lỗi mã SV khi user ĐỔI giá trị (grandfather dữ liệu cũ).
     if (isFptStudent(profile?.role) && fptStudentCode.trim() !== (profile?.fptStudentCode ?? "")
-        && fptStudentCode.trim() && !isValidFptStudentCode(fptStudentCode.trim())) {
+        && fptStudentCode.trim() && !isValidFptStudentCode(fptStudentCode.trim(), fptPrefixes)) {
       errors.fptStudentCode = MSG_FPT_CODE;
     }
     if (isExternalStudent(profile?.role)) {
@@ -105,7 +121,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
         fullName: fullName.trim(),
         phone: phone.trim(),
         universityName: isExternalStudent(profile?.role) ? universityName.trim() : undefined,
-        fptStudentCode: isFptStudent(profile?.role) ? fptStudentCode.trim() : undefined,
+        fptStudentCode: isFptStudent(profile?.role) ? normalizeFptStudentCode(fptStudentCode) : undefined,
         externalStudentCode: isExternalStudent(profile?.role) ? externalStudentCode.trim() : undefined,
       });
       setProfile(prev => (prev ? { ...prev, ...updated } : prev));
@@ -144,6 +160,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
 
   const showUniversity = isExternalStudent(profile?.role) || !!profile?.universityName;
   const notCompliant = profile?.profileCompliant === false;
+  const prefixInfo = isFptStudent(profile?.role) ? getFptStudentCodePrefixInfo(fptStudentCode, fptPrefixes) : null;
 
   const body = loading ? (
     <Card className="p-8">
@@ -163,7 +180,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
           className="mb-4 px-4 py-3 rounded-xl"
           style={{ background: `${COLORS.warning}12`, border: `1px solid ${COLORS.warning}40`, color: "#92400e" }}
         >
-          <div style={{ fontWeight: 700, fontSize: 13 }}>Hồ sơ chưa đúng định dạng chuẩn — vui lòng cập nhật</div>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>Your profile does not match the required format — please update it</div>
           <ul style={{ fontSize: 12, marginTop: 6, marginLeft: 16, listStyle: "disc" }}>
             {(profile?.profileIssues ?? []).map((issue, i) => <li key={i}>{issue}</li>)}
           </ul>
@@ -193,7 +210,7 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
         </div>
 
         <div>
-          <label style={labelStyle}>Email (cannot be changed)</label>
+          <label style={labelStyle}>Email</label>
           <input value={profile?.email ?? ""} disabled className="w-full px-3 py-2 rounded-xl outline-none" style={disabledStyle} />
         </div>
 
@@ -214,13 +231,19 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
             <label style={labelStyle}>Student Code (FPT)</label>
             <input
               value={fptStudentCode}
-              onChange={e => setFptStudentCode(e.target.value)}
+              disabled
               placeholder="e.g. SE123456"
               maxLength={20}
               className="w-full px-3 py-2 rounded-xl outline-none"
-              style={inputStyle}
+              style={disabledStyle}
             />
             {fieldErrors.fptStudentCode && <div style={errorStyle}>{fieldErrors.fptStudentCode}</div>}
+            {prefixInfo && (
+              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 4 }}>
+                {prefixInfo.prefix} - {prefixInfo.englishName}; {prefixInfo.majorGroup}
+                {prefixInfo.majorCode ? ` (${prefixInfo.majorCode})` : ""}
+              </div>
+            )}
           </div>
         )}
         {isExternalStudent(profile?.role) && (
@@ -228,10 +251,10 @@ export function MyProfileSection({ title, subtitle }: { title?: string; subtitle
             <label style={labelStyle}>Student Code (External)</label>
             <input
               value={externalStudentCode}
-              onChange={e => setExternalStudentCode(e.target.value)}
+              disabled
               maxLength={50}
               className="w-full px-3 py-2 rounded-xl outline-none"
-              style={inputStyle}
+              style={disabledStyle}
             />
             {fieldErrors.externalStudentCode && <div style={errorStyle}>{fieldErrors.externalStudentCode}</div>}
           </div>
