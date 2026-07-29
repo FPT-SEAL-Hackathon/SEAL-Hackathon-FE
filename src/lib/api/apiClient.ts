@@ -211,19 +211,33 @@ async function buildApiError(res: Response): Promise<ApiError> {
 
   const rawText = await res.text().catch(() => "");
   if (rawText && rawText.trim()) {
-    try {
-      const err = JSON.parse(rawText) as BackendErrorBody;
-      code = err.error ?? err.code;
-      fieldErrors = toStringRecord(err.errors);
-      details = err.details;
-      if (err.message && err.message.trim()) {
-        message = err.message;
-      } else if (err.error && err.error.trim()) {
-        message = err.error;
+    const trimmed = rawText.trim();
+    // Check if response is HTML (e.g., Azure proxy error page or Spring whitelabel HTML)
+    if (trimmed.startsWith("<") || /<!doctype/i.test(trimmed) || /<html/i.test(trimmed)) {
+      const titleMatch = trimmed.match(/<title>(.*?)<\/title>/i);
+      const h1Match = trimmed.match(/<h1>(.*?)<\/h1>/i);
+      if (titleMatch && titleMatch[1]) {
+        message = titleMatch[1].trim();
+      } else if (h1Match && h1Match[1]) {
+        message = h1Match[1].trim();
+      } else {
+        message = `Server Error (${res.status}): ${res.statusText || "HTML response returned"}`;
       }
-    } catch {
-      // Body không phải JSON (vd Backend trả plain text string trực tiếp)
-      message = rawText.trim();
+    } else {
+      try {
+        const err = JSON.parse(trimmed) as BackendErrorBody;
+        code = err.error ?? err.code;
+        fieldErrors = toStringRecord(err.errors);
+        details = err.details;
+        if (err.message && err.message.trim()) {
+          message = err.message;
+        } else if (err.error && err.error.trim()) {
+          message = err.error;
+        }
+      } catch {
+        // Body không phải JSON (vd Backend trả plain text string trực tiếp)
+        message = trimmed;
+      }
     }
   }
   return new ApiError(res.status, message, { code, fieldErrors, details });
