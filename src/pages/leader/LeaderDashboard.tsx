@@ -779,7 +779,7 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     let cancelled = false;
     const fetchTeams = async () => {
       try {
-        const events = await eventService.getPublic();
+        const events = await eventService.getAll(true).catch(() => eventService.getPublic());
         if (cancelled) return;
         const teams = await discoverUserTeamsForEvents(events, user?.userId);
         if (cancelled) return;

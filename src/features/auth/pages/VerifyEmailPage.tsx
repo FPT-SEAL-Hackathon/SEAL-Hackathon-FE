@@ -33,16 +33,18 @@ const STATE_COPY: Record<VerificationState, { title: string; message: string }> 
 };
 
 function getVerificationErrorState(error: unknown): VerificationState {
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
   const status = error instanceof ApiError ? error.status : undefined;
+  const code = error instanceof ApiError ? error.code : undefined;
 
-  if (message.includes("already") || message.includes("verified") || status === 409) {
-    return "already-verified";
-  }
+  // Ưu tiên mã lỗi máy đọc; backend hiện trả BAD_REQUEST cho cả 3 tình huống verify
+  // nên vẫn cần dự phòng so khớp chuỗi. Khi backend bổ sung code riêng thì 2 nhánh
+  // đầu tự động ăn và có thể bỏ phần so chuỗi bên dưới.
+  if (code === "EMAIL_ALREADY_VERIFIED" || status === 409) return "already-verified";
+  if (code === "VERIFICATION_TOKEN_EXPIRED" || status === 410) return "expired";
 
-  if (message.includes("expired") || status === 410) {
-    return "expired";
-  }
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("already") || message.includes("verified")) return "already-verified";
+  if (message.includes("expired")) return "expired";
 
   return "invalid";
 }

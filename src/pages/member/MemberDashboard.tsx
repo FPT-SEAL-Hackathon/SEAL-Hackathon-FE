@@ -22,6 +22,7 @@ import {
 } from "@/components/shared/UIComponents";
 import { useAuth } from "@/features/auth/store/authStore";
 import { updateProfile } from "@/features/auth/api/authService";
+import { isOptionalHttpUrl } from "@/features/users/utils/profileValidation";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
 import { roundService } from "@/features/events/service/roundService";
@@ -239,7 +240,9 @@ function mapEvent(event: EventResponse): MemberEvent {
     registrationStart: event.registrationStart,
     registrationEnd: event.registrationEnd,
     location: event.location,
-    eventStatus: typeof event.eventStatus === "object" ? event.eventStatus.eventStatusName : event.eventStatusName,
+    eventStatus: typeof event.eventStatus === "object"
+      ? (event.eventStatus?.eventStatusName || event.eventStatusName || "")
+      : (event.eventStatusName || event.eventStatus || ""),
     participants: "N/A",
     tracks: "N/A",
     prizePool: "N/A",
@@ -484,7 +487,43 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             .map(participation => [participation.eventId, participation]),
         );
         setParticipations(participationByEvent);
-        setApiEvents(data.map(event => mergeEventParticipation(mapEvent(event), participationByEvent[event.eventId])));
+
+        const eventsByEventId = new Map<string, MemberEvent>();
+        data.forEach(rawEvent => {
+          const mapped = mapEvent(rawEvent);
+          if (mapped.eventId) {
+            eventsByEventId.set(mapped.eventId, mergeEventParticipation(mapped, participationByEvent[mapped.eventId]));
+          }
+        });
+
+        myParticipations.forEach(part => {
+          if (part.eventId && !eventsByEventId.has(part.eventId)) {
+            const syntheticEvent: MemberEvent = {
+              eventId: part.eventId,
+              eventName: part.eventName || "Joined Event",
+              description: "",
+              eventStartDate: "",
+              eventEndDate: "",
+              registrationStart: "",
+              registrationEnd: "",
+              location: "",
+              eventStatus: part.eventStatus || "REGISTRATION_CLOSED",
+              participants: "N/A",
+              tracks: "N/A",
+              prizePool: "N/A",
+              participantStatus: normalizeParticipationStatus(part.participantStatus),
+              bannerImageUrl: "",
+              eventParticipantId: part.eventParticipantId,
+              rejectedReason: part.rejectedReason,
+              appliedAt: part.appliedAt,
+              approvedAt: part.approvedAt,
+            };
+            eventsByEventId.set(part.eventId, syntheticEvent);
+          }
+        });
+
+        const mergedEvents = Array.from(eventsByEventId.values());
+        setApiEvents(mergedEvents);
         if (myParticipations.length > 0 || !hasToken) setEventsError("");
       })
       .catch(error => {
@@ -563,14 +602,33 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     email: user?.email ?? "",
     phone: user?.phone ?? "",
     github: user?.github ?? "", portfolio: user?.portfolio ?? "",
+    universityName: (user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT") ? "FPT University" : (user?.universityName ?? ""),
     bio: user?.bio ?? "", major: "",
   });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileFieldErrors, setProfileFieldErrors] = useState<{ github?: string; portfolio?: string }>({});
+
   const handleSaveProfile = async () => {
-    setProfileSaving(true);
     setProfileError(null);
+    setProfileFieldErrors({});
+
+    const fieldErrs: { github?: string; portfolio?: string } = {};
+    if (profileForm.github.trim() && !isOptionalHttpUrl(profileForm.github.trim())) {
+      fieldErrs.github = "URL GitHub phải bắt đầu bằng http:// hoặc https://";
+    }
+    if (profileForm.portfolio.trim() && !isOptionalHttpUrl(profileForm.portfolio.trim())) {
+      fieldErrs.portfolio = "URL Portfolio phải bắt đầu bằng http:// hoặc https://";
+    }
+
+    if (Object.keys(fieldErrs).length > 0) {
+      setProfileFieldErrors(fieldErrs);
+      toast.error("Vui lòng kiểm tra lại định dạng URL GitHub / Portfolio");
+      return;
+    }
+
+    setProfileSaving(true);
     try {
       const isFpt = user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT";
       const isExternal = user?.role === "EXTERNAL_STUDENT" || user?.role === "ROLE_EXTERNAL_STUDENT";
@@ -578,9 +636,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       const updatedUser = await updateProfile({
         fullName: profileForm.fullName.trim(),
         phone: profileForm.phone.trim() || undefined,
-        fptStudentCode: isFpt ? profileForm.studentId.trim() || undefined : undefined,
-        externalStudentCode: isExternal ? profileForm.studentId.trim() || undefined : undefined,
-        universityName: isExternal ? user?.universityName : undefined,
+        fptStudentCode: isFpt ? (user?.fptStudentCode || studentCode || profileForm.studentId.trim()) || undefined : undefined,
+        externalStudentCode: isExternal ? (user?.externalStudentCode || studentCode || profileForm.studentId.trim()) || undefined : undefined,
+        universityName: isFpt ? "FPT University" : (isExternal ? profileForm.universityName.trim() || undefined : user?.universityName),
         bio: profileForm.bio.trim() || undefined,
         github: profileForm.github.trim() || undefined,
         portfolio: profileForm.portfolio.trim() || undefined,
@@ -676,7 +734,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
   useEffect(() => {
-    if (!user?.userId || apiEvents.length === 0) {
+    if (!user?.userId) {
       setSubmissionTeams([]);
       setDashboardTeams([]);
       return;
@@ -2398,7 +2456,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                             return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>-</span>;
                           }
                           if (rank <= 3) {
-                            return <span style={{ fontSize: 16 }}>{["đŸ¥‡", "đŸ¥ˆ", "đŸ¥‰"][rank - 1]}</span>;
+                            return <span style={{ fontSize: 16 }}>{["🥇", "🥈", "🥉"][rank - 1]}</span>;
                           }
                           return <span style={{ fontSize: 13, fontWeight: 600, color: COLORS.textSecondary, width: 20, textAlign: "center" }}>#{rank}</span>;
                         })()}
@@ -3097,23 +3155,50 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Personal Information</div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: "Full Name", key: "fullName" },
-                { label: "Student ID", key: "studentId" },
-                { label: "Email", key: "email" },
-                { label: "Phone", key: "phone" },
-                { label: "GitHub", key: "github" },
-                { label: "Portfolio", key: "portfolio" },
-              ].map(field => (
-                <div key={field.key}>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{field.label}</label>
-                  <input
-                    value={profileForm[field.key as keyof typeof profileForm]}
-                    onChange={e => setProfileForm(p => ({ ...p, [field.key]: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg outline-none"
-                    style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-                  />
-                </div>
-              ))}
+                { label: "Full Name", key: "fullName", disabled: false },
+                { label: "Student ID", key: "studentId", disabled: true },
+                { label: "Email", key: "email", disabled: true },
+                { label: "Phone", key: "phone", disabled: false },
+                { label: "University", key: "universityName", disabled: user?.role === "FPT_STUDENT" || user?.role === "ROLE_FPT_STUDENT", placeholder: "e.g. Greenwich University" },
+                { label: "GitHub", key: "github", disabled: false, placeholder: "https://github.com/username" },
+                { label: "Portfolio", key: "portfolio", disabled: false, placeholder: "https://yourportfolio.com" },
+              ].map(field => {
+                const isFieldDisabled = field.disabled;
+                const fieldErr = profileFieldErrors[field.key as keyof typeof profileFieldErrors];
+                return (
+                  <div key={field.key}>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>
+                      {field.label}
+                    </label>
+                    <input
+                      value={profileForm[field.key as keyof typeof profileForm]}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setProfileForm(p => ({ ...p, [field.key]: val }));
+                        if (profileFieldErrors[field.key as keyof typeof profileFieldErrors]) {
+                          setProfileFieldErrors(p => ({ ...p, [field.key]: undefined }));
+                        }
+                      }}
+                      disabled={isFieldDisabled}
+                      placeholder={field.placeholder}
+                      className="w-full px-3 py-2 rounded-lg outline-none"
+                      style={{
+                        fontSize: 14,
+                        border: `1px solid ${fieldErr ? COLORS.error : COLORS.border}`,
+                        background: COLORS.bg,
+                        color: COLORS.textPrimary,
+                        opacity: isFieldDisabled ? 0.6 : 1,
+                        cursor: isFieldDisabled ? "not-allowed" : "text",
+                      }}
+                    />
+                    {fieldErr && (
+                      <span style={{ fontSize: 12, color: COLORS.error, marginTop: 4, display: "block" }}>
+                        {fieldErr}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <div className="mt-4">
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Bio</label>
@@ -3135,7 +3220,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               >
                 {profileSaving ? "Saving..." : "Save Changes"}
               </Button>
-              {profileSaved && <span style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>âœ“ Profile saved!</span>}
+              {profileSaved && (
+                <span className="inline-flex items-center gap-1" style={{ fontSize: 13, color: COLORS.success, fontWeight: 600 }}>
+                  <CheckCircle size={14} /> Profile saved!
+                </span>
+              )}
               {profileError && <span style={{ fontSize: 13, color: COLORS.error, fontWeight: 600 }}>{profileError}</span>}
             </div>
           </Card>
