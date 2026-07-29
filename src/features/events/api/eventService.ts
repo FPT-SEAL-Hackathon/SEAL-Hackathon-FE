@@ -201,4 +201,5 @@ export const eventService = {
   delete: (id: string) => api.delete(`/api/v1/event/${id}`),
   getAllEventsForOrganizer: async () => normalizeEvents(unwrapList(await api.get<EventResponse[] | BackendEnvelope<EventResponse[]>>("/api/v1/event/organizer"))),
   publishEvent: (id: string) => api.post<EventResponse>(`/api/v1/event/publish/${id}`, {}),
+  cancelEvent: (id: string) => api.patch<EventResponse>(`/api/v1/event/cancel/${id}`),
 };
