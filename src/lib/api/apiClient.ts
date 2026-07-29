@@ -208,16 +208,23 @@ async function buildApiError(res: Response): Promise<ApiError> {
   let code: string | undefined;
   let fieldErrors: Record<string, string> | undefined;
   let details: Record<string, unknown> | undefined;
-  try {
-    const err = await res.json() as BackendErrorBody;
-    code = err.error ?? err.code;
-    fieldErrors = toStringRecord(err.errors);
-    details = err.details;
-    if (err.message && err.message.trim()) message = err.message;
-  } catch (parseError) {
-    // Body không phải JSON (vd advice cũ trả plain text). Đừng nuốt im lặng —
-    // trước đây `catch { /* ignore */ }` khiến lỗi thật biến mất hoàn toàn.
-    console.error("[api-error] response body was not JSON", { status: res.status, parseError });
+
+  const rawText = await res.text().catch(() => "");
+  if (rawText && rawText.trim()) {
+    try {
+      const err = JSON.parse(rawText) as BackendErrorBody;
+      code = err.error ?? err.code;
+      fieldErrors = toStringRecord(err.errors);
+      details = err.details;
+      if (err.message && err.message.trim()) {
+        message = err.message;
+      } else if (err.error && err.error.trim()) {
+        message = err.error;
+      }
+    } catch {
+      // Body không phải JSON (vd Backend trả plain text string trực tiếp)
+      message = rawText.trim();
+    }
   }
   return new ApiError(res.status, message, { code, fieldErrors, details });
 }

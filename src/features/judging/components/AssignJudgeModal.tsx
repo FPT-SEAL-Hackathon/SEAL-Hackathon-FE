@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "motion/react";
 import { roundService } from "@/features/judging/api/roundService";
 import { userService } from "@/features/users/api/userService";
 import { categoryService } from "@/features/categories/api/categoryService";
-import { ApiError } from "@/lib/api/apiClient";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 import { COLORS } from "@/components/shared/UIComponents";
 
 interface Props {
@@ -56,7 +57,9 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
       setAssignedIds(newIds);
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to remove judge");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setRemovingId(null);
     }
@@ -92,7 +95,11 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
         assignedMentors.forEach((m: any) => mentorIds.add(m.mentorId || m.expertId));
         setCategoryMentorIds(mentorIds);
       })
-      .catch(() => setError("Failed to load judges and mentors"))
+      .catch((err) => {
+        const errMsg = parseApiError(err).message || "Failed to load judges and mentors";
+        setError(errMsg);
+        toast.error(errMsg);
+      })
       .finally(() => setLoading(false));
   }, [roundId]);
 
@@ -128,7 +135,9 @@ export function AssignJudgeModal({ roundId, roundName, onClose, onSaved }: Props
       setSelectedIds([]);
       onSaved();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to assign judges");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setAssigning(false);
     }
