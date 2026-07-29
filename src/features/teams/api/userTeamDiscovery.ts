@@ -40,12 +40,12 @@ async function verifyCurrentMembership(team: TeamResponse, userId: string, optio
 
   try {
     const detail = await teamService.getMemberDetail(team.teamId, userId);
-    if (detail.userId !== userId || detail.active === false) return false;
-    if (isRejectedParticipantStatus(detail.participantStatus) || isRejectedParticipantStatus(detail.participantStatusName)) {
+    if (detail && detail.userId === userId && detail.active === false) return false;
+    if (isRejectedParticipantStatus(detail?.participantStatus) || isRejectedParticipantStatus(detail?.participantStatusName)) {
       return false;
     }
   } catch {
-    return false;
+    // If detail API fails, rely on isCurrentUserTeam check which already verified active membership from team.members
   }
 
   const participation = await eventParticipantService.getMyParticipation(team.eventId).catch(() => null);
@@ -117,20 +117,15 @@ export function rememberUserTeam(team: TeamResponse, userId?: string) {
 
 export async function discoverUserTeamsForEvents(events: EventLike[], userId?: string, options: DiscoverUserTeamsOptions = {}) {
   if (!userId) return [] as TeamResponse[];
-  const cachedTeams = getStoredUserTeams(userId);
-
-  const eventIds = Array.from(new Set(
-    events
-      .map(event => event.eventId)
-      .filter((eventId): eventId is string => Boolean(eventId)),
-  ));
-  if (eventIds.length === 0) return cachedTeams;
 
   const myTeams = await teamService.getMyTeams().catch(() => [] as TeamResponse[]);
+  if (myTeams.length === 0 && events.length === 0) {
+    return getStoredUserTeams(userId);
+  }
+
   const candidatesById = new Map<string, TeamResponse>();
 
   myTeams
-    .filter(team => eventIds.includes(team.eventId))
     .filter(team => !options.activeOnly || getTeamStatusInfoForTeam(team).badge === "active")
     .forEach(team => {
       if (team.teamId) candidatesById.set(team.teamId, team);

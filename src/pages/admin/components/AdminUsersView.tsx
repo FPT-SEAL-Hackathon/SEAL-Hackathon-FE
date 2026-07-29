@@ -76,7 +76,7 @@ const emptyForm: UserFormState = {
   password: "",
   fptStudentCode: "",
   externalStudentCode: "",
-  universityName: "",
+  universityName: "FPT University",
   accountExpiresAt: "",
 };
 
@@ -445,7 +445,7 @@ export function AdminUsersView() {
       return compactPayload({
         ...base,
         fptStudentCode: normalizeFptStudentCode(form.fptStudentCode),
-        universityName: form.universityName.trim() || undefined,
+        universityName: "FPT University",
       });
     }
     if (role === "EXTERNAL_STUDENT") {
@@ -470,9 +470,11 @@ export function AdminUsersView() {
       accountStatus: form.accountStatus,
     };
     if (role === "FPT_STUDENT") {
-      const payload: UpdateUserRequest = compactPayload({ ...base, fptStudentCode: normalizeFptStudentCode(form.fptStudentCode) });
-      payload.universityName = form.universityName.trim();
-      return payload;
+      return compactPayload({
+        ...base,
+        fptStudentCode: normalizeFptStudentCode(form.fptStudentCode),
+        universityName: "FPT University",
+      });
     }
     if (role === "EXTERNAL_STUDENT") {
       return compactPayload({
@@ -879,8 +881,7 @@ function UserFormModal({
       accountStatus: defaultStatusForRole(normalizedRole),
       fptStudentCode: normalizedRole === "FPT_STUDENT" ? prev.fptStudentCode : "",
       externalStudentCode: normalizedRole === "EXTERNAL_STUDENT" ? prev.externalStudentCode : "",
-      // University KHÔNG bị xoá khi đổi role: ô này giờ dùng cho mọi role.
-      universityName: prev.universityName,
+      universityName: normalizedRole === "FPT_STUDENT" ? "FPT University" : prev.universityName,
       accountExpiresAt: normalizedRole === "GUEST_JUDGE" ? prev.accountExpiresAt : "",
     }));
   };
@@ -949,10 +950,8 @@ function UserFormModal({
               onChange={value => setForm(prev => ({ ...prev, externalStudentCode: value }))}
             />
           )}
-          {/* University hiện cho MỌI role (yêu cầu người dùng); chỉ BẮT BUỘC với
-              External Student — validateForm phản ánh đúng điều đó. */}
           <FormInput
-            label={isExternalStudentRole(role) ? "University Name" : "University Name (optional)"}
+            label="University Name"
             value={form.universityName}
             error={fieldErrors.universityName}
             onChange={value => setForm(prev => ({ ...prev, universityName: value }))}

@@ -8,6 +8,7 @@ export const MSG_FPT_CODE = "FPT student code must start with an active FPT majo
 export const MSG_EXTERNAL_CODE = "External student code is invalid (3-50 letters/digits, dot, underscore or hyphen).";
 export const MSG_PHONE = "Enter a valid Vietnamese mobile number (e.g. 0912345678).";
 export const MSG_UNIVERSITY = "External students must provide their university name.";
+export const MSG_HTTP_URL = "URL phải bắt đầu bằng http:// hoặc https:// (ví dụ https://github.com/username).";
 
 export function normalizeFptStudentCode(value: string): string {
   return value.trim().toUpperCase();
@@ -38,3 +39,16 @@ export function isValidVietnamesePhone(value: string): boolean {
   const normalized = value.trim().replace(/[\s.()\-]/g, "");
   return VN_PHONE_REGEX.test(normalized);
 }
+
+export function isOptionalHttpUrl(value?: string | null): boolean {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return true;
+  if (!/^https?:\/\/\S+$/i.test(trimmed)) return false;
+  try {
+    const u = new URL(trimmed);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
