@@ -3,7 +3,8 @@ import { useState } from "react";
 import { X, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { roundService, type RoundResponse } from "@/features/judging/api/roundService";
-import { ApiError } from "@/lib/api/apiClient";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 import { COLORS } from "@/components/shared/UIComponents";
 
 interface Props {
@@ -60,7 +61,9 @@ export function RoundModal({ categoryId, round, onClose, onSaved }: Props) {
         : await roundService.create(categoryId, payload);
       onSaved(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }

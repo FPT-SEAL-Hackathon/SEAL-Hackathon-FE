@@ -5,6 +5,7 @@ import { Card, SectionHeader, StatusBadge, Button, DataTable, COLORS } from "@/c
 import { appealService, type Appeal } from "@/features/appeals/api/appealService";
 import { Loader, MessageSquare, Check, X } from "lucide-react";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
+import { parseApiError } from "@/lib/api/apiClient";
 
 export function AdminAppealsView() {
   const [events, setEvents] = useState<EventResponse[]>([]);
@@ -62,7 +63,7 @@ export function AdminAppealsView() {
       loadAppeals(selectedEventId);
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.message || error?.response?.data?.message || "Failed to resolve appeal");
+      toast.error(parseApiError(error).message);
     } finally {
       setResolving(false);
     }

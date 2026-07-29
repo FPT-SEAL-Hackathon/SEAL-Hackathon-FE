@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { X, Calendar, MapPin, Users, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { eventService, type EventResponse, type CreateEventRequest } from "@/features/events/api/eventService";
-import { ApiError } from "@/lib/api/apiClient";
+import { ApiError, parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 import { COLORS } from "@/components/shared/UIComponents";
 import { DatePickerField, DateTimePickerField } from "../shared/ui/shared";
 import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
@@ -176,13 +177,17 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
+      const parsedMsg = parseApiError(err).message;
       if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
         const errorMessages = Object.entries(err.fieldErrors)
           .map(([field, msg]) => `• ${msg}`)
           .join("\n");
-        setError(err.message + "\n" + errorMessages);
+        const fullMsg = parsedMsg + "\n" + errorMessages;
+        setError(fullMsg);
+        toast.error(parsedMsg);
       } else {
-        setError(err instanceof ApiError ? err.message : "Save failed.");
+        setError(parsedMsg);
+        toast.error(parsedMsg);
       }
     } finally {
       setLoading(false);
