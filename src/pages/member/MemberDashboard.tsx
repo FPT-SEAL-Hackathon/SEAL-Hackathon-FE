@@ -512,7 +512,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               tracks: "N/A",
               prizePool: "N/A",
               participantStatus: normalizeParticipationStatus(part.participantStatus),
-              bannerImageUrl: "",
+              bannerImageUrl: part.bannerImageUrl || (part.event as any)?.bannerImageUrl || "",
               eventParticipantId: part.eventParticipantId,
               rejectedReason: part.rejectedReason,
               appliedAt: part.appliedAt,
