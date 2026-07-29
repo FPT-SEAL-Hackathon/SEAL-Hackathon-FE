@@ -4,7 +4,7 @@ import { rankingService } from "@/features/rankings/api/rankingService";
 import { Trophy, CheckCircle, Loader, Calendar, BookOpen, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { Card, Button, COLORS, DataTable, StatusBadge } from "@/components/shared/UIComponents";
-import { parseApiError } from "@/lib/api/apiClient";
+import { ApiError } from "@/lib/api/apiClient";
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
 import { ScoreDetailsModal } from "./ScoreDetailsModal";
@@ -78,9 +78,10 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
         setLocalRankings(data);
         toast.success("Category rankings computed successfully.");
       }
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
-      toast.error(parseApiError(e).message || "Failed to compute rankings.");
+      const msg = e instanceof ApiError ? e.message : "Failed to compute rankings.";
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -101,9 +102,10 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
       }
       setShowPublishModal(false);
       toast.success("Rankings published successfully.");
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
-      toast.error(parseApiError(e).message || "Failed to publish rankings.");
+      const msg = e instanceof ApiError ? e.message : "Failed to publish rankings.";
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -124,9 +126,10 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
         setLocalRankings(eventData);
       }
       toast.success("Rankings approved successfully.");
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(e);
-      toast.error(parseApiError(e).message || "Failed to approve rankings.");
+      const msg = e instanceof ApiError ? e.message : "Failed to approve rankings.";
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
