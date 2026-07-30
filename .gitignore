@@ -36,6 +36,7 @@ dist-ssr
 # AI tool local config
 .ai/
 .claude/
+AI_logs_Final.md
 
  
 # Vite
