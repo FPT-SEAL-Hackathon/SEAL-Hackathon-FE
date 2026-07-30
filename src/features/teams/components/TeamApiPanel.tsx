@@ -649,13 +649,17 @@ export function TeamApiPanel({
     if (!eventId) return "-";
     return events.find(event => event.eventId === eventId)?.eventName
       ?? eventNames[eventId]
+      ?? (selectedTeam?.eventId === eventId ? selectedTeam.eventName : undefined)
+      ?? userTeams.find(t => t.eventId === eventId && t.eventName)?.eventName
       ?? eventId;
   };
-  const selectedEventName = getEventName(selectedTeam?.eventId)
+  const selectedEventName = selectedTeam?.eventName
+    ?? getEventName(selectedTeam?.eventId)
     ?? selectedTeam?.eventId
     ?? "-";
   const selectedCategoryName = selectedCategory?.categoryName
     ?? categories.find(category => category.categoryId === selectedTeam?.categoryId)?.categoryName
+    ?? selectedTeam?.categoryName
     ?? "None";
 
   useEffect(() => {
@@ -1445,7 +1449,7 @@ export function TeamApiPanel({
     const selectedPickerTeamId = form.teamId || selectedTeam?.teamId || "";
 
     const groupedTeams = currentUserTeams.reduce((acc, team) => {
-      const evName = getEventName(team.eventId) || "Other Events";
+      const evName = team.eventName || getEventName(team.eventId) || "Other Events";
       if (!acc[evName]) acc[evName] = [];
       acc[evName].push(team);
       return acc;

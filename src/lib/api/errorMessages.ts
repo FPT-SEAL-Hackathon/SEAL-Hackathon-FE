@@ -80,23 +80,26 @@ export function friendlyMessage(
   backendMessage?: string,
 ): string {
   if (code && MESSAGE_BY_CODE[code]) return MESSAGE_BY_CODE[code];
-  if (status && MESSAGE_BY_STATUS[status]) return MESSAGE_BY_STATUS[status];
   if (backendMessage && backendMessage.trim() && !looksTechnical(backendMessage)) {
-    return backendMessage;
+    return backendMessage.trim();
   }
+  if (status && MESSAGE_BY_STATUS[status]) return MESSAGE_BY_STATUS[status];
   return GENERIC_FALLBACK;
 }
 
 /**
- * Chặn lưới cuối: nhận diện chuỗi rõ ràng là của máy để không đẩy ra UI
- * (tên class Java, package, dấu vết SQL/JDBC, stack trace).
+ * Chặn lưới cuối: nhận diện chuỗi rõ ràng là của máy hoặc chuỗi fallback mặc định
+ * để không đẩy ra UI (tên class Java, package, dấu vết SQL/JDBC, stack trace, Request failed).
  */
 function looksTechnical(message: string): boolean {
+  const trimmed = message.trim();
   return (
-    /(^|\s)(java|jakarta|org)\.[a-z]+\./i.test(message) ||
-    /Exception\b|Throwable\b/.test(message) ||
-    /\bat [\w.$]+\([\w.]+:\d+\)/.test(message) ||
-    /\b(SELECT|INSERT|UPDATE|DELETE)\b.*\b(FROM|INTO|SET|WHERE)\b/i.test(message) ||
-    /SQLState|JDBC|Hibernate/i.test(message)
+    /^Request failed \(\d+\)$/i.test(trimmed) ||
+    /^Request failed$/i.test(trimmed) ||
+    /(^|\s)(java|jakarta|org)\.[a-z]+\./i.test(trimmed) ||
+    /Exception\b|Throwable\b/.test(trimmed) ||
+    /\bat [\w.$]+\([\w.]+:\d+\)/.test(trimmed) ||
+    /\b(SELECT|INSERT|UPDATE|DELETE)\b.*\b(FROM|INTO|SET|WHERE)\b/i.test(trimmed) ||
+    /SQLState|JDBC|Hibernate/i.test(trimmed)
   );
 }

@@ -2,7 +2,8 @@ import { useState } from "react";
 import { X, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { categoryService, type CategoryResponse } from "@/features/categories/api/categoryService";
-import { ApiError } from "@/lib/api/apiClient";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 import { COLORS } from "@/components/shared/UIComponents";
 
 interface Props {
@@ -36,7 +37,9 @@ export function CategoryModal({ eventId, category, onClose, onSaved }: Props) {
         : await categoryService.create(eventId, payload);
       onSaved(result);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      const errMsg = parseApiError(err).message;
+      setError(errMsg);
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }

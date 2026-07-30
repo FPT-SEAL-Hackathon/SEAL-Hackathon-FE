@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { PlusCircle, Loader, User, Mail, Trash2 } from "lucide-react";
 import { SectionHeader, Card, Button, COLORS } from "@/components/shared/UIComponents";
 import { roundService } from "@/features/judging/api/roundService";
+import { parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 
 interface AdminViewProps {
   context: any;
@@ -33,12 +35,14 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
       const updatedJudges = await roundService.getJudges(selectedRoundId);
       setJudges(updatedJudges);
     } catch (err: any) {
+      const errMsg = parseApiError(err).message;
       if (err.message && err.message.includes("JUDGE_HAS_SCORES")) {
         if (window.confirm("This judge has already submitted scores. Removing them will delete those scores. Are you sure?")) {
           return handleRemove(judgeId, roundJudgeId, true);
         }
       } else {
-        setError(err.message || "Failed to remove judge");
+        setError(errMsg);
+        toast.error(errMsg);
       }
     } finally {
       if (!force) setRemovingId(null);
@@ -65,7 +69,11 @@ export function AdminAssignmentsView({ context }: AdminViewProps) {
     setError("");
     roundService.getJudges(selectedRoundId)
       .then(setJudges)
-      .catch(err => setError(err instanceof Error ? err.message : "Failed to load judges"))
+      .catch(err => {
+        const errMsg = parseApiError(err).message;
+        setError(errMsg);
+        toast.error(errMsg);
+      })
       .finally(() => setLoading(false));
   }, [selectedRoundId, assignJudgeModal?.open]);
 

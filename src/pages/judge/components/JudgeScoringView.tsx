@@ -181,7 +181,9 @@ export function JudgeScoringView({ apiCriteria, apiRounds, selectedRoundId, sele
       });
     } catch (err: any) {
       setSubmitStatus("error");
-      setScoreError(err?.message ?? "Failed to save scores");
+      const errMsg = parseApiError(err).message;
+      setScoreError(errMsg);
+      toast.error(errMsg);
     }
   };
 
