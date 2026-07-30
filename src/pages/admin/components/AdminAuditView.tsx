@@ -83,8 +83,8 @@ export function AdminAuditView({ context }: AdminViewProps) {
     const matchesAction = actionFilter === "ALL" || log.actionType === actionFilter;
     const q = searchTerm.toLowerCase();
     
-    const actorName = getUserName(log.actorUserId) || "";
-    const teamName = getTeamName(log.teamId) || "";
+    const actorName = log.actorName || getUserName(log.actorUserId) || "";
+    const teamName = log.teamName || getTeamName(log.teamId) || "";
 
     const matchesSearch = !searchTerm || 
       (log.reason && log.reason.toLowerCase().includes(q)) ||
@@ -208,8 +208,8 @@ export function AdminAuditView({ context }: AdminViewProps) {
               </thead>
               <tbody>
                 {filteredLogs.length > 0 ? filteredLogs.map((log: EvaluationAuditLogDTO, i: number) => {
-                  const actorName = getUserName(log.actorUserId);
-                  const teamName = getTeamName(log.teamId);
+                  const actorName = log.actorName || getUserName(log.actorUserId);
+                  const teamName = log.teamName || getTeamName(log.teamId);
                   
                   return (
                   <tr 
@@ -278,7 +278,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
                 </div>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 4 }}>ACTOR (USER ID)</div>
-                  {getUserName(selectedLog.actorUserId) && <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}>{getUserName(selectedLog.actorUserId)}</div>}
+                  {(selectedLog.actorName || getUserName(selectedLog.actorUserId)) && <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}>{selectedLog.actorName || getUserName(selectedLog.actorUserId)}</div>}
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, fontFamily: 'monospace' }}>{selectedLog.actorUserId}</div>
                 </div>
               </div>

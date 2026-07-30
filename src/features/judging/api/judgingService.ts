@@ -34,10 +34,13 @@ export interface UpdateScoreSubmissionDTO {
 export interface EvaluationAuditLogDTO {
   id: string;
   eventId: string;
+  eventName?: string;
   actionType: string;
   actorUserId: string;
+  actorName?: string;
   judgingId: string;
   teamId: string;
+  teamName?: string;
   submissionId: string;
   oldValue: string;
   newValue: string;
