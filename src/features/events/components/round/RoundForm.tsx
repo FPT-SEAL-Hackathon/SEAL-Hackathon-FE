@@ -54,6 +54,17 @@ export function RoundForm({
       return;
     }
 
+    // Chặn số âm/0 ngay tại form — khớp @Min(1) ở CreateRoundRequest/UpdateRoundRequest.
+    // roundOrder sai làm hỏng sắp xếp bảng xếp hạng chung cuộc và việc xác định vòng chung kết.
+    if (form.advancementTopN != null && form.advancementTopN < 1) {
+      setError("Advancement Top N must be at least 1.");
+      return;
+    }
+    if (editingRoundId && form.roundOrder != null && form.roundOrder < 1) {
+      setError("Round Order must be at least 1.");
+      return;
+    }
+
     // eventStartDate/eventEndDate là LocalDateTime (EventResponse.java) → so sánh bằng
     // TIMESTAMP, khớp RoundServiceImpl.validateRoundTimeline (isBefore/isAfter trên datetime
     // nguyên vẹn, KHÔNG cắt về ngày). So sánh ở mức NGÀY sẽ cho qua những giá trị mà backend
@@ -169,6 +180,14 @@ export function RoundForm({
     previewRounds = [...previewRounds, editingRound];
   }
 
+  // Số đội của category chứa round này — chỉ để tham chiếu khi đặt Advancement Top N.
+  // null khi chưa biết (backend chưa trả teamCount hoặc chưa chọn category).
+  const categoryTeamCount = categories?.find(c => c.categoryId === categoryId)?.teamCount ?? null;
+  // Chỉ cảnh báo khi category ĐÃ có đội: lúc setup event số đội là 0, cảnh báo khi đó chỉ gây nhiễu.
+  const topNExceedsTeams =
+    categoryTeamCount != null && categoryTeamCount > 0
+    && form.advancementTopN != null && form.advancementTopN >= categoryTeamCount;
+
   // Mốc thời gian của round ĐANG SOẠN, vẽ chồng lên timeline ngay khi user điền TỪNG field.
   // Khối `editingRound` phía trên chỉ xuất hiện khi đã có ĐỦ cả startDate và endDate, nên
   // trong lúc nhập dở organizer không thấy gì để đối chiếu — đây là phần bù cho khoảng đó.
@@ -193,8 +212,20 @@ export function RoundForm({
         <Field label="Round Name">
           <Input value={form.roundName} onChange={v => set("roundName", v)} placeholder="e.g. Qualifying Round" />
         </Field>
+        {/* Round Order: khi TẠO MỚI, server luôn tự gán max+1 trong category và bỏ qua giá trị
+            client gửi — nên hiện read-only thay vì ô nhập giả. Khi SỬA mới cho đổi, tối thiểu
+            1 và không được trùng round khác (backend chặn bằng 409). */}
         <Field label="Round Order">
-          <Input type="number" value={String(form.roundOrder)} onChange={v => set("roundOrder", Number(v))} />
+          {editingRoundId ? (
+            <Input
+              type="number"
+              min={1}
+              value={String(form.roundOrder ?? "")}
+              onChange={v => set("roundOrder", v ? Math.max(1, Number(v)) : undefined)}
+            />
+          ) : (
+            <Input type="number" value={String(form.roundOrder)} disabled />
+          )}
         </Field>
         <Field label="Status">
           <Select
@@ -212,13 +243,32 @@ export function RoundForm({
             }
           </Select>
         </Field>
+        {/* Advancement Top N: số đội đi tiếp. Đội thuộc CATEGORY nên mốc tham chiếu là số đội
+            của category này, không phải toàn event. CỐ Ý không chặn cứng theo số đội: round
+            hầu như luôn được tạo lúc setup event, khi chưa đội nào đăng ký (số đội = 0) — chặn
+            cứng sẽ khoá luôn màn tạo round. Chỉ cảnh báo mềm; RankingServiceImpl vẫn chỉ cho
+            đi tiếp trong số đội thực có. */}
         <Field label="Advancement Top N">
           <Input
             type="number"
+            min={1}
             value={form.advancementTopN != null ? String(form.advancementTopN) : ""}
-            onChange={v => set("advancementTopN", v ? Number(v) : null)}
+            onChange={v => set("advancementTopN", v ? Math.max(1, Number(v)) : null)}
             placeholder="e.g. 10"
           />
+          {categoryTeamCount != null && (
+            <div
+              className="mt-1"
+              style={{
+                fontSize: 11,
+                color: topNExceedsTeams ? COLORS.warning : COLORS.textSecondary,
+              }}
+            >
+              {topNExceedsTeams
+                ? `⚠ Category này hiện chỉ có ${categoryTeamCount} đội — Top N đang lớn hơn hoặc bằng số đội hiện có.`
+                : `Category này hiện có ${categoryTeamCount} đội.`}
+            </div>
+          )}
         </Field>
         {/* Biên event truyền vào các picker dưới đây là DATETIME thật của event (không phải
             ngày rồi 00:00), và quan hệ với biên event là BAO GỒM cả mốc — nên KHÔNG đặt

@@ -7,6 +7,12 @@ export interface CategoryResponse {
   description: string;
   sortOrder: number;
   isActive: boolean;
+  /**
+   * Số đội đang đăng ký trong category (backend trả ở GET theo event và theo id).
+   * Chỉ dùng để tham chiếu/cảnh báo mềm khi đặt Advancement Top N — KHÔNG phải ràng buộc
+   * cứng, vì round thường được tạo lúc chưa đội nào đăng ký.
+   */
+  teamCount?: number | null;
 }
 
 export interface CreateCategoryRequest {
