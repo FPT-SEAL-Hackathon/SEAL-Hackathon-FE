@@ -97,25 +97,13 @@ export const categoryService = {
       () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`),
     )).filter(category => category.isActive !== false),
   getById: async (id: string) =>
-    unwrapItem(await withLegacyFallback(
-      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`),
-      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`),
-    )),
+    unwrapItem(await api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`)),
   create: async (eventId: string, data: CreateCategoryRequest) =>
-    unwrapItem(await withLegacyFallback(
-      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${eventId}`, data),
-      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${eventId}`, data),
-    )),
+    unwrapItem(await api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${eventId}`, data)),
   update: async (id: string, data: UpdateCategoryRequest) =>
-    unwrapItem(await withLegacyFallback(
-      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`, data),
-      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`, data),
-    )),
+    unwrapItem(await api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`, data)),
   delete: (id: string) =>
-    withLegacyFallback(
-      () => api.delete(`/api/v1/categories/category/${id}`),
-      () => api.delete(`/api/v1/category/${id}`),
-    ),
+    api.delete(`/api/v1/category/${id}`),
   assignMentors: async (categoryId: string, mentorIds: string[]) =>
     unwrapList(await api.post<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(
       `/api/v1/category/expert/${categoryId}`,

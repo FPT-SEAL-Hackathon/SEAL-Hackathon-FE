@@ -68,32 +68,20 @@ export const categoryService = {
     create: async (
         eventId: string,
         body: CategoryRequest
-    ) => unwrapItem(await withLegacyFallback(
-        () => api.post<Category | BackendEnvelope<Category>>(`/api/v1/categories/category/${eventId}`, body),
-        () => api.post<Category | BackendEnvelope<Category>>(`/api/v1/category/${eventId}`, body),
-    )),
+    ) => unwrapItem(await api.post<Category | BackendEnvelope<Category>>(`/api/v1/category/${eventId}`, body)),
 
     getByEvent: async (eventId: string) => unwrapList(await withLegacyFallback(
         () => api.get<Category[] | BackendEnvelope<Category[]>>(`/api/v1/categories/${eventId}`),
         () => api.get<Category[] | BackendEnvelope<Category[]>>(`/api/v1/categories/categories/${eventId}`),
     )).filter(category => category.isActive !== false),
-    getById: async (id: string) => unwrapItem(await withLegacyFallback(
-        () => api.get<Category | BackendEnvelope<Category>>(`/api/v1/categories/category/${id}`),
-        () => api.get<Category | BackendEnvelope<Category>>(`/api/v1/category/${id}`),
-    )),
+    getById: async (id: string) => unwrapItem(await api.get<Category | BackendEnvelope<Category>>(`/api/v1/category/${id}`)),
 
     update: async (
         id: string,
         body: CategoryRequest
-    ) => unwrapItem(await withLegacyFallback(
-        () => api.put<Category | BackendEnvelope<Category>>(`/api/v1/categories/category/${id}`, body),
-        () => api.put<Category | BackendEnvelope<Category>>(`/api/v1/category/${id}`, body),
-    )),
+    ) => unwrapItem(await api.put<Category | BackendEnvelope<Category>>(`/api/v1/category/${id}`, body)),
 
-    delete: (id: string) => withLegacyFallback(
-        () => api.delete<void>(`/api/v1/categories/category/${id}`),
-        () => api.delete<void>(`/api/v1/category/${id}`),
-    ),
+    delete: (id: string) => api.delete<void>(`/api/v1/category/${id}`),
 
     // Sends { expertIds: [...] } – the backend expects this field name
     assignMentor: (
