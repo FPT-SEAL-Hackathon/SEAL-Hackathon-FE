@@ -592,7 +592,10 @@ export function AdminAwardsView({ context }: AdminViewProps) {
       )}
       {/* Modal Confirm Auto Grant */}
       {showAutoGrantConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(15, 23, 42, 0.5)", backdropFilter: "blur(4px)" }}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-amber-50/50">
               <div className="flex items-center gap-2.5">
@@ -600,7 +603,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
                   <Trophy size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-gray-900">Xác nhận Trao Giải Tự Động (Auto Grant)</h3>
+                  <h3 className="font-bold text-base text-gray-900">Confirm Auto Grant Award</h3>
                   <p className="text-xs text-gray-500">Auto-grant awards from category rankings</p>
                 </div>
               </div>
@@ -616,22 +619,22 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               <div className="p-4 bg-amber-50/60 border border-amber-200/60 rounded-xl text-amber-900 text-xs leading-relaxed flex gap-3">
                 <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-amber-950 mb-1">Cấu hình trao giải hiện tại</p>
-                  <p>Hệ thống sẽ dựa trên bảng xếp hạng chính thức và các Mẫu giải thưởng (Award Patterns) đã cài đặt để tự động trao giải cho các đội thi dẫn đầu.</p>
+                  <p className="font-semibold text-amber-950 mb-1">Current Award Configuration</p>
+                  <p>The system will automatically grant awards to the top ranking teams based on the official leaderboard and active Award Patterns.</p>
                 </div>
               </div>
 
               <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 space-y-2.5 text-sm">
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sự kiện (Event)</span>
-                  <span className="font-medium text-gray-900">{apiEvents.find((e: any) => e.id === selectedEventId)?.name || "Chưa chọn"}</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</span>
+                  <span className="font-medium text-gray-900">{apiEvents.find((e: any) => e.id === selectedEventId)?.name || "Not selected"}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thể loại (Category)</span>
-                  <span className="font-medium text-amber-700">{apiCategories.find((c: any) => c.categoryId === awardPatternCategoryId)?.categoryName || "Chưa chọn"}</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</span>
+                  <span className="font-medium text-amber-700">{apiCategories.find((c: any) => c.categoryId === awardPatternCategoryId)?.categoryName || "Not selected"}</span>
                 </div>
                 <div className="flex justify-between items-center py-1">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Giới hạn xếp hạng (Top N)</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Ranking Limit (Top N)</span>
                   <span className="font-bold text-gray-900 bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-xs">Top {autoGrantLimit}</span>
                 </div>
               </div>
@@ -639,7 +642,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
 
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowAutoGrantConfirm(false)}>
-                Hủy bỏ
+                Cancel
               </Button>
               <Button
                 variant="primary"
@@ -650,7 +653,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
                 }}
                 disabled={autoGrantLoading}
               >
-                Xác nhận & Trao giải Auto
+                Confirm & Grant Auto
               </Button>
             </div>
           </div>
@@ -659,7 +662,10 @@ export function AdminAwardsView({ context }: AdminViewProps) {
 
       {/* Modal Confirm Manual Grant */}
       {showManualGrantConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ backgroundColor: "rgba(15, 23, 42, 0.5)", backdropFilter: "blur(4px)" }}
+        >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-orange-50/50">
               <div className="flex items-center gap-2.5">
@@ -667,7 +673,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
                   <Award size={20} />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-gray-900">Xác nhận Trao Giải Tùy Chỉnh (Manual Grant)</h3>
+                  <h3 className="font-bold text-base text-gray-900">Confirm Custom Award (Manual Grant)</h3>
                   <p className="text-xs text-gray-500">Grant a non-ranking award to a team</p>
                 </div>
               </div>
@@ -683,47 +689,47 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               <div className="p-4 bg-orange-50/60 border border-orange-200/60 rounded-xl text-orange-900 text-xs leading-relaxed flex gap-3">
                 <AlertTriangle size={18} className="text-orange-600 shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-orange-950 mb-1">Cấu hình trao giải hiện tại</p>
-                  <p>Vui lòng kiểm tra kỹ thông tin giải thưởng và đội thi được chọn trước khi trao giải chính thức.</p>
+                  <p className="font-semibold text-orange-950 mb-1">Current Award Configuration</p>
+                  <p>Please carefully verify the selected award details and the winning team before granting the award.</p>
                 </div>
               </div>
 
               <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 space-y-2.5 text-sm">
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sự kiện (Event)</span>
-                  <span className="font-medium text-gray-900">{apiEvents.find((e: any) => e.id === selectedEventId)?.name || "Chưa chọn"}</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Event</span>
+                  <span className="font-medium text-gray-900">{apiEvents.find((e: any) => e.id === selectedEventId)?.name || "Not selected"}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thể loại (Category)</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</span>
                   <span className="font-medium text-gray-900">
-                    {apiCategories.find((c: any) => c.categoryId === manualAwardForm.categoryId)?.categoryName || "Tất cả thể loại"}
+                    {apiCategories.find((c: any) => c.categoryId === manualAwardForm.categoryId)?.categoryName || "All Categories"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Đội nhận giải (Team)</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Awardee Team</span>
                   <span className="font-bold text-orange-600">
                     {manualAwardTeams.find((t: any) => t.teamId === manualAwardForm.teamId)?.teamName || manualAwardForm.teamId}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Hạng giải (Tier)</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Award Tier</span>
                   <span className="font-semibold text-gray-800">
                     {AWARD_TIER_OPTIONS.find((t: any) => t.value === manualAwardForm.awardTierId)?.label || manualAwardForm.awardTierId}
                   </span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tên giải (Title)</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Award Title</span>
                   <span className="font-bold text-gray-900">{manualAwardForm.awardTitle}</span>
                 </div>
                 <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Giá trị tiền thưởng</span>
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Prize Value</span>
                   <span className="font-bold text-green-600">
                     {manualAwardForm.prizeValue ? `${Number(manualAwardForm.prizeValue).toLocaleString()} ${manualAwardForm.prizeCurrency}` : "0 VND"}
                   </span>
                 </div>
                 {manualAwardForm.description && (
                   <div className="pt-1">
-                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Mô tả / Lý do</span>
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Description / Reason</span>
                     <span className="text-xs text-gray-700 italic block bg-white p-2 rounded border border-gray-200/60">
                       "{manualAwardForm.description}"
                     </span>
@@ -734,7 +740,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
 
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowManualGrantConfirm(false)}>
-                Hủy bỏ
+                Cancel
               </Button>
               <Button
                 variant="primary"
@@ -746,7 +752,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
                 disabled={manualAwardLoading}
                 style={{ background: COLORS.warning }}
               >
-                Xác nhận & Trao giải Manual
+                Confirm & Grant Manual
               </Button>
             </div>
           </div>
