@@ -14,7 +14,7 @@ import {
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader, X
+  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader, X, Layers
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -25,8 +25,10 @@ import { updateProfile } from "@/features/auth/api/authService";
 import { isOptionalHttpUrl } from "@/features/users/utils/profileValidation";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
+import { categoryService } from "@/features/categories/api/categoryService";
 import { roundService } from "@/features/events/service/roundService";
 import type { Round } from "@/features/events/types/round";
+import type { Category } from "@/features/events/types/category";
 import { getRoundStatus } from "@/features/events/utils/roundUtils";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
@@ -382,6 +384,45 @@ function isNotFoundApiError(error: unknown) {
   return parseApiError(error).status === 404;
 }
 
+function getRoundStyle(status: string) {
+  const s = (status || "").toUpperCase();
+  if (s.includes("SUBMISSION OPEN") || s.includes("OPEN") || s.includes("SUBMIT")) {
+    return {
+      background: "#ffffff",
+      border: "2px solid #2563eb",
+      boxShadow: "0 4px 12px rgba(37, 99, 235, 0.08)",
+      borderRadius: "14px",
+      opacity: 1,
+    };
+  }
+  if (s.includes("UPCOMING") || s.includes("SCHEDULED")) {
+    return {
+      background: "#ffffff",
+      border: "2px solid #f47920",
+      boxShadow: "0 4px 12px rgba(244, 121, 32, 0.08)",
+      borderRadius: "14px",
+      opacity: 1,
+    };
+  }
+  if (s.includes("JUDGING") || s.includes("EVALUAT")) {
+    return {
+      background: "#ffffff",
+      border: "2px solid #10b981",
+      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.08)",
+      borderRadius: "14px",
+      opacity: 1,
+    };
+  }
+  // Complete / Closed: White base, gray border and dimmed
+  return {
+    background: "#ffffff",
+    border: "2px solid #cbd5e1",
+    boxShadow: "none",
+    borderRadius: "14px",
+    opacity: 0.55,
+  };
+}
+
 function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadline, "teamId"> {
   const officialRounds = rounds
     .filter(round => isOfficialSubmissionRound(round) && round.submissionDeadline)
@@ -683,6 +724,52 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     canSubmit: true,
     reason: "",
   });
+  const [eventDashboardCategories, setEventDashboardCategories] = useState<Category[]>([]);
+  const [eventDashboardRoundsMap, setEventDashboardRoundsMap] = useState<Record<string, Round[]>>({});
+  const [selectedEventCategoryId, setSelectedEventCategoryId] = useState<string | null>(null);
+  const [eventDashboardCategoriesLoading, setEventDashboardCategoriesLoading] = useState(false);
+
+  useEffect(() => {
+    const targetEventId = viewingEventDetail?.eventId;
+    if (!targetEventId) {
+      setEventDashboardCategories([]);
+      setEventDashboardRoundsMap({});
+      setSelectedEventCategoryId(null);
+      return;
+    }
+    setEventDashboardCategoriesLoading(true);
+    categoryService.getByEvent(targetEventId)
+      .then(async (categories) => {
+        if (!categories || categories.length === 0) {
+          setEventDashboardCategories([]);
+          setEventDashboardRoundsMap({});
+          setSelectedEventCategoryId(null);
+          return;
+        }
+        const activeCategories = categories.filter(c => c.isActive !== false);
+        const targetCats = activeCategories.length > 0 ? activeCategories : categories;
+        setEventDashboardCategories(targetCats);
+        setSelectedEventCategoryId(targetCats[0].categoryId);
+
+        const roundsEntries = await Promise.all(
+          targetCats.map(async cat => {
+            const rounds = await roundService.getByCategory(cat.categoryId).catch(() => [] as Round[]);
+            const sorted = [...rounds].sort((a, b) => (a.roundOrder ?? 0) - (b.roundOrder ?? 0));
+            return [cat.categoryId, sorted] as const;
+          })
+        );
+        setEventDashboardRoundsMap(Object.fromEntries(roundsEntries));
+      })
+      .catch(() => {
+        setEventDashboardCategories([]);
+        setEventDashboardRoundsMap({});
+        setSelectedEventCategoryId(null);
+      })
+      .finally(() => {
+        setEventDashboardCategoriesLoading(false);
+      });
+  }, [viewingEventDetail?.eventId]);
+
   useEffect(() => {
     if (currentPage !== "team") return;
     const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
@@ -900,7 +987,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       })
       .catch(error => {
         if (cancelled) return;
-        setCertificateAwards([]);
+        setCertificates([]);
         setCertificateError(error instanceof Error ? error.message : "Could not load certificates.");
       })
       .finally(() => {
@@ -2028,85 +2115,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   );
 
   const renderEvents = () => {
-    if (selectedEventDetailId) {
-      const targetEvent = apiEvents.find(ev => ev.eventId === selectedEventDetailId);
-      const userTeamForEvent = submissionTeams.find(t => t.eventId === selectedEventDetailId)
-        || (activeTeamContext?.eventId === selectedEventDetailId ? activeTeamContext : null);
-      const eventRounds = leaderboardRounds || [];
-
-      return (
-        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setSelectedEventDetailId(null)}>
-              Back to Events
-            </Button>
-            <StatusBadge status={targetEvent?.eventStatus ?? (targetEvent as any)?.status ?? "ACTIVE"} />
-          </div>
-
-          <div className="rounded-2xl p-6 shadow-sm space-y-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
-            <div className="flex justify-between items-start border-b pb-4" style={{ borderColor: COLORS.border }}>
-              <div>
-                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.textPrimary }}>
-                  {targetEvent?.eventName ?? (targetEvent as any)?.name} - Event Dashboard
-                </h1>
-                <p style={{ fontSize: 14, color: COLORS.textSecondary }}>
-                  {targetEvent?.description || "Comprehensive event dashboard for active participants."}
-                </p>
-              </div>
-            </div>
-
-            {/* Event Team Overview */}
-            {userTeamForEvent && (
-              <Card className="p-5 bg-primary/5 border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
-                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
-                    Manage Team
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            {/* Rounds & Timeline Section */}
-            <div className="space-y-4">
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
-                <Clock size={20} style={{ color: COLORS.primary }} /> Event Rounds & Deadlines
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {eventRounds.length > 0 ? (
-                  eventRounds.map((r: any) => (
-                    <Card key={r.roundId} className="p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
-                        <StatusBadge status={r.roundStatusName ?? r.status ?? "OPEN"} />
-                      </div>
-                      <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1">
-                        <div><strong style={{ color: COLORS.textPrimary }}>Start:</strong> {r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</div>
-                        <div><strong style={{ color: COLORS.textPrimary }}>Deadline:</strong> {r.endDate ? new Date(r.endDate).toLocaleString() : "TBD"}</div>
-                      </div>
-                    </Card>
-                  ))
-                ) : (
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
-                    No round schedules published yet.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Leaderboard Section inside Event Dashboard */}
-            <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
-              {renderLeaderboard()}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     if (viewingEventDetail) {
       const ev = viewingEventDetail;
       const participation = participations[ev.eventId];
@@ -2118,6 +2126,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
       const isPendingParticipant = participantStatus === "PENDING";
       const isRejectedParticipant = participantStatus === "REJECTED";
+
+      const userTeamForEvent = submissionTeams.find(t => t.eventId === ev.eventId)
+        || (activeTeamContext?.eventId === ev.eventId ? activeTeamContext : null);
+      const selectedCategory = eventDashboardCategories.find(c => c.categoryId === selectedEventCategoryId);
+      const currentCategoryRounds = selectedEventCategoryId ? (eventDashboardRoundsMap[selectedEventCategoryId] || []) : [];
 
       return (
         <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -2135,8 +2148,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <span style={{ color: COLORS.textSecondary, fontWeight: 600 }}>No Banner Image</span>
               </div>
             )}
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-6">
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-start">
                 <div>
                   <h1 className="text-3xl font-bold mb-3" style={{ color: COLORS.textPrimary }}>{ev.eventName}</h1>
                   <p className="text-base leading-relaxed" style={{ color: COLORS.textSecondary }}>{ev.description}</p>
@@ -2144,7 +2157,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <StatusBadge status={lifecycleStatus.toLowerCase()} />
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
                   <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Registration Start</div>
                   <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.registrationStart ? new Date(ev.registrationStart).toLocaleDateString() : "N/A"}</div>
@@ -2163,7 +2176,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="p-4 rounded-xl flex items-center gap-4" style={{ border: `1px solid ${COLORS.border}` }}>
                   <div className="w-12 h-12 flex items-center justify-center rounded-full" style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}>
                     <MapPin size={24} />
@@ -2184,12 +2197,164 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 </div>
               </div>
 
+              {/* Registered Team Overview */}
+              {userTeamForEvent && (
+                <Card className="p-5 bg-primary/5 border border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { setViewingEventDetail(null); onNavigate("team"); }}>
+                      Manage Team
+                    </Button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Categories Selection Section */}
+              <div className="space-y-3 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                  <Layers size={20} style={{ color: COLORS.primary }} /> Event Categories
+                  {eventDashboardCategoriesLoading && <Loader size={16} className="animate-spin" style={{ color: COLORS.primary }} />}
+                </h3>
+
+                {eventDashboardCategoriesLoading ? (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="p-6 text-center border rounded-xl flex items-center justify-center gap-2">
+                    <Loader size={16} className="animate-spin" /> Loading categories...
+                  </div>
+                ) : eventDashboardCategories.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {eventDashboardCategories.map(cat => {
+                      const isSelected = selectedEventCategoryId === cat.categoryId;
+                      const catRounds = eventDashboardRoundsMap[cat.categoryId] || [];
+                      return (
+                        <button
+                          key={cat.categoryId}
+                          type="button"
+                          onClick={() => setSelectedEventCategoryId(cat.categoryId)}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left border"
+                          style={{
+                            background: isSelected
+                              ? `linear-gradient(135deg, ${COLORS.primary}20, ${COLORS.primary}08)`
+                              : COLORS.card,
+                            borderColor: isSelected ? COLORS.primary : COLORS.border,
+                            boxShadow: isSelected ? `0 4px 16px ${COLORS.primary}30` : "none",
+                            transform: isSelected ? "translateY(-1px)" : "none",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: isSelected ? COLORS.primary : "#94a3b8" }}
+                          />
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: isSelected ? COLORS.primary : COLORS.textPrimary }}>
+                              {cat.categoryName}
+                            </div>
+                            {cat.description && (
+                              <div style={{ fontSize: 11, color: COLORS.textSecondary }} className="line-clamp-1 max-w-[220px]">
+                                {cat.description}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold"
+                            style={{
+                              background: isSelected ? `${COLORS.primary}25` : `${COLORS.border}`,
+                              color: isSelected ? COLORS.primary : COLORS.textSecondary,
+                            }}
+                          >
+                            {catRounds.length} rounds
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="p-6 text-center border rounded-xl">
+                    No categories configured for this event yet.
+                  </div>
+                )}
+              </div>
+
+              {/* Rounds for Selected Category */}
+              {selectedCategory && (
+                <div className="space-y-4 pt-2">
+                  <h4 style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                    <Clock size={18} style={{ color: COLORS.primary }} />
+                    Rounds for <span style={{ color: COLORS.primary }}>{selectedCategory.categoryName}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentCategoryRounds.length > 0 ? (
+                      currentCategoryRounds.map((r: any) => {
+                        const deadlineDate = r.submissionDeadline || r.endDate;
+                        const rawStatus = String(r.roundStatusName || r.status || "").toUpperCase();
+                        let statusStr = "UPCOMING";
+                        if (rawStatus.includes("SUBMISSION") || rawStatus.includes("OPEN") || rawStatus.includes("SUBMIT")) {
+                          statusStr = "SUBMISSION OPEN";
+                        } else if (rawStatus.includes("JUDGING") || rawStatus.includes("EVALUAT")) {
+                          statusStr = "JUDGING";
+                        } else if (rawStatus.includes("COMPLETE") || rawStatus.includes("CLOSED") || rawStatus.includes("ENDED")) {
+                          statusStr = "COMPLETE";
+                        } else if (rawStatus.includes("UPCOMING") || rawStatus.includes("SCHEDULED")) {
+                          statusStr = "UPCOMING";
+                        } else if (deadlineDate && new Date(deadlineDate).getTime() < Date.now()) {
+                          statusStr = "COMPLETE";
+                        } else {
+                          statusStr = "SUBMISSION OPEN";
+                        }
+                        const cardStyle = getRoundStyle(statusStr);
+                        return (
+                          <div
+                            key={r.roundId}
+                            className="p-5 space-y-3 transition-all duration-300 hover:scale-[1.01]"
+                            style={cardStyle}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>{r.roundName}</span>
+                              <StatusBadge status={statusStr} />
+                            </div>
+                            {r.description && (
+                              <p style={{ fontSize: 12, color: COLORS.textSecondary }} className="line-clamp-2">
+                                {r.description}
+                              </p>
+                            )}
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1.5 pt-2 border-t border-slate-200">
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: COLORS.textSecondary }}>Start Date:</span>
+                                <strong style={{ color: COLORS.textPrimary }}>{r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</strong>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: COLORS.textSecondary }}>Submission Deadline:</span>
+                                <strong style={{ color: COLORS.textPrimary }}>{deadlineDate ? new Date(deadlineDate).toLocaleString() : "TBD"}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
+                        No round schedules published for this category yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Leaderboard Section */}
+              <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+                {renderLeaderboard()}
+              </div>
+
               {eventActionMessage[ev.eventId] && (
-                <div className="rounded-xl px-4 py-3 mb-6" style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, fontSize: 14, fontWeight: 500 }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, fontSize: 14, fontWeight: 500 }}>
                   {eventActionMessage[ev.eventId]}
                 </div>
               )}
 
+              {/* Registration Action Bar */}
               <div className="pt-6 flex justify-between items-center" style={{ borderTop: `1px solid ${COLORS.border}` }}>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Your Status:</span>
@@ -2197,10 +2362,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 </div>
                 <div className="flex gap-3">
                   {isActiveParticipant ? (
-                    <>
-                      <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined</Button>
-                      <Button variant="primary" size="md" icon={<ExternalLink size={16} />} onClick={() => { setSelectedEventDetailId(ev.eventId); setLeaderboardEventId(ev.eventId); setLeaderboardRoundId("event"); }}>Enter Event Dashboard</Button>
-                    </>
+                    <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined Event</Button>
                   ) : isPendingParticipant ? (
                     <Button variant="outline" size="md" disabled icon={<Clock size={16} />}>Pending Approval</Button>
                   ) : blocksTeamRegistration ? (
