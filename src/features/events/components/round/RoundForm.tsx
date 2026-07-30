@@ -11,28 +11,28 @@ import { EventTimeline } from "../timeline/EventTimeline";
 
 
 interface Props {
-    initial: RoundRequest;
-    onSave: (data: RoundRequest) => Promise<void>;
-    onCancel: () => void;
-    
-    // Optional props for Timeline Preview
-    event?: EventResponse;
-    categories?: CategoryResponse[];
-    allRounds?: RoundResponse[];
-    categoryId?: string;
-    // Khi edit: id của round đang sửa, để loại nó khỏi allRounds và thay bằng bản
-    // preview đang chỉnh (tránh hiển thị trùng round trên timeline).
-    editingRoundId?: string;
+  initial: RoundRequest;
+  onSave: (data: RoundRequest) => Promise<void>;
+  onCancel: () => void;
+
+  // Optional props for Timeline Preview
+  event?: EventResponse;
+  categories?: CategoryResponse[];
+  allRounds?: RoundResponse[];
+  categoryId?: string;
+  // Khi edit: id của round đang sửa, để loại nó khỏi allRounds và thay bằng bản
+  // preview đang chỉnh (tránh hiển thị trùng round trên timeline).
+  editingRoundId?: string;
 }
 export function RoundForm({
-    initial,
-    onSave,
-    onCancel,
-    event,
-    categories,
-    allRounds,
-    categoryId,
-    editingRoundId
+  initial,
+  onSave,
+  onCancel,
+  event,
+  categories,
+  allRounds,
+  categoryId,
+  editingRoundId
 }: Props) {
   const [form, setForm] = useState(initial);
   const [error, setError] = useState("");
@@ -43,7 +43,7 @@ export function RoundForm({
     if (!form.roundName) return;
 
     const getTime = (d: string | null | undefined) => d ? new Date(d).getTime() : null;
-    
+
     const sTime = getTime(form.startDate);
     const eTime = getTime(form.endDate);
     const subTime = getTime(form.submissionDeadline);
@@ -55,34 +55,38 @@ export function RoundForm({
     }
 
     if (event?.eventStartDate && form.startDate) {
-      if (form.startDate.substring(0, 10) < event.eventStartDate) {
-        setError(`Round Start Date must be on or after Event Start Date (${event.eventStartDate}).`);
+      const eventStartDay = new Date(event.eventStartDate.substring(0, 10) + "T00:00:00").getTime();
+      const roundStartDay = new Date(form.startDate.substring(0, 10) + "T00:00:00").getTime();
+      if (!isNaN(roundStartDay) && !isNaN(eventStartDay) && roundStartDay < eventStartDay) {
+        setError(`Round Start Date must be on or after Event Start Date (${event.eventStartDate.substring(0, 10)}).`);
         return;
       }
     }
 
     if (event?.eventEndDate && form.endDate) {
-      if (form.endDate.substring(0, 10) > event.eventEndDate) {
-        setError(`Round End Date must be on or before Event End Date (${event.eventEndDate}).`);
+      const eventEndDay = new Date(event.eventEndDate.substring(0, 10) + "T23:59:59").getTime();
+      const roundEndDay = new Date(form.endDate.substring(0, 10) + "T00:00:00").getTime();
+      if (!isNaN(roundEndDay) && !isNaN(eventEndDay) && roundEndDay > eventEndDay) {
+        setError(`Round End Date must be on or before Event End Date (${event.eventEndDate.substring(0, 10)}).`);
         return;
       }
     }
-    
+
     if (sTime && subTime && subTime < sTime) {
       setError("Submission Deadline must be after or equal to Start Date.");
       return;
     }
-    
+
     if (subTime && jdgTime && jdgTime < subTime) {
       setError("Judging Deadline must be after or equal to Submission Deadline.");
       return;
     }
-    
+
     if (jdgTime && eTime && eTime < jdgTime) {
       setError("End Date must be after or equal to Judging Deadline.");
       return;
     }
-    
+
     // Cross checks if some dates are missing
     if (!subTime && sTime && jdgTime && jdgTime < sTime) {
       setError("Judging Deadline must be after or equal to Start Date.");
@@ -96,14 +100,18 @@ export function RoundForm({
     const aStart = getTime(form.appealStartTime);
     const aEnd = getTime(form.appealEndTime);
     if (event?.eventStartDate && form.appealStartTime) {
-      if (form.appealStartTime.substring(0, 10) < event.eventStartDate) {
-        setError(`Appeal Start Time must be on or after Event Start Date (${event.eventStartDate}).`);
+      const eventStartDay = new Date(event.eventStartDate.substring(0, 10) + "T00:00:00").getTime();
+      const appealStartDay = new Date(form.appealStartTime.substring(0, 10) + "T00:00:00").getTime();
+      if (!isNaN(appealStartDay) && !isNaN(eventStartDay) && appealStartDay < eventStartDay) {
+        setError(`Appeal Start Time must be on or after Event Start Date (${event.eventStartDate.substring(0, 10)}).`);
         return;
       }
     }
     if (event?.eventEndDate && form.appealEndTime) {
-      if (form.appealEndTime.substring(0, 10) > event.eventEndDate) {
-        setError(`Appeal End Time must be on or before Event End Date (${event.eventEndDate}).`);
+      const eventEndDay = new Date(event.eventEndDate.substring(0, 10) + "T23:59:59").getTime();
+      const appealEndDay = new Date(form.appealEndTime.substring(0, 10) + "T00:00:00").getTime();
+      if (!isNaN(appealEndDay) && !isNaN(eventEndDay) && appealEndDay > eventEndDay) {
+        setError(`Appeal End Time must be on or before Event End Date (${event.eventEndDate.substring(0, 10)}).`);
         return;
       }
     }
@@ -140,29 +148,29 @@ export function RoundForm({
   // bên dưới thay thế nó, tránh vẽ trùng round trên timeline.
   let previewRounds = (allRounds || []).filter(r => r.roundId !== editingRoundId);
   if (categoryId && form.startDate && form.endDate) {
-      // Mock the current editing round to preview it on the timeline
-      const editingRound: RoundResponse = {
-          roundId: "editing-temp-id",
-          categoryId: categoryId,
-          roundName: form.roundName || "Editing Round...",
-          description: form.description || "",
-          roundOrder: form.roundOrder || 0,
-          roundStatusId: form.roundStatusId || "",
-          roundStatusName: "Draft",
-          isCalibrationRound: form.isCalibrationRound || false,
-          startDate: form.startDate,
-          endDate: form.endDate,
-          submissionDeadline: form.submissionDeadline || "",
-          judgingDeadline: form.judgingDeadline || "",
-          advancementTopN: form.advancementTopN || 0,
-            // @ts-ignore
-            appealStartTime: form.appealStartTime || undefined,
-            // @ts-ignore
-            appealEndTime: form.appealEndTime || undefined,
-      };
-      
-      // Filter out this round if we are editing an existing one (it would be in allRounds with same ID, but initial doesn't have ID so we can't easily filter by ID here. Wait, initial is RoundRequest, we'd need roundId to filter. If it's an edit, we might show it twice. To fix, let's just assume we only pass preview data on Add Round for now, or filter by roundName if needed. Wait, RoundRequest doesn't have roundId. We can pass roundId as a prop if we want to replace it, but for simplicity let's just append it. Actually if it's Edit, `RoundCard` handles it. `RoundForm` is used only for Add Round right now! Let's verify this.)
-      previewRounds = [...previewRounds, editingRound];
+    // Mock the current editing round to preview it on the timeline
+    const editingRound: RoundResponse = {
+      roundId: "editing-temp-id",
+      categoryId: categoryId,
+      roundName: form.roundName || "Editing Round...",
+      description: form.description || "",
+      roundOrder: form.roundOrder || 0,
+      roundStatusId: form.roundStatusId || "",
+      roundStatusName: "Draft",
+      isCalibrationRound: form.isCalibrationRound || false,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      submissionDeadline: form.submissionDeadline || "",
+      judgingDeadline: form.judgingDeadline || "",
+      advancementTopN: form.advancementTopN || 0,
+      // @ts-ignore
+      appealStartTime: form.appealStartTime || undefined,
+      // @ts-ignore
+      appealEndTime: form.appealEndTime || undefined,
+    };
+
+    // Filter out this round if we are editing an existing one (it would be in allRounds with same ID, but initial doesn't have ID so we can't easily filter by ID here. Wait, initial is RoundRequest, we'd need roundId to filter. If it's an edit, we might show it twice. To fix, let's just assume we only pass preview data on Add Round for now, or filter by roundName if needed. Wait, RoundRequest doesn't have roundId. We can pass roundId as a prop if we want to replace it, but for simplicity let's just append it. Actually if it's Edit, `RoundCard` handles it. `RoundForm` is used only for Add Round right now! Let's verify this.)
+    previewRounds = [...previewRounds, editingRound];
   }
 
   return (
@@ -180,18 +188,18 @@ export function RoundForm({
           <Input type="number" value={String(form.roundOrder)} onChange={v => set("roundOrder", Number(v))} />
         </Field>
         <Field label="Status">
-          <Select 
-              value={form.roundStatusId || ""} 
-              onChange={v => set("roundStatusId", v)}
-            >
+          <Select
+            value={form.roundStatusId || ""}
+            onChange={v => set("roundStatusId", v)}
+          >
             {ROUND_STATUSES.map(status => (
-                <option 
-                   key={status.statusId} 
-                   value={status.statusId}
-                >
-                    {status.statusName}
-                </option>
-                ))
+              <option
+                key={status.statusId}
+                value={status.statusId}
+              >
+                {status.statusName}
+              </option>
+            ))
             }
           </Select>
         </Field>
@@ -204,52 +212,52 @@ export function RoundForm({
           />
         </Field>
         <Field label="Start Date">
-          <DateTimePickerField 
-            value={form.startDate ?? ""} 
-            onChange={v => set("startDate", v)} 
+          <DateTimePickerField
+            value={form.startDate ?? ""}
+            onChange={v => set("startDate", v)}
             minDateTime={event?.eventStartDate}
             maxDateTime={form.endDate || event?.eventEndDate}
             strictMax={!!form.endDate}
           />
         </Field>
         <Field label="End Date">
-          <DateTimePickerField 
-            value={form.endDate ?? ""} 
-            onChange={v => set("endDate", v)} 
+          <DateTimePickerField
+            value={form.endDate ?? ""}
+            onChange={v => set("endDate", v)}
             minDateTime={form.judgingDeadline || form.submissionDeadline || form.startDate || event?.eventStartDate}
             strictMin={!form.judgingDeadline && !form.submissionDeadline && !!form.startDate}
             maxDateTime={event?.eventEndDate}
           />
         </Field>
         <Field label="Submission Deadline">
-          <DateTimePickerField 
-            value={form.submissionDeadline ?? ""} 
-            onChange={v => set("submissionDeadline", v)} 
+          <DateTimePickerField
+            value={form.submissionDeadline ?? ""}
+            onChange={v => set("submissionDeadline", v)}
             minDateTime={form.startDate || event?.eventStartDate}
             maxDateTime={form.judgingDeadline || form.endDate || event?.eventEndDate}
           />
         </Field>
         <Field label="Judging Deadline">
-          <DateTimePickerField 
-            value={form.judgingDeadline ?? ""} 
-            onChange={v => set("judgingDeadline", v)} 
+          <DateTimePickerField
+            value={form.judgingDeadline ?? ""}
+            onChange={v => set("judgingDeadline", v)}
             minDateTime={form.submissionDeadline || form.startDate || event?.eventStartDate}
             maxDateTime={form.endDate || event?.eventEndDate}
           />
         </Field>
         <Field label="Appeal Start Time">
-          <DateTimePickerField 
-            value={form.appealStartTime ?? ""} 
-            onChange={v => set("appealStartTime", v)} 
+          <DateTimePickerField
+            value={form.appealStartTime ?? ""}
+            onChange={v => set("appealStartTime", v)}
             minDateTime={form.judgingDeadline || form.startDate || event?.eventStartDate}
             maxDateTime={form.appealEndTime || form.endDate || event?.eventEndDate}
             strictMax={!!form.appealEndTime}
           />
         </Field>
         <Field label="Appeal End Time">
-          <DateTimePickerField 
-            value={form.appealEndTime ?? ""} 
-            onChange={v => set("appealEndTime", v)} 
+          <DateTimePickerField
+            value={form.appealEndTime ?? ""}
+            onChange={v => set("appealEndTime", v)}
             minDateTime={form.appealStartTime || form.judgingDeadline || form.startDate || event?.eventStartDate}
             strictMin={!!form.appealStartTime}
             maxDateTime={form.endDate || event?.eventEndDate}
@@ -280,18 +288,18 @@ export function RoundForm({
       </div>
 
       {event && categories && previewRounds && (
-          <div className="mt-4 mb-2 pt-4 border-t border-gray-100">
-              <div className="text-xs font-semibold text-gray-500 mb-2">Timeline Preview</div>
-              {/* Bọc cuộn ngang: EventTimeline có min-w-[800px] bên trong, cha phải cho tràn/cuộn
+        <div className="mt-4 mb-2 pt-4 border-t border-gray-100">
+          <div className="text-xs font-semibold text-gray-500 mb-2">Timeline Preview</div>
+          {/* Bọc cuộn ngang: EventTimeline có min-w-[800px] bên trong, cha phải cho tràn/cuộn
                   để không đè lên các phần khác của form khi card hẹp. */}
-              <div className="w-full max-w-full overflow-x-auto">
-                  <EventTimeline
-                      event={event}
-                      categories={categories.filter(c => c.categoryId === categoryId)} // Only show this category lane for compactness
-                      rounds={previewRounds.filter(r => r.categoryId === categoryId)}
-                  />
-              </div>
+          <div className="w-full max-w-full overflow-x-auto">
+            <EventTimeline
+              event={event}
+              categories={categories.filter(c => c.categoryId === categoryId)} // Only show this category lane for compactness
+              rounds={previewRounds.filter(r => r.categoryId === categoryId)}
+            />
           </div>
+        </div>
       )}
 
       <div className="flex gap-2 mt-4">
