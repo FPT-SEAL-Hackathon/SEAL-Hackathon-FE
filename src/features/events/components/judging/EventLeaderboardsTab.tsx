@@ -272,7 +272,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               render: (_: any, row: any) => (
                 <div className="flex items-center gap-2">
                   <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-                    {row.finalScore?.toFixed(1) ?? row.totalScore}
+                    {row.averageScore?.toFixed(2) ?? row.finalScore?.toFixed(2) ?? row.totalScore}
                   </span>
                   {row.submissionId && (
                     <button 
