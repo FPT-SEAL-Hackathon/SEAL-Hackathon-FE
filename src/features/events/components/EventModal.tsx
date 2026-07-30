@@ -178,17 +178,25 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
-      const parsedMsg = parseApiError(err).message;
-      if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
-        const errorMessages = Object.entries(err.fieldErrors)
-          .map(([field, msg]) => `• ${msg}`)
+      if (
+        err instanceof ApiError &&
+        err.fieldErrors &&
+        Object.keys(err.fieldErrors).length > 0
+      ) {
+        const errorMessage = Object.values(err.fieldErrors)
+          .map(msg => `• ${msg}`)
           .join("\n");
-        const fullMsg = parsedMsg + "\n" + errorMessages;
-        setError(fullMsg);
-        toast.error(parsedMsg);
+
+        setError(errorMessage);
+        toast.error(Object.values(err.fieldErrors)[0]); // chỉ hiện lỗi đầu tiên trên toast
       } else {
-        setError(parsedMsg);
-        toast.error(parsedMsg);
+        const message =
+          err instanceof ApiError
+            ? err.message
+            : parseApiError(err).message;
+
+        setError(message);
+        toast.error(message);
       }
     } finally {
       setLoading(false);
