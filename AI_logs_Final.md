@@ -46,3 +46,46 @@
 - **[SYSTEM]:** 
   - FE commits: `5f974027`, `a1544468`, `f50a9c9e`, `0780faab`, `a6d8875d`, `ab03f1c5`, `8c43be43` — Branch `mentor_AI`.
   - BE commits: `4d93373`, `0495cac`, `fad6451`, `e0ad34a`, `4b51d35`, `b99dceb` — Branch `mentor_AI`.
+
+---
+
+## Session Summary - Certificate Redesign, Both Certificate Types, HikariCP & Spring Context Fixes
+
+### 1. Certificate PDF UI Redesign & Watermark Adjustment
+- **Requirement**: Update Certificate PDF UI to modern dark theme matching SEAL Hackathon web style (`#0f172a`, gold/orange borders `#fbbf24`, `#f97316`), and center a large faded background watermark logo (`logo_trans.png`).
+- **Template Improvements (`certificate.html`)**:
+  - A4 Landscape layout (`@page { size: A4 landscape; margin: 0; }`).
+  - Centered watermark logo with soft opacity `0.035` (`top: 145px; left: 50%; width: 400px; margin-left: -200px;`) to prevent clashing with text elements.
+  - Dynamically bound Thymeleaf variables `certMainTitle`, `certSubtitle`, and `citation`.
+  - Fixed Thymeleaf SpEL expression evaluation for String fields (`logoBase64 != ''`, `categoryName != ''`, `awardTierName != ''`) eliminating `500 INTERNAL_SERVER_ERROR` during rendering.
+
+### 2. Business Logic Support for Both Participation & Award Certificates
+- **Requirement**: Allow ALL students who actively participated in an event to download a "Certificate of Participation". For students whose team won published awards, render a list of selectable certificates (Participation Certificate + Award Certificate(s)).
+- **Backend Implementations**:
+  - Created `CertificateItemResponse.java` DTO.
+  - Updated `TeamMembersRepository.java` with `@Query` method `findActiveMemberInEvent` using `JOIN FETCH tm.team team LEFT JOIN FETCH team.event LEFT JOIN FETCH team.category`.
+  - Implemented `getCertificatesForUserInEvent`, `generateParticipationCertificatePdf`, and Base64 logo loader in `CertificateServiceImpl.java`.
+  - Added REST endpoints in `CertificateController.java`:
+    - `GET /api/v1/certificates/events/{eventId}`: List available certificates for the current user in an event.
+    - `GET /api/v1/certificates/download/participation/{eventId}`: Download Participation Certificate PDF.
+    - `GET /api/v1/certificates/download/{awardId}`: Download Award Certificate PDF.
+- **Frontend Integration**:
+  - Updated `awardService.ts` with `getEventCertificates`, `downloadParticipationCertificate`, and `downloadAwardCertificate`.
+  - Redesigned Certificates tab in `MemberDashboard.tsx` to list all available certificates (Participation & Award Tiers) with View & Download actions.
+
+### 3. Database Connection Leak Prevention & HikariCP Optimization
+- **HikariCP Leak Detection**: Added `spring.datasource.hikari.leak-detection-threshold=20000` (20s) to `application.properties` to log stack traces if connections are held > 20s.
+- **Gemini API Network Call & Timeout Fix**:
+  - Configured `SimpleClientHttpRequestFactory` with `connectTimeout(5000)` (5s) and `readTimeout(10000)` (10s) on `RestTemplate` in `GeminiServiceImpl.java`.
+  - Refactored `sendMessage` in `ConsultationServiceImpl.java` to execute `geminiService.askAi(...)` **outside** the `@Transactional` boundary, preventing database connections from being held hostage during external network requests.
+- **Notification Broadcast Fix**: Updated `notifyNonCompliantUsers` in `UserManagementService.java` to `@Transactional(readOnly = true)`, releasing the database connection immediately after scanning before broadcasting notifications.
+
+### 4. Spring Application Context Initialization Fix
+- **Root Cause**: `SystemSettingServiceImpl.java` used Lombok `@RequiredArgsConstructor` with `private final ObjectMapper objectMapper = new ObjectMapper();`. Lombok included `ObjectMapper` in the generated constructor parameter list, causing Spring to fail starting with `UnsatisfiedDependencyException` when an `ObjectMapper` bean was not found in the Application Context.
+- **Fix**:
+  - Added `@Bean @Primary public ObjectMapper objectMapper()` in `JacksonConfig.java` to register a managed `ObjectMapper` bean with custom modules (`uppercaseUuidModule`, `JavaTimeModule`).
+  - Updated `SystemSettingServiceImpl.java` to `private final ObjectMapper objectMapper;` for Spring dependency injection.
+
+### 5. Git Commit Logs
+- **BE Commit**: `ac57b88` — `fix(certificate,hikari,config): fix participation certificate download, prevent DB connection leaks and add ObjectMapper bean` — Branch `mentor_AI`.
+- **FE Commit**: `a95f27ce` — `feat(certificate): support participation and award certificates UI in member dashboard` — Branch `mentor_AI`.
