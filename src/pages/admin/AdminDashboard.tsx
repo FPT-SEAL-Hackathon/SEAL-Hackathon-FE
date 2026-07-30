@@ -161,6 +161,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
   const [apiUsers, setApiUsers] = useState<UserManagementUser[]>([]);
+  const [apiActiveJudgesCount, setApiActiveJudgesCount] = useState<number | null>(null);
   const [eventLoadError, setEventLoadError] = useState("");
   const [categoryLoadError, setCategoryLoadError] = useState("");
   const [selectedSubmissionCategoryId, setSelectedSubmissionCategoryId] = useState("");
@@ -309,6 +310,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       .then(data => setApiUsers(data.content))
       .catch(() => setApiUsers([]));
   }, [isAdminUser]);
+
+  useEffect(() => {
+    userService.getJudgesCount()
+      .then(res => setApiActiveJudgesCount(res.count))
+      .catch(() => setApiActiveJudgesCount(null));
+  }, []);
 
   useEffect(() => {
     if (!selectedEventId) {
@@ -846,6 +853,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setApiCriteriaTemplates,
     apiUsers,
     setApiUsers,
+    apiActiveJudgesCount,
     eventLoadError,
     setEventLoadError,
     categoryLoadError,
