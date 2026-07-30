@@ -299,17 +299,7 @@ export function Layout({ role, currentPage, onNavigate, onRoleChange, children, 
               paddingRight: 12,
             }}
           >
-            <div
-              className="flex items-center justify-center rounded-2xl flex-shrink-0"
-              style={{
-                width: 40,
-                height: 40,
-                background: "linear-gradient(135deg, #F47920, #FF9040)",
-                boxShadow: "0 4px 16px rgba(244,121,32,0.4)",
-              }}
-            >
-              <Zap size={20} color="white" />
-            </div>
+            <img src="/logo_trans.png" alt="SEAL Logo" className="h-12 w-auto object-contain flex-shrink-0 filter drop-shadow-md" />
             <div
               style={{
                 marginLeft: 12,
