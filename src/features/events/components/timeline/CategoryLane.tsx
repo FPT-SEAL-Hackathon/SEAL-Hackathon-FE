@@ -8,7 +8,15 @@ interface Props {
     category: CategoryResponse;
     rounds: RoundResponse[];
     bounds: TimelineBounds;
+    // Bề rộng thực (px) của track, do TimelineGrid tính từ mức zoom.
+    trackPx: number;
 }
+
+// Chỗ px cần chừa giữa 2 block cùng dòng để nhãn nổi của block hẹp không đè block sau.
+const LABEL_GAP_PX = 80;
+// Chặn trên cho khoảng hở quy đổi: ở mức zoom rất xa, 80px chiếm % rất lớn và sẽ đẩy hầu
+// hết round xuống dòng riêng làm lane cao vọt. Thà để nhãn hơi sát nhau còn hơn lane 20 dòng.
+const MAX_GAP_PCT = 4;
 
 // Kích thước một dòng con của round trong lane. Lane cao = rowCount * ROW_STRIDE + đệm.
 const BLOCK_H = 40;
@@ -16,13 +24,16 @@ const ROW_GAP = 8;
 const ROW_STRIDE = BLOCK_H + ROW_GAP;
 const LANE_PAD_Y = 10;
 
-export function CategoryLane({ category, rounds, bounds }: Props) {
+export function CategoryLane({ category, rounds, bounds, trackPx }: Props) {
     // Sort rounds by roundOrder
     const sortedRounds = [...rounds].sort((a, b) => (a.roundOrder || 0) - (b.roundOrder || 0));
 
     // Lane-packing: round đè nhau về thời gian được đẩy xuống dòng con khác nhau,
     // nên chiều cao lane co giãn theo số dòng thực tế thay vì cố định 64px.
-    const { rowByRoundId, rowCount } = assignRoundRows(sortedRounds, bounds);
+    // Khoảng hở quy đổi từ px sang % theo mức zoom hiện tại: zoom xa thì cùng một khoảng
+    // px chiếm % lớn hơn, nên phải đẩy round xuống dòng khác sớm hơn.
+    const minGapPct = Math.min((LABEL_GAP_PX / Math.max(trackPx, 1)) * 100, MAX_GAP_PCT);
+    const { rowByRoundId, rowCount } = assignRoundRows(sortedRounds, bounds, minGapPct);
     const trackHeight = rowCount * ROW_STRIDE - ROW_GAP;
     const laneMinHeight = sortedRounds.length === 0 ? 48 : trackHeight + LANE_PAD_Y * 2;
 
@@ -47,6 +58,7 @@ export function CategoryLane({ category, rounds, bounds }: Props) {
                                 key={r.roundId}
                                 round={r}
                                 bounds={bounds}
+                                trackPx={trackPx}
                                 topPx={(rowByRoundId[r.roundId] ?? 0) * ROW_STRIDE}
                                 heightPx={BLOCK_H}
                             />

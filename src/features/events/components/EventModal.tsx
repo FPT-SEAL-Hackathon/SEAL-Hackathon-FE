@@ -150,7 +150,9 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       setError("Event End Date must be after or equal to Event Start Date.");
       return;
     }
-    if (form.registrationEnd && form.eventStartDate && form.registrationEnd > form.eventStartDate) {
+    // Strict: backend (validateEventTimeline) chặn khi !registrationEnd.isBefore(eventStart),
+    // tức bằng nhau CŨNG bị 400. Dùng `>=` để lỗi hiện tại chỗ thay vì để server trả về.
+    if (form.registrationEnd && form.eventStartDate && form.registrationEnd >= form.eventStartDate) {
       setError(
           "Registration End must be before Event Start."
       );
@@ -277,10 +279,15 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Event Start Date">
+                {/* Event phải bắt đầu SAU khi đóng đăng ký: backend validateEventTimeline
+                    yêu cầu registrationEnd < eventStart (strict). Đặt minDateTime =
+                    registrationEnd + strictMin để picker làm mờ luôn mọi ngày/giờ nằm trong
+                    hoặc trùng mép khoảng đăng ký, thay vì để người dùng chọn rồi ăn lỗi 400. */}
                 <DateTimePickerField
                   value={form.eventStartDate}
                   onChange={v => set("eventStartDate", v)}
-                  minDateTime={!isEdit ? new Date() : undefined}
+                  minDateTime={form.registrationEnd || form.registrationStart || (!isEdit ? new Date() : undefined)}
+                  strictMin={!!form.registrationEnd}
                   maxDateTime={form.eventEndDate || undefined}
                   strictMax={!!form.eventEndDate}
                 />
