@@ -452,7 +452,6 @@ export function TeamApiPanel({
     | { kind: "leave" }
     | { kind: "kick"; userId: string; name: string }
     | { kind: "disband" }
-    | { kind: "makeLeader"; userId: string; name: string }
     | null
   >(null);
   const [dismissedExpiredTeamId, setDismissedExpiredTeamId] = useState<string | null>(null);
@@ -2514,10 +2513,6 @@ export function TeamApiPanel({
                     && memberUserId !== user?.userId
                     && memberUserId !== selectedTeam.leaderUserId;
                   const isCurrentUserRow = memberUserId === user?.userId;
-                  const canMakeLeader = canRemoveMember; // leader + roster mở + không phải mình/leader hiện tại
-                  const memberName = getMemberDisplay(
-                    selectedTeam.members.find(item => item.userId === memberUserId) ?? { userId: memberUserId } as any,
-                  ).name;
                   return (
                     <div className="flex justify-center">
                       <div className="flex flex-wrap justify-center gap-2" style={{ minWidth: 188 }}>
@@ -2529,17 +2524,6 @@ export function TeamApiPanel({
                         >
                           Detail
                         </Button>
-                        {canMakeLeader && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            icon={loading.transfer ? <Loader size={13} className="animate-spin" /> : <UserCheck size={13} />}
-                            disabled={loading.transfer}
-                            onClick={() => setConfirmAction({ kind: "makeLeader", userId: memberUserId, name: memberName })}
-                          >
-                            Make Leader
-                          </Button>
-                        )}
                         {isCurrentUserRow && canEditRoster ? (
                           <Button
                             variant="danger"
@@ -2873,30 +2857,25 @@ export function TeamApiPanel({
           const isLeaderLeaving = confirmAction.kind === "leave" && isLeader;
           const title = confirmAction.kind === "leave" ? "Leave team?"
             : confirmAction.kind === "kick" ? "Remove member?"
-            : confirmAction.kind === "disband" ? "Disband team?"
-            : "Transfer leadership?";
+            : "Disband team?";
           const description = confirmAction.kind === "leave"
             ? (isLeaderLeaving
                 ? (successorMember
-                    ? `You are the team leader. If you leave, leadership will automatically transfer to ${getMemberDisplay(successorMember).name} (earliest member). You can also use "Make Leader" first to pick someone else.`
+                    ? `You are the team leader. If you leave, leadership will automatically transfer to ${getMemberDisplay(successorMember).name} (earliest member). Use "Transfer Leader" first if you want to pick someone else.`
                     : "You are the only member. Leaving will delete this team permanently, including all pending join requests.")
                 : "You will leave this team. You can request to join another team afterwards.")
             : confirmAction.kind === "kick"
               ? `Remove ${confirmAction.name} from the team? They can request to join again later.`
-              : confirmAction.kind === "disband"
-                ? "This will permanently delete the team, its membership history and all pending join requests. This cannot be undone."
-                : `Make ${confirmAction.name} the new team leader? You will become a regular member and lose leader controls.`;
+              : "This will permanently delete the team, its membership history and all pending join requests. This cannot be undone.";
           const confirmLabel = confirmAction.kind === "leave" ? "Leave team"
             : confirmAction.kind === "kick" ? "Remove"
-            : confirmAction.kind === "disband" ? "Disband"
-            : "Transfer";
+            : "Disband";
           const onConfirm = () => {
             const action = confirmAction;
             setConfirmAction(null);
             if (action.kind === "leave") leaveTeam();
             else if (action.kind === "kick") removeMember(action.userId);
-            else if (action.kind === "disband") disbandTeam();
-            else transferLeadershipTo(action.userId);
+            else disbandTeam();
           };
           return renderCenteredModal(
             title,
@@ -2906,7 +2885,7 @@ export function TeamApiPanel({
               <div className="mt-5 flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setConfirmAction(null)}>Cancel</Button>
                 <Button
-                  variant={confirmAction.kind === "makeLeader" ? "primary" : "danger"}
+                  variant="danger"
                   size="sm"
                   onClick={onConfirm}
                 >
