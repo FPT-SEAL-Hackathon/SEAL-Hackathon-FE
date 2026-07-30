@@ -244,7 +244,9 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                     </span>
                   );
                 }
-                return <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary }}>-</span>;
+                return (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>
+                );
               }
             },
             {
@@ -267,30 +269,38 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             ...(activeTab === "round" ? [{
               key: "score",
               label: "SCORE",
-              render: (_: any, row: any) => (
-                <div className="flex items-center gap-2">
-                  <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-                    {row.averageScore?.toFixed(2) ?? row.finalScore?.toFixed(2) ?? row.totalScore}
-                  </span>
-                  {row.submissionId && (
-                    <button 
-                      onClick={() => setSelectedSubmissionId(row.submissionId)}
-                      className="text-xs text-primary hover:underline hover:text-primary-dark transition-colors"
-                    >
-                      (Details)
-                    </button>
-                  )}
-                </div>
-              )
+              render: (_: any, row: any) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                const isDisqualified = rankNum === 0;
+                return (
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontWeight: 700, fontSize: 14, color: isDisqualified ? COLORS.textSecondary : COLORS.textPrimary }}>
+                      {isDisqualified ? '—' : (row.averageScore?.toFixed(2) ?? row.finalScore?.toFixed(2) ?? row.totalScore)}
+                    </span>
+                    {!isDisqualified && row.submissionId && (
+                      <button 
+                        onClick={() => setSelectedSubmissionId(row.submissionId)}
+                        className="text-xs text-primary hover:underline hover:text-primary-dark transition-colors"
+                      >
+                        (Details)
+                      </button>
+                    )}
+                  </div>
+                );
+              }
             }] : []),
             ...(activeTab === "round" ? [{
               key: "advanced",
               label: "ADVANCED",
-              render: (_: any, row: any) => row.isAdvanced ? (
-                <span style={{ color: COLORS.success, fontWeight: 600, fontSize: 13 }}>Yes</span>
-              ) : (
-                <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>No</span>
-              )
+              render: (_: any, row: any) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === 0) return <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>;
+                return row.isAdvanced ? (
+                  <span style={{ color: COLORS.success, fontWeight: 600, fontSize: 13 }}>Yes</span>
+                ) : (
+                  <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>No</span>
+                );
+              }
             }] : []),
             {
               key: "status",
