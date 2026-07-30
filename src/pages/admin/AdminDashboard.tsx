@@ -291,6 +291,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           };
         }));
         setApiEvents(mapped as any);
+        if (mapped.length > 0) {
+          const firstEvId = mapped[0].id || mapped[0].eventId;
+          if (firstEvId) {
+            setSelectedEventId(prev => prev || firstEvId);
+          }
+        }
       })
       .catch(error => {
         setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
