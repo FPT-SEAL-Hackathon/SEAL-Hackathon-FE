@@ -54,22 +54,25 @@ export function RoundForm({
       return;
     }
 
-    if (event?.eventStartDate && form.startDate) {
-      const eventStartDay = new Date(event.eventStartDate.substring(0, 10) + "T00:00:00").getTime();
-      const roundStartDay = new Date(form.startDate.substring(0, 10) + "T00:00:00").getTime();
-      if (!isNaN(roundStartDay) && !isNaN(eventStartDay) && roundStartDay < eventStartDay) {
-        setError(`Round Start Date must be on or after Event Start Date (${event.eventStartDate.substring(0, 10)}).`);
-        return;
-      }
+    // eventStartDate/eventEndDate là LocalDateTime (EventResponse.java) → so sánh bằng
+    // TIMESTAMP, khớp RoundServiceImpl.validateRoundTimeline (isBefore/isAfter trên datetime
+    // nguyên vẹn, KHÔNG cắt về ngày). So sánh ở mức NGÀY sẽ cho qua những giá trị mà backend
+    // vẫn từ chối (vd event bắt đầu 08:00, round bắt đầu 06:00 cùng ngày) → người dùng ăn 400.
+    // Cách cũ hơn nữa so sánh chuỗi `startDate.substring(0,10) < event.eventStartDate` còn
+    // sai hẳn: "2026-08-01" < "2026-08-01T00:00" (chuỗi ngắn hơn được coi là nhỏ hơn) → báo
+    // lỗi oan ngay cả khi round bắt đầu đúng mốc khai mạc.
+    const evStart = getTime(event?.eventStartDate);
+    const evEnd = getTime(event?.eventEndDate);
+    const fmtBoundary = (d: string) => new Date(d).toLocaleString();
+
+    if (evStart && sTime && sTime < evStart) {
+      setError(`Round Start Date must be on or after Event Start (${fmtBoundary(event!.eventStartDate)}).`);
+      return;
     }
 
-    if (event?.eventEndDate && form.endDate) {
-      const eventEndDay = new Date(event.eventEndDate.substring(0, 10) + "T23:59:59").getTime();
-      const roundEndDay = new Date(form.endDate.substring(0, 10) + "T00:00:00").getTime();
-      if (!isNaN(roundEndDay) && !isNaN(eventEndDay) && roundEndDay > eventEndDay) {
-        setError(`Round End Date must be on or before Event End Date (${event.eventEndDate.substring(0, 10)}).`);
-        return;
-      }
+    if (evEnd && eTime && eTime > evEnd) {
+      setError(`Round End Date must be on or before Event End (${fmtBoundary(event!.eventEndDate)}).`);
+      return;
     }
 
     if (sTime && subTime && subTime < sTime) {
@@ -99,21 +102,14 @@ export function RoundForm({
 
     const aStart = getTime(form.appealStartTime);
     const aEnd = getTime(form.appealEndTime);
-    if (event?.eventStartDate && form.appealStartTime) {
-      const eventStartDay = new Date(event.eventStartDate.substring(0, 10) + "T00:00:00").getTime();
-      const appealStartDay = new Date(form.appealStartTime.substring(0, 10) + "T00:00:00").getTime();
-      if (!isNaN(appealStartDay) && !isNaN(eventStartDay) && appealStartDay < eventStartDay) {
-        setError(`Appeal Start Time must be on or after Event Start Date (${event.eventStartDate.substring(0, 10)}).`);
-        return;
-      }
+    // Cùng lý do như biên round ở trên: so sánh timestamp, không cắt về ngày.
+    if (evStart && aStart && aStart < evStart) {
+      setError(`Appeal Start Time must be on or after Event Start (${fmtBoundary(event!.eventStartDate)}).`);
+      return;
     }
-    if (event?.eventEndDate && form.appealEndTime) {
-      const eventEndDay = new Date(event.eventEndDate.substring(0, 10) + "T23:59:59").getTime();
-      const appealEndDay = new Date(form.appealEndTime.substring(0, 10) + "T00:00:00").getTime();
-      if (!isNaN(appealEndDay) && !isNaN(eventEndDay) && appealEndDay > eventEndDay) {
-        setError(`Appeal End Time must be on or before Event End Date (${event.eventEndDate.substring(0, 10)}).`);
-        return;
-      }
+    if (evEnd && aEnd && aEnd > evEnd) {
+      setError(`Appeal End Time must be on or before Event End (${fmtBoundary(event!.eventEndDate)}).`);
+      return;
     }
     if (jdgTime && aStart && aStart < jdgTime) {
       setError("Appeal Start Time must be after or equal to Judging Deadline.");
@@ -173,6 +169,19 @@ export function RoundForm({
     previewRounds = [...previewRounds, editingRound];
   }
 
+  // Mốc thời gian của round ĐANG SOẠN, vẽ chồng lên timeline ngay khi user điền TỪNG field.
+  // Khối `editingRound` phía trên chỉ xuất hiện khi đã có ĐỦ cả startDate và endDate, nên
+  // trong lúc nhập dở organizer không thấy gì để đối chiếu — đây là phần bù cho khoảng đó.
+  // DraftOverlay tự bỏ qua mốc rỗng/không parse được.
+  const draftMarkers = [
+      { label: "Start", at: form.startDate, color: "#2563eb" },
+      { label: "Submission", at: form.submissionDeadline, color: "#16a34a" },
+      { label: "Judging", at: form.judgingDeadline, color: "#9333ea" },
+      { label: "Appeal ▸", at: form.appealStartTime, color: "#d97706" },
+      { label: "◂ Appeal", at: form.appealEndTime, color: "#d97706" },
+      { label: "End", at: form.endDate, color: "#dc2626" },
+  ];
+
   return (
     <Card className="p-5 mb-3" style={{ border: `1px solid ${COLORS.primary}30` }}>
       {error && (
@@ -211,6 +220,11 @@ export function RoundForm({
             placeholder="e.g. 10"
           />
         </Field>
+        {/* Biên event truyền vào các picker dưới đây là DATETIME thật của event (không phải
+            ngày rồi 00:00), và quan hệ với biên event là BAO GỒM cả mốc — nên KHÔNG đặt
+            strictMin/strictMax cho event: RoundServiceImpl cho phép roundStart == eventStart
+            và roundEnd == eventEnd. strictMin/strictMax chỉ dùng cho các quan hệ nghiêm ngặt
+            trong nội bộ round (start < end, appealStart < appealEnd). */}
         <Field label="Start Date">
           <DateTimePickerField
             value={form.startDate ?? ""}
@@ -297,6 +311,8 @@ export function RoundForm({
               event={event}
               categories={categories.filter(c => c.categoryId === categoryId)} // Only show this category lane for compactness
               rounds={previewRounds.filter(r => r.categoryId === categoryId)}
+              draftMarkers={draftMarkers}
+              draftRange={{ start: form.startDate, end: form.endDate }}
             />
           </div>
         </div>

@@ -1,4 +1,28 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+
+/**
+ * Theo dõi bề rộng hiển thị (clientWidth) của một phần tử qua ResizeObserver.
+ * Timeline cần con số px thật để: (1) chế độ "Fit" đặt canvas bằng bề rộng khung,
+ * (2) quy đổi bề rộng block từ % sang px nhằm quyết định vẽ nhãn trong hay ngoài block.
+ * Trả 0 ở lần render đầu (chưa đo được) — chỗ dùng phải chịu được giá trị 0.
+ */
+export function useElementWidth<T extends HTMLElement>(ref: RefObject<T | null>) {
+    const [width, setWidth] = useState(0);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+
+        const update = () => setWidth(el.clientWidth);
+        update();
+
+        const observer = new ResizeObserver(update);
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, [ref]);
+
+    return width;
+}
 
 /**
  * Kéo-để-trượt: nhấn giữ chuột và kéo bên trong vùng cuộn để pan ngang (và dọc).

@@ -2,13 +2,14 @@ import { type CSSProperties } from "react";
 import { EventResponse } from "../../api/eventService";
 import { CategoryResponse } from "../../../categories/api/categoryService";
 import { RoundResponse } from "../../../judging/api/roundService";
-import { TimelineBounds } from "./timelineUtils";
+import { TimelineBounds, LABEL_COL_PX, getCanvasWidthPx } from "./timelineUtils";
 import { TimeScaleHeader } from "./TimeScaleHeader";
 import { MasterTimeline } from "./MasterTimeline";
 import { CategoryLane } from "./CategoryLane";
 import { CurrentTimeMarker } from "./CurrentTimeMarker";
+import { DraftOverlay, type DraftMarker, type DraftRange } from "./DraftOverlay";
 import { COLORS } from "../../../../components/shared/UIComponents";
-import { useDragScroll } from "./useDragScroll";
+import { useDragScroll, useElementWidth } from "./useDragScroll";
 
 // Bề rộng canvas tối thiểu: hẹp hơn thì cuộn/kéo ngang.
 const MIN_CANVAS_WIDTH = 800;
@@ -18,6 +19,11 @@ interface Props {
     bounds: TimelineBounds;
     categories: CategoryResponse[];
     rounds: RoundResponse[];
+    // Mức zoom: px cho mỗi ngày. null = "Fit" (canvas vừa khung, không cuộn ngang).
+    pxPerDay?: number | null;
+    // Mốc/khoảng của round đang được soạn trong RoundForm — vẽ chồng lên mọi lane.
+    draftMarkers?: DraftMarker[];
+    draftRange?: DraftRange;
     // className/style áp cho khung cuộn (viền, bo góc, chiều cao) — dùng chung inline & modal.
     className?: string;
     style?: CSSProperties;
@@ -27,35 +33,55 @@ interface Props {
  * Lưới timeline cuộn được (header thang thời gian + Event Master + các Category lane).
  * Tách riêng để tái dụng cho cả bản inline lẫn bản trong modal "Mở rộng".
  * Bản thân khung cuộn hỗ trợ kéo-để-trượt (useDragScroll).
+ *
+ * Định vị vẫn theo % của canvas; điều khiển zoom chỉ thay đổi BỀ RỘNG canvas (px/ngày),
+ * nhờ vậy mọi phép tính % trong timelineUtils không phải đổi.
  */
-export function TimelineGrid({ event, bounds, categories, rounds, className = "", style }: Props) {
+export function TimelineGrid({
+    event,
+    bounds,
+    categories,
+    rounds,
+    pxPerDay = null,
+    draftMarkers,
+    draftRange,
+    className = "",
+    style,
+}: Props) {
     const scrollRef = useDragScroll<HTMLDivElement>();
+    const containerPx = useElementWidth(scrollRef);
     const safeCategories = Array.isArray(categories) ? categories : [];
     const safeRounds = Array.isArray(rounds) ? rounds : [];
 
+    // Canvas gồm cột nhãn + track. Track là hệ quy chiếu của mọi vị trí % nên các
+    // component con nhận trackPx để quy đổi % → px (quyết định hiện nhãn, mật độ vạch).
+    const canvasPx = Math.max(getCanvasWidthPx(bounds, pxPerDay, containerPx), MIN_CANVAS_WIDTH);
+    const trackPx = Math.max(canvasPx - LABEL_COL_PX, 1);
+
     return (
         <div ref={scrollRef} className={`overflow-auto cursor-grab ${className}`} style={style}>
-            <div className="flex flex-col relative" style={{ minWidth: MIN_CANVAS_WIDTH }}>
+            <div className="flex flex-col relative" style={{ minWidth: canvasPx }}>
                 {/* Header thang thời gian */}
                 <div className="flex bg-gray-50/50 sticky top-0 z-30">
                     <div className="w-48 shrink-0 border-r border-b sticky left-0 z-40 bg-gray-50/90 backdrop-blur-sm" style={{ borderColor: COLORS.border }} />
                     <div className="flex-1 relative border-b" style={{ borderColor: COLORS.border }}>
-                        <TimeScaleHeader bounds={bounds} />
+                        <TimeScaleHeader bounds={bounds} trackPx={trackPx} />
                     </div>
                 </div>
 
                 {/* Vùng các lane */}
                 <div className="flex flex-col relative">
-                    {/* Đường "thời điểm hiện tại" trải qua mọi lane */}
+                    {/* Lớp phủ trải qua mọi lane: đường "thời điểm hiện tại" + mốc round đang soạn */}
                     <div className="absolute top-0 bottom-0 left-48 right-0 pointer-events-none z-20">
                         <CurrentTimeMarker bounds={bounds} />
+                        <DraftOverlay bounds={bounds} markers={draftMarkers} range={draftRange} />
                     </div>
 
                     {/* Event Master */}
                     <div className="flex">
                         <div className="w-48 shrink-0 sticky left-0 z-30 bg-white" />
                         <div className="flex-1 relative -ml-48">
-                            <MasterTimeline event={event} bounds={bounds} />
+                            <MasterTimeline event={event} bounds={bounds} trackPx={trackPx} />
                         </div>
                     </div>
 
@@ -73,6 +99,7 @@ export function TimelineGrid({ event, bounds, categories, rounds, className = ""
                                         category={cat}
                                         rounds={safeRounds.filter(r => r.categoryId === cat.categoryId)}
                                         bounds={bounds}
+                                        trackPx={trackPx}
                                     />
                                 </div>
                             </div>
