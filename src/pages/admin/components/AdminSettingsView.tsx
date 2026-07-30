@@ -232,9 +232,9 @@ export function AdminSettingsView({ context }: AdminViewProps) {
     // đánh dấu hồ sơ lỗi. Vẫn xác nhận khi có người đang dùng để admin biết phạm vi ảnh hưởng.
     if (prefix.active && (prefix.usageCount ?? 0) > 0) {
       const ok = window.confirm(
-        `Đang có ${prefix.usageCount} tài khoản dùng prefix ${prefix.prefix}.\n\n` +
-        `Tắt prefix sẽ chặn ĐĂNG KÝ MỚI với prefix này. Các tài khoản đã có vẫn giữ nguyên ` +
-        `và không bị coi là hồ sơ lỗi.\n\nTiếp tục?`,
+        `${prefix.usageCount} account(s) currently use prefix ${prefix.prefix}.\n\n` +
+        `Deactivating it blocks NEW sign-ups with this prefix. Existing accounts keep working ` +
+        `and are not flagged as incomplete profiles.\n\nContinue?`,
       );
       if (!ok) return;
     }
