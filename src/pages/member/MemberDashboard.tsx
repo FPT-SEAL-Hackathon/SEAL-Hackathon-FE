@@ -1545,8 +1545,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     && !submissionEligibility.canSubmit;
 
   const renderSubmissionTeamSelector = () => {
+    const ungroupedEventKey = "__ungrouped__";
     const groupedTeams = submissionTeams.reduce((acc, team) => {
-      const evName = team.eventName || "Other Events";
+      const evName = team.eventName || ungroupedEventKey;
       if (!acc[evName]) acc[evName] = [];
       acc[evName].push(team);
       return acc;
@@ -1576,7 +1577,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 )}
                 {Object.entries(groupedTeams).map(([evName, teams]) => (
                   <SelectGroup key={evName}>
-                    <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    {evName !== ungroupedEventKey && (
+                      <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    )}
                     {teams.map(team => {
                       const categoryInfo = team.categoryName ? ` - ${team.categoryName}` : "";
                       return (
@@ -1713,9 +1716,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                         </span>
                         <span className="inline-flex items-center gap-1">
                           <Calendar size={13} /> Submitted: {formatSubmissionDate(submission.submittedAt || submission.lastUpdatedAt)}
-                        </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar size={13} /> Deadline: {formatSubmissionDate(round?.submissionDeadline)}
                         </span>
                         <StatusBadge status={submissionStatusLabel.toLowerCase()} />
                       </div>
@@ -3264,15 +3264,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <div className="flex flex-wrap items-center gap-3 mt-4">
               <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading || !submissionForm.roundId || !selectedSubmissionRoundCanSubmit}>
                 {submissionLoading ? "Saving..." : "Submit"}
-              </Button>
-              <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading || !submissionForm.roundId}>
-                {submissionLookupLoading ? "Loading..." : selectedSubmissionRound ? `Load ${selectedSubmissionRound.roundName}` : "Load Current"}
-              </Button>
-              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null || !submissionForm.roundId || !selectedSubmissionRoundState.canDownloadProblem}>
-                {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
-              </Button>
-              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null || !submissionForm.roundId || !selectedSubmissionRoundState.canDownloadProblem}>
-                {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
               </Button>
               {submissionStatus && (
                 <span
