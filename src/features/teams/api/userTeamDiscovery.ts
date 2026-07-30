@@ -1,5 +1,4 @@
 import { displayTeamName, getTeamStatusInfoForTeam, isTeamRejected, teamService, type TeamResponse } from "@/features/teams/api/teamService";
-import { eventParticipantService } from "@/features/eventParticipants/api/eventParticipantService";
 
 export const USER_TEAMS_STORAGE_KEY = "seal_user_teams";
 
@@ -22,34 +21,17 @@ export function isCurrentUserTeam(team: TeamResponse, userId?: string) {
   return userBelongsToTeam(team, userId) && !isTeamRejected(team);
 }
 
-function isRejectedParticipantStatus(value?: string | null) {
-  return value?.trim().replace(/[-\s]+/g, "_").toUpperCase() === "REJECTED";
-}
-
-function memberHasRejectedParticipantStatus(team: TeamResponse, userId: string) {
-  const member = team.members.find(item => item.userId === userId);
-  return isRejectedParticipantStatus(member?.participantStatus)
-    || isRejectedParticipantStatus(member?.participantStatusName);
-}
-
 async function verifyCurrentMembership(team: TeamResponse, userId: string, options: DiscoverUserTeamsOptions = {}) {
   if (!isCurrentUserTeam(team, userId)) return false;
-  if (memberHasRejectedParticipantStatus(team, userId)) return false;
   const teamStatus = getTeamStatusInfoForTeam(team).badge;
   if (options.activeOnly && teamStatus !== "active") return false;
 
   try {
     const detail = await teamService.getMemberDetail(team.teamId, userId);
     if (detail && detail.userId === userId && detail.active === false) return false;
-    if (isRejectedParticipantStatus(detail?.participantStatus) || isRejectedParticipantStatus(detail?.participantStatusName)) {
-      return false;
-    }
   } catch {
     // If detail API fails, rely on isCurrentUserTeam check which already verified active membership from team.members
   }
-
-  const participation = await eventParticipantService.getMyParticipation(team.eventId).catch(() => null);
-  if (participation?.participantStatus === "REJECTED" && teamStatus !== "forming") return false;
 
   return true;
 }
