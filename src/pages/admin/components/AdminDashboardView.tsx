@@ -47,6 +47,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
     apiCriteriaTemplates,
     setApiCriteriaTemplates,
     apiUsers,
+    apiActiveJudgesCount,
     adminSubmissions,
     eventLoadError,
     setEventLoadError,
@@ -162,11 +163,13 @@ export function AdminDashboardView({ context }: AdminViewProps) {
 
   const allUsersList = (apiUsers && apiUsers.length > 0) ? apiUsers : (users || context.users || []);
 
-  const activeJudges = allUsersList.filter((user: any) => {
-    const role = String(user.roleName ?? user.role ?? user.userRole ?? "").toUpperCase();
-    const status = String(user.accountStatusName ?? user.accountStatus ?? user.status ?? "ACTIVE").toUpperCase();
-    return (role.includes("JUDGE") || role.includes("EXPERT")) && (status.includes("ACTIVE") || status.includes("ENABLE"));
-  }).length;
+  const activeJudges = typeof apiActiveJudgesCount === "number"
+    ? apiActiveJudgesCount
+    : allUsersList.filter((user: any) => {
+        const role = String(user.roleName ?? user.role ?? user.userRole ?? "").toUpperCase();
+        const status = String(user.accountStatusName ?? user.accountStatus ?? user.status ?? "ACTIVE").toUpperCase();
+        return (role.includes("JUDGE") || role.includes("EXPERT")) && (status.includes("ACTIVE") || status.includes("ENABLE"));
+      }).length;
 
   const pendingApprovals = allUsersList.filter((user: any) => {
     const status = String(user.accountStatusName ?? user.accountStatus ?? user.status ?? "").toUpperCase();
