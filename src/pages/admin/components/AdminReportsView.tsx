@@ -12,6 +12,7 @@ import { submissionService } from "@/features/submissions/api/submissionService"
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { categoryService } from "@/features/categories/api/categoryService";
 import { teamService } from "@/features/teams/api/teamService";
+import { ScoreVarianceByCriterion } from "./ScoreVarianceByCriterion";
 
 interface AdminViewProps {
   context: any;
@@ -393,6 +394,9 @@ export function AdminReportsView({ context }: AdminViewProps) {
               ))}
             </div>
           </Card>
+
+          {/* Phương sai điểm giữa các giám khảo theo từng tiêu chí */}
+          <ScoreVarianceByCriterion eventId={selectedEventId} />
         </div>
       )}
     </div>

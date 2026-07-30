@@ -38,6 +38,26 @@ export function RoundForm({
   const [error, setError] = useState("");
   const set = (key: keyof typeof form, value: unknown) => setForm(p => ({ ...p, [key]: value }));
 
+  /**
+   * Bật/tắt vòng hiệu chuẩn. Khi BẬT thì xoá luôn các field không áp dụng cho vòng này thay vì
+   * chỉ ẩn ô đi: ẩn mà vẫn giữ giá trị trong state thì payload vẫn mang dữ liệu rác lên server
+   * (backend cũng ép null, nhưng để form và thứ gửi đi khớp nhau cho khỏi khó hiểu khi debug).
+   */
+  const toggleCalibrationRound = () => {
+    setForm(p => {
+      const next = !p.isCalibrationRound;
+      if (!next) return { ...p, isCalibrationRound: next };
+      return {
+        ...p,
+        isCalibrationRound: next,
+        submissionDeadline: undefined,
+        appealStartTime: undefined,
+        appealEndTime: undefined,
+        advancementTopN: undefined,
+      };
+    });
+  };
+
   const handleSave = async () => {
     setError("");
     if (!form.roundName) return;
@@ -248,6 +268,9 @@ export function RoundForm({
             hầu như luôn được tạo lúc setup event, khi chưa đội nào đăng ký (số đội = 0) — chặn
             cứng sẽ khoá luôn màn tạo round. Chỉ cảnh báo mềm; RankingServiceImpl vẫn chỉ cho
             đi tiếp trong số đội thực có. */}
+        {/* Vòng hiệu chuẩn không cho đội nào đi tiếp (RankingServiceImpl từ chối tính xếp hạng
+            cho vòng này) nên ô Top N vô nghĩa — ẩn đi thay vì để tưởng là có tác dụng. */}
+        {!form.isCalibrationRound && (
         <Field label="Advancement Top N">
           <Input
             type="number"
@@ -265,11 +288,12 @@ export function RoundForm({
               }}
             >
               {topNExceedsTeams
-                ? `⚠ Category này hiện chỉ có ${categoryTeamCount} đội — Top N đang lớn hơn hoặc bằng số đội hiện có.`
-                : `Category này hiện có ${categoryTeamCount} đội.`}
+                ? `⚠ This category currently has only ${categoryTeamCount} team${categoryTeamCount === 1 ? "" : "s"} — Top N is greater than or equal to the number of registered teams.`
+                : `This category currently has ${categoryTeamCount} team${categoryTeamCount === 1 ? "" : "s"}.`}
             </div>
           )}
         </Field>
+        )}
         {/* Biên event truyền vào các picker dưới đây là DATETIME thật của event (không phải
             ngày rồi 00:00), và quan hệ với biên event là BAO GỒM cả mốc — nên KHÔNG đặt
             strictMin/strictMax cho event: RoundServiceImpl cho phép roundStart == eventStart
@@ -293,6 +317,10 @@ export function RoundForm({
             maxDateTime={event?.eventEndDate}
           />
         </Field>
+        {/* Đội thi KHÔNG nộp bài vào vòng hiệu chuẩn được (backend chặn thẳng ở
+            validateTeamAdvancedFromPreviousRound) — chỉ Organizer tạo bài mẫu. Nên hạn nộp bài
+            không có tác dụng gì với vòng này. */}
+        {!form.isCalibrationRound && (
         <Field label="Submission Deadline">
           <DateTimePickerField
             value={form.submissionDeadline ?? ""}
@@ -301,6 +329,7 @@ export function RoundForm({
             maxDateTime={form.judgingDeadline || form.endDate || event?.eventEndDate}
           />
         </Field>
+        )}
         <Field label="Judging Deadline">
           <DateTimePickerField
             value={form.judgingDeadline ?? ""}
@@ -309,6 +338,9 @@ export function RoundForm({
             maxDateTime={form.endDate || event?.eventEndDate}
           />
         </Field>
+        {/* Không có đội thi thì không ai phúc khảo — cửa sổ appeal vô nghĩa với vòng hiệu chuẩn. */}
+        {!form.isCalibrationRound && (
+        <>
         <Field label="Appeal Start Time">
           <DateTimePickerField
             value={form.appealStartTime ?? ""}
@@ -327,15 +359,17 @@ export function RoundForm({
             maxDateTime={form.endDate || event?.eventEndDate}
           />
         </Field>
+        </>
+        )}
         <div className="md:col-span-2">
           <Field label="Description">
             <Textarea value={form.description ?? ""} onChange={v => set("description", v)} placeholder="Round description..." />
           </Field>
         </div>
-        <div className="md:col-span-2 flex items-center gap-3">
+        <div className="md:col-span-2">
           <div
-            className="flex items-center gap-2 cursor-pointer select-none"
-            onClick={() => set("isCalibrationRound", !form.isCalibrationRound)}
+            className="flex items-center gap-2 cursor-pointer select-none w-max"
+            onClick={() => toggleCalibrationRound()}
           >
             <div
               className="w-4 h-4 rounded flex items-center justify-center"
@@ -348,6 +382,14 @@ export function RoundForm({
             </div>
             <span style={{ fontSize: 13, color: COLORS.textPrimary }}>Calibration Round</span>
           </div>
+          {form.isCalibrationRound && (
+            <div style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 6 }}>
+              Judges score organizer-created sample submissions only — no team submits here, so
+              submission deadline, advancement and appeal windows do not apply. Judges may score
+              before or after the round dates; calibration closes once a competition round in this
+              category enters judging.
+            </div>
+          )}
         </div>
       </div>
 

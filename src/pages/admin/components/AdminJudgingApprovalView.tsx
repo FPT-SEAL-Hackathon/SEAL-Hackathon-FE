@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { CheckCircle, XCircle, Eye, Loader, CheckSquare, X } from "lucide-react";
 import { toast } from "sonner";
 import { Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
-import { api, parseApiError } from "@/lib/api/apiClient";
+import { api, ApiError, parseApiError } from "@/lib/api/apiClient";
 import {
   getSubmissionStatusLabel,
   SUBMISSION_STATUS_IDS,

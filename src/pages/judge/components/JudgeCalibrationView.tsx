@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Star, BarChart2, TrendingUp, Award, Loader2 } from "lucide-react";
-import { Card, SectionHeader, COLORS, StatCard, ProgressBar } from "@/components/shared/UIComponents";
+import { BarChart2, TrendingUp, Scale, Loader2 } from "lucide-react";
+import { Card, SectionHeader, COLORS, StatCard } from "@/components/shared/UIComponents";
 import { type ReliabilityMetricResponse } from "@/features/research/api/researchService";
 import { judgingService } from "@/features/judging/api/judgingService";
 import { eventService, type EventResponse } from "@/features/events/api/eventService";
@@ -9,7 +9,93 @@ import { useAuth } from "@/features/auth/store/authStore";
 import { JudgeConsensusMatrix } from "./JudgeConsensusMatrix";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export function JudgeCalibrationView({ 
+// Dưới ngưỡng này thì bias/RMS chưa đủ dữ liệu để kết luận gì.
+const MIN_COMPARISONS = 3;
+// Lệch quá mức này (điểm tổng của một bài) mới coi là đáng chú ý.
+const NOTABLE_BIAS = 2;
+
+function biasColor(bias: number | null) {
+  if (bias == null) return COLORS.textSecondary;
+  return Math.abs(bias) >= NOTABLE_BIAS ? COLORS.warning : COLORS.success;
+}
+
+/**
+ * Một câu chẩn đoán từ cặp (bias, RMS) — đây mới là thứ giám khảo hành động được:
+ *  - bias cao, RMS thấp  → lệch HỆ THỐNG, chỉ cần dịch cả thang chấm
+ *  - bias ~0, RMS cao    → chấm THẤT THƯỜNG, dịch thang không cứu được
+ *  - cả hai thấp         → đã ăn khớp với hội đồng
+ */
+function describeBias(bias: number | null, rms: number | null): string {
+  if (bias == null) {
+    return "No peer scored the same samples, so there is nothing to compare against yet.";
+  }
+  const direction = bias > 0 ? "more leniently" : "more strictly";
+  const systematic = Math.abs(bias) >= NOTABLE_BIAS;
+  const erratic = rms != null && rms >= Math.abs(bias) * 2 && rms >= NOTABLE_BIAS;
+
+  if (systematic && erratic) {
+    return `You score ${direction} than the panel by ${Math.abs(bias).toFixed(1)} on average, and your gap swings a lot between samples (${rms?.toFixed(1)}). Re-read the rubric rather than simply shifting your scale.`;
+  }
+  if (systematic) {
+    return `You consistently score ${direction} than the panel, by ${Math.abs(bias).toFixed(1)} on average. This is a systematic offset — shifting your whole scale would align you.`;
+  }
+  if (erratic) {
+    return `Your average matches the panel, but individual scores swing by ${rms?.toFixed(1)}. The disagreement is case-by-case rather than a fixed offset.`;
+  }
+  return "Your scoring is aligned with the panel, both on average and case by case.";
+}
+
+/**
+ * Phân bố điểm trung bình của cả hội đồng trên một trục, chấm của người đang xem được tô màu.
+ * Cho biết mình nằm ở rìa hay ở giữa mà không nêu tên ai.
+ */
+function PanelSpread({ data, myUserId }: { data: ReliabilityMetricResponse[]; myUserId?: string }) {
+  const points = data
+    .map(j => ({ id: j.judgeUserId, value: j.averageScore }))
+    .filter((p): p is { id: string; value: number } => p.value != null);
+
+  if (points.length === 0) {
+    return <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No scores to plot yet.</div>;
+  }
+
+  const values = points.map(p => p.value);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  // Cả hội đồng chấm y hệt nhau thì span = 0 → đặt mọi chấm vào giữa thay vì chia cho 0.
+  const span = hi - lo || 1;
+
+  return (
+    <div>
+      <div className="relative h-8 rounded-lg" style={{ background: "var(--surface-bg)" }}>
+        {points.map(p => {
+          const isMe = p.id === myUserId;
+          return (
+            <span
+              key={p.id}
+              title={isMe ? `You: ${p.value.toFixed(1)}` : `Judge (anonymous): ${p.value.toFixed(1)}`}
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full"
+              style={{
+                left: hi === lo ? "50%" : `${((p.value - lo) / span) * 100}%`,
+                width: isMe ? 14 : 10,
+                height: isMe ? 14 : 10,
+                background: isMe ? COLORS.primary : "#9ca3af",
+                border: "2px solid #fff",
+                zIndex: isMe ? 2 : 1,
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="flex justify-between" style={{ fontSize: 11, color: COLORS.textSecondary, marginTop: 4 }}>
+        <span>{lo.toFixed(1)}</span>
+        <span>{points.length} judges</span>
+        <span>{hi.toFixed(1)}</span>
+      </div>
+    </div>
+  );
+}
+
+export function JudgeCalibrationView({
   apiRounds = [], 
   selectedRoundId, 
   onSelectRound 
@@ -106,81 +192,66 @@ export function JudgeCalibrationView({
       );
     }
 
-    // Find current judge
-    const currentUserObj = data.find(j => j.judgeUserId === user?.userId);
-    const myAvg = currentUserObj?.averageScore?.toFixed(1) || "0.0";
-    const myStdDev = currentUserObj?.rootMeanSquareDeviation?.toFixed(1) || "0.0";
-    
-    // Calculate panel averages
-    const panelAvg = (data.reduce((sum, j) => sum + (j.averageScore || 0), 0) / data.length).toFixed(1);
-    const calibrationScore = currentUserObj?.comparableScoreCount ? Math.min(100, Math.max(0, 100 - (currentUserObj.averageAbsoluteDeviation || 0) * 5)).toFixed(0) + "%" : "N/A";
-    
-    // Dynamically calculate the theoretical max score (10 or 100) based on max given scores
-    const theoreticalMax = data.some(d => (d.maxScore || 0) > 10) ? 100 : 10;
+    const me = data.find(j => j.judgeUserId === user?.userId);
 
-    // Sort data so current judge is at the top
-    const sortedData = [...data].sort((a, b) => {
-      if (a.judgeUserId === user?.userId) return -1;
-      if (b.judgeUserId === user?.userId) return 1;
-      return (a.averageAbsoluteDeviation || 0) - (b.averageAbsoluteDeviation || 0);
-    });
+    // Cỡ mẫu: số lượt chấm có đồng nghiệp chấm cùng bài để so sánh. Với 1-2 lượt thì bias/RMS
+    // gần như vô nghĩa nhưng vẫn in ra 1 chữ số thập phân trông rất chắc chắn — nên phải hiện
+    // cỡ mẫu và ẩn kết luận khi quá nhỏ.
+    const comparisons = me?.comparableScoreCount ?? 0;
+    const hasEnoughData = comparisons >= MIN_COMPARISONS;
+
+    // bias/RMS có thể là null khi backend không tính được (không có đồng nghiệp nào chấm cùng
+    // bài). null KHÁC 0 — 0 nghĩa là "khớp hoàn hảo", null nghĩa là "không có gì để so".
+    const bias = me?.biasFromPeerMean ?? null;
+    const rms = me?.rootMeanSquareDeviation ?? null;
 
     return (
       <>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-          <StatCard title="Your Avg Score" value={myAvg} icon={<Star size={20} />} color={COLORS.primary} />
-          <StatCard title="Panel Avg" value={panelAvg} icon={<BarChart2 size={20} />} color={COLORS.secondary} />
-          <StatCard title="Your Std Dev" value={myStdDev} icon={<TrendingUp size={20} />} color={COLORS.success} />
-          <StatCard title="Calibration Score" value={calibrationScore} icon={<Award size={20} />} color={COLORS.accent} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <StatCard
+            title="Deviation vs panel"
+            value={bias == null ? "—" : `${bias > 0 ? "+" : ""}${bias.toFixed(1)}`}
+            icon={<Scale size={20} />}
+            color={biasColor(bias)}
+          />
+          <StatCard
+            title="Typical gap vs panel"
+            value={rms == null ? "—" : rms.toFixed(1)}
+            icon={<TrendingUp size={20} />}
+            color={COLORS.secondary}
+          />
+          <StatCard
+            title="Based on"
+            value={`${comparisons} comparison${comparisons === 1 ? "" : "s"}`}
+            icon={<BarChart2 size={20} />}
+            color={COLORS.textSecondary}
+          />
         </div>
-        <Card className="p-5 mt-4">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 16 }}>Judge Panel Comparison</div>
-          <div className="space-y-4">
-            {sortedData.map((j, i) => {
-              const isMe = j.judgeUserId === user?.userId;
-              const avg = j.averageScore?.toFixed(1) || "0";
-              const min = j.minScore || 0;
-              const max = j.maxScore || 100;
-              const stdDev = j.rootMeanSquareDeviation?.toFixed(1) || "0.0";
 
-              return (
-                <div key={j.judgeUserId} className="p-4 rounded-xl" style={{ background: isMe ? `${COLORS.primary}08` : COLORS.bg, border: `1px solid ${isMe ? COLORS.primary + "30" : COLORS.border}` }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span style={{ fontWeight: isMe ? 700 : 500, fontSize: 14, color: isMe ? COLORS.primary : COLORS.textPrimary }}>
-                      {isMe ? "You (" + j.judgeName + ")" : j.judgeName} 
-                      {isMe && <span style={{ fontSize: 11, marginLeft: 4, padding: "1px 6px", borderRadius: 8, background: `${COLORS.primary}20` }}>You</span>}
-                    </span>
-                    <div className="flex items-center gap-4">
-                      <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Range: {min}–{max}</span>
-                      <span style={{ fontSize: 12, color: COLORS.textSecondary }}>Std Dev: {stdDev}</span>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>Avg: {avg}</span>
-                    </div>
-                  </div>
-                  <ProgressBar value={j.averageScore} max={theoreticalMax} color={isMe ? COLORS.primary : COLORS.secondary} />
-                </div>
-              );
-            })}
+        {/* Một câu sinh từ số liệu thật, thay cho 3 thẻ "insight" trước đây vốn hardcode màu
+            xanh và dấu ✓ bất kể giá trị. */}
+        <Card className="p-4 mt-4">
+          <div style={{ fontSize: 13, color: COLORS.textPrimary, lineHeight: 1.6 }}>
+            {!hasEnoughData
+              ? `Not enough overlapping scores yet (${comparisons}). Figures appear once at least ${MIN_COMPARISONS} of your scores share a sample with another judge.`
+              : describeBias(bias, rms)}
+          </div>
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 6 }}>
+            See the table below for which criterion you diverge on.
           </div>
         </Card>
+
+        {/* Vị trí của bạn trong hội đồng — ẩn danh. Bản cũ liệt kê TÊN THẬT kèm điểm trung bình
+            của từng đồng nghiệp, trong khi file CSV lại ẩn danh: hai chỗ mâu thuẫn nhau, và nó
+            biến việc hiệu chuẩn thành bảng so bì ai chấm cao hơn ai. */}
         <Card className="p-5 mt-4">
-          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary, marginBottom: 12 }}>Calibration Insights</div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[
-              { title: "Consistent Scoring", desc: `Your standard deviation of ${myStdDev} indicates how consistent your evaluation is relative to the mean.`, color: COLORS.success, icon: "✓" },
-              { title: "Near Panel Average", desc: `Your average of ${myAvg} is compared to the panel average of ${panelAvg}.`, color: COLORS.primary, icon: "≈" },
-              { title: "Bias Detection", desc: currentUserObj?.biasFromPeerMean && currentUserObj.biasFromPeerMean < -2 ? "You tend to score stricter than peers." : currentUserObj?.biasFromPeerMean && currentUserObj.biasFromPeerMean > 2 ? "You tend to score more leniently than peers." : "Your scoring bias is well balanced.", color: COLORS.success, icon: "✓" },
-            ].map(insight => (
-              <div key={insight.title} className="p-4 rounded-xl" style={{ background: `${insight.color}10`, border: `1px solid ${insight.color}20` }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span style={{ fontSize: 18, color: insight.color }}>{insight.icon}</span>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: COLORS.textPrimary }}>{insight.title}</span>
-                </div>
-                <p style={{ fontSize: 12, color: COLORS.textSecondary }}>{insight.desc}</p>
-              </div>
-            ))}
+          <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Where you sit in the panel</div>
+          <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3, marginBottom: 14 }}>
+            Each dot is one judge's average on the calibration samples. Other judges are anonymous.
           </div>
+          <PanelSpread data={data} myUserId={user?.userId} />
         </Card>
-        
+
         {/* Consensus Matrix Component */}
         {selectedRoundId && (
           <JudgeConsensusMatrix roundId={selectedRoundId} />
@@ -192,9 +263,9 @@ export function JudgeCalibrationView({
   return (
     <>
       <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4 mb-2">
-        <SectionHeader 
-          title="Calibration Analytics" 
-          subtitle="Compare your scoring patterns with other judges" 
+        <SectionHeader
+          title="Calibration Analytics"
+          subtitle="How your scoring compares with the rest of the panel"
         />
         
         {/* Cascade Filters */}
