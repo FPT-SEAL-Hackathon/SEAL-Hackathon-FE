@@ -29,10 +29,20 @@ export function useEventActions() {
         setLoading(false);
         }
     };
+
+    const deleteEvent = async (eventId: string) => {
+        setLoading(true);
+        try {
+            await eventService.delete(eventId);
+        } finally {
+            setLoading(false);
+        }
+    };
     
     return {
         loading,
         publishEvent,
         cancelEvent,
+        deleteEvent,
     };
 }

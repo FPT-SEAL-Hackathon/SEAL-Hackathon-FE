@@ -1012,6 +1012,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               viewContext.onNavigate("events");
             }}
             onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
+            onDeleted={async () => {           
+              // quay về list
+              setSelectedEvent(null);
+              viewContext.onNavigate("events");
+            }}
+
           />
         );
       case "event-participants": return <AdminEventParticipantsView />;
