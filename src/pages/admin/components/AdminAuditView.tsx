@@ -83,8 +83,8 @@ export function AdminAuditView({ context }: AdminViewProps) {
     const matchesAction = actionFilter === "ALL" || log.actionType === actionFilter;
     const q = searchTerm.toLowerCase();
     
-    const actorName = getUserName(log.actorUserId) || "";
-    const teamName = getTeamName(log.teamId) || "";
+    const actorName = log.actorName || getUserName(log.actorUserId) || "";
+    const teamName = log.teamName || getTeamName(log.teamId) || "";
 
     const matchesSearch = !searchTerm || 
       (log.reason && log.reason.toLowerCase().includes(q)) ||
@@ -197,7 +197,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
             <p className="text-sm text-gray-500">Loading audit logs...</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
             <table className="w-full" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: COLORS.bg }}>
@@ -208,8 +208,8 @@ export function AdminAuditView({ context }: AdminViewProps) {
               </thead>
               <tbody>
                 {filteredLogs.length > 0 ? filteredLogs.map((log: EvaluationAuditLogDTO, i: number) => {
-                  const actorName = getUserName(log.actorUserId);
-                  const teamName = getTeamName(log.teamId);
+                  const actorName = log.actorName || getUserName(log.actorUserId);
+                  const teamName = log.teamName || getTeamName(log.teamId);
                   
                   return (
                   <tr 
@@ -278,7 +278,7 @@ export function AdminAuditView({ context }: AdminViewProps) {
                 </div>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 4 }}>ACTOR (USER ID)</div>
-                  {getUserName(selectedLog.actorUserId) && <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}>{getUserName(selectedLog.actorUserId)}</div>}
+                  {(selectedLog.actorName || getUserName(selectedLog.actorUserId)) && <div style={{ fontSize: 14, fontWeight: 500, color: COLORS.textPrimary }}>{selectedLog.actorName || getUserName(selectedLog.actorUserId)}</div>}
                   <div style={{ fontSize: 13, color: COLORS.textSecondary, fontFamily: 'monospace' }}>{selectedLog.actorUserId}</div>
                 </div>
               </div>
@@ -287,7 +287,12 @@ export function AdminAuditView({ context }: AdminViewProps) {
                 <div style={{ fontSize: 11, fontWeight: 600, color: COLORS.textSecondary, marginBottom: 4 }}>TARGET ENTITIES</div>
                 <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded-lg border">
                   {selectedLog.judgingId && <div style={{ fontSize: 13, color: COLORS.textPrimary }}><strong>Judging ID:</strong> <span style={{ fontFamily: 'monospace' }}>{selectedLog.judgingId}</span></div>}
-                  {selectedLog.teamId && <div style={{ fontSize: 13, color: COLORS.textPrimary }}><strong>Team ID:</strong> {getTeamName(selectedLog.teamId) ? <span className="font-semibold">{getTeamName(selectedLog.teamId)}</span> : null} <span style={{ fontFamily: 'monospace' }}>({selectedLog.teamId})</span></div>}
+                  {selectedLog.teamId && (
+                    <div style={{ fontSize: 13, color: COLORS.textPrimary }}>
+                      <strong>Team:</strong> {(selectedLog.teamName || getTeamName(selectedLog.teamId)) ? <span className="font-semibold mr-1">{selectedLog.teamName || getTeamName(selectedLog.teamId)}</span> : null}
+                      <span style={{ fontFamily: 'monospace', color: COLORS.textSecondary }}>({selectedLog.teamId})</span>
+                    </div>
+                  )}
                   {selectedLog.submissionId && <div style={{ fontSize: 13, color: COLORS.textPrimary }}><strong>Submission ID:</strong> <span style={{ fontFamily: 'monospace' }}>{selectedLog.submissionId}</span></div>}
                   {!selectedLog.judgingId && !selectedLog.teamId && !selectedLog.submissionId && <span className="text-gray-400 italic">No targets associated</span>}
                 </div>

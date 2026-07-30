@@ -3,6 +3,7 @@ import { Edit, Trash2, X, ChevronDown, ChevronRight, GitBranch, UserCheck, Uploa
 import { Card, Button, StatusBadge, COLORS } from "../../../../components/shared/UIComponents";
 import { CriteriaImportPanel } from "../../shared/ui/shared";
 import { RoundForm } from "./RoundForm";
+import { CalibrationProgressPanel } from "./CalibrationProgressPanel";
 import { Round, RoundCriteria, RoundJudge } from "../../types/round";
 import { EventResponse } from "../../api/eventService";
 import { getRoundStatus } from "../../utils/roundUtils";
@@ -374,6 +375,9 @@ export function RoundCard({
                 )}
               </Card>
             )}
+
+            {/* Ai đã/chưa chấm bài mẫu + nút nhắc */}
+            {round.isCalibrationRound && <CalibrationProgressPanel roundId={round.roundId} />}
 
             {/* Round criteria */}
             <div className="pt-2">

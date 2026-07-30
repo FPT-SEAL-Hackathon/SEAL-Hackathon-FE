@@ -29,13 +29,17 @@ export function Field({ label, children }: { label: string; children: React.Reac
 }
 
 export function Input({
-  value, onChange, placeholder, type = "text", disabled,
+  value, onChange, placeholder, type = "text", disabled, min, max,
 }: {
   value: string;
   onChange?: (v: string) => void;
   placeholder?: string;
   type?: string;
   disabled?: boolean;
+  // Chỉ áp dụng cho type="number": chặn nút tăng/giảm và cảnh báo của trình duyệt.
+  // Ràng buộc thật vẫn nằm ở validate form + backend.
+  min?: number;
+  max?: number;
 }) {
   return (
     <input
@@ -44,6 +48,8 @@ export function Input({
       onChange={onChange ? e => onChange(e.target.value) : undefined}
       placeholder={placeholder}
       disabled={disabled}
+      min={min}
+      max={max}
       className="w-full px-3 py-2 rounded-xl outline-none"
       style={{
         fontSize: 13,

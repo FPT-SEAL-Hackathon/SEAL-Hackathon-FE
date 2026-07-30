@@ -31,13 +31,30 @@ export interface UpdateScoreSubmissionDTO {
   reason: string;
 }
 
+/** Tiến độ chấm bài mẫu của một giám khảo trong vòng hiệu chuẩn. */
+export interface CalibrationJudgeStatus {
+  judgeUserId: string;
+  judgeName: string;
+  email: string;
+  sampleCount: number;
+  /** Số bài mẫu đã chấm ĐỦ mọi tiêu chí. */
+  completedSampleCount: number;
+  scoredCriterionCount: number;
+  expectedCriterionCount: number;
+  completed: boolean;
+  lastScoredAt: string | null;
+}
+
 export interface EvaluationAuditLogDTO {
   id: string;
   eventId: string;
+  eventName?: string;
   actionType: string;
   actorUserId: string;
+  actorName?: string;
   judgingId: string;
   teamId: string;
+  teamName?: string;
   submissionId: string;
   oldValue: string;
   newValue: string;
@@ -109,4 +126,15 @@ export const judgingService = {
       `/api/v1/research/reliability-metrics${suffix}`,
     ], []);
   },
+
+  /** Ai đã/chưa chấm xong bài mẫu của một vòng hiệu chuẩn (Organizer/Admin). */
+  getCalibrationStatus: (roundId: string) =>
+    api.get<CalibrationJudgeStatus[]>(`/api/v1/judging/rounds/${roundId}/calibration-status`),
+
+  /** Nhắc những giám khảo chưa hoàn thành. Trả về số người đã được nhắc. */
+  remindCalibrationJudges: (roundId: string) =>
+    api.post<{ remindedCount: number; message: string }>(
+      `/api/v1/judging/rounds/${roundId}/calibration-reminder`,
+      {},
+    ),
 };

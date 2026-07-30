@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Calendar, Star, BookOpen, GitBranch, Users, Shield, UserCheck, CheckCircle, Trophy, Clock } from "lucide-react";
 import { COLORS } from "../../../components/shared/UIComponents";
 import { OverviewTab } from "../shared/components/OverviewTab";
@@ -36,7 +37,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "leaderboards",    label: "Leaderboards",    icon: <Trophy size={14} /> },
 ];
 
-export function EventDetailPage({ event, onBack, onEdit }: { event: EventResponse; onBack: () => void; onEdit?: () => void }) {
+export function EventDetailPage({ event, onBack, onEdit, onDeleted }: { event: EventResponse; onBack: () => void; onEdit?: () => void; onDeleted?: (id: string) => void; }) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   // ── Shared state lifted here so all tabs can read/write ──────────────────
@@ -58,6 +59,7 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
     loading,
     publishEvent,
     cancelEvent,
+    deleteEvent,
   } = useEventActions();
 
   const handleConfirm = async () => {
@@ -72,6 +74,8 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
 
                 setCurrentEvent(updatedEvent);
 
+                toast.success("Event published successfully.");
+
                 setConfirmAction(null);
 
                 break;
@@ -83,7 +87,18 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
               }
               const updatedEvent = await cancelEvent(currentEvent.eventId);
               setCurrentEvent(updatedEvent);
+              toast.success("Event cancelled successfully.");
               setConfirmAction(null);
+              break;
+            }
+            case "delete": {
+
+              await deleteEvent(currentEvent.eventId);
+
+              toast.success("Event deleted successfully.");
+              setConfirmAction(null);
+              onDeleted?.(currentEvent.eventId);
+
               break;
             }
         }
@@ -231,11 +246,35 @@ export function EventDetailPage({ event, onBack, onEdit }: { event: EventRespons
                     confirmVariant={EVENT_ACTION_CONFIG[confirmAction].variant}
                     loading={confirmLoading}
                     error={error}
-                    step={confirmStep}
-                    verifyLabel="Type the event name to confirm cancellation"
-                    verifyPlaceholder="Enter event name"
-                    expectedValue={currentEvent.eventName}
-                    verifyValue={confirmInput}
+                    step={
+                      confirmAction === "cancel"
+                          ? confirmStep
+                          : "confirm"
+                    }
+                    verifyLabel={
+                      confirmAction === "cancel"
+                          ? "Type the event name to confirm cancellation"
+                          : undefined
+                    }
+
+                    verifyPlaceholder={
+                        confirmAction === "cancel"
+                            ? "Enter event name"
+                            : undefined
+                    }
+
+                    expectedValue={
+                        confirmAction === "cancel"
+                            ? currentEvent.eventName
+                            : undefined
+                    }
+
+                    verifyValue={
+                        confirmAction === "cancel"
+                            ? confirmInput
+                            : ""
+                    }
+
                     onVerifyChange={setConfirmInput}
                     onConfirm={handleConfirm}
                     onCancel={() => {

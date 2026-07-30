@@ -14,7 +14,7 @@ import {
   ExternalLink, Edit, PlusCircle, AlertCircle, Info,
   User, Mail, Github, Globe, TrendingUp, TrendingDown,
   Minus, ChevronRight, Star, Zap, Target, Award, FileText,
-  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader, X
+  MapPin, Phone, Save, Download, Eye, MessageSquare, Search, Trash2, Loader, X, Layers
 } from "lucide-react";
 import {
   StatCard, Card, SectionHeader, COLORS, StatusBadge,
@@ -25,8 +25,10 @@ import { updateProfile } from "@/features/auth/api/authService";
 import { isOptionalHttpUrl } from "@/features/users/utils/profileValidation";
 import { ApiError, getAccessToken, parseApiError } from "@/lib/api/apiClient";
 import { eventService, type EventResponse, type EventStatus as EventLifecycleStatus, type UserParticipationStatus } from "@/features/events/api/eventService";
+import { categoryService } from "@/features/categories/api/categoryService";
 import { roundService } from "@/features/events/service/roundService";
 import type { Round } from "@/features/events/types/round";
+import type { Category } from "@/features/events/types/category";
 import { getRoundStatus } from "@/features/events/utils/roundUtils";
 import { notificationService } from "@/features/notifications/api/notificationService";
 import { MyMentor } from "@/pages/team/MyMentor";
@@ -43,7 +45,7 @@ import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlError
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
-import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
+import { awardService, type AwardResponse, type CertificateItemResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import { eventParticipantService, type EventParticipantResponse } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
@@ -382,6 +384,45 @@ function isNotFoundApiError(error: unknown) {
   return parseApiError(error).status === 404;
 }
 
+function getRoundStyle(status: string) {
+  const s = (status || "").toUpperCase();
+  if (s.includes("SUBMISSION OPEN") || s.includes("OPEN") || s.includes("SUBMIT")) {
+    return {
+      background: "#ffffff",
+      border: "2px solid #2563eb",
+      boxShadow: "0 4px 12px rgba(37, 99, 235, 0.08)",
+      borderRadius: "14px",
+      opacity: 1,
+    };
+  }
+  if (s.includes("UPCOMING") || s.includes("SCHEDULED")) {
+    return {
+      background: "#ffffff",
+      border: "2px solid #f47920",
+      boxShadow: "0 4px 12px rgba(244, 121, 32, 0.08)",
+      borderRadius: "14px",
+      opacity: 1,
+    };
+  }
+  if (s.includes("JUDGING") || s.includes("EVALUAT")) {
+    return {
+      background: "#ffffff",
+      border: "2px solid #10b981",
+      boxShadow: "0 4px 12px rgba(16, 185, 129, 0.08)",
+      borderRadius: "14px",
+      opacity: 1,
+    };
+  }
+  // Complete / Closed: White base, gray border and dimmed
+  return {
+    background: "#ffffff",
+    border: "2px solid #cbd5e1",
+    boxShadow: "none",
+    borderRadius: "14px",
+    opacity: 0.55,
+  };
+}
+
 function getDashboardDeadlineForRounds(rounds: Round[]): Omit<DashboardTeamDeadline, "teamId"> {
   const officialRounds = rounds
     .filter(round => isOfficialSubmissionRound(round) && round.submissionDeadline)
@@ -512,7 +553,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               tracks: "N/A",
               prizePool: "N/A",
               participantStatus: normalizeParticipationStatus(part.participantStatus),
-              bannerImageUrl: "",
+              bannerImageUrl: part.bannerImageUrl || (part.event as any)?.bannerImageUrl || "",
               eventParticipantId: part.eventParticipantId,
               rejectedReason: part.rejectedReason,
               appliedAt: part.appliedAt,
@@ -683,27 +724,77 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     canSubmit: true,
     reason: "",
   });
+  const [eventDashboardCategories, setEventDashboardCategories] = useState<Category[]>([]);
+  const [eventDashboardRoundsMap, setEventDashboardRoundsMap] = useState<Record<string, Round[]>>({});
+  const [selectedEventCategoryId, setSelectedEventCategoryId] = useState<string | null>(null);
+  const [eventDashboardCategoriesLoading, setEventDashboardCategoriesLoading] = useState(false);
+
   useEffect(() => {
-    if (currentPage !== "team") return;
-    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    const targetEventId = viewingEventDetail?.eventId;
+    if (!targetEventId) {
+      setEventDashboardCategories([]);
+      setEventDashboardRoundsMap({});
+      setSelectedEventCategoryId(null);
+      return;
+    }
+    setEventDashboardCategoriesLoading(true);
+    categoryService.getByEvent(targetEventId)
+      .then(async (categories) => {
+        if (!categories || categories.length === 0) {
+          setEventDashboardCategories([]);
+          setEventDashboardRoundsMap({});
+          setSelectedEventCategoryId(null);
+          return;
+        }
+        const activeCategories = categories.filter(c => c.isActive !== false);
+        const targetCats = activeCategories.length > 0 ? activeCategories : categories;
+        setEventDashboardCategories(targetCats);
+        setSelectedEventCategoryId(targetCats[0].categoryId);
+
+        const roundsEntries = await Promise.all(
+          targetCats.map(async cat => {
+            const rounds = await roundService.getByCategory(cat.categoryId).catch(() => [] as Round[]);
+            const sorted = [...rounds].sort((a, b) => (a.roundOrder ?? 0) - (b.roundOrder ?? 0));
+            return [cat.categoryId, sorted] as const;
+          })
+        );
+        setEventDashboardRoundsMap(Object.fromEntries(roundsEntries));
+      })
+      .catch(() => {
+        setEventDashboardCategories([]);
+        setEventDashboardRoundsMap({});
+        setSelectedEventCategoryId(null);
+      })
+      .finally(() => {
+        setEventDashboardCategoriesLoading(false);
+      });
+  }, [viewingEventDetail?.eventId]);
+
+  useEffect(() => {
+    if (currentPage !== "team" && currentPage !== "events") return;
+    const targetEventId = (currentPage === "events" && viewingEventDetail) ? viewingEventDetail.eventId : (leaderboardEventId || activeTeamContext?.eventId);
     if (!targetEventId) return;
 
-    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
-    const targetCategoryId = team?.categoryId;
+    const targetCategoryId = (currentPage === "events" && viewingEventDetail) 
+      ? selectedEventCategoryId 
+      : (submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext)?.categoryId;
+      
     if (!targetCategoryId) return;
 
     roundService.getByCategory(targetCategoryId)
       .then(setLeaderboardRounds)
       .catch(() => setLeaderboardRounds([]));
-  }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
+  }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams, viewingEventDetail, selectedEventCategoryId]);
 
   useEffect(() => {
-    if (currentPage !== "team") return;
-    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (currentPage !== "team" && currentPage !== "events") return;
+    const targetEventId = (currentPage === "events" && viewingEventDetail) ? viewingEventDetail.eventId : (leaderboardEventId || activeTeamContext?.eventId);
     if (!targetEventId) return;
 
-    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
-    const targetCategoryId = team?.categoryId;
+    const targetCategoryId = (currentPage === "events" && viewingEventDetail) 
+      ? selectedEventCategoryId 
+      : (submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext)?.categoryId;
+      
     if (!targetCategoryId) return;
     
     if (leaderboardRoundId === "event") {
@@ -715,7 +806,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         .then(setApiLeaderboard)
         .catch(() => { setApiLeaderboard([]); });
     }
-  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
+  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams, viewingEventDetail, selectedEventCategoryId]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [submissionHistoryError, setSubmissionHistoryError] = useState("");
@@ -726,13 +817,62 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
-  const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
+  const [certificates, setCertificates] = useState<CertificateItemResponse[]>([]);
   const [certificateCategoryId, setCertificateCategoryId] = useState("all");
   const [certificateSelectedEventId, setCertificateSelectedEventId] = useState("");
   const [certificateLoading, setCertificateLoading] = useState(false);
   const [certificateError, setCertificateError] = useState("");
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
+  const [dashboardTeamRanking, setDashboardTeamRanking] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!activeTeamContext?.eventId || !activeTeamContext?.categoryId || !activeTeamContext?.teamId) {
+      setDashboardTeamRanking(null);
+      return;
+    }
+    
+    let isCancelled = false;
+
+    const fetchRankings = async () => {
+      try {
+        let bestRank: any = null;
+        
+        const eventRanks = await rankingService.getLeaderboard(activeTeamContext.eventId, activeTeamContext.categoryId).catch(() => []);
+        if (isCancelled) return;
+        const eventRank = eventRanks.find((r: any) => r.teamId === activeTeamContext.teamId);
+        
+        if (eventRank) {
+          bestRank = eventRank;
+        } else {
+          const rounds = await roundService.getByCategory(activeTeamContext.categoryId).catch(() => []);
+          if (isCancelled) return;
+          for (const round of rounds) {
+            const roundRanks = await rankingService.getRoundLeaderboard(round.roundId, activeTeamContext.categoryId).catch(() => []);
+            if (isCancelled) return;
+            const roundRank = roundRanks.find((r: any) => r.teamId === activeTeamContext.teamId);
+            if (roundRank) {
+              const rPos = roundRank.rankPosition ?? roundRank.rank;
+              if (rPos > 0) {
+                const bestPos = bestRank?.rankPosition ?? bestRank?.rank;
+                if (!bestRank || bestPos <= 0 || rPos < bestPos) {
+                  bestRank = roundRank;
+                }
+              } else if (!bestRank) {
+                bestRank = roundRank;
+              }
+            }
+          }
+        }
+        if (!isCancelled) setDashboardTeamRanking(bestRank || null);
+      } catch (e) {
+        if (!isCancelled) setDashboardTeamRanking(null);
+      }
+    };
+    fetchRankings();
+    
+    return () => { isCancelled = true; };
+  }, [activeTeamContext?.eventId, activeTeamContext?.categoryId, activeTeamContext?.teamId]);
   useEffect(() => {
     if (!user?.userId) {
       setSubmissionTeams([]);
@@ -876,37 +1016,31 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
-    // Náº¿u chÆ°a chá»n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
+    // Náº¿u chÆ°a chá» n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
     setCertificateCategoryId("all");
   }, [currentPage, user?.userId]);
 
-  // Load awards khi event Ä‘Æ°á»£c chá»n
+  // Load certificates khi event được chọn
   useEffect(() => {
     if (currentPage !== "certificates") return;
     if (!certificateSelectedEventId) {
-      setCertificateAwards([]);
+      setCertificates([]);
       setCertificateError("");
       return;
     }
 
-    const storedTeam = getStoredActiveTeam(user?.userId);
     let cancelled = false;
     setCertificateLoading(true);
     setCertificateError("");
-    awardService.getByEvent(certificateSelectedEventId)
-      .then(awards => {
+    awardService.getEventCertificates(certificateSelectedEventId)
+      .then(items => {
         if (cancelled) return;
-        // Chá»‰ lá»c theo teamId náº¿u cĂ³, khĂ´ng lá»c cá»©ng theo categoryId
-        const visibleAwards = awards.filter((award: any) => (
-          (!storedTeam?.teamId || award.teamId === storedTeam.teamId)
-          && award.isPublished
-        ));
-        setCertificateAwards(visibleAwards);
+        setCertificates(items);
         setCertificateCategoryId("all");
       })
       .catch(error => {
         if (cancelled) return;
-        setCertificateAwards([]);
+        setCertificates([]);
         setCertificateError(error instanceof Error ? error.message : "Could not load certificates.");
       })
       .finally(() => {
@@ -1464,8 +1598,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     && !submissionEligibility.canSubmit;
 
   const renderSubmissionTeamSelector = () => {
+    const ungroupedEventKey = "__ungrouped__";
     const groupedTeams = submissionTeams.reduce((acc, team) => {
-      const evName = team.eventName || "Other Events";
+      const evName = team.eventName || ungroupedEventKey;
       if (!acc[evName]) acc[evName] = [];
       acc[evName].push(team);
       return acc;
@@ -1495,7 +1630,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 )}
                 {Object.entries(groupedTeams).map(([evName, teams]) => (
                   <SelectGroup key={evName}>
-                    <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    {evName !== ungroupedEventKey && (
+                      <SelectLabel style={{ color: COLORS.textSecondary, fontWeight: 700 }}>{evName}</SelectLabel>
+                    )}
                     {teams.map(team => {
                       const categoryInfo = team.categoryName ? ` - ${team.categoryName}` : "";
                       return (
@@ -1633,9 +1770,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                         <span className="inline-flex items-center gap-1">
                           <Calendar size={13} /> Submitted: {formatSubmissionDate(submission.submittedAt || submission.lastUpdatedAt)}
                         </span>
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar size={13} /> Deadline: {formatSubmissionDate(round?.submissionDeadline)}
-                        </span>
                         <StatusBadge status={submissionStatusLabel.toLowerCase()} />
                       </div>
                     </div>
@@ -1726,11 +1860,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     );
   };
 
-  const handleCertificateFile = async (award: AwardResponse, mode: "view" | "download") => {
-    setCertificateActionLoading(prev => ({ ...prev, [award.id]: mode }));
+  const handleCertificateFile = async (cert: CertificateItemResponse, mode: "view" | "download") => {
+    setCertificateActionLoading(prev => ({ ...prev, [cert.id]: mode }));
     setCertificateError("");
     try {
-      const blob = await awardService.downloadCertificate(award.id);
+      const blob = cert.type === "PARTICIPATION"
+        ? await awardService.downloadParticipationCertificate(cert.eventId)
+        : await awardService.downloadAwardCertificate(cert.awardId!);
+
       const url = URL.createObjectURL(blob);
       if (mode === "view") {
         const opened = window.open(url, "_blank", "noopener,noreferrer");
@@ -1744,7 +1881,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         window.setTimeout(() => URL.revokeObjectURL(url), 60000);
       } else {
         const link = document.createElement("a");
-        const filename = `${award.eventName}-${award.categoryName}-${award.awardTitle}-certificate.pdf`
+        const filename = `${cert.eventName}-${cert.title}-certificate.pdf`
           .replace(/[^a-z0-9._-]+/gi, "-")
           .replace(/^-+|-+$/g, "");
         link.href = url;
@@ -1757,7 +1894,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     } finally {
       setCertificateActionLoading(prev => {
         const next = { ...prev };
-        delete next[award.id];
+        delete next[cert.id];
         return next;
       });
     }
@@ -1896,19 +2033,26 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     event.preventDefault();
     openDashboardTeam(team);
   };
+  const renderDashboard = () => {
+    const unread = notifs.filter(n => !n.isRead).length;
 
-  const renderDashboard = () => (
-    <>
-      <SectionHeader
-        title="Team Member Dashboard"
-        subtitle={`Welcome back, ${displayName}.`}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Events" value={apiEvents.length} trend={0} icon={<Calendar size={22} />} color={COLORS.primary} />
-        <StatCard title="Team Rank" value="N/A" icon={<Trophy size={22} />} color={COLORS.warning} />
-        <StatCard title="Team Score" value="N/A" icon={<Star size={22} />} color={COLORS.accent} />
-        <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
-      </div>
+    const rRank = dashboardTeamRanking?.rankPosition ?? dashboardTeamRanking?.rank;
+    const rankStr = rRank ? (rRank > 0 ? `#${rRank}` : "DSQ") : "N/A";
+    const scoreStr = dashboardTeamRanking ? (dashboardTeamRanking.finalScore?.toFixed(1) ?? dashboardTeamRanking.totalScore ?? "0") : "N/A";
+
+    return (
+      <>
+        <SectionHeader
+          title="Team Member Dashboard"
+          subtitle={`Welcome back, ${displayName}.`}
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Events" value={apiEvents.length} trend={0} icon={<Calendar size={22} />} color={COLORS.primary} />
+          <StatCard title="Team Rank" value={rankStr} icon={<Trophy size={22} />} color={COLORS.warning} />
+          <StatCard title="Team Score" value={scoreStr} icon={<Star size={22} />} color={COLORS.accent} />
+          <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
+        </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5 col-span-1">
           <div className="mb-4">
@@ -2011,6 +2155,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       </div>
     </>
   );
+};
 
   const handleTeamPanelChange = useCallback((team: TeamResponse | null) => {
     if (teamInitialTeamId && team?.teamId === teamInitialTeamId) return;
@@ -2031,85 +2176,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   );
 
   const renderEvents = () => {
-    if (selectedEventDetailId) {
-      const targetEvent = apiEvents.find(ev => ev.eventId === selectedEventDetailId);
-      const userTeamForEvent = submissionTeams.find(t => t.eventId === selectedEventDetailId)
-        || (activeTeamContext?.eventId === selectedEventDetailId ? activeTeamContext : null);
-      const eventRounds = leaderboardRounds || [];
-
-      return (
-        <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" icon={<ChevronRight className="-rotate-180" size={16} />} onClick={() => setSelectedEventDetailId(null)}>
-              Back to Events
-            </Button>
-            <StatusBadge status={targetEvent?.eventStatus ?? (targetEvent as any)?.status ?? "ACTIVE"} />
-          </div>
-
-          <div className="rounded-2xl p-6 shadow-sm space-y-6" style={{ background: COLORS.card, border: `1px solid ${COLORS.border}` }}>
-            <div className="flex justify-between items-start border-b pb-4" style={{ borderColor: COLORS.border }}>
-              <div>
-                <h1 className="text-2xl font-bold mb-2" style={{ color: COLORS.textPrimary }}>
-                  {targetEvent?.eventName ?? (targetEvent as any)?.name} - Event Dashboard
-                </h1>
-                <p style={{ fontSize: 14, color: COLORS.textSecondary }}>
-                  {targetEvent?.description || "Comprehensive event dashboard for active participants."}
-                </p>
-              </div>
-            </div>
-
-            {/* Event Team Overview */}
-            {userTeamForEvent && (
-              <Card className="p-5 bg-primary/5 border border-primary/20">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
-                    <div style={{ fontSize: 13, color: COLORS.textSecondary }}>Team Code: {(userTeamForEvent as any).teamCode || "N/A"}</div>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => { setSelectedEventDetailId(null); onNavigate("team"); }}>
-                    Manage Team
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            {/* Rounds & Timeline Section */}
-            <div className="space-y-4">
-              <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
-                <Clock size={20} style={{ color: COLORS.primary }} /> Event Rounds & Deadlines
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {eventRounds.length > 0 ? (
-                  eventRounds.map((r: any) => (
-                    <Card key={r.roundId} className="p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span style={{ fontSize: 14, fontWeight: 600, color: COLORS.textPrimary }}>{r.roundName}</span>
-                        <StatusBadge status={r.roundStatusName ?? r.status ?? "OPEN"} />
-                      </div>
-                      <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1">
-                        <div><strong style={{ color: COLORS.textPrimary }}>Start:</strong> {r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</div>
-                        <div><strong style={{ color: COLORS.textPrimary }}>Deadline:</strong> {r.endDate ? new Date(r.endDate).toLocaleString() : "TBD"}</div>
-                      </div>
-                    </Card>
-                  ))
-                ) : (
-                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
-                    No round schedules published yet.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Leaderboard Section inside Event Dashboard */}
-            <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
-              {renderLeaderboard()}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     if (viewingEventDetail) {
       const ev = viewingEventDetail;
       const participation = participations[ev.eventId];
@@ -2121,6 +2187,11 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       const isActiveParticipant = isApprovedParticipationStatus(participantStatus);
       const isPendingParticipant = participantStatus === "PENDING";
       const isRejectedParticipant = participantStatus === "REJECTED";
+
+      const userTeamForEvent = submissionTeams.find(t => t.eventId === ev.eventId)
+        || (activeTeamContext?.eventId === ev.eventId ? activeTeamContext : null);
+      const selectedCategory = eventDashboardCategories.find(c => c.categoryId === selectedEventCategoryId);
+      const currentCategoryRounds = selectedEventCategoryId ? (eventDashboardRoundsMap[selectedEventCategoryId] || []) : [];
 
       return (
         <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -2138,8 +2209,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <span style={{ color: COLORS.textSecondary, fontWeight: 600 }}>No Banner Image</span>
               </div>
             )}
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-6">
+            <div className="p-8 space-y-6">
+              <div className="flex justify-between items-start">
                 <div>
                   <h1 className="text-3xl font-bold mb-3" style={{ color: COLORS.textPrimary }}>{ev.eventName}</h1>
                   <p className="text-base leading-relaxed" style={{ color: COLORS.textSecondary }}>{ev.description}</p>
@@ -2147,7 +2218,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <StatusBadge status={lifecycleStatus.toLowerCase()} />
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 <div className="p-4 rounded-xl" style={{ background: `var(--surface-input, ${COLORS.bg})` }}>
                   <div className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: COLORS.textSecondary }}>Registration Start</div>
                   <div className="font-semibold" style={{ color: COLORS.textPrimary }}>{ev.registrationStart ? new Date(ev.registrationStart).toLocaleDateString() : "N/A"}</div>
@@ -2166,7 +2237,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="p-4 rounded-xl flex items-center gap-4" style={{ border: `1px solid ${COLORS.border}` }}>
                   <div className="w-12 h-12 flex items-center justify-center rounded-full" style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}>
                     <MapPin size={24} />
@@ -2187,12 +2258,164 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 </div>
               </div>
 
+              {/* Registered Team Overview */}
+              {userTeamForEvent && (
+                <Card className="p-5 bg-primary/5 border border-primary/20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.primary }} className="uppercase tracking-wider">Your Registered Team</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }}>{userTeamForEvent.teamName}</div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => { setViewingEventDetail(null); onNavigate("team"); }}>
+                      Manage Team
+                    </Button>
+                  </div>
+                </Card>
+              )}
+
+              {/* Categories Selection Section */}
+              <div className="space-y-3 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                  <Layers size={20} style={{ color: COLORS.primary }} /> Event Categories
+                  {eventDashboardCategoriesLoading && <Loader size={16} className="animate-spin" style={{ color: COLORS.primary }} />}
+                </h3>
+
+                {eventDashboardCategoriesLoading ? (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="p-6 text-center border rounded-xl flex items-center justify-center gap-2">
+                    <Loader size={16} className="animate-spin" /> Loading categories...
+                  </div>
+                ) : eventDashboardCategories.length > 0 ? (
+                  <div className="flex flex-wrap gap-3">
+                    {eventDashboardCategories.map(cat => {
+                      const isSelected = selectedEventCategoryId === cat.categoryId;
+                      const catRounds = eventDashboardRoundsMap[cat.categoryId] || [];
+                      return (
+                        <button
+                          key={cat.categoryId}
+                          type="button"
+                          onClick={() => setSelectedEventCategoryId(cat.categoryId)}
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-left border"
+                          style={{
+                            background: isSelected
+                              ? `linear-gradient(135deg, ${COLORS.primary}20, ${COLORS.primary}08)`
+                              : COLORS.card,
+                            borderColor: isSelected ? COLORS.primary : COLORS.border,
+                            boxShadow: isSelected ? `0 4px 16px ${COLORS.primary}30` : "none",
+                            transform: isSelected ? "translateY(-1px)" : "none",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: isSelected ? COLORS.primary : "#94a3b8" }}
+                          />
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: isSelected ? COLORS.primary : COLORS.textPrimary }}>
+                              {cat.categoryName}
+                            </div>
+                            {cat.description && (
+                              <div style={{ fontSize: 11, color: COLORS.textSecondary }} className="line-clamp-1 max-w-[220px]">
+                                {cat.description}
+                              </div>
+                            )}
+                          </div>
+                          <span
+                            className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold"
+                            style={{
+                              background: isSelected ? `${COLORS.primary}25` : `${COLORS.border}`,
+                              color: isSelected ? COLORS.primary : COLORS.textSecondary,
+                            }}
+                          >
+                            {catRounds.length} rounds
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="p-6 text-center border rounded-xl">
+                    No categories configured for this event yet.
+                  </div>
+                )}
+              </div>
+
+              {/* Rounds for Selected Category */}
+              {selectedCategory && (
+                <div className="space-y-4 pt-2">
+                  <h4 style={{ fontSize: 16, fontWeight: 700, color: COLORS.textPrimary }} className="flex items-center gap-2">
+                    <Clock size={18} style={{ color: COLORS.primary }} />
+                    Rounds for <span style={{ color: COLORS.primary }}>{selectedCategory.categoryName}</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {currentCategoryRounds.length > 0 ? (
+                      currentCategoryRounds.map((r: any) => {
+                        const deadlineDate = r.submissionDeadline || r.endDate;
+                        const rawStatus = String(r.roundStatusName || r.status || "").toUpperCase();
+                        let statusStr = "UPCOMING";
+                        if (rawStatus.includes("SUBMISSION") || rawStatus.includes("OPEN") || rawStatus.includes("SUBMIT")) {
+                          statusStr = "SUBMISSION OPEN";
+                        } else if (rawStatus.includes("JUDGING") || rawStatus.includes("EVALUAT")) {
+                          statusStr = "JUDGING";
+                        } else if (rawStatus.includes("COMPLETE") || rawStatus.includes("CLOSED") || rawStatus.includes("ENDED")) {
+                          statusStr = "COMPLETE";
+                        } else if (rawStatus.includes("UPCOMING") || rawStatus.includes("SCHEDULED")) {
+                          statusStr = "UPCOMING";
+                        } else if (deadlineDate && new Date(deadlineDate).getTime() < Date.now()) {
+                          statusStr = "COMPLETE";
+                        } else {
+                          statusStr = "SUBMISSION OPEN";
+                        }
+                        const cardStyle = getRoundStyle(statusStr);
+                        return (
+                          <div
+                            key={r.roundId}
+                            className="p-5 space-y-3 transition-all duration-300 hover:scale-[1.01]"
+                            style={cardStyle}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span style={{ fontSize: 15, fontWeight: 700, color: COLORS.textPrimary }}>{r.roundName}</span>
+                              <StatusBadge status={statusStr} />
+                            </div>
+                            {r.description && (
+                              <p style={{ fontSize: 12, color: COLORS.textSecondary }} className="line-clamp-2">
+                                {r.description}
+                              </p>
+                            )}
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary }} className="space-y-1.5 pt-2 border-t border-slate-200">
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: COLORS.textSecondary }}>Start Date:</span>
+                                <strong style={{ color: COLORS.textPrimary }}>{r.startDate ? new Date(r.startDate).toLocaleDateString() : "TBD"}</strong>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span style={{ color: COLORS.textSecondary }}>Submission Deadline:</span>
+                                <strong style={{ color: COLORS.textPrimary }}>{deadlineDate ? new Date(deadlineDate).toLocaleString() : "TBD"}</strong>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div style={{ fontSize: 13, color: COLORS.textSecondary }} className="col-span-2 p-6 text-center border rounded-xl">
+                        No round schedules published for this category yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Leaderboard Section */}
+              <div className="space-y-4 pt-4 border-t" style={{ borderColor: COLORS.border }}>
+                {renderLeaderboard()}
+              </div>
+
               {eventActionMessage[ev.eventId] && (
-                <div className="rounded-xl px-4 py-3 mb-6" style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, fontSize: 14, fontWeight: 500 }}>
+                <div className="rounded-xl px-4 py-3" style={{ background: `${COLORS.primary}10`, border: `1px solid ${COLORS.primary}30`, color: COLORS.primary, fontSize: 14, fontWeight: 500 }}>
                   {eventActionMessage[ev.eventId]}
                 </div>
               )}
 
+              {/* Registration Action Bar */}
               <div className="pt-6 flex justify-between items-center" style={{ borderTop: `1px solid ${COLORS.border}` }}>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold" style={{ color: COLORS.textSecondary }}>Your Status:</span>
@@ -2200,10 +2423,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 </div>
                 <div className="flex gap-3">
                   {isActiveParticipant ? (
-                    <>
-                      <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined</Button>
-                      <Button variant="primary" size="md" icon={<ExternalLink size={16} />} onClick={() => { setSelectedEventDetailId(ev.eventId); setLeaderboardEventId(ev.eventId); setLeaderboardRoundId("event"); }}>Enter Event Dashboard</Button>
-                    </>
+                    <Button variant="outline" size="md" disabled icon={<CheckCircle size={16} />}>Joined Event</Button>
                   ) : isPendingParticipant ? (
                     <Button variant="outline" size="md" disabled icon={<Clock size={16} />}>Pending Approval</Button>
                   ) : blocksTeamRegistration ? (
@@ -2507,7 +2727,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 };
 
   const renderCertificates = () => {
-    // Danh sĂ¡ch events mĂ  user Ä‘ang tham gia (ACTIVE)
+    // Danh sách events mà user đang tham gia (ACTIVE)
     const joinedEvents = apiEvents.filter(ev =>
       normalizeParticipationStatus(participations[ev.eventId]?.participantStatus ?? ev.participantStatus) === "ACTIVE",
     );
@@ -2516,11 +2736,15 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       ?? apiEvents.find(ev => ev.eventId === certificateSelectedEventId);
 
     const categoryOptions = Array.from(
-      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
+      new Map(
+        certificates
+          .filter(c => c.categoryId)
+          .map(c => [c.categoryId!, c.categoryName ?? "General"])
+      ).entries(),
     );
-    const filteredAwards = certificateCategoryId === "all"
-      ? certificateAwards
-      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
+    const filteredCertificates = certificateCategoryId === "all"
+      ? certificates
+      : certificates.filter(c => c.categoryId === certificateCategoryId);
 
     return (
       <>
@@ -2630,9 +2854,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         {certificateSelectedEventId && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
-              <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
-              <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
+              <StatCard title="Available Certificates" value={certificates.length} icon={<Award size={22} />} color={COLORS.warning} />
+              <StatCard title="Categories" value={categoryOptions.length || 1} icon={<Target size={22} />} color={COLORS.secondary} />
+              <StatCard title="Selected" value={filteredCertificates.length} icon={<FileText size={22} />} color={COLORS.primary} />
             </div>
 
             <Card>
@@ -2640,7 +2864,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <table className="w-full" style={{ borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: COLORS.bg }}>
-                      {["Award", "Event", "Category", "Published", "Actions"].map(h => (
+                      {["Certificate Title", "Type", "Event", "Category", "Issued Date", "Actions"].map(h => (
                         <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                       ))}
                     </tr>
@@ -2648,22 +2872,35 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   <tbody>
                     {certificateLoading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                        <td colSpan={6} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
                           Loading certificates...
                         </td>
                       </tr>
-                    ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
-                      const actionLoading = certificateActionLoading[award.id];
+                    ) : filteredCertificates.length > 0 ? filteredCertificates.map((cert) => {
+                      const actionLoading = certificateActionLoading[cert.id];
+                      const isParticipation = cert.type === "PARTICIPATION";
                       return (
-                        <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                        <tr key={cert.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                           <td className="px-4 py-3">
-                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
-                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{cert.title}</div>
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{cert.teamName}</div>
                           </td>
-                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
-                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                              style={{
+                                background: isParticipation ? `${COLORS.primary}18` : `${COLORS.warning}18`,
+                                color: isParticipation ? COLORS.primary : COLORS.warning,
+                                border: `1px solid ${isParticipation ? `${COLORS.primary}33` : `${COLORS.warning}33`}`
+                              }}
+                            >
+                              {isParticipation ? "Participation" : (cert.awardTierName || "Award")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{cert.eventName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{cert.categoryName || "General"}</td>
                           <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                            {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
+                            {cert.publishedAt ? new Date(cert.publishedAt).toLocaleDateString("en-US") : "Available"}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-2">
@@ -2672,7 +2909,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                                 size="sm"
                                 icon={<Eye size={13} />}
                                 disabled={!!actionLoading}
-                                onClick={() => handleCertificateFile(award, "view")}
+                                onClick={() => handleCertificateFile(cert, "view")}
                               >
                                 {actionLoading === "view" ? "Opening..." : "View"}
                               </Button>
@@ -2681,7 +2918,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                                 size="sm"
                                 icon={<Download size={13} />}
                                 disabled={!!actionLoading}
-                                onClick={() => handleCertificateFile(award, "download")}
+                                onClick={() => handleCertificateFile(cert, "download")}
                               >
                                 {actionLoading === "download" ? "Downloading..." : "Download"}
                               </Button>
@@ -2691,12 +2928,12 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                       );
                     }) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center">
+                        <td colSpan={6} className="px-4 py-8 text-center">
                           <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                            No published certificates are available for this category.
+                            No certificates are available for this event yet.
                           </div>
                           <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                            Certificates will appear here after awards are published by the organizer.
+                            Participate actively in event rounds to receive your certificates.
                           </div>
                         </td>
                       </tr>
@@ -3089,15 +3326,6 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
               <Button variant="primary" size="md" icon={<FileText size={14} />} onClick={handleSubmitWork} disabled={submissionLoading || !submissionForm.roundId || !selectedSubmissionRoundCanSubmit}>
                 {submissionLoading ? "Saving..." : "Submit"}
               </Button>
-              <Button variant="outline" size="md" icon={<ExternalLink size={14} />} onClick={handleLoadSubmission} disabled={submissionLookupLoading || !submissionForm.roundId}>
-                {submissionLookupLoading ? "Loading..." : selectedSubmissionRound ? `Load ${selectedSubmissionRound.roundName}` : "Load Current"}
-              </Button>
-              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("csv")} disabled={problemDownloadLoading !== null || !submissionForm.roundId || !selectedSubmissionRoundState.canDownloadProblem}>
-                {problemDownloadLoading === "csv" ? "Downloading..." : "Problem CSV"}
-              </Button>
-              <Button variant="ghost" size="md" icon={<FileText size={14} />} onClick={() => handleDownloadProblem("zip")} disabled={problemDownloadLoading !== null || !submissionForm.roundId || !selectedSubmissionRoundState.canDownloadProblem}>
-                {problemDownloadLoading === "zip" ? "Downloading..." : "Problem ZIP"}
-              </Button>
               {submissionStatus && (
                 <span
                   style={{
@@ -3234,8 +3462,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <div className="grid grid-cols-3 gap-4">
               {[
                 { label: "Events", value: String(apiEvents.length), icon: <Calendar size={18} />, color: COLORS.primary },
-                { label: "Best Rank", value: "N/A", icon: <Trophy size={18} />, color: COLORS.warning },
-                { label: "Total Score", value: "N/A", icon: <Star size={18} />, color: COLORS.accent },
+                { label: "Best Rank", value: dashboardTeamRanking ? ((dashboardTeamRanking.rankPosition ?? dashboardTeamRanking.rank) > 0 ? `#${dashboardTeamRanking.rankPosition ?? dashboardTeamRanking.rank}` : "DSQ") : "N/A", icon: <Trophy size={18} />, color: COLORS.warning },
+                { label: "Total Score", value: dashboardTeamRanking ? (dashboardTeamRanking.finalScore?.toFixed(1) ?? dashboardTeamRanking.totalScore ?? "0") : "N/A", icon: <Star size={18} />, color: COLORS.accent },
               ].map(stat => (
                 <div key={stat.label} className="rounded-xl p-4 text-center" style={{ background: `${stat.color}10` }}>
                   <span style={{ color: stat.color }}>{stat.icon}</span>

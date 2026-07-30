@@ -158,12 +158,13 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
 </Select>
             </div>
 
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[260px]">
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANKING TYPE</label>
               <div className="flex gap-2">
                 <Button
                   variant={activeTab === "round" ? "primary" : "outline"}
                   onClick={() => setActiveTab("round")}
+                  className="justify-center whitespace-nowrap"
                   style={{ flex: 1, ...(activeTab !== "round" ? { borderColor: COLORS.border, color: COLORS.textSecondary } : {}) }}
                 >
                   Round Rankings
@@ -171,6 +172,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                 <Button
                   variant={activeTab === "event" ? "primary" : "outline"}
                   onClick={() => setActiveTab("event")}
+                  className="justify-center whitespace-nowrap"
                   style={{ flex: 1, ...(activeTab !== "event" ? { borderColor: COLORS.border, color: COLORS.textSecondary } : {}) }}
                 >
                   Category Final
@@ -237,6 +239,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               label: "RANK",
               render: (_, row) => {
                 const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
                 if (rankNum > 0) {
                   return (
                     <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
@@ -244,7 +247,9 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                     </span>
                   );
                 }
-                return <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary }}>-</span>;
+                return (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>
+                );
               }
             },
             {
@@ -267,39 +272,53 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             ...(activeTab === "round" ? [{
               key: "score",
               label: "SCORE",
-              render: (_: any, row: any) => (
-                <div className="flex items-center gap-2">
-                  <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-                    {row.finalScore?.toFixed(1) ?? row.totalScore}
-                  </span>
-                  {row.submissionId && (
-                    <button 
-                      onClick={() => setSelectedSubmissionId(row.submissionId)}
-                      className="text-xs text-primary hover:underline hover:text-primary-dark transition-colors"
-                    >
-                      (Details)
-                    </button>
-                  )}
-                </div>
-              )
+              render: (_: any, row: any) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
+                const isDisqualified = rankNum === 0;
+                return (
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontWeight: 700, fontSize: 14, color: isDisqualified ? COLORS.textSecondary : COLORS.textPrimary }}>
+                      {isDisqualified ? '—' : (row.averageScore?.toFixed(2) ?? row.finalScore?.toFixed(2) ?? row.totalScore)}
+                    </span>
+                    {!isDisqualified && row.submissionId && (
+                      <button 
+                        onClick={() => setSelectedSubmissionId(row.submissionId)}
+                        className="text-xs text-primary hover:underline hover:text-primary-dark transition-colors"
+                      >
+                        (Details)
+                      </button>
+                    )}
+                  </div>
+                );
+              }
             }] : []),
             ...(activeTab === "round" ? [{
               key: "advanced",
               label: "ADVANCED",
-              render: (_: any, row: any) => row.isAdvanced ? (
-                <span style={{ color: COLORS.success, fontWeight: 600, fontSize: 13 }}>Yes</span>
-              ) : (
-                <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>No</span>
-              )
+              render: (_: any, row: any) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
+                if (rankNum === 0) return <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>;
+                return row.isAdvanced ? (
+                  <span style={{ color: COLORS.success, fontWeight: 600, fontSize: 13 }}>Yes</span>
+                ) : (
+                  <span style={{ color: COLORS.textSecondary, fontSize: 13 }}>No</span>
+                );
+              }
             }] : []),
             {
               key: "status",
               label: "STATUS",
-              render: (_, row) => <StatusBadge status={row.isPublished ? "published" : "draft"} />
+              render: (_, row) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
+                return <StatusBadge status={row.isPublished ? "published" : "draft"} />;
+              }
             }
           ]}
           data={localRankings.length === 0 ? [{
-            rank: 0,
+            rank: -1,
             team: "No rankings computed yet",
             category: "-",
             score: 0,

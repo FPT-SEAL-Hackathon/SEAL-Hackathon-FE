@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { CheckCircle, XCircle, Eye, Loader, CheckSquare, X } from "lucide-react";
-import { Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
-import { api, ApiError } from "@/lib/api/apiClient";
 import { toast } from "sonner";
+import { Card, Button, StatusBadge, COLORS } from "@/components/shared/UIComponents";
+import { api, ApiError, parseApiError } from "@/lib/api/apiClient";
 import {
   getSubmissionStatusLabel,
   SUBMISSION_STATUS_IDS,
@@ -22,6 +23,21 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
   const [batchScores, setBatchScores] = useState<Record<string, Record<string, number>>>({});
   const [judgesList, setJudgesList] = useState<string[]>([]);
   const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [rejectModal, setRejectModal] = useState<{
+    isOpen: boolean;
+    type: "judge_submission" | "judge_round";
+    submissionId?: string;
+    roundId?: string;
+    judgeId: string;
+    judgeName: string;
+    reason: string;
+  }>({
+    isOpen: false,
+    type: "judge_submission",
+    judgeId: "",
+    judgeName: "",
+    reason: "",
+  });
 
   const fetchSubmissions = async () => {
     if (!localRoundId) {
@@ -94,10 +110,9 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
           submissionStatusName: !currentStatus ? "Scored" : "In Progress",
         } : s
       ));
-    } catch (e: unknown) {
-      console.error("toggleApproval error:", e);
-      const msg = e instanceof ApiError ? e.message : "Failed to update score approval.";
-      toast.error(msg);
+    } catch (e) {
+      console.error(e);
+      toast.error(parseApiError(e).message || "Failed to update score approval.");
     } finally {
       setApprovingId(null);
     }
@@ -116,10 +131,9 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
       setRejectReason("");
       // Reload submissions to get empty scores
       fetchSubmissions();
-    } catch (e: unknown) {
-      console.error("rejectScore error:", e);
-      const msg = e instanceof ApiError ? e.message : "Failed to reject score.";
-      toast.error(msg);
+    } catch (e) {
+      console.error(e);
+      toast.error(parseApiError(e).message || "Failed to reject score.");
     } finally {
       setApprovingId(null);
     }
@@ -140,6 +154,50 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
       setJudgingDetails([]);
     } finally {
       setIsJudgingLoading(false);
+    }
+  };
+
+  const openRejectJudgeSubmissionModal = (submissionId: string, judgeId: string, judgeName: string) => {
+    setRejectModal({
+      isOpen: true,
+      type: "judge_submission",
+      submissionId,
+      judgeId,
+      judgeName,
+      reason: "",
+    });
+  };
+
+  const openRejectJudgeRoundModal = (roundId: string, judgeId: string, judgeName: string) => {
+    setRejectModal({
+      isOpen: true,
+      type: "judge_round",
+      roundId,
+      judgeId,
+      judgeName,
+      reason: "",
+    });
+  };
+
+  const handleConfirmRejectModal = async () => {
+    const { type, submissionId, roundId, judgeId, judgeName, reason } = rejectModal;
+    if (!reason.trim()) return;
+
+    try {
+      if (type === "judge_submission") {
+        await api.post(`/api/v1/admin/submissions/${submissionId}/judges/${judgeId}/reject-score`, { reason });
+        toast.success(`Rejected scores from judge ${judgeName} for this team.`);
+        viewScores(submissionId!);
+      } else {
+        await api.post(`/api/v1/admin/rounds/${roundId}/judges/${judgeId}/reject-scores`, { reason });
+        toast.success(`Rejected all scores from judge ${judgeName} in this round.`);
+        setSelectedSubmissionId(null);
+      }
+      setRejectModal(prev => ({ ...prev, isOpen: false }));
+      fetchSubmissions();
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : "Failed to reject judge scores.";
+      toast.error(msg);
     }
   };
 
@@ -180,7 +238,7 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                 const subId = sub.submissionId || sub.id;
                 const subScores = batchScores[subId] || {};
                 const scoresArray = Object.values(subScores);
-                const totalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0)).toFixed(2) : "-";
+                const finalScore = scoresArray.length > 0 ? (scoresArray.reduce((a,b)=>a+b,0) / scoresArray.length).toFixed(2) : "-";
                 
                 return (
                   <tr 
@@ -218,8 +276,8 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                       );
                     })}
                     
-                    <td className="p-4 text-center font-bold text-primary text-lg">
-                      {totalScore}
+                    <td className="p-4 font-bold text-primary text-lg text-center">
+                      {finalScore}
                     </td>
 
                     <td className="p-4 text-right sticky right-0 shadow-[-1px_0_0_0_#e5e7eb] z-10" style={{ backgroundColor: 'inherit' }}>
@@ -326,12 +384,33 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
                       return acc;
                     }, {})
                   ).map(([judgeName, details]: [string, any]) => {
-                    const totalScore = details.reduce((sum: number, d: any) => sum + (d.scoreValue || 0), 0);
+                    const totalScore = details.reduce((sum: number, d: any) => sum + ((d.scoreValue || 0) * (d.criterionWeight || 1)), 0);
+                    const judgeId = details[0]?.roundJudgeId; // roundJudgeId is judge's userId in JudgingDTO
                     return (
                       <div key={judgeName} className="border rounded-xl overflow-hidden" style={{ borderColor: COLORS.border }}>
                         <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: COLORS.border }}>
                           <h3 className="font-semibold" style={{ color: COLORS.textPrimary }}>Judge: {judgeName}</h3>
-                          <span className="font-bold text-primary bg-primary/10 px-3 py-1 rounded-lg">Total: {totalScore}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-primary bg-primary/10 px-3 py-1 rounded-lg mr-2">Total: {totalScore}</span>
+                            {judgeId && (
+                              <>
+                                <button
+                                  className="text-xs text-red-600 hover:text-red-800 border border-red-200 hover:border-red-400 bg-white px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                                  onClick={() => openRejectJudgeSubmissionModal(selectedSubmissionId!, judgeId, judgeName)}
+                                  disabled={isRoundApproved}
+                                >
+                                  Reject Score
+                                </button>
+                                <button
+                                  className="text-xs text-red-600 hover:text-red-800 border border-red-200 hover:border-red-400 bg-white px-2 py-1 rounded-lg transition-colors disabled:opacity-50"
+                                  onClick={() => openRejectJudgeRoundModal(localRoundId, judgeId, judgeName)}
+                                  disabled={isRoundApproved}
+                                >
+                                  Reject Round Scores
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <div className="divide-y" style={{ borderColor: COLORS.border }}>
                           {details.map((d: any, i: number) => (
@@ -361,6 +440,45 @@ export function AdminJudgingApprovalView({ context, localCategoryId, localRoundI
             </div>
           </div>
         </div>
+      )}
+
+      {rejectModal.isOpen && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setRejectModal(prev => ({ ...prev, isOpen: false }))}>
+          <Card className="w-full max-w-md p-6 shadow-2xl relative bg-white" style={{ backgroundColor: "#ffffff" }} onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-2" style={{ color: COLORS.textPrimary }}>
+              {rejectModal.type === "judge_submission" ? "Reject Judge's Score" : "Reject Judge's Round Scores"}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              {rejectModal.type === "judge_submission"
+                ? `Enter reason for rejecting scores from judge ${rejectModal.judgeName} for this team:`
+                : `Are you sure you want to reject ALL scores submitted by judge ${rejectModal.judgeName} in this entire round? This action cannot be undone. Enter reason for rejection:`}
+            </p>
+            <textarea
+              className="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-primary/20 mb-4 text-sm"
+              rows={3}
+              placeholder="Reason for rejection..."
+              value={rejectModal.reason}
+              onChange={e => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setRejectModal(prev => ({ ...prev, isOpen: false }))}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                disabled={!rejectModal.reason.trim()}
+                onClick={handleConfirmRejectModal}
+              >
+                Confirm Reject
+              </Button>
+            </div>
+          </Card>
+        </div>,
+        document.body
       )}
     </>
   );
