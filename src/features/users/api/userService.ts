@@ -302,6 +302,10 @@ export const userService = {
     return api.get<UserFacetsResponse>(`/api/v1/users/facets${qs ? `?${qs}` : ""}`);
   },
 
+  getJudgesCount: async () => {
+    return api.get<{ count: number }>("/api/v1/public/judges/count", false);
+  },
+
   getUserById: async (userId: string) =>
     unwrapUser(await api.get<BackendUser | { data?: BackendUser }>(`/api/v1/users/${userId}`)),
 
