@@ -771,26 +771,30 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   }, [viewingEventDetail?.eventId]);
 
   useEffect(() => {
-    if (currentPage !== "team") return;
-    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (currentPage !== "team" && currentPage !== "events") return;
+    const targetEventId = (currentPage === "events" && viewingEventDetail) ? viewingEventDetail.eventId : (leaderboardEventId || activeTeamContext?.eventId);
     if (!targetEventId) return;
 
-    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
-    const targetCategoryId = team?.categoryId;
+    const targetCategoryId = (currentPage === "events" && viewingEventDetail) 
+      ? selectedEventCategoryId 
+      : (submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext)?.categoryId;
+      
     if (!targetCategoryId) return;
 
     roundService.getByCategory(targetCategoryId)
       .then(setLeaderboardRounds)
       .catch(() => setLeaderboardRounds([]));
-  }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
+  }, [currentPage, leaderboardEventId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams, viewingEventDetail, selectedEventCategoryId]);
 
   useEffect(() => {
-    if (currentPage !== "team") return;
-    const targetEventId = leaderboardEventId || activeTeamContext?.eventId;
+    if (currentPage !== "team" && currentPage !== "events") return;
+    const targetEventId = (currentPage === "events" && viewingEventDetail) ? viewingEventDetail.eventId : (leaderboardEventId || activeTeamContext?.eventId);
     if (!targetEventId) return;
 
-    const team = submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext;
-    const targetCategoryId = team?.categoryId;
+    const targetCategoryId = (currentPage === "events" && viewingEventDetail) 
+      ? selectedEventCategoryId 
+      : (submissionTeams.find(t => t.eventId === targetEventId) || activeTeamContext)?.categoryId;
+      
     if (!targetCategoryId) return;
     
     if (leaderboardRoundId === "event") {
@@ -802,7 +806,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         .then(setApiLeaderboard)
         .catch(() => { setApiLeaderboard([]); });
     }
-  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams]);
+  }, [currentPage, leaderboardEventId, leaderboardRoundId, activeTeamContext?.eventId, activeTeamContext?.categoryId, submissionTeams, viewingEventDetail, selectedEventCategoryId]);
   const [submissionHistory, setSubmissionHistory] = useState<SubmissionHistoryResponse[]>([]);
   const [submissionHistoryLoading, setSubmissionHistoryLoading] = useState(false);
   const [submissionHistoryError, setSubmissionHistoryError] = useState("");
@@ -820,6 +824,55 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [certificateError, setCertificateError] = useState("");
   const [certificateActionLoading, setCertificateActionLoading] = useState<Record<string, "view" | "download">>({});
 
+  const [dashboardTeamRanking, setDashboardTeamRanking] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!activeTeamContext?.eventId || !activeTeamContext?.categoryId || !activeTeamContext?.teamId) {
+      setDashboardTeamRanking(null);
+      return;
+    }
+    
+    let isCancelled = false;
+
+    const fetchRankings = async () => {
+      try {
+        let bestRank: any = null;
+        
+        const eventRanks = await rankingService.getLeaderboard(activeTeamContext.eventId, activeTeamContext.categoryId).catch(() => []);
+        if (isCancelled) return;
+        const eventRank = eventRanks.find((r: any) => r.teamId === activeTeamContext.teamId);
+        
+        if (eventRank) {
+          bestRank = eventRank;
+        } else {
+          const rounds = await roundService.getByCategory(activeTeamContext.categoryId).catch(() => []);
+          if (isCancelled) return;
+          for (const round of rounds) {
+            const roundRanks = await rankingService.getRoundLeaderboard(round.roundId, activeTeamContext.categoryId).catch(() => []);
+            if (isCancelled) return;
+            const roundRank = roundRanks.find((r: any) => r.teamId === activeTeamContext.teamId);
+            if (roundRank) {
+              const rPos = roundRank.rankPosition ?? roundRank.rank;
+              if (rPos > 0) {
+                const bestPos = bestRank?.rankPosition ?? bestRank?.rank;
+                if (!bestRank || bestPos <= 0 || rPos < bestPos) {
+                  bestRank = roundRank;
+                }
+              } else if (!bestRank) {
+                bestRank = roundRank;
+              }
+            }
+          }
+        }
+        if (!isCancelled) setDashboardTeamRanking(bestRank || null);
+      } catch (e) {
+        if (!isCancelled) setDashboardTeamRanking(null);
+      }
+    };
+    fetchRankings();
+    
+    return () => { isCancelled = true; };
+  }, [activeTeamContext?.eventId, activeTeamContext?.categoryId, activeTeamContext?.teamId]);
   useEffect(() => {
     if (!user?.userId) {
       setSubmissionTeams([]);
@@ -1980,19 +2033,26 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     event.preventDefault();
     openDashboardTeam(team);
   };
+  const renderDashboard = () => {
+    const unread = notifs.filter(n => !n.isRead).length;
 
-  const renderDashboard = () => (
-    <>
-      <SectionHeader
-        title="Team Member Dashboard"
-        subtitle={`Welcome back, ${displayName}.`}
-      />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Events" value={apiEvents.length} trend={0} icon={<Calendar size={22} />} color={COLORS.primary} />
-        <StatCard title="Team Rank" value="N/A" icon={<Trophy size={22} />} color={COLORS.warning} />
-        <StatCard title="Team Score" value="N/A" icon={<Star size={22} />} color={COLORS.accent} />
-        <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
-      </div>
+    const rRank = dashboardTeamRanking?.rankPosition ?? dashboardTeamRanking?.rank;
+    const rankStr = rRank ? (rRank > 0 ? `#${rRank}` : "DSQ") : "N/A";
+    const scoreStr = dashboardTeamRanking ? (dashboardTeamRanking.finalScore?.toFixed(1) ?? dashboardTeamRanking.totalScore ?? "0") : "N/A";
+
+    return (
+      <>
+        <SectionHeader
+          title="Team Member Dashboard"
+          subtitle={`Welcome back, ${displayName}.`}
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Events" value={apiEvents.length} trend={0} icon={<Calendar size={22} />} color={COLORS.primary} />
+          <StatCard title="Team Rank" value={rankStr} icon={<Trophy size={22} />} color={COLORS.warning} />
+          <StatCard title="Team Score" value={scoreStr} icon={<Star size={22} />} color={COLORS.accent} />
+          <StatCard title="Unread" value={unread} icon={<Clock size={22} />} color={COLORS.error} />
+        </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-5 col-span-1">
           <div className="mb-4">
@@ -2095,6 +2155,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       </div>
     </>
   );
+};
 
   const handleTeamPanelChange = useCallback((team: TeamResponse | null) => {
     if (teamInitialTeamId && team?.teamId === teamInitialTeamId) return;
@@ -3401,8 +3462,8 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
             <div className="grid grid-cols-3 gap-4">
               {[
                 { label: "Events", value: String(apiEvents.length), icon: <Calendar size={18} />, color: COLORS.primary },
-                { label: "Best Rank", value: "N/A", icon: <Trophy size={18} />, color: COLORS.warning },
-                { label: "Total Score", value: "N/A", icon: <Star size={18} />, color: COLORS.accent },
+                { label: "Best Rank", value: dashboardTeamRanking ? ((dashboardTeamRanking.rankPosition ?? dashboardTeamRanking.rank) > 0 ? `#${dashboardTeamRanking.rankPosition ?? dashboardTeamRanking.rank}` : "DSQ") : "N/A", icon: <Trophy size={18} />, color: COLORS.warning },
+                { label: "Total Score", value: dashboardTeamRanking ? (dashboardTeamRanking.finalScore?.toFixed(1) ?? dashboardTeamRanking.totalScore ?? "0") : "N/A", icon: <Star size={18} />, color: COLORS.accent },
               ].map(stat => (
                 <div key={stat.label} className="rounded-xl p-4 text-center" style={{ background: `${stat.color}10` }}>
                   <span style={{ color: stat.color }}>{stat.icon}</span>
