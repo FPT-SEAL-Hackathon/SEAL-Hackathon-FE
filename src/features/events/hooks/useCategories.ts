@@ -30,7 +30,12 @@ export function useCategories(eventId: string) {
 
     const deleteCategory = async (id: string) => {
         await categoryService.delete(id);
-        setCategories(prev => prev.filter(category => category.categoryId !== id));
+        setCategoryMentors(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+        });
+        await loadCategories();
     };
 
     //Category Mentor
