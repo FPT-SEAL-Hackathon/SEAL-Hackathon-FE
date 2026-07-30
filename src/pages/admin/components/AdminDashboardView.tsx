@@ -165,7 +165,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
   const activeJudges = allUsersList.filter((user: any) => {
     const role = String(user.roleName ?? user.role ?? user.userRole ?? "").toUpperCase();
     const status = String(user.accountStatusName ?? user.accountStatus ?? user.status ?? "ACTIVE").toUpperCase();
-    return role.includes("JUDGE") && (status.includes("ACTIVE") || status.includes("ENABLE"));
+    return (role.includes("JUDGE") || role.includes("EXPERT")) && (status.includes("ACTIVE") || status.includes("ENABLE"));
   }).length;
 
   const pendingApprovals = allUsersList.filter((user: any) => {
@@ -252,20 +252,25 @@ export function AdminDashboardView({ context }: AdminViewProps) {
               {overviewEvents.length === 0 && (
                 <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No events loaded from API.</div>
               )}
-              {overviewEvents.map((ev: any) => (
-                <div key={ev.id} className="mb-4 last:mb-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{ev.name}</span>
-                    <StatusBadge status={ev.status} />
+              {overviewEvents.map((ev: any) => {
+                const eventTeamsCount = ev.id === selectedEventId 
+                  ? (apiTeamEligibility.length || ev.teams || 0) 
+                  : (ev.teams ?? 0);
+                return (
+                  <div key={ev.id} className="mb-4 last:mb-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <span style={{ fontWeight: 600, fontSize: 14, color: COLORS.textPrimary }}>{ev.name}</span>
+                      <StatusBadge status={ev.status} />
+                    </div>
+                    <ProgressBar
+                      value={eventTeamsCount}
+                      max={Math.max(ev.maxTeamSize ?? eventTeamsCount, eventTeamsCount, 1)}
+                      color={COLORS.primary}
+                      label={`${eventTeamsCount} teams registered`}
+                    />
                   </div>
-                  <ProgressBar
-                    value={ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)}
-                    max={Math.max(ev.maxTeamSize ?? totalTeams, totalTeams, 1)}
-                    color={COLORS.primary}
-                    label={`${ev.id === selectedEventId ? totalTeams : (ev.teams ?? 0)} teams registered`}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
 
