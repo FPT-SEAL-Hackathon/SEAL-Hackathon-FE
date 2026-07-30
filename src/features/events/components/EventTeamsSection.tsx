@@ -286,7 +286,7 @@ function getStatusDetailActor(team: TeamEligibilityReviewResponse, status: Statu
         team.latestDisqualification?.disqualifiedByEmail,
         team.latestDisqualification?.disqualifiedById,
       )
-      || auditLog?.actorUserId
+      || auditLog?.actorName || auditLog?.actorUserId
       || "";
   }
   return formatStatusActor(team.withdrawnByName, team.withdrawnByEmail, team.withdrawnById)
@@ -300,7 +300,7 @@ function getStatusDetailActor(team: TeamEligibilityReviewResponse, status: Statu
       team.latestWithdrawal?.withdrawnByEmail,
       team.latestWithdrawal?.withdrawnById ?? team.latestWithdrawal?.actorUserId,
     )
-    || auditLog?.actorUserId
+    || auditLog?.actorName || auditLog?.actorUserId
     || "";
 }
 
