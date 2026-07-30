@@ -43,7 +43,7 @@ import { hasSubmissionUrlErrors, validateSubmissionUrls, type SubmissionUrlError
 import { TeamApiPanel } from "@/features/teams/components/TeamApiPanel";
 import { getTeamStatusInfo, isTeamActive, teamService, type JoinTeamRequestResponse, type TeamResponse } from "@/features/teams/api/teamService";
 import { discoverUserTeamsForEvents, rememberUserTeam } from "@/features/teams/api/userTeamDiscovery";
-import { awardService, type AwardResponse } from "@/features/awards/api/awardService";
+import { awardService, type AwardResponse, type CertificateItemResponse } from "@/features/awards/api/awardService";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
 import { eventParticipantService, type EventParticipantResponse } from "@/features/eventParticipants/api/eventParticipantService";
 import { MemberAppealsView } from "./components/MemberAppealsView";
@@ -726,7 +726,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
   const [judgingScores, setJudgingScores] = useState<JudgingDTO[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState("");
-  const [certificateAwards, setCertificateAwards] = useState<AwardResponse[]>([]);
+  const [certificates, setCertificates] = useState<CertificateItemResponse[]>([]);
   const [certificateCategoryId, setCertificateCategoryId] = useState("all");
   const [certificateSelectedEventId, setCertificateSelectedEventId] = useState("");
   const [certificateLoading, setCertificateLoading] = useState(false);
@@ -876,32 +876,26 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     if (currentPage !== "certificates") return;
     const storedTeam = getStoredActiveTeam(user?.userId);
     setActiveTeamContext(storedTeam);
-    // Náº¿u chÆ°a chá»n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
+    // Náº¿u chÆ°a chá» n event, Æ°u tiĂªn dĂ¹ng eventId tá»« storedTeam
     setCertificateCategoryId("all");
   }, [currentPage, user?.userId]);
 
-  // Load awards khi event Ä‘Æ°á»£c chá»n
+  // Load certificates khi event được chọn
   useEffect(() => {
     if (currentPage !== "certificates") return;
     if (!certificateSelectedEventId) {
-      setCertificateAwards([]);
+      setCertificates([]);
       setCertificateError("");
       return;
     }
 
-    const storedTeam = getStoredActiveTeam(user?.userId);
     let cancelled = false;
     setCertificateLoading(true);
     setCertificateError("");
-    awardService.getByEvent(certificateSelectedEventId)
-      .then(awards => {
+    awardService.getEventCertificates(certificateSelectedEventId)
+      .then(items => {
         if (cancelled) return;
-        // Chá»‰ lá»c theo teamId náº¿u cĂ³, khĂ´ng lá»c cá»©ng theo categoryId
-        const visibleAwards = awards.filter((award: any) => (
-          (!storedTeam?.teamId || award.teamId === storedTeam.teamId)
-          && award.isPublished
-        ));
-        setCertificateAwards(visibleAwards);
+        setCertificates(items);
         setCertificateCategoryId("all");
       })
       .catch(error => {
@@ -1726,11 +1720,14 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     );
   };
 
-  const handleCertificateFile = async (award: AwardResponse, mode: "view" | "download") => {
-    setCertificateActionLoading(prev => ({ ...prev, [award.id]: mode }));
+  const handleCertificateFile = async (cert: CertificateItemResponse, mode: "view" | "download") => {
+    setCertificateActionLoading(prev => ({ ...prev, [cert.id]: mode }));
     setCertificateError("");
     try {
-      const blob = await awardService.downloadCertificate(award.id);
+      const blob = cert.type === "PARTICIPATION"
+        ? await awardService.downloadParticipationCertificate(cert.eventId)
+        : await awardService.downloadAwardCertificate(cert.awardId!);
+
       const url = URL.createObjectURL(blob);
       if (mode === "view") {
         const opened = window.open(url, "_blank", "noopener,noreferrer");
@@ -1744,7 +1741,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         window.setTimeout(() => URL.revokeObjectURL(url), 60000);
       } else {
         const link = document.createElement("a");
-        const filename = `${award.eventName}-${award.categoryName}-${award.awardTitle}-certificate.pdf`
+        const filename = `${cert.eventName}-${cert.title}-certificate.pdf`
           .replace(/[^a-z0-9._-]+/gi, "-")
           .replace(/^-+|-+$/g, "");
         link.href = url;
@@ -1757,7 +1754,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
     } finally {
       setCertificateActionLoading(prev => {
         const next = { ...prev };
-        delete next[award.id];
+        delete next[cert.id];
         return next;
       });
     }
@@ -2507,7 +2504,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
 };
 
   const renderCertificates = () => {
-    // Danh sĂ¡ch events mĂ  user Ä‘ang tham gia (ACTIVE)
+    // Danh sách events mà user đang tham gia (ACTIVE)
     const joinedEvents = apiEvents.filter(ev =>
       normalizeParticipationStatus(participations[ev.eventId]?.participantStatus ?? ev.participantStatus) === "ACTIVE",
     );
@@ -2516,11 +2513,15 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       ?? apiEvents.find(ev => ev.eventId === certificateSelectedEventId);
 
     const categoryOptions = Array.from(
-      new Map(certificateAwards.map((award: any) => [award.categoryId, award.categoryName])).entries(),
+      new Map(
+        certificates
+          .filter(c => c.categoryId)
+          .map(c => [c.categoryId!, c.categoryName ?? "General"])
+      ).entries(),
     );
-    const filteredAwards = certificateCategoryId === "all"
-      ? certificateAwards
-      : certificateAwards.filter((award: any) => award.categoryId === certificateCategoryId);
+    const filteredCertificates = certificateCategoryId === "all"
+      ? certificates
+      : certificates.filter(c => c.categoryId === certificateCategoryId);
 
     return (
       <>
@@ -2630,9 +2631,9 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
         {certificateSelectedEventId && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <StatCard title="Published Certificates" value={certificateAwards.length} icon={<Award size={22} />} color={COLORS.warning} />
-              <StatCard title="Categories" value={categoryOptions.length} icon={<Target size={22} />} color={COLORS.secondary} />
-              <StatCard title="Selected" value={filteredAwards.length} icon={<FileText size={22} />} color={COLORS.primary} />
+              <StatCard title="Available Certificates" value={certificates.length} icon={<Award size={22} />} color={COLORS.warning} />
+              <StatCard title="Categories" value={categoryOptions.length || 1} icon={<Target size={22} />} color={COLORS.secondary} />
+              <StatCard title="Selected" value={filteredCertificates.length} icon={<FileText size={22} />} color={COLORS.primary} />
             </div>
 
             <Card>
@@ -2640,7 +2641,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                 <table className="w-full" style={{ borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: COLORS.bg }}>
-                      {["Award", "Event", "Category", "Published", "Actions"].map(h => (
+                      {["Certificate Title", "Type", "Event", "Category", "Issued Date", "Actions"].map(h => (
                         <th key={h} className="text-left px-4 py-3" style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}`, letterSpacing: "0.04em" }}>{h.toUpperCase()}</th>
                       ))}
                     </tr>
@@ -2648,22 +2649,35 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                   <tbody>
                     {certificateLoading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                        <td colSpan={6} className="px-4 py-8 text-center" style={{ fontSize: 13, color: COLORS.textSecondary }}>
                           Loading certificates...
                         </td>
                       </tr>
-                    ) : filteredAwards.length > 0 ? filteredAwards.map((award: any) => {
-                      const actionLoading = certificateActionLoading[award.id];
+                    ) : filteredCertificates.length > 0 ? filteredCertificates.map((cert) => {
+                      const actionLoading = certificateActionLoading[cert.id];
+                      const isParticipation = cert.type === "PARTICIPATION";
                       return (
-                        <tr key={award.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                        <tr key={cert.id} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
                           <td className="px-4 py-3">
-                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{award.awardTitle}</div>
-                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{award.awardTierName}</div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{cert.title}</div>
+                            <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>{cert.teamName}</div>
                           </td>
-                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{award.eventName}</td>
-                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{award.categoryName}</td>
+                          <td className="px-4 py-3">
+                            <span
+                              className="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold"
+                              style={{
+                                background: isParticipation ? `${COLORS.primary}18` : `${COLORS.warning}18`,
+                                color: isParticipation ? COLORS.primary : COLORS.warning,
+                                border: `1px solid ${isParticipation ? `${COLORS.primary}33` : `${COLORS.warning}33`}`
+                              }}
+                            >
+                              {isParticipation ? "Participation" : (cert.awardTierName || "Award")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textPrimary }}>{cert.eventName}</td>
+                          <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>{cert.categoryName || "General"}</td>
                           <td className="px-4 py-3" style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                            {award.publishedAt ? new Date(award.publishedAt).toLocaleDateString("en-US") : "Published"}
+                            {cert.publishedAt ? new Date(cert.publishedAt).toLocaleDateString("en-US") : "Available"}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-wrap gap-2">
@@ -2672,7 +2686,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                                 size="sm"
                                 icon={<Eye size={13} />}
                                 disabled={!!actionLoading}
-                                onClick={() => handleCertificateFile(award, "view")}
+                                onClick={() => handleCertificateFile(cert, "view")}
                               >
                                 {actionLoading === "view" ? "Opening..." : "View"}
                               </Button>
@@ -2681,7 +2695,7 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                                 size="sm"
                                 icon={<Download size={13} />}
                                 disabled={!!actionLoading}
-                                onClick={() => handleCertificateFile(award, "download")}
+                                onClick={() => handleCertificateFile(cert, "download")}
                               >
                                 {actionLoading === "download" ? "Downloading..." : "Download"}
                               </Button>
@@ -2691,12 +2705,12 @@ export function MemberDashboard({ currentPage, onNavigate, markAllReadKey }: { c
                       );
                     }) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center">
+                        <td colSpan={6} className="px-4 py-8 text-center">
                           <div style={{ fontSize: 15, fontWeight: 600, color: COLORS.textPrimary, marginBottom: 8 }}>
-                            No published certificates are available for this category.
+                            No certificates are available for this event yet.
                           </div>
                           <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
-                            Certificates will appear here after awards are published by the organizer.
+                            Participate actively in event rounds to receive your certificates.
                           </div>
                         </td>
                       </tr>
