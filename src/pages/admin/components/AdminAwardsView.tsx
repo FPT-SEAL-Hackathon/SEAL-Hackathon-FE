@@ -227,9 +227,6 @@ export function AdminAwardsView({ context }: AdminViewProps) {
             <Zap size={17} style={{ color: COLORS.primary }} />
             <div>
               <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>Grant for Top Ranking of Category</div>
-              <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 2 }}>
-                Select a category, enter Top N, then grant awards using the backend award patterns.
-              </div>
             </div>
           </div>
 

@@ -283,7 +283,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
               {dashboardRounds.length === 0 && (
                 <div style={{ fontSize: 13, color: COLORS.textSecondary }}>No round schedules loaded yet.</div>
               )}
-              {dashboardRounds.map((r: any) => {
+              {dashboardRounds.map((r: any, idx: number) => {
                 const roundSubmissions = adminSubmissions.filter((submission: any) => submission.roundId === r.roundId);
                 const scored = roundSubmissions.filter((submission: any) => isSubmissionStatus(submission, "SCORED")).length;
                 const status = r.roundStatusName ?? r.status ?? "OPEN";
@@ -291,7 +291,7 @@ export function AdminDashboardView({ context }: AdminViewProps) {
                 const catName = r.categoryName || r.category?.categoryName;
 
                 return (
-                  <div key={r.roundId} className="p-3.5 rounded-xl border mb-3 last:mb-0 space-y-2" style={{ background: COLORS.bg, borderColor: COLORS.border }}>
+                  <div key={r.roundId || r.id || idx} className="p-3.5 rounded-xl border mb-3 last:mb-0 space-y-2" style={{ background: COLORS.bg, borderColor: COLORS.border }}>
                     <div className="flex items-center justify-between">
                       <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textPrimary }}>{r.roundName}</span>
                       <StatusBadge status={status} />
