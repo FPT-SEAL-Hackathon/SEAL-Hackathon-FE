@@ -67,22 +67,19 @@ const GENERIC_FALLBACK = "Something went wrong. Please try again.";
 /**
  * Chọn câu hiển thị cho người dùng.
  *
- * Thứ tự CỐ Ý: mã lỗi -> status -> message của backend -> câu chung.
- * Trước đây thứ tự bị ngược (`backendMessage || "friendly"`) nên chuỗi kỹ thuật của
- * backend luôn thắng và các câu thân thiện thành code chết.
- *
- * `backendMessage` chỉ dùng khi không có mapping nào — thường là các thông báo nghiệp
- * vụ do chính chúng ta viết (vd "Min team size cannot be greater than max team size").
+ * Cập nhật: Ưu tiên message của Backend (nếu không phải lỗi kỹ thuật thô)
+ * để lấy được các thông báo nghiệp vụ chi tiết.
+ * Thứ tự: message của backend -> mã lỗi -> status -> câu chung.
  */
 export function friendlyMessage(
   status?: number,
   code?: string,
   backendMessage?: string,
 ): string {
-  if (code && MESSAGE_BY_CODE[code]) return MESSAGE_BY_CODE[code];
   if (backendMessage && backendMessage.trim() && !looksTechnical(backendMessage)) {
     return backendMessage.trim();
   }
+  if (code && MESSAGE_BY_CODE[code]) return MESSAGE_BY_CODE[code];
   if (status && MESSAGE_BY_STATUS[status]) return MESSAGE_BY_STATUS[status];
   return GENERIC_FALLBACK;
 }
