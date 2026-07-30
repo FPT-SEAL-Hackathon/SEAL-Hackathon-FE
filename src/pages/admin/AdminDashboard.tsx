@@ -579,10 +579,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       }
 
       const blob = await response.blob();
+      const contentType = response.headers.get("Content-Type") || blob.type;
+      const extension = contentType.includes("zip") ? "zip" : "csv";
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `seal-data-export-${selectedEventId}.csv`;
+      link.download = `seal-data-export-${selectedEventId}.${extension}`;
       link.click();
       URL.revokeObjectURL(url);
       setDataExportDone(true);
