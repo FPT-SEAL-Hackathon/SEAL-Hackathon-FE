@@ -109,6 +109,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
     manualAwardLoading,
     manualAwardMessage,
     manualAwardError,
+    setManualAwardError,
     broadcastTitle,
     setBroadcastTitle,
     broadcastMessage,
@@ -161,6 +162,47 @@ export function AdminAwardsView({ context }: AdminViewProps) {
   ));
 
   const [selectedAward, setSelectedAward] = useState<any>(null);
+  const [showAutoGrantConfirm, setShowAutoGrantConfirm] = useState(false);
+  const [showManualGrantConfirm, setShowManualGrantConfirm] = useState(false);
+
+  const onOpenAutoGrantConfirm = () => {
+    if (setAutoGrantError) setAutoGrantError("");
+    const limit = Number(autoGrantLimit);
+    if (!awardPatternCategoryId) {
+      if (setAutoGrantError) setAutoGrantError("Select a category before granting awards.");
+      return;
+    }
+    if (!Number.isInteger(limit) || limit < 1) {
+      if (setAutoGrantError) setAutoGrantError("Top N must be a positive whole number.");
+      return;
+    }
+    setShowAutoGrantConfirm(true);
+  };
+
+  const onOpenManualGrantConfirm = () => {
+    if (setManualAwardError) setManualAwardError("");
+    if (!selectedEventId) {
+      if (setManualAwardError) setManualAwardError("Select an event before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.teamId) {
+      if (setManualAwardError) setManualAwardError("Select a team before granting a manual award.");
+      return;
+    }
+    if (!manualAwardForm.awardTierId || !manualAwardForm.awardTitle.trim()) {
+      if (setManualAwardError) setManualAwardError("Choose an award tier and enter an award title.");
+      return;
+    }
+
+    const prizeValue = manualAwardForm.prizeValue.trim()
+      ? Number(manualAwardForm.prizeValue)
+      : undefined;
+    if (prizeValue !== undefined && (!Number.isFinite(prizeValue) || prizeValue < 0)) {
+      if (setManualAwardError) setManualAwardError("Prize value must be zero or a positive number.");
+      return;
+    }
+    setShowManualGrantConfirm(true);
+  };
 
   return (
     <>
@@ -261,7 +303,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               variant="primary"
               size="lg"
               icon={autoGrantLoading ? <Loader size={15} className="animate-spin" /> : <Trophy size={15} />}
-              onClick={handleAutoGrantAwards}
+              onClick={onOpenAutoGrantConfirm}
               disabled={autoGrantLoading || !awardPatternCategoryId}
             >
               {autoGrantLoading ? "Granting..." : "Grant for Top Ranking of Category"}
@@ -420,7 +462,7 @@ export function AdminAwardsView({ context }: AdminViewProps) {
               variant="primary"
               size="lg"
               icon={manualAwardLoading ? <Loader size={15} className="animate-spin" /> : <Send size={15} />}
-              onClick={handleManualGrantAward}
+              onClick={onOpenManualGrantConfirm}
               disabled={manualAwardLoading || !selectedEventId || !manualAwardForm.teamId}
               style={{ background: COLORS.warning }}
             >
@@ -545,6 +587,168 @@ export function AdminAwardsView({ context }: AdminViewProps) {
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+      {/* Modal Confirm Auto Grant */}
+      {showAutoGrantConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-amber-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600">
+                  <Trophy size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900">Xác nhận Trao Giải Tự Động (Auto Grant)</h3>
+                  <p className="text-xs text-gray-500">Auto-grant awards from category rankings</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowAutoGrantConfirm(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-amber-50/60 border border-amber-200/60 rounded-xl text-amber-900 text-xs leading-relaxed flex gap-3">
+                <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-950 mb-1">Cấu hình trao giải hiện tại</p>
+                  <p>Hệ thống sẽ dựa trên bảng xếp hạng chính thức và các Mẫu giải thưởng (Award Patterns) đã cài đặt để tự động trao giải cho các đội thi dẫn đầu.</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 space-y-2.5 text-sm">
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sự kiện (Event)</span>
+                  <span className="font-medium text-gray-900">{apiEvents.find((e: any) => e.id === selectedEventId)?.name || "Chưa chọn"}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thể loại (Category)</span>
+                  <span className="font-medium text-amber-700">{apiCategories.find((c: any) => c.categoryId === awardPatternCategoryId)?.categoryName || "Chưa chọn"}</span>
+                </div>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Giới hạn xếp hạng (Top N)</span>
+                  <span className="font-bold text-gray-900 bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-xs">Top {autoGrantLimit}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowAutoGrantConfirm(false)}>
+                Hủy bỏ
+              </Button>
+              <Button
+                variant="primary"
+                icon={<Trophy size={15} />}
+                onClick={() => {
+                  setShowAutoGrantConfirm(false);
+                  handleAutoGrantAwards();
+                }}
+                disabled={autoGrantLoading}
+              >
+                Xác nhận & Trao giải Auto
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirm Manual Grant */}
+      {showManualGrantConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-gray-100 bg-orange-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600">
+                  <Award size={20} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-gray-900">Xác nhận Trao Giải Tùy Chỉnh (Manual Grant)</h3>
+                  <p className="text-xs text-gray-500">Grant a non-ranking award to a team</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowManualGrantConfirm(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-orange-50/60 border border-orange-200/60 rounded-xl text-orange-900 text-xs leading-relaxed flex gap-3">
+                <AlertTriangle size={18} className="text-orange-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-orange-950 mb-1">Cấu hình trao giải hiện tại</p>
+                  <p>Vui lòng kiểm tra kỹ thông tin giải thưởng và đội thi được chọn trước khi trao giải chính thức.</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 space-y-2.5 text-sm">
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sự kiện (Event)</span>
+                  <span className="font-medium text-gray-900">{apiEvents.find((e: any) => e.id === selectedEventId)?.name || "Chưa chọn"}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Thể loại (Category)</span>
+                  <span className="font-medium text-gray-900">
+                    {apiCategories.find((c: any) => c.categoryId === manualAwardForm.categoryId)?.categoryName || "Tất cả thể loại"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Đội nhận giải (Team)</span>
+                  <span className="font-bold text-orange-600">
+                    {manualAwardTeams.find((t: any) => t.teamId === manualAwardForm.teamId)?.teamName || manualAwardForm.teamId}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Hạng giải (Tier)</span>
+                  <span className="font-semibold text-gray-800">
+                    {AWARD_TIER_OPTIONS.find((t: any) => t.value === manualAwardForm.awardTierId)?.label || manualAwardForm.awardTierId}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tên giải (Title)</span>
+                  <span className="font-bold text-gray-900">{manualAwardForm.awardTitle}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-gray-200/50">
+                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Giá trị tiền thưởng</span>
+                  <span className="font-bold text-green-600">
+                    {manualAwardForm.prizeValue ? `${Number(manualAwardForm.prizeValue).toLocaleString()} ${manualAwardForm.prizeCurrency}` : "0 VND"}
+                  </span>
+                </div>
+                {manualAwardForm.description && (
+                  <div className="pt-1">
+                    <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1">Mô tả / Lý do</span>
+                    <span className="text-xs text-gray-700 italic block bg-white p-2 rounded border border-gray-200/60">
+                      "{manualAwardForm.description}"
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowManualGrantConfirm(false)}>
+                Hủy bỏ
+              </Button>
+              <Button
+                variant="primary"
+                icon={<Send size={15} />}
+                onClick={() => {
+                  setShowManualGrantConfirm(false);
+                  handleManualGrantAward();
+                }}
+                disabled={manualAwardLoading}
+                style={{ background: COLORS.warning }}
+              >
+                Xác nhận & Trao giải Manual
+              </Button>
+            </div>
           </div>
         </div>
       )}
