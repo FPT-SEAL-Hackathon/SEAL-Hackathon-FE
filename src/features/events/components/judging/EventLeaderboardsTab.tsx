@@ -239,6 +239,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               label: "RANK",
               render: (_, row) => {
                 const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
                 if (rankNum > 0) {
                   return (
                     <span style={{ fontSize: rankNum <= 3 ? 18 : 14, fontWeight: 700 }}>
@@ -273,6 +274,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               label: "SCORE",
               render: (_: any, row: any) => {
                 const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
                 const isDisqualified = rankNum === 0;
                 return (
                   <div className="flex items-center gap-2">
@@ -296,6 +298,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               label: "ADVANCED",
               render: (_: any, row: any) => {
                 const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
                 if (rankNum === 0) return <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>;
                 return row.isAdvanced ? (
                   <span style={{ color: COLORS.success, fontWeight: 600, fontSize: 13 }}>Yes</span>
@@ -307,11 +310,15 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             {
               key: "status",
               label: "STATUS",
-              render: (_, row) => <StatusBadge status={row.isPublished ? "published" : "draft"} />
+              render: (_, row) => {
+                const rankNum = row.rankPosition ?? row.rank;
+                if (rankNum === -1) return <span style={{ fontSize: 13, color: COLORS.textSecondary }}>—</span>;
+                return <StatusBadge status={row.isPublished ? "published" : "draft"} />;
+              }
             }
           ]}
           data={localRankings.length === 0 ? [{
-            rank: 0,
+            rank: -1,
             team: "No rankings computed yet",
             category: "-",
             score: 0,
