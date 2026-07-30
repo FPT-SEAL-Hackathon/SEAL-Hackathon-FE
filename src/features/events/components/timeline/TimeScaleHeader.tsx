@@ -3,21 +3,33 @@ import { COLORS } from "../../../../components/shared/UIComponents";
 
 interface Props {
     bounds: TimelineBounds;
+    // Bề rộng thực (px) của track, do TimelineGrid tính từ mức zoom.
+    trackPx: number;
 }
 
-// Khoảng cách % tối thiểu giữa hai nhãn ngày để không chồng chữ lên nhau.
-const MIN_DAY_LABEL_GAP_PCT = 4;
 // Ngưỡng coi tick là "sát mép" để căn nhãn về trong, tránh bị cắt/che ở hai biên.
 const EDGE_PCT = 2;
+// Khoảng cách px tối thiểu giữa hai vạch để thang không rối.
+const MIN_TICK_PX = 28;
+// Khoảng cách px tối thiểu giữa hai NHÃN ngày (nhãn rộng hơn vạch).
+const MIN_DAY_LABEL_PX = 34;
+// Từ mức zoom này (px cho mỗi ngày) mới đủ chỗ hiện thêm thứ trong tuần.
+const WEEKDAY_LABEL_PX_PER_DAY = 120;
+// Các bước "đẹp" cho khoảng cách vạch (ngày) — tránh mốc kiểu 5/11 ngày khó đọc.
+const NICE_INTERVALS = [1, 2, 3, 7, 14, 28];
 
-export function TimeScaleHeader({ bounds }: Props) {
+export function TimeScaleHeader({ bounds, trackPx }: Props) {
     const totalDays = bounds.totalMs / (1000 * 60 * 60 * 24);
 
-    // Mật độ tick thích ứng theo tổng thời lượng để không quá dày.
-    let intervalDays = 1;
-    if (totalDays > 60) intervalDays = 14;
-    else if (totalDays > 30) intervalDays = 7;
-    else if (totalDays > 14) intervalDays = 3;
+    // Mật độ vạch tính theo BỀ RỘNG PX THẬT (phụ thuộc mức zoom) chứ không theo tổng số
+    // ngày: zoom sâu thì hiện từng ngày, zoom xa thì tự thưa ra, ở mọi độ dài event.
+    const pxPerDay = totalDays > 0 ? trackPx / totalDays : trackPx;
+    const rawInterval = Math.max(1, Math.ceil(MIN_TICK_PX / Math.max(pxPerDay, 0.01)));
+    const intervalDays = NICE_INTERVALS.find(n => n >= rawInterval) ?? rawInterval;
+
+    // Nhãn ngày chỉ hiện khi cách nhãn trước đủ xa (quy đổi px → %).
+    const minDayLabelGapPct = (MIN_DAY_LABEL_PX / Math.max(trackPx, 1)) * 100;
+    const showWeekday = pxPerDay >= WEEKDAY_LABEL_PX_PER_DAY;
 
     // Sinh danh sách tick ngày.
     const ticks: { date: Date; percent: number }[] = [];
@@ -74,7 +86,7 @@ export function TimeScaleHeader({ bounds }: Props) {
                     let lastShownPercent = -Infinity;
                     return ticks.map((tick, i) => {
                         // Chỉ hiện số ngày nếu cách nhãn trước đủ xa; vạch tick vẫn luôn vẽ.
-                        const showDay = tick.percent - lastShownPercent >= MIN_DAY_LABEL_GAP_PCT;
+                        const showDay = tick.percent - lastShownPercent >= minDayLabelGapPct;
                         if (showDay) lastShownPercent = tick.percent;
                         return (
                             <div key={i}>
@@ -84,7 +96,10 @@ export function TimeScaleHeader({ bounds }: Props) {
                                         className="absolute top-1 whitespace-nowrap text-gray-600"
                                         style={{ left: `${tick.percent}%`, transform: labelTransform(tick.percent) }}
                                     >
-                                        {tick.date.toLocaleDateString(undefined, { day: "2-digit" })}
+                                        {tick.date.toLocaleDateString(
+                                            undefined,
+                                            showWeekday ? { weekday: "short", day: "2-digit" } : { day: "2-digit" },
+                                        )}
                                     </span>
                                 )}
                                 {/* Vạch tick — luôn ở đúng vị trí percent */}

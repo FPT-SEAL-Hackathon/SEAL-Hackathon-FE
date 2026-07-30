@@ -5,15 +5,29 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../../../../components/
 interface Props {
     round: RoundResponse;
     bounds: TimelineBounds;
+    // Bề rộng thực (px) của track, do TimelineGrid tính từ mức zoom.
+    trackPx: number;
     // Vị trí dọc (px từ đỉnh track) do CategoryLane tính qua lane-packing để round đè
     // nhau về thời gian không vẽ chồng lên nhau. Bỏ qua => giữ hành vi cũ (giữa track).
     topPx?: number;
     heightPx?: number;
 }
 
-export function RoundBlock({ round, bounds, topPx, heightPx = 40 }: Props) {
+// Bề rộng px tối thiểu để tên round còn đọc được BÊN TRONG block.
+const MIN_INNER_LABEL_PX = 72;
+// Round chỉ dài vài giờ vẫn phải là một khối bấm/hover được, không co về 0px.
+const MIN_BLOCK_PX = 6;
+
+export function RoundBlock({ round, bounds, trackPx, topPx, heightPx = 40 }: Props) {
     const rStartPct = getPercentage(round.startDate, bounds);
     const rWidth = getWidthPercentage(round.startDate, round.endDate, bounds);
+
+    // Block quá hẹp thì tên round bị `truncate` mất sạch → đẩy tên ra thành nhãn nổi
+    // bên cạnh block. Quyết định theo px thật nên tự đổi khi user zoom.
+    const widthPx = (rWidth / 100) * trackPx;
+    const labelInside = widthPx >= MIN_INNER_LABEL_PX;
+    // Block sát mép phải: nhãn nổi đặt bên trái để không bị cắt khỏi vùng cuộn.
+    const labelOnLeft = rStartPct > 80;
 
     // Các đoạn màu bên trong round block (tính theo % của chính round):
     // Submission: start → submissionDeadline; Judging: submissionDeadline → judgingDeadline;
@@ -50,45 +64,60 @@ export function RoundBlock({ round, bounds, topPx, heightPx = 40 }: Props) {
         <Tooltip>
             <TooltipTrigger asChild>
                 <div
-                    className={`absolute rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-md hover:z-10 hover:border-gray-400 ${topPx == null ? "top-1/2 -translate-y-1/2" : ""}`}
+                    className={`absolute cursor-pointer transition-all hover:z-10 ${topPx == null ? "top-1/2 -translate-y-1/2" : ""}`}
                     style={{
                         left: `${rStartPct}%`,
                         width: `${rWidth}%`,
+                        minWidth: MIN_BLOCK_PX,
                         height: `${heightPx}px`,
                         ...(topPx != null ? { top: `${topPx}px` } : {}),
                     }}
                 >
-                    {/* Round Label */}
-                    <div className="flex-1 px-1.5 pt-1 flex items-start overflow-hidden">
-                        <span className="text-[10px] font-bold text-gray-800 truncate leading-tight w-full">
+                    {/* Khối màu: overflow-hidden để dải màu không tràn khỏi góc bo. Nhãn nổi
+                        nằm NGOÀI khối này nên không bị cắt. */}
+                    <div className="w-full h-full rounded-md border border-gray-300 bg-white shadow-sm overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-gray-400">
+                        {labelInside && (
+                            <div className="flex-1 px-1.5 pt-1 flex items-start overflow-hidden">
+                                <span className="text-[10px] font-bold text-gray-800 truncate leading-tight w-full">
+                                    {round.roundName}
+                                </span>
+                            </div>
+                        )}
+
+                        {/* Colored Progress Bars for Submission & Judging */}
+                        <div className="mt-auto h-1.5 flex w-full relative bg-gray-100">
+                            {subWidthPct > 0 && (
+                                <div
+                                    className="absolute h-full bg-green-400"
+                                    style={{ left: `${subStartPct}%`, width: `${subWidthPct}%` }}
+                                    title="Submission Period"
+                                />
+                            )}
+                            {judgeWidthPct > 0 && (
+                                <div
+                                    className="absolute h-full bg-purple-400"
+                                    style={{ left: `${judgeStartPct}%`, width: `${judgeWidthPct}%` }}
+                                    title="Judging Period"
+                                />
+                            )}
+                            {appealWidthPct > 0 && (
+                                <div
+                                    className="absolute h-full bg-amber-400"
+                                    style={{ left: `${appealStartPct}%`, width: `${appealWidthPct}%` }}
+                                    title="Appeal Period"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Block quá hẹp: tên round hiện thành nhãn nổi cạnh block để vẫn đọc được */}
+                    {!labelInside && (
+                        <span
+                            className={`absolute top-0 whitespace-nowrap text-[10px] font-bold text-gray-700 leading-tight pointer-events-none ${labelOnLeft ? "right-full mr-1" : "left-full ml-1"}`}
+                        >
                             {round.roundName}
                         </span>
-                    </div>
-                    
-                    {/* Colored Progress Bars for Submission & Judging */}
-                    <div className="mt-auto h-1.5 flex w-full relative bg-gray-100">
-                        {subWidthPct > 0 && (
-                            <div 
-                                className="absolute h-full bg-green-400"
-                                style={{ left: `${subStartPct}%`, width: `${subWidthPct}%` }} 
-                                title="Submission Period"
-                            />
-                        )}
-                        {judgeWidthPct > 0 && (
-                            <div
-                                className="absolute h-full bg-purple-400"
-                                style={{ left: `${judgeStartPct}%`, width: `${judgeWidthPct}%` }}
-                                title="Judging Period"
-                            />
-                        )}
-                        {appealWidthPct > 0 && (
-                            <div
-                                className="absolute h-full bg-amber-400"
-                                style={{ left: `${appealStartPct}%`, width: `${appealWidthPct}%` }}
-                                title="Appeal Period"
-                            />
-                        )}
-                    </div>
+                    )}
                 </div>
             </TooltipTrigger>
             <TooltipContent>

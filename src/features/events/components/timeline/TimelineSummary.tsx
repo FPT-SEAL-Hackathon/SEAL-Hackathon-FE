@@ -15,16 +15,17 @@ export function TimelineSummary({ event, categories, rounds }: Props) {
     const safeCategories = Array.isArray(categories) ? categories : [];
     const safeRounds = Array.isArray(rounds) ? rounds : [];
 
-    // Event start/end là date-only (LocalDate) → CHỈ hiển thị ngày, không kèm giờ.
-    // Trước đây format kèm hour/minute khiến new Date("YYYY-MM-DD") (UTC midnight)
-    // hiện ra giờ sai (vd "07:00" ở UTC+7) như thể bị hardcode. parseSafeDate dựng
-    // Date local từ Y/M/D nên không lệch múi giờ.
+    // eventStartDate/eventEndDate là LocalDateTime ở backend → hiển thị cả giờ, vì giờ
+    // kết thúc quyết định biên hợp lệ của round (RoundServiceImpl so sánh datetime thật).
+    // parseSafeDate dựng Date ở local timezone nên không lệch múi giờ.
     const formatDt = (d?: string | null) => {
         const parsed = parseSafeDate(d);
-        return parsed ? parsed.toLocaleDateString(undefined, {
+        return parsed ? parsed.toLocaleString(undefined, {
             year: 'numeric',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
         }) : "TBD";
     };
 
@@ -33,16 +34,11 @@ export function TimelineSummary({ event, categories, rounds }: Props) {
     let phase = "Upcoming";
     let countdown = "";
 
-    // parseSafeDate: event dates (date-only) dựng ở nửa đêm local thay vì UTC midnight,
-    // nên mốc chuyển phase và đếm ngược không lệch múi giờ (~7h ở UTC+7).
-    // Event bắt đầu ĐẦU ngày eventStartDate (00:00) và kết thúc CUỐI ngày eventEndDate
-    // (23:59:59.999) — khớp backend RoundServiceImpl: eventStartDate.atStartOfDay() /
-    // eventEndDate.atTime(LocalTime.MAX). Nếu để eEnd ở 00:00 sẽ báo "ended" sớm trọn 1 ngày.
+    // Mốc chuyển phase dùng CHÍNH datetime của event: backend (RoundServiceImpl,
+    // EventServiceImplementation) so sánh trực tiếp eventStartDate/eventEndDate chứ không
+    // nới ra cuối ngày, nên FE ép eEnd về 23:59:59 sẽ báo "Event Live" lâu hơn thực tế.
     const eStart = parseSafeDate(event.eventStartDate);
-    const eEndRaw = parseSafeDate(event.eventEndDate);
-    const eEnd = eEndRaw
-        ? new Date(eEndRaw.getFullYear(), eEndRaw.getMonth(), eEndRaw.getDate(), 23, 59, 59, 999)
-        : null;
+    const eEnd = parseSafeDate(event.eventEndDate);
     const rStart = parseSafeDate(event.registrationStart);
     const rEnd = parseSafeDate(event.registrationEnd);
 

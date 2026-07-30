@@ -474,12 +474,14 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
 
   const filteredTeams = teams.filter(team => {
     const matchesSearch = !searchQuery.trim() || team.teamName?.toLowerCase().includes(searchQuery.trim().toLowerCase());
     const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName).badge;
     const matchesStatus = statusFilter === "ALL" || status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCategory = categoryFilter === "ALL" || team.categoryId === categoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
   const loadTeams = useCallback(async () => {
@@ -823,34 +825,99 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
         )}
 
         {teams.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search team by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl outline-none"
-                style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
+          <div className="space-y-3 mb-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search team by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div className="flex flex-row gap-3">
+                <div className="relative min-w-[150px] flex-1 sm:flex-none">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
+                    <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
+                      <SelectItem value="pending_approval" style={{ color: COLORS.textPrimary }}>Pending</SelectItem>
+                      <SelectItem value="active" style={{ color: COLORS.textPrimary }}>Approved (Active)</SelectItem>
+                      <SelectItem value="rejected" style={{ color: COLORS.textPrimary }}>Rejected</SelectItem>
+                      <SelectItem value="disqualified" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
+                      <SelectItem value="withdrawn" style={{ color: COLORS.textPrimary }}>Withdrawn</SelectItem>
+                      <SelectItem value="forming" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="relative min-w-[150px] flex-1 sm:flex-none">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Categories</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.categoryId} value={cat.categoryId} style={{ color: COLORS.textPrimary }}>
+                          {cat.categoryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div className="relative min-w-[160px]">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
-                <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  <SelectValue placeholder="Select..." />
-                </SelectTrigger>
-                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                  <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
-                <SelectItem value="pending_approval" style={{ color: COLORS.textPrimary }}>Pending</SelectItem>
-                <SelectItem value="active" style={{ color: COLORS.textPrimary }}>Approved (Active)</SelectItem>
-                <SelectItem value="rejected" style={{ color: COLORS.textPrimary }}>Rejected</SelectItem>
-                  <SelectItem value="disqualified" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
-                  <SelectItem value="withdrawn" style={{ color: COLORS.textPrimary }}>Withdrawn</SelectItem>
-                  <SelectItem value="forming" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
-                </SelectContent>
-              </Select>
+
+            {/* Category Team Counts Row */}
+            <div 
+              className="flex flex-wrap items-center gap-2 p-3 rounded-xl border border-dashed transition-all" 
+              style={{ borderColor: COLORS.border, background: `${COLORS.bg}50` }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, letterSpacing: "0.05em" }} className="uppercase w-full mb-1">
+                Team count by category:
+              </span>
+              <div 
+                onClick={() => setCategoryFilter("ALL")}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all hover:opacity-80"
+                style={{ 
+                  border: `1px solid ${categoryFilter === "ALL" ? COLORS.primary : COLORS.border}`, 
+                  background: categoryFilter === "ALL" ? `${COLORS.primary}15` : COLORS.card,
+                  color: categoryFilter === "ALL" ? COLORS.primary : COLORS.textPrimary 
+                }}
+              >
+                <span>All Teams:</span>
+                <span className="font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
+                  {teams.length}
+                </span>
+              </div>
+              {categories.map(cat => {
+                const count = teams.filter(t => t.categoryId === cat.categoryId).length;
+                const isSelected = categoryFilter === cat.categoryId;
+                return (
+                  <div 
+                    key={cat.categoryId}
+                    onClick={() => setCategoryFilter(cat.categoryId)}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all hover:opacity-80"
+                    style={{ 
+                      border: `1px solid ${isSelected ? COLORS.primary : COLORS.border}`, 
+                      background: isSelected ? `${COLORS.primary}15` : COLORS.card,
+                      color: isSelected ? COLORS.primary : COLORS.textPrimary 
+                    }}
+                  >
+                    <span>{cat.categoryName}:</span>
+                    <span className="font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
+                      {count}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

@@ -162,15 +162,11 @@ export function AdminSettingsView({ context }: AdminViewProps) {
   const [prefixLoading, setPrefixLoading] = useState(false);
   const [prefixSaving, setPrefixSaving] = useState(false);
   const [prefixError, setPrefixError] = useState("");
-  const [prefixForm, setPrefixForm] = useState<FptStudentCodePrefixRequest>({
-    prefix: "",
-    englishName: "",
-    vietnameseName: "",
-    majorGroup: "",
-    majorCode: "",
-    note: "",
-    active: true,
-  });
+  // null = đang THÊM MỚI; chuỗi = đang SỬA prefix đó. Phân biệt rõ hai chế độ vì backend đã
+  // tách POST (tạo, 409 nếu trùng) và PUT (sửa) — trước đây một form dùng chung cho cả hai
+  // nên "thêm" một prefix đã tồn tại sẽ ghi đè âm thầm bản ghi cũ.
+  const [editingPrefix, setEditingPrefix] = useState<string | null>(null);
+  const [prefixForm, setPrefixForm] = useState<FptStudentCodePrefixRequest>(EMPTY_PREFIX_FORM);
 
   const loadPrefixes = () => {
     setPrefixLoading(true);
@@ -185,7 +181,14 @@ export function AdminSettingsView({ context }: AdminViewProps) {
     loadPrefixes();
   }, []);
 
+  // Lỗi từng ô, mirror đúng ràng buộc của FptStudentCodePrefixRequest ở backend để người dùng
+  // biết sai chỗ nào ngay thay vì bấm Save rồi nhận 400 chung chung.
+  const prefixFieldErrors = validatePrefixForm(prefixForm, prefixes, editingPrefix);
+  const prefixFormValid = Object.keys(prefixFieldErrors).length === 0;
+
   const editPrefix = (prefix: FptStudentCodePrefix) => {
+    setPrefixError("");
+    setEditingPrefix(prefix.prefix);
     setPrefixForm({
       prefix: prefix.prefix,
       englishName: prefix.englishName,
@@ -197,20 +200,24 @@ export function AdminSettingsView({ context }: AdminViewProps) {
     });
   };
 
+  const cancelEditPrefix = () => {
+    setEditingPrefix(null);
+    setPrefixForm(EMPTY_PREFIX_FORM);
+    setPrefixError("");
+  };
+
   const savePrefix = async () => {
+    if (!prefixFormValid) return;
     setPrefixSaving(true);
     setPrefixError("");
     try {
-      await fptStudentCodePrefixService.save(prefixForm);
-      setPrefixForm({
-        prefix: "",
-        englishName: "",
-        vietnameseName: "",
-        majorGroup: "",
-        majorCode: "",
-        note: "",
-        active: true,
-      });
+      if (editingPrefix) {
+        await fptStudentCodePrefixService.update(editingPrefix, prefixForm);
+      } else {
+        await fptStudentCodePrefixService.create(prefixForm);
+      }
+      setEditingPrefix(null);
+      setPrefixForm(EMPTY_PREFIX_FORM);
       loadPrefixes();
     } catch (err) {
       setPrefixError(parseApiError(err).message);
@@ -221,9 +228,22 @@ export function AdminSettingsView({ context }: AdminViewProps) {
 
   const togglePrefix = async (prefix: FptStudentCodePrefix) => {
     setPrefixError("");
+    // Tắt prefix chỉ chặn tài khoản MỚI; tài khoản đã dùng prefix này giữ nguyên và không bị
+    // đánh dấu hồ sơ lỗi. Vẫn xác nhận khi có người đang dùng để admin biết phạm vi ảnh hưởng.
+    if (prefix.active && (prefix.usageCount ?? 0) > 0) {
+      const ok = window.confirm(
+        `Đang có ${prefix.usageCount} tài khoản dùng prefix ${prefix.prefix}.\n\n` +
+        `Tắt prefix sẽ chặn ĐĂNG KÝ MỚI với prefix này. Các tài khoản đã có vẫn giữ nguyên ` +
+        `và không bị coi là hồ sơ lỗi.\n\nTiếp tục?`,
+      );
+      if (!ok) return;
+    }
     try {
       const updated = await fptStudentCodePrefixService.setActive(prefix.prefix, !prefix.active);
-      setPrefixes(prev => prev.map(item => item.prefix === updated.prefix ? updated : item));
+      // Endpoint setActive không trả usageCount → giữ lại giá trị cũ để cột không nhảy về trống.
+      setPrefixes(prev => prev.map(item => item.prefix === updated.prefix
+        ? { ...updated, usageCount: item.usageCount }
+        : item));
     } catch (err) {
       setPrefixError(parseApiError(err).message);
     }
@@ -304,6 +324,7 @@ export function AdminSettingsView({ context }: AdminViewProps) {
             <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.textPrimary }}>FPT Student Code Prefixes</div>
             <div style={{ fontSize: 12, color: COLORS.textSecondary, marginTop: 3 }}>
               Manage active MSSV prefixes used to validate FPT Student codes.
+              Deactivating a prefix blocks new sign-ups only — existing accounts keep working.
             </div>
           </div>
           <Button variant="outline" size="sm" icon={prefixLoading ? <Loader size={14} className="animate-spin" /> : <Database size={14} />} onClick={loadPrefixes}>
@@ -311,12 +332,57 @@ export function AdminSettingsView({ context }: AdminViewProps) {
           </Button>
         </div>
 
+        <div
+          className="px-3 py-2 mb-3 rounded-xl"
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            color: editingPrefix ? COLORS.primary : COLORS.textSecondary,
+            background: editingPrefix ? `${COLORS.primary}10` : "var(--surface-bg)",
+            border: `1px solid ${editingPrefix ? `${COLORS.primary}30` : COLORS.border}`,
+          }}
+        >
+          {editingPrefix ? `Editing prefix ${editingPrefix}` : "Adding a new prefix"}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-4">
-          <PrefixInput label="Prefix" value={prefixForm.prefix} onChange={value => setPrefixForm(prev => ({ ...prev, prefix: value.toUpperCase().slice(0, 2) }))} />
-          <PrefixInput label="English Name" value={prefixForm.englishName} onChange={value => setPrefixForm(prev => ({ ...prev, englishName: value }))} />
-          <PrefixInput label="Vietnamese Name" value={prefixForm.vietnameseName} onChange={value => setPrefixForm(prev => ({ ...prev, vietnameseName: value }))} />
-          <PrefixInput label="Major Group" value={prefixForm.majorGroup} onChange={value => setPrefixForm(prev => ({ ...prev, majorGroup: value }))} />
-          <PrefixInput label="Major Code" value={prefixForm.majorCode ?? ""} onChange={value => setPrefixForm(prev => ({ ...prev, majorCode: value }))} />
+          {/* Prefix là khoá chính → khoá ô này ở chế độ sửa (đổi prefix = làm mồ côi mọi MSSV cũ) */}
+          <PrefixInput
+            label="Prefix *"
+            value={prefixForm.prefix}
+            onChange={value => setPrefixForm(prev => ({ ...prev, prefix: value.toUpperCase().slice(0, 2) }))}
+            maxLength={2}
+            disabled={!!editingPrefix}
+            error={prefixFieldErrors.prefix}
+          />
+          <PrefixInput
+            label="English Name *"
+            value={prefixForm.englishName}
+            onChange={value => setPrefixForm(prev => ({ ...prev, englishName: value }))}
+            maxLength={100}
+            error={prefixFieldErrors.englishName}
+          />
+          <PrefixInput
+            label="Vietnamese Name *"
+            value={prefixForm.vietnameseName}
+            onChange={value => setPrefixForm(prev => ({ ...prev, vietnameseName: value }))}
+            maxLength={200}
+            error={prefixFieldErrors.vietnameseName}
+          />
+          <PrefixInput
+            label="Major Group *"
+            value={prefixForm.majorGroup}
+            onChange={value => setPrefixForm(prev => ({ ...prev, majorGroup: value }))}
+            maxLength={100}
+            error={prefixFieldErrors.majorGroup}
+          />
+          <PrefixInput
+            label="Major Code"
+            value={prefixForm.majorCode ?? ""}
+            onChange={value => setPrefixForm(prev => ({ ...prev, majorCode: value }))}
+            maxLength={20}
+            error={prefixFieldErrors.majorCode}
+          />
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>Active</label>
             <button
@@ -329,12 +395,27 @@ export function AdminSettingsView({ context }: AdminViewProps) {
             </button>
           </div>
           <div className="md:col-span-5">
-            <PrefixInput label="Note" value={prefixForm.note ?? ""} onChange={value => setPrefixForm(prev => ({ ...prev, note: value }))} />
+            <PrefixInput
+              label="Note"
+              value={prefixForm.note ?? ""}
+              onChange={value => setPrefixForm(prev => ({ ...prev, note: value }))}
+              maxLength={500}
+              error={prefixFieldErrors.note}
+            />
           </div>
-          <div className="flex items-end">
-            <Button variant="primary" size="md" icon={prefixSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />} disabled={prefixSaving} onClick={savePrefix}>
-              {prefixSaving ? "Saving..." : "Save Prefix"}
+          <div className="flex items-end gap-2">
+            <Button
+              variant="primary"
+              size="md"
+              icon={prefixSaving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
+              disabled={prefixSaving || !prefixFormValid}
+              onClick={savePrefix}
+            >
+              {prefixSaving ? "Saving..." : editingPrefix ? "Update" : "Add"}
             </Button>
+            {editingPrefix && (
+              <Button variant="ghost" size="md" onClick={cancelEditPrefix}>Cancel</Button>
+            )}
           </div>
         </div>
 
@@ -348,7 +429,7 @@ export function AdminSettingsView({ context }: AdminViewProps) {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ color: COLORS.textSecondary, borderBottom: `1px solid ${COLORS.border}` }}>
-                {["Prefix", "English", "Major Group", "Major Code", "Status", "Actions"].map(header => (
+                {["Prefix", "English", "Major Group", "Major Code", "In use", "Status", "Actions"].map(header => (
                   <th key={header} className="text-left py-2 pr-3" style={{ fontSize: 12, fontWeight: 700 }}>{header}</th>
                 ))}
               </tr>
@@ -360,6 +441,10 @@ export function AdminSettingsView({ context }: AdminViewProps) {
                   <td className="py-2 pr-3" style={{ color: COLORS.textPrimary }}>{prefix.englishName}</td>
                   <td className="py-2 pr-3" style={{ color: COLORS.textSecondary }}>{prefix.majorGroup}</td>
                   <td className="py-2 pr-3" style={{ color: COLORS.textSecondary }}>{prefix.majorCode || "-"}</td>
+                  {/* Số tài khoản đang mang prefix này — xem trước ảnh hưởng khi tắt */}
+                  <td className="py-2 pr-3" style={{ color: COLORS.textSecondary }}>
+                    {prefix.usageCount == null ? "-" : `${prefix.usageCount} account${prefix.usageCount === 1 ? "" : "s"}`}
+                  </td>
                   <td className="py-2 pr-3">
                     <StatusBadge status={prefix.active ? "active" : "suspended"} />
                   </td>
@@ -381,16 +466,87 @@ export function AdminSettingsView({ context }: AdminViewProps) {
   );
 }
 
-function PrefixInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+const EMPTY_PREFIX_FORM: FptStudentCodePrefixRequest = {
+  prefix: "",
+  englishName: "",
+  vietnameseName: "",
+  majorGroup: "",
+  majorCode: "",
+  note: "",
+  active: true,
+};
+
+/**
+ * Validate form prefix ở client, mirror ĐÚNG ràng buộc của FptStudentCodePrefixRequest
+ * (@NotBlank/@Pattern/@Size) bên backend, cộng thêm kiểm tra trùng prefix ở chế độ thêm mới
+ * để báo ngay tại chỗ thay vì đợi 409 từ server. Backend vẫn là nơi chốt chặn thật sự.
+ * Trả về map field -> thông báo; rỗng nghĩa là hợp lệ.
+ */
+function validatePrefixForm(
+  form: FptStudentCodePrefixRequest,
+  existing: FptStudentCodePrefix[],
+  editingPrefix: string | null,
+): Record<string, string> {
+  const errors: Record<string, string> = {};
+  const prefix = (form.prefix ?? "").trim().toUpperCase();
+
+  if (!prefix) {
+    errors.prefix = "Prefix is required";
+  } else if (!/^[A-Z]{2}$/.test(prefix)) {
+    errors.prefix = "Exactly 2 letters (A-Z)";
+  } else if (!editingPrefix && existing.some(p => p.prefix.toUpperCase() === prefix)) {
+    // Chế độ sửa thì trùng chính nó là bình thường, chỉ chặn khi đang thêm mới.
+    errors.prefix = `Prefix ${prefix} already exists — use Edit`;
+  }
+
+  const required: [keyof FptStudentCodePrefixRequest, string, number][] = [
+    ["englishName", "English name", 100],
+    ["vietnameseName", "Vietnamese name", 200],
+    ["majorGroup", "Major group", 100],
+  ];
+  required.forEach(([field, label, max]) => {
+    const value = String(form[field] ?? "").trim();
+    if (!value) errors[field] = `${label} is required`;
+    else if (value.length > max) errors[field] = `Max ${max} characters`;
+  });
+
+  const optional: [keyof FptStudentCodePrefixRequest, number][] = [["majorCode", 20], ["note", 500]];
+  optional.forEach(([field, max]) => {
+    if (String(form[field] ?? "").trim().length > max) errors[field] = `Max ${max} characters`;
+  });
+
+  return errors;
+}
+
+function PrefixInput({ label, value, onChange, maxLength, disabled, error }: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  maxLength?: number;
+  disabled?: boolean;
+  error?: string;
+}) {
   return (
     <div>
       <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 4 }}>{label}</label>
       <input
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-2 rounded-xl outline-none"
-        style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+        maxLength={maxLength}
+        disabled={disabled}
+        className="w-full px-3 py-2 rounded-xl outline-none disabled:cursor-not-allowed"
+        style={{
+          fontSize: 14,
+          border: `1px solid ${error ? COLORS.error : COLORS.border}`,
+          background: disabled ? "var(--surface-bg)" : COLORS.bg,
+          color: COLORS.textPrimary,
+        }}
       />
+      {/* Chỉ hiện lỗi khi ô đã có nội dung hoặc lỗi không phải "required", để form trống lúc
+          mới mở không đỏ lòm; nút Save vẫn bị disable cho tới khi hợp lệ. */}
+      {error && value.trim().length > 0 && (
+        <div style={{ fontSize: 11, color: COLORS.error, marginTop: 3 }}>{error}</div>
+      )}
     </div>
   );
 }

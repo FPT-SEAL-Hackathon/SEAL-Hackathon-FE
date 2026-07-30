@@ -7,6 +7,12 @@ export interface CategoryResponse {
   description: string;
   sortOrder: number;
   isActive: boolean;
+  /**
+   * Số đội đang đăng ký trong category (backend trả ở GET theo event và theo id).
+   * Chỉ dùng để tham chiếu/cảnh báo mềm khi đặt Advancement Top N — KHÔNG phải ràng buộc
+   * cứng, vì round thường được tạo lúc chưa đội nào đăng ký.
+   */
+  teamCount?: number | null;
 }
 
 export interface CreateCategoryRequest {
@@ -95,26 +101,26 @@ export const categoryService = {
     unwrapList(await withLegacyFallback(
       () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/${eventId}`),
       () => api.get<CategoryResponse[] | BackendEnvelope<CategoryResponse[]>>(`/api/v1/categories/categories/${eventId}`),
-    )),
+    )).filter(category => category.isActive !== false),
   getById: async (id: string) =>
     unwrapItem(await withLegacyFallback(
-      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`),
       () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`),
+      () => api.get<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`),
     )),
   create: async (eventId: string, data: CreateCategoryRequest) =>
     unwrapItem(await withLegacyFallback(
-      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${eventId}`, data),
       () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${eventId}`, data),
+      () => api.post<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${eventId}`, data),
     )),
   update: async (id: string, data: UpdateCategoryRequest) =>
     unwrapItem(await withLegacyFallback(
-      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`, data),
       () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/categories/category/${id}`, data),
+      () => api.put<CategoryResponse | BackendEnvelope<CategoryResponse>>(`/api/v1/category/${id}`, data),
     )),
   delete: (id: string) =>
     withLegacyFallback(
-      () => api.delete(`/api/v1/category/${id}`),
       () => api.delete(`/api/v1/categories/category/${id}`),
+      () => api.delete(`/api/v1/category/${id}`),
     ),
   assignMentors: async (categoryId: string, mentorIds: string[]) =>
     unwrapList(await api.post<BackendCategoryExpertResponse[] | BackendEnvelope<BackendCategoryExpertResponse[]>>(

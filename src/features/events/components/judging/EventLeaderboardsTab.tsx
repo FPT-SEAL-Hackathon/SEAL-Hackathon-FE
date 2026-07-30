@@ -158,12 +158,13 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
 </Select>
             </div>
 
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-[260px]">
               <label style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary, display: "block", marginBottom: 6 }}>RANKING TYPE</label>
               <div className="flex gap-2">
                 <Button
                   variant={activeTab === "round" ? "primary" : "outline"}
                   onClick={() => setActiveTab("round")}
+                  className="justify-center whitespace-nowrap"
                   style={{ flex: 1, ...(activeTab !== "round" ? { borderColor: COLORS.border, color: COLORS.textSecondary } : {}) }}
                 >
                   Round Rankings
@@ -171,6 +172,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                 <Button
                   variant={activeTab === "event" ? "primary" : "outline"}
                   onClick={() => setActiveTab("event")}
+                  className="justify-center whitespace-nowrap"
                   style={{ flex: 1, ...(activeTab !== "event" ? { borderColor: COLORS.border, color: COLORS.textSecondary } : {}) }}
                 >
                   Category Final
@@ -270,7 +272,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
               render: (_: any, row: any) => (
                 <div className="flex items-center gap-2">
                   <span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>
-                    {row.finalScore?.toFixed(1) ?? row.totalScore}
+                    {row.averageScore?.toFixed(2) ?? row.finalScore?.toFixed(2) ?? row.totalScore}
                   </span>
                   {row.submissionId && (
                     <button 
