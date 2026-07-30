@@ -103,7 +103,7 @@ function teamResponseToEligibilityReview(
     latestDisqualification: team.latestDisqualification,
     withdrawal: team.withdrawal,
     latestWithdrawal: team.latestWithdrawal,
-    members: team.members.map(member => ({
+    members: normalizeMemberParticipantStatusesForTeam(team, team.members.map(member => ({
       teamMemberId: member.teamMemberId,
       userId: member.userId,
       fullName: member.userId,
@@ -119,7 +119,7 @@ function teamResponseToEligibilityReview(
       active: member.active,
       profileComplete: true,
       issues: [],
-    })),
+    }))),
   };
 }
 
@@ -159,7 +159,13 @@ function mergeReviewAndEventTeams(
       withdrawal: eventTeam?.withdrawal ?? team.withdrawal,
       latestWithdrawal: eventTeam?.latestWithdrawal ?? team.latestWithdrawal,
       activeMemberCount,
-      members: mergeTeamMemberParticipantStatuses(team.members, eventTeam),
+      members: normalizeMemberParticipantStatusesForTeam(
+        {
+          teamStatusId: eventTeam?.teamStatusId ?? team.teamStatusId,
+          teamStatusName: eventTeam?.teamStatusName ?? team.teamStatusName,
+        },
+        mergeTeamMemberParticipantStatuses(team.members, eventTeam),
+      ),
     });
   });
 
@@ -180,6 +186,33 @@ function labelParticipantStatus(status?: EventParticipantStatus | string | null)
   if (value === "SUSPENDED") return "Suspended";
   if (value === "WITHDRAWN") return "Withdrawn";
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function participantStatusForTeam(
+  teamStatusId?: string | null,
+  teamStatusName?: string | null,
+  participantStatus?: EventParticipantStatus | string | null,
+) {
+  const teamStatus = getTeamStatusInfo(teamStatusId, teamStatusName).badge;
+  if (teamStatus === "forming" || teamStatus === "pending_approval") return "Pending";
+  if (teamStatus === "active") return "Active";
+  if (teamStatus === "disqualified") return "Suspended";
+  if (teamStatus === "withdrawn") return "Withdrawn";
+  return labelParticipantStatus(participantStatus);
+}
+
+function normalizeMemberParticipantStatusesForTeam<T extends { participantStatusName?: string }>(
+  team: Pick<TeamEligibilityReviewResponse, "teamStatusId" | "teamStatusName">,
+  members: T[],
+) {
+  return members.map(member => ({
+    ...member,
+    participantStatusName: participantStatusForTeam(
+      team.teamStatusId,
+      team.teamStatusName,
+      member.participantStatusName,
+    ),
+  }));
 }
 
 function sameId(left?: string | null, right?: string | null) {
@@ -478,8 +511,13 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const toEligibilityMember = (
     member: TeamResponse["members"][number],
     detail?: TeamMemberDetailResponse | null,
+    team?: Pick<TeamResponse, "teamStatusId" | "teamStatusName">,
   ): TeamEligibilityMemberResponse => {
     const hasProfile = Boolean(detail?.fullName?.trim() || detail?.email?.trim());
+    const participantStatus = detail?.participantStatusName
+      ?? detail?.participantStatus
+      ?? member.participantStatusName
+      ?? member.participantStatus;
     return {
       teamMemberId: member.teamMemberId,
       userId: member.userId,
@@ -491,12 +529,9 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       universityName: detail?.universityName || "",
       userTypeName: detail?.userTypeName || "",
       accountStatusName: detail?.accountStatusName || "",
-      participantStatusName: labelParticipantStatus(
-        detail?.participantStatusName
-          ?? detail?.participantStatus
-          ?? member.participantStatusName
-          ?? member.participantStatus,
-      ),
+      participantStatusName: team
+        ? participantStatusForTeam(team.teamStatusId, team.teamStatusName, participantStatus)
+        : labelParticipantStatus(participantStatus),
       joinedAt: member.joinedAt,
       active: member.active,
       profileComplete: hasProfile,
@@ -606,7 +641,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       Array.from(sourceMembersByUserId.values()).map(async member => {
         const detail = await teamService.getMemberDetail(latestTeam.teamId, member.userId)
           .catch(() => null);
-        return toEligibilityMember(member, detail);
+        return toEligibilityMember(member, detail, latestTeam);
       }),
     );
 
@@ -1107,7 +1142,13 @@ function TeamDetailDialog({
           Team Members
         </div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          {team.members.map(member => <MemberDetailCard key={member.teamMemberId} member={member} />)}
+          {team.members.map(member => (
+            <MemberDetailCard
+              key={member.teamMemberId}
+              member={member}
+              teamStatusBadge={status.badge}
+            />
+          ))}
         </div>
 
         {isPending && (
@@ -1148,7 +1189,22 @@ function TeamDetailDialog({
   );
 }
 
-function MemberDetailCard({ member }: { member: TeamEligibilityMemberResponse }) {
+function MemberDetailCard({
+  member,
+  teamStatusBadge,
+}: {
+  member: TeamEligibilityMemberResponse;
+  teamStatusBadge: ReturnType<typeof getTeamStatusInfo>["badge"];
+}) {
+  const participantStatusLabel = teamStatusBadge === "forming" || teamStatusBadge === "pending_approval"
+    ? "Pending"
+    : teamStatusBadge === "active"
+      ? "Active"
+    : teamStatusBadge === "disqualified"
+      ? "Suspended"
+    : teamStatusBadge === "withdrawn"
+      ? "Withdrawn"
+      : member.participantStatusName || (member.profileComplete ? "Active" : "Unverified");
   const fields: Array<[string, string | undefined]> = [
     ["Full Name", member.fullName],
     ["Email", member.email],
@@ -1158,14 +1214,13 @@ function MemberDetailCard({ member }: { member: TeamEligibilityMemberResponse })
     ["University", member.universityName],
     ["User Type", member.userTypeName],
     ["Account Status", member.accountStatusName],
-    ["Participant Status", member.participantStatusName],
   ];
 
   return (
     <div className="rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
       <div className="flex items-center justify-between gap-2">
         <div style={{ fontSize: 14, fontWeight: 800, color: COLORS.textPrimary }}>{member.fullName || member.email || "Member"}</div>
-        <StatusBadge status={(member.participantStatusName || (member.profileComplete ? "active" : "unverified")).toLowerCase()} />
+        <StatusBadge status={participantStatusLabel.toLowerCase()} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
         {fields.map(([label, value]) => (

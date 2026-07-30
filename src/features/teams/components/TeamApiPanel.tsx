@@ -247,6 +247,8 @@ function memberDetailFromTeamMember(member: TeamMemberResponse): TeamMemberDetai
     universityName: "",
     userTypeName: "",
     accountStatusName: "",
+    participantStatus: member.participantStatus,
+    participantStatusName: member.participantStatusName,
     joinedAt: member.joinedAt,
     active: member.active,
   };
@@ -269,9 +271,27 @@ function formatStatusLabel(value?: string | null) {
     .replace(/\b\w/g, char => char.toUpperCase());
 }
 
-function getMemberStatusLabel(member: TeamMemberResponse) {
-  return formatStatusLabel(member.participantStatusName ?? member.participantStatus)
-    || (member.active ? "Active" : "Inactive");
+function hasParticipantStatus(value?: Pick<TeamMemberResponse, "participantStatus" | "participantStatusName"> | null) {
+  return Boolean(value?.participantStatus?.trim() || value?.participantStatusName?.trim());
+}
+
+function getMemberStatusLabel(
+  member: TeamMemberResponse,
+  detail?: TeamMemberDetailResponse,
+  teamStatusBadge?: ReturnType<typeof getTeamStatusInfoForTeam>["badge"],
+) {
+  const participantStatus = formatStatusLabel(
+    detail?.participantStatusName
+      ?? detail?.participantStatus
+      ?? member.participantStatusName
+      ?? member.participantStatus,
+  );
+  if (teamStatusBadge === "forming" || teamStatusBadge === "pending_approval") return "Pending";
+  if (teamStatusBadge === "active") return "Active";
+  if (teamStatusBadge === "disqualified") return "Suspended";
+  if (teamStatusBadge === "withdrawn") return "Withdrawn";
+  if (participantStatus) return participantStatus;
+  return member.active ? "Active" : "Inactive";
 }
 
 function getMemberStatusColor(status: string) {
@@ -471,10 +491,10 @@ export function TeamApiPanel({
     knownTeams = userTeams,
   ): Promise<TeamMemberDetailResponse | null> => {
     const embeddedDetail = memberDetailFromTeamMember(member);
-    if (embeddedDetail) return embeddedDetail;
+    if (embeddedDetail && hasParticipantStatus(embeddedDetail)) return embeddedDetail;
 
     const storedDetail = readStoredMemberDetails()[member.userId];
-    if (storedDetail && hasDisplayableMemberDetail(storedDetail)) {
+    if (storedDetail && hasDisplayableMemberDetail(storedDetail) && hasParticipantStatus(storedDetail)) {
       return {
         ...storedDetail,
         teamMemberId: member.teamMemberId,
@@ -485,6 +505,15 @@ export function TeamApiPanel({
 
     const currentTeamDetail = await teamService.getMemberDetail(team.teamId, member.userId).catch(() => null);
     if (currentTeamDetail && hasDisplayableMemberDetail(currentTeamDetail)) return currentTeamDetail;
+    if (embeddedDetail) return embeddedDetail;
+    if (storedDetail && hasDisplayableMemberDetail(storedDetail)) {
+      return {
+        ...storedDetail,
+        teamMemberId: member.teamMemberId,
+        joinedAt: member.joinedAt || storedDetail.joinedAt,
+        active: member.active,
+      };
+    }
 
     const alternateTeams = knownTeams.filter(knownTeam =>
       knownTeam.teamId !== team.teamId
@@ -1962,12 +1991,13 @@ export function TeamApiPanel({
     };
     const memberTableRows = selectedTeam.members.map(member => {
       const display = getMemberDisplay(member);
+      const detail = memberDetails[member.userId];
       return {
         userId: member.userId,
         member: display.name,
         role: member.userId === selectedTeam.leaderUserId ? "Leader" : "Member",
         email: display.email,
-        active: getMemberStatusLabel(member),
+        active: getMemberStatusLabel(member, detail, teamStatus.badge),
         joinedAt: member.joinedAt ? new Date(member.joinedAt).toLocaleString() : "-",
         action: member.userId,
       };
@@ -2021,7 +2051,6 @@ export function TeamApiPanel({
             <div style={{ fontSize: 11, fontWeight: 800, color: COLORS.textSecondary }}>
               FINALIZE TEAM
             </div>
-            <StatusBadge status={teamStatus.badge} />
           </div>
           <div style={{ fontSize: 13, fontWeight: 800, color: COLORS.textPrimary, marginTop: 8 }}>
             Members: {memberRequirementLabel}
@@ -2456,7 +2485,7 @@ export function TeamApiPanel({
               { key: "email", label: "Email" },
               {
                 key: "active",
-                label: "Status",
+                label: "Participant Status",
                 render: (status) => {
                   const color = getMemberStatusColor(String(status));
                   return (
