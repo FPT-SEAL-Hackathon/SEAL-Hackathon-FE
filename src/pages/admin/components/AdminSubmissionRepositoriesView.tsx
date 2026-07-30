@@ -335,9 +335,12 @@ export function AdminSubmissionRepositoriesView() {
               No submission repositories found.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-orange-100 shadow-sm backdrop-blur-sm" style={{ background: "rgba(255,255,255,0.85)" }}>
+            <div
+              className="max-h-[calc(100vh-360px)] min-h-[280px] overflow-auto rounded-lg border border-orange-100 shadow-sm backdrop-blur-sm"
+              style={{ background: "rgba(255,255,255,0.85)" }}
+            >
               <table className="w-full text-sm border-collapse">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b border-orange-100" style={{ background: "rgba(255,237,213,0.7)", backdropFilter: "blur(8px)" }}>
                     <th className="border-r border-orange-100 px-3 py-2.5 text-left text-xs font-semibold text-orange-800 whitespace-nowrap">#</th>
                     <th className="border-r border-orange-100 px-3 py-2.5 text-left text-xs font-semibold text-orange-800 whitespace-nowrap">Team</th>

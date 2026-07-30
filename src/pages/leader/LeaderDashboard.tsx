@@ -38,6 +38,7 @@ import { notificationService } from "@/features/notifications/api/notificationSe
 import { MyMentor } from "@/pages/team/MyMentor";
 import { TeamConsultations } from "@/pages/team/TeamConsultations";
 import { judgingService, type JudgingDTO } from "@/features/judging/api/judgingService";
+import { parseApiError } from "@/lib/api/apiClient";
 import { roundService } from "@/features/events/service/roundService";
 import { rankingService } from "@/features/rankings/api/rankingService";
 import { eventService } from "@/features/events/api/eventService";
@@ -460,7 +461,9 @@ export function LeaderDashboard({ currentPage, onNavigate, markAllReadKey }: { c
       await loadSubmissionHistory(saved.teamId, saved.roundId);
       setSubmitMessage("Submission saved.");
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Submission failed.");
+      const parsed = parseApiError(error);
+      setSubmissionFieldErrors(parsed.fieldErrors ?? {});
+      setSubmitError(parsed.message || "Submission failed.");
     } finally {
       setSubmitLoading(false);
     }
