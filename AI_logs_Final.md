@@ -51,14 +51,15 @@
 
 ## Session Summary - Certificate Redesign, Both Certificate Types, HikariCP & Spring Context Fixes
 
-### 1. Certificate PDF UI Redesign & Watermark Adjustment
-- **Requirement**: Update Certificate PDF UI to modern dark theme matching SEAL Hackathon web style (`#0f172a`, gold/orange borders `#fbbf24`, `#f97316`), and center a large faded background watermark logo (`logo_trans.png`).
+### 1. Certificate PDF UI Redesign, White Paper Theme & OpenHTMLToPDF SAX Fixes
+- **Requirement**: Modernize Certificate PDF UI to clean white paper layout (`#ffffff`, double gold/orange border `#ea580c`, `#d97706`), bold black text (`#0f172a`), solid orange gold seal badge, and prevent line wrapping for long team names.
 - **Template Improvements (`certificate.html`)**:
   - A4 Landscape layout (`@page { size: A4 landscape; margin: 0; }`).
-  - Centered watermark logo with soft 18% opacity (`top: 145px; left: 50%; width: 400px; margin-left: -200px;`). OpenHTMLToPDF ignores CSS `opacity`, so alpha transparency (`alpha = 0.18f`) is applied directly to the PNG image using Java `AlphaComposite` & `Graphics2D` in `CertificateServiceImpl.java`.
-  - Dynamically bound Thymeleaf variables `certMainTitle`, `certSubtitle`, and `citation`.
-  - Fixed Thymeleaf SpEL expression evaluation for String fields (`logoBase64 != ''`, `categoryName != ''`, `awardTierName != ''`).
-  - **CRITICAL FIX**: Fixed unescaped `&` character inside CSS comment (`/* Watermark Background Logo - Perfectly Centered & Soft Faded Opacity */` -> `and Soft`). OpenHTMLToPDF uses Xerces XML SAXParser which threw `SAXParseException: The entity name must immediately follow the '&' in the entity reference` whenever `&` was present in the template, which caused the `500 INTERNAL_SERVER_ERROR` during PDF rendering. Verified fix with clean PDF render (`113,360 bytes`).
+  - Converted theme to clean white paper with gold corner accents. Removed background watermark logo as requested for clean appearance.
+  - Dynamically bound Thymeleaf variables `certMainTitle`, `certSubtitle`, `citation`, `eventName`, `categoryName`, `awardTierName`.
+  - Added `white-space: nowrap;` and `font-size: 30px;` to `.team-name` to prevent multi-line text wrapping on long team names.
+  - Fixed gold seal badge background to solid `#ea580c` color so white "SEAL VERIFIED" text is crisp and fully legible on white background.
+  - **CRITICAL XML SAX FIX**: Fixed all unescaped `&` characters inside CSS/HTML comments (`&` -> `and`). OpenHTMLToPDF uses Xerces XML SAXParser which threw `SAXParseException: The entity name must immediately follow the '&' in the entity reference` whenever `&` was present in template comments, causing `500 INTERNAL_SERVER_ERROR`.
 
 ### 2. Business Logic Support for Both Participation & Award Certificates
 - **Requirement**: Allow ALL students who actively participated in an event to download a "Certificate of Participation". For students whose team won published awards, render a list of selectable certificates (Participation Certificate + Award Certificate(s)).
@@ -88,5 +89,5 @@
   - Updated `SystemSettingServiceImpl.java` to `private final ObjectMapper objectMapper;` for Spring dependency injection.
 
 ### 5. Git Commit Logs
-- **BE Commit**: `ac57b88`, `cd58a12`, `ea16508` — `fix(certificate): apply 18% alpha transparency directly to watermark PNG image in Java for OpenHTMLToPDF compatibility` — Branch `mentor_AI`.
-- **FE Commit**: `a95f27ce`, `65414f51`, `c5e6e097` — `docs: update AI_logs_Final.md` — Branch `mentor_AI`.
+- **BE Commit**: `ac57b88`, `cd58a12`, `ea16508`, `67037ba` — `style(certificate): convert to clean white theme, fix seal badge visibility, enlarge text and prevent team name wrapping` — Branch `mentor_AI`.
+- **FE Commit**: `a95f27ce`, `65414f51`, `c5e6e097`, `f2bc60da` — `docs: update AI_logs_Final.md` — Branch `mentor_AI`.
