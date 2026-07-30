@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import { X, Calendar, MapPin, Users, Save, Loader } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { eventService, type EventResponse, type CreateEventRequest } from "@/features/events/api/eventService";
-import { ApiError } from "@/lib/api/apiClient";
+import { ApiError, parseApiError } from "@/lib/api/apiClient";
+import { toast } from "sonner";
 import { COLORS } from "@/components/shared/UIComponents";
 import { DatePickerField, DateTimePickerField } from "../shared/ui/shared";
 import { ImageCropperModal } from "@/components/shared/ImageCropperModal";
@@ -64,8 +65,8 @@ export function EventModal({ event, onClose, onSaved }: Props) {
     bannerImageUrl: event?.bannerImageUrl ?? "",
     registrationStart: event?.registrationStart?.slice(0, 16) ?? "",
     registrationEnd: event?.registrationEnd?.slice(0, 16) ?? "",
-    eventStartDate: event?.eventStartDate ?? "",
-    eventEndDate: event?.eventEndDate ?? "",
+    eventStartDate: event?.eventStartDate?.slice(0, 16) ?? "",
+    eventEndDate: event?.eventEndDate?.slice(0, 16) ?? "",
     maxTeamSize: String(event?.maxTeamSize ?? 5),
     minTeamSize: String(event?.minTeamSize ?? 2),
   });
@@ -90,10 +91,10 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         event.registrationEnd?.slice(0,16) ?? "",
 
       eventStartDate:
-        event.eventStartDate ?? "",
+         event.eventStartDate?.slice(0,16) ?? "",
 
       eventEndDate:
-        event.eventEndDate ?? "",
+        event.eventEndDate?.slice(0,16) ?? "",
 
       maxTeamSize:
         String(event.maxTeamSize ?? 5),
@@ -149,12 +150,11 @@ export function EventModal({ event, onClose, onSaved }: Props) {
       setError("Event End Date must be after or equal to Event Start Date.");
       return;
     }
-    if (form.registrationEnd && form.eventStartDate) {
-      const regEndDate = form.registrationEnd.substring(0, 10);
-      if (regEndDate > form.eventStartDate) {
-        setError("Registration End date must be on or before Event Start Date.");
-        return;
-      }
+    if (form.registrationEnd && form.eventStartDate && form.registrationEnd > form.eventStartDate) {
+      setError(
+          "Registration End must be before Event Start."
+      );
+      return;
     }
 
     setLoading(true); setError("");
@@ -166,8 +166,8 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         bannerImageUrl: form.bannerImageUrl || "",
         registrationStart: formatDateTime(form.registrationStart) ?? "",
         registrationEnd: formatDateTime(form.registrationEnd) ?? "",
-        eventStartDate: form.eventStartDate || "",
-        eventEndDate: form.eventEndDate || "",
+        eventStartDate: formatDateTime(form.eventStartDate) || "",
+        eventEndDate: formatDateTime(form.eventEndDate) || "",
         maxTeamSize: parseInt(form.maxTeamSize) || 5,
         minTeamSize: parseInt(form.minTeamSize) || 2,
       };
@@ -176,13 +176,17 @@ export function EventModal({ event, onClose, onSaved }: Props) {
         : await eventService.create(payload);
       onSaved(result);
     } catch (err) {
+      const parsedMsg = parseApiError(err).message;
       if (err instanceof ApiError && err.fieldErrors && Object.keys(err.fieldErrors).length > 0) {
         const errorMessages = Object.entries(err.fieldErrors)
           .map(([field, msg]) => `• ${msg}`)
           .join("\n");
-        setError(err.message + "\n" + errorMessages);
+        const fullMsg = parsedMsg + "\n" + errorMessages;
+        setError(fullMsg);
+        toast.error(parsedMsg);
       } else {
-        setError(err instanceof ApiError ? err.message : "Save failed.");
+        setError(parsedMsg);
+        toast.error(parsedMsg);
       }
     } finally {
       setLoading(false);
@@ -273,18 +277,20 @@ export function EventModal({ event, onClose, onSaved }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <Field label="Event Start Date">
-                <DatePickerField
+                <DateTimePickerField
                   value={form.eventStartDate}
                   onChange={v => set("eventStartDate", v)}
-                  minDate={!isEdit ? new Date() : undefined}
-                  maxDate={form.eventEndDate}
+                  minDateTime={!isEdit ? new Date() : undefined}
+                  maxDateTime={form.eventEndDate || undefined}
+                  strictMax={!!form.eventEndDate}
                 />
               </Field>
               <Field label="Event End Date">
-                <DatePickerField
+                <DateTimePickerField
                   value={form.eventEndDate}
                   onChange={v => set("eventEndDate", v)}
-                  minDate={form.eventStartDate || (!isEdit ? new Date() : undefined)}
+                  minDateTime={form.eventStartDate || (!isEdit ? new Date() : undefined)}
+                  strictMin={!!form.eventStartDate}
                 />
               </Field>
             </div>

@@ -20,6 +20,7 @@ export interface EventParticipantResponse {
   eventId: string;
   eventName: string;
   eventStatus?: string;
+  bannerImageUrl?: string;
   studentId: string;
   studentName: string;
   studentEmail: string;
@@ -48,6 +49,7 @@ export interface EventParticipantResponse {
   event?: {
     eventId?: string;
     eventName?: string;
+    bannerImageUrl?: string;
   };
   team?: {
     teamId?: string;
@@ -120,6 +122,7 @@ function normalizeParticipant(participant: RawParticipantRecord): EventParticipa
     eventId: String(participant.eventId ?? participant.event?.eventId ?? ""),
     eventName: participant.eventName ?? participant.event?.eventName ?? "",
     eventStatus: participant.eventStatus,
+    bannerImageUrl: participant.bannerImageUrl ?? (participant.event as any)?.bannerImageUrl ?? "",
     studentId: String(participant.studentId ?? participant.userId ?? participant.user?.userId ?? ""),
     studentName: participant.studentName ?? participant.fullName ?? participant.user?.fullName ?? "",
     studentEmail: participant.studentEmail ?? participant.email ?? participant.user?.email ?? "",
