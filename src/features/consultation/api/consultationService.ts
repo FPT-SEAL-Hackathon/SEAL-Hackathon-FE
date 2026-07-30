@@ -218,7 +218,7 @@ export const consultationService = {
       .then(normalizeConsultationRequest),
 
   getMessages: (requestId: string): Promise<ConsultationMessageResponse[]> =>
-    request(`/api/v1/consultation-requests/${requestId}/messages`, { method: "GET" }),
+    request(`/api/v1/consultation-requests/${requestId}/messages?_t=${Date.now()}`, { method: "GET" }),
 
   sendMessage: (requestId: string, data: MessageRequest): Promise<ConsultationMessageResponse> =>
     request(`/api/v1/consultation-requests/${requestId}/messages`, { method: "POST", body: JSON.stringify(data) }),

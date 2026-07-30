@@ -8,6 +8,7 @@ import { Card, Button, StatusBadge, COLORS, DataTable } from "@/components/share
 import { useCategoryContext } from "../../context/CategoryContext";
 import { useRoundContext } from "../../context/RoundContext";
 import { rankingService } from "@/features/rankings/api/rankingService";
+import { roundService } from "@/features/judging/api/roundService";
 import {
   getSubmissionStatusLabel,
   SUBMISSION_STATUS_IDS,
@@ -65,23 +66,28 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
     }
   }, [categoryRounds, localRoundId]);
 
+  const [assignedJudgesCount, setAssignedJudgesCount] = useState<number>(0);
+
   const fetchSubmissions = async () => {
     if (!localRoundId || !localCategoryId) {
       setSubmissions([]);
       setBatchScores({});
       setJudgesList([]);
       setIsRoundLocked(false);
+      setAssignedJudgesCount(0);
       return;
     }
     setIsLoading(true);
     try {
-      const [data, rankings] = await Promise.all([
+      const [data, rankings, judgesData] = await Promise.all([
         api.get<any[]>(`/api/v1/admin/rounds/${localRoundId}/submissions`),
-        rankingService.getRoundRankings(localRoundId, localCategoryId).catch(() => [])
+        rankingService.getRoundRankings(localRoundId, localCategoryId).catch(() => []),
+        roundService.getJudges(localRoundId).catch(() => [])
       ]);
       
       setSubmissions(data || []);
       setIsRoundLocked(rankings.some(r => r.isApproved || r.isPublished));
+      setAssignedJudgesCount(judgesData ? judgesData.length : 0);
       
       if (data && data.length > 0) {
         setIsBatchLoading(true);
@@ -415,7 +421,14 @@ export function EventJudgingApprovalTab({ eventId }: { eventId: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSelectedSubmissionId(null)}>
           <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col p-6 overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold" style={{ color: COLORS.textPrimary }}>Judging Details</h3>
+              <div className="flex flex-col gap-1">
+                 <h3 className="text-xl font-bold" style={{ color: COLORS.textPrimary }}>Judging Details</h3>
+                 <div style={{ fontSize: 13, color: COLORS.textSecondary }}>
+                    Judges evaluated: <span style={{ fontWeight: 600, color: COLORS.primary }}>
+                      {Object.keys(judgingDetails.reduce((acc, curr) => { if(curr.judgeName) acc[curr.judgeName] = true; return acc; }, {} as Record<string, boolean>)).length}
+                    </span> / {assignedJudgesCount} assigned
+                 </div>
+              </div>
               <Button variant="ghost" icon={<XCircle size={20}/>} onClick={() => setSelectedSubmissionId(null)} />
             </div>
             
