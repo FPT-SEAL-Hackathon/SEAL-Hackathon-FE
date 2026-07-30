@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import {
   Image as ImageIcon, Save, Plus, Trash2, CheckCircle, RefreshCw,
-  Sparkles, MapPin, Mail, Phone, Globe, Info, Camera, Upload
+  Sparkles, MapPin, Mail, Phone, Globe, Info, Camera, Upload, Loader2
 } from "lucide-react";
 import { Card, SectionHeader, Button } from "@/components/shared/UIComponents";
+import { uploadImageToCloudinary } from "@/utils/cloudinary";
+import { landingSettingsService } from "@/lib/api/landingSettingsService";
 
 export interface LandingGallerySettingItem {
   id: string;
@@ -89,48 +91,57 @@ export const DEFAULT_LANDING_SETTINGS: LandingPageSettingsData = {
   },
 };
 
-const STORAGE_KEY = "seal_landing_settings";
-
-export function loadLandingSettings(): LandingPageSettingsData {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_LANDING_SETTINGS;
-    const parsed = JSON.parse(raw);
-    return {
-      gallery: Array.isArray(parsed.gallery) && parsed.gallery.length > 0 ? parsed.gallery : DEFAULT_LANDING_SETTINGS.gallery,
-      footer: { ...DEFAULT_LANDING_SETTINGS.footer, ...(parsed.footer || {}) },
-    };
-  } catch {
-    return DEFAULT_LANDING_SETTINGS;
-  }
-}
-
 export function AdminLandingSettingsView({ context }: { context?: any }) {
-  const [settings, setSettings] = useState<LandingPageSettingsData>(loadLandingSettings);
+  const [settings, setSettings] = useState<LandingPageSettingsData>(DEFAULT_LANDING_SETTINGS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"gallery" | "footer">("gallery");
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
 
-  const handleSave = () => {
+  useEffect(() => {
+    let mounted = true;
+    landingSettingsService.getLandingSettings().then(data => {
+      if (mounted) {
+        setSettings(data);
+        setLoading(false);
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      const updated = await landingSettingsService.updateLandingSettings(settings);
+      setSettings(updated);
       window.dispatchEvent(new Event("seal_landing_settings_updated"));
       setSaveSuccess(true);
-      setSaveMessage("Landing Page settings saved successfully!");
+      setSaveMessage("Landing Page settings saved successfully to Database!");
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       alert("Failed to save settings: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleReset = () => {
-    if (confirm("Reset Landing Page gallery and footer settings to defaults?")) {
-      setSettings(DEFAULT_LANDING_SETTINGS);
-      localStorage.removeItem(STORAGE_KEY);
-      window.dispatchEvent(new Event("seal_landing_settings_updated"));
-      setSaveSuccess(true);
-      setSaveMessage("Reset to default settings.");
-      setTimeout(() => setSaveSuccess(false), 3000);
+  const handleReset = async () => {
+    if (confirm("Reset Landing Page gallery and footer settings to defaults in Database?")) {
+      setSaving(true);
+      try {
+        const resetData = await landingSettingsService.updateLandingSettings(DEFAULT_LANDING_SETTINGS);
+        setSettings(resetData);
+        window.dispatchEvent(new Event("seal_landing_settings_updated"));
+        setSaveSuccess(true);
+        setSaveMessage("Reset to default settings.");
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } catch (err) {
+        alert("Failed to reset settings: " + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -142,17 +153,19 @@ export function AdminLandingSettingsView({ context }: { context?: any }) {
     }));
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        updateGalleryItem(id, "url", result);
-      }
-    };
-    reader.readAsDataURL(file);
+    setUploadingId(id);
+    try {
+      const url = await uploadImageToCloudinary(file);
+      updateGalleryItem(id, "url", url);
+    } catch (err: any) {
+      alert("Failed to upload image to Cloudinary: " + (err.message || String(err)));
+    } finally {
+      setUploadingId(null);
+      e.target.value = "";
+    }
   };
 
   const setFeaturedItem = (id: string) => {
@@ -236,14 +249,15 @@ export function AdminLandingSettingsView({ context }: { context?: any }) {
         <div className="flex items-center gap-3">
           <button
             onClick={handleReset}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl glass border border-red-500/30 text-red-500 hover:bg-red-500/10 text-xs font-semibold transition-all"
+            disabled={saving || loading}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl glass border border-red-500/30 text-red-500 hover:bg-red-500/10 text-xs font-semibold transition-all disabled:opacity-50"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={saving ? "animate-spin" : ""} />
             Reset Defaults
           </button>
-          <Button onClick={handleSave} className="bg-orange-500 text-white hover:bg-orange-600">
-            <Save size={16} className="mr-2" />
-            Save Changes
+          <Button onClick={handleSave} disabled={saving || loading} className="bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50">
+            {saving ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Save size={16} className="mr-2" />}
+            {saving ? "Saving..." : "Save Changes"}
           </Button>
         </div>
       </div>
@@ -328,22 +342,34 @@ export function AdminLandingSettingsView({ context }: { context?: any }) {
                       <label className="text-xs font-semibold text-muted-foreground">Image Source / Link</label>
                       <label
                         htmlFor={`file-upload-${item.id}`}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500 text-white hover:bg-orange-600 shadow-md text-xs font-semibold cursor-pointer transition-all active:scale-95"
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500 text-white hover:bg-orange-600 shadow-md text-xs font-semibold cursor-pointer transition-all active:scale-95 ${
+                          uploadingId === item.id ? "opacity-50 pointer-events-none" : ""
+                        }`}
                       >
-                        <Upload size={14} />
-                        Upload from Computer
+                        {uploadingId === item.id ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={14} />
+                            Upload from Computer
+                          </>
+                        )}
                       </label>
                       <input
                         id={`file-upload-${item.id}`}
                         type="file"
                         accept="image/*"
+                        disabled={uploadingId === item.id}
                         className="hidden"
                         onChange={(e) => handleFileUpload(e, item.id)}
                       />
                     </div>
                     <input
                       type="text"
-                      value={item.url.startsWith("data:") ? "[Upload from computer]" : item.url}
+                      value={item.url}
                       onChange={(e) => updateGalleryItem(item.id, "url", e.target.value)}
                       placeholder="Paste Cloudinary link or click the button to upload from computer..."
                       className="w-full px-3.5 py-2.5 rounded-xl glass border border-white/20 text-xs font-mono text-muted-foreground focus:text-foreground"

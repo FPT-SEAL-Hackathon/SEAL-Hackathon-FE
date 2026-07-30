@@ -482,7 +482,7 @@ export function RegisterCard({ onSwitchToLogin }: { onSwitchToLogin: () => void 
             )}
           </div>
 
-          <GlassInput label="Student Code" placeholder="FPT2024001" icon={<BookOpen size={15} />}
+          <GlassInput label="Student Code" placeholder="SE123456" icon={<BookOpen size={15} />}
             value={form.studentCode} onChange={v => set("studentCode", v)} error={errors.studentCode} />
           <GlassInput label="University" placeholder="FPT University" icon={<Building2 size={15} />}
             disabled={form.userTypeId === REGISTER_USER_TYPES[0].value || form.userTypeId === "FPT_STUDENT"}
@@ -672,12 +672,7 @@ function LoginPage({ onLogin, onSwitchToRegister, onBackToLanding }: { onLogin: 
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="flex items-center gap-3.5 relative z-10">
-          <div className="flex items-center justify-center rounded-2xl"
-            style={{ width: 52, height: 52, background: "linear-gradient(135deg, #F47920, #FF9040)", boxShadow: "0 8px 24px rgba(244,121,32,0.4)" }}>
-            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-            </svg>
-          </div>
+          <img src="/logo_trans.png" alt="SEAL Logo" className="h-14 w-auto object-contain flex-shrink-0 filter drop-shadow-md" />
           <div>
             <div style={{ color: "var(--text-primary)", fontWeight: 800, fontSize: 22, letterSpacing: "-0.02em" }}>SEAL</div>
             <div style={{ color: "var(--text-muted)", fontSize: 12, letterSpacing: "0.04em" }}>Software Engineering Agile League</div>

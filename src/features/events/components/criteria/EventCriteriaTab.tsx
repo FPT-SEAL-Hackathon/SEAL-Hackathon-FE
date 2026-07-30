@@ -18,7 +18,6 @@ export function CriteriaTab() {
     removeEventCriteria
   } = useEventCriteriaContext();
 
-  const totalWeight = eventCriteria.reduce((s, c) => s + c.weight, 0);
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [removingEventCriterion, setRemovingEventCriterion] = useState<EventCriteria | null>(null);
 
@@ -106,17 +105,6 @@ export function CriteriaTab() {
                 onDelete={setRemovingEventCriterion}
               />
             ))}
-            <div className="pt-2 flex items-center gap-2">
-              <div className="h-px flex-1" style={{ background: COLORS.border }} />
-              <span style={{ fontSize: 12, color: COLORS.textSecondary }}>
-                Total weight:{" "}
-                <strong style={{ color: totalWeight === 100 ? COLORS.success : COLORS.warning }}>
-                  {totalWeight}
-                </strong>{" "}
-                / 100
-              </span>
-              <div className="h-px flex-1" style={{ background: COLORS.border }} />
-            </div>
           </div>
         )}
       </Card>

@@ -175,19 +175,20 @@ export function DateTimePickerField({ value, onChange, minDateTime, maxDateTime,
           }}
         />
         {/* Phần chọn giờ LUÔN hiển thị (kể cả khi chưa chọn ngày) để người dùng không
-            tưởng picker thiếu phần chọn giờ. Khi chưa chọn ngày: disable + hiện gợi ý. */}
+            tưởng picker thiếu phần chọn giờ. Khi chưa chọn ngày: disable + hiện "--".
+            KHÔNG thêm dòng hướng dẫn chỉ xuất hiện ở trạng thái rỗng: nó làm popover khi
+            chưa có giá trị cao hơn hẳn popover khi đã có giá trị (nhảy layout). Gợi ý đặt
+            vào `title` của hàng giờ để chiều cao không đổi giữa hai trạng thái. */}
         <div className="p-3 border-t flex flex-col gap-3 bg-gray-50/50" style={{ borderColor: COLORS.border }}>
              {clampedMessage && (
                <div className="text-[11px] font-medium text-orange-600 bg-orange-50 px-2 py-1 rounded" style={{ border: '1px solid #fed7aa' }}>
                  {clampedMessage}
                </div>
              )}
-             {!draftValue && (
-               <div className="text-[11px] text-center text-muted-foreground">
-                 Pick a date in the calendar above, then set the hour:minute
-               </div>
-             )}
-             <div className="flex items-center gap-2 justify-center">
+             <div
+               className="flex items-center gap-2 justify-center"
+               title={draftValue ? undefined : "Pick a date in the calendar above, then set the hour:minute"}
+             >
                <Clock size={14} className="text-muted-foreground mr-1" />
                <select
                  className="px-2 py-1 rounded text-sm outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"

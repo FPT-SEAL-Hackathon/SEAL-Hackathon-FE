@@ -161,6 +161,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
   const [apiAwards, setApiAwards] = useState<AwardResponse[]>([]);
   const [apiCriteriaTemplates, setApiCriteriaTemplates] = useState<CriterionTemplateResponse[]>([]);
   const [apiUsers, setApiUsers] = useState<UserManagementUser[]>([]);
+  const [apiActiveJudgesCount, setApiActiveJudgesCount] = useState<number | null>(null);
   const [eventLoadError, setEventLoadError] = useState("");
   const [categoryLoadError, setCategoryLoadError] = useState("");
   const [selectedSubmissionCategoryId, setSelectedSubmissionCategoryId] = useState("");
@@ -291,6 +292,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
           };
         }));
         setApiEvents(mapped as any);
+        if (mapped.length > 0) {
+          const firstEvId = mapped[0].id || mapped[0].eventId;
+          if (firstEvId) {
+            setSelectedEventId(prev => prev || firstEvId);
+          }
+        }
       })
       .catch(error => {
         setEventLoadError(error instanceof Error ? error.message : "Failed to load events.");
@@ -303,6 +310,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       .then(data => setApiUsers(data.content))
       .catch(() => setApiUsers([]));
   }, [isAdminUser]);
+
+  useEffect(() => {
+    userService.getJudgesCount()
+      .then(res => setApiActiveJudgesCount(res.count))
+      .catch(() => setApiActiveJudgesCount(null));
+  }, []);
 
   useEffect(() => {
     if (!selectedEventId) {
@@ -566,10 +579,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
       }
 
       const blob = await response.blob();
+      const contentType = response.headers.get("Content-Type") || blob.type;
+      const extension = contentType.includes("zip") ? "zip" : "csv";
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `seal-data-export-${selectedEventId}.csv`;
+      link.download = `seal-data-export-${selectedEventId}.${extension}`;
       link.click();
       URL.revokeObjectURL(url);
       setDataExportDone(true);
@@ -840,6 +855,7 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
     setApiCriteriaTemplates,
     apiUsers,
     setApiUsers,
+    apiActiveJudgesCount,
     eventLoadError,
     setEventLoadError,
     categoryLoadError,
@@ -1012,6 +1028,12 @@ export function AdminDashboard({ currentPage, onNavigate }: { currentPage: strin
               viewContext.onNavigate("events");
             }}
             onEdit={() => setEventModal({ open: true, edit: selectedEvent })}
+            onDeleted={async () => {           
+              // quay về list
+              setSelectedEvent(null);
+              viewContext.onNavigate("events");
+            }}
+
           />
         );
       case "event-participants": return <AdminEventParticipantsView />;

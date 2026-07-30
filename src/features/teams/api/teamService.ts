@@ -35,7 +35,9 @@ export interface DisqualificationResponse {
 export interface TeamResponse {
   teamId: string;
   eventId: string;
+  eventName?: string;
   categoryId: string;
+  categoryName?: string;
   teamName: string;
   rawTeamName?: string;
   teamStatusId: string;
@@ -419,6 +421,9 @@ export interface TeamEligibilityReviewResponse {
   latestWithdrawal?: TeamStatusReasonMetadata;
 }
 
+const isPendingJoinRequest = (request: JoinTeamRequestResponse) =>
+  (request.requestStatus ?? "").trim().toUpperCase() === "PENDING";
+
 export interface EligibilityDecisionResponse {
   approved: boolean;
   message: string;
@@ -443,7 +448,7 @@ export const teamService = {
     api.post<JoinTeamRequestResponse>(`/api/v1/teams/${teamId}/join`, {}),
   getPendingRequests: (teamId: string) =>
     api.get<JoinTeamRequestResponse[] | BackendEnvelope<JoinTeamRequestResponse[]>>(`/api/v1/teams/${teamId}/requests`)
-      .then(unwrapArray),
+      .then(response => unwrapArray(response).filter(isPendingJoinRequest)),
   handleJoinRequest: (requestId: string, action: "APPROVED" | "REJECTED", responseNote?: string) =>
     api.put<JoinTeamRequestResponse>(`/api/v1/teams/requests/${requestId}`, { action, responseNote }),
   // Người xin tự hủy request PENDING của chính mình.
@@ -452,7 +457,7 @@ export const teamService = {
   // Các request PENDING của chính user hiện tại (mọi team) — để hiển thị trạng thái + nút hủy.
   getMyPendingRequests: () =>
     api.get<JoinTeamRequestResponse[] | BackendEnvelope<JoinTeamRequestResponse[]>>("/api/v1/teams/requests/mine")
-      .then(unwrapArray),
+      .then(response => unwrapArray(response).filter(isPendingJoinRequest)),
 
   // Members
   getMemberDetail: async (teamId: string, userId: string) =>

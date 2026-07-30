@@ -103,7 +103,7 @@ function teamResponseToEligibilityReview(
     latestDisqualification: team.latestDisqualification,
     withdrawal: team.withdrawal,
     latestWithdrawal: team.latestWithdrawal,
-    members: team.members.map(member => ({
+    members: normalizeMemberParticipantStatusesForTeam(team, team.members.map(member => ({
       teamMemberId: member.teamMemberId,
       userId: member.userId,
       fullName: member.userId,
@@ -119,7 +119,7 @@ function teamResponseToEligibilityReview(
       active: member.active,
       profileComplete: true,
       issues: [],
-    })),
+    }))),
   };
 }
 
@@ -159,7 +159,13 @@ function mergeReviewAndEventTeams(
       withdrawal: eventTeam?.withdrawal ?? team.withdrawal,
       latestWithdrawal: eventTeam?.latestWithdrawal ?? team.latestWithdrawal,
       activeMemberCount,
-      members: mergeTeamMemberParticipantStatuses(team.members, eventTeam),
+      members: normalizeMemberParticipantStatusesForTeam(
+        {
+          teamStatusId: eventTeam?.teamStatusId ?? team.teamStatusId,
+          teamStatusName: eventTeam?.teamStatusName ?? team.teamStatusName,
+        },
+        mergeTeamMemberParticipantStatuses(team.members, eventTeam),
+      ),
     });
   });
 
@@ -180,6 +186,33 @@ function labelParticipantStatus(status?: EventParticipantStatus | string | null)
   if (value === "SUSPENDED") return "Suspended";
   if (value === "WITHDRAWN") return "Withdrawn";
   return value.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function participantStatusForTeam(
+  teamStatusId?: string | null,
+  teamStatusName?: string | null,
+  participantStatus?: EventParticipantStatus | string | null,
+) {
+  const teamStatus = getTeamStatusInfo(teamStatusId, teamStatusName).badge;
+  if (teamStatus === "forming" || teamStatus === "pending_approval") return "Pending";
+  if (teamStatus === "active") return "Active";
+  if (teamStatus === "disqualified") return "Suspended";
+  if (teamStatus === "withdrawn") return "Withdrawn";
+  return labelParticipantStatus(participantStatus);
+}
+
+function normalizeMemberParticipantStatusesForTeam<T extends { participantStatusName?: string }>(
+  team: Pick<TeamEligibilityReviewResponse, "teamStatusId" | "teamStatusName">,
+  members: T[],
+) {
+  return members.map(member => ({
+    ...member,
+    participantStatusName: participantStatusForTeam(
+      team.teamStatusId,
+      team.teamStatusName,
+      member.participantStatusName,
+    ),
+  }));
 }
 
 function sameId(left?: string | null, right?: string | null) {
@@ -253,7 +286,7 @@ function getStatusDetailActor(team: TeamEligibilityReviewResponse, status: Statu
         team.latestDisqualification?.disqualifiedByEmail,
         team.latestDisqualification?.disqualifiedById,
       )
-      || auditLog?.actorUserId
+      || auditLog?.actorName || auditLog?.actorUserId
       || "";
   }
   return formatStatusActor(team.withdrawnByName, team.withdrawnByEmail, team.withdrawnById)
@@ -267,7 +300,7 @@ function getStatusDetailActor(team: TeamEligibilityReviewResponse, status: Statu
       team.latestWithdrawal?.withdrawnByEmail,
       team.latestWithdrawal?.withdrawnById ?? team.latestWithdrawal?.actorUserId,
     )
-    || auditLog?.actorUserId
+    || auditLog?.actorName || auditLog?.actorUserId
     || "";
 }
 
@@ -441,12 +474,14 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
 
   const filteredTeams = teams.filter(team => {
     const matchesSearch = !searchQuery.trim() || team.teamName?.toLowerCase().includes(searchQuery.trim().toLowerCase());
     const status = getTeamStatusInfo(team.teamStatusId, team.teamStatusName).badge;
     const matchesStatus = statusFilter === "ALL" || status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesCategory = categoryFilter === "ALL" || team.categoryId === categoryFilter;
+    return matchesSearch && matchesStatus && matchesCategory;
   });
 
   const loadTeams = useCallback(async () => {
@@ -478,8 +513,13 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
   const toEligibilityMember = (
     member: TeamResponse["members"][number],
     detail?: TeamMemberDetailResponse | null,
+    team?: Pick<TeamResponse, "teamStatusId" | "teamStatusName">,
   ): TeamEligibilityMemberResponse => {
     const hasProfile = Boolean(detail?.fullName?.trim() || detail?.email?.trim());
+    const participantStatus = detail?.participantStatusName
+      ?? detail?.participantStatus
+      ?? member.participantStatusName
+      ?? member.participantStatus;
     return {
       teamMemberId: member.teamMemberId,
       userId: member.userId,
@@ -491,12 +531,9 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       universityName: detail?.universityName || "",
       userTypeName: detail?.userTypeName || "",
       accountStatusName: detail?.accountStatusName || "",
-      participantStatusName: labelParticipantStatus(
-        detail?.participantStatusName
-          ?? detail?.participantStatus
-          ?? member.participantStatusName
-          ?? member.participantStatus,
-      ),
+      participantStatusName: team
+        ? participantStatusForTeam(team.teamStatusId, team.teamStatusName, participantStatus)
+        : labelParticipantStatus(participantStatus),
       joinedAt: member.joinedAt,
       active: member.active,
       profileComplete: hasProfile,
@@ -606,7 +643,7 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
       Array.from(sourceMembersByUserId.values()).map(async member => {
         const detail = await teamService.getMemberDetail(latestTeam.teamId, member.userId)
           .catch(() => null);
-        return toEligibilityMember(member, detail);
+        return toEligibilityMember(member, detail, latestTeam);
       }),
     );
 
@@ -788,34 +825,99 @@ export function EventTeamsSection({ eventId, event }: EventTeamsSectionProps) {
         )}
 
         {teams.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-3 mb-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search team by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 rounded-xl outline-none"
-                style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
-              />
+          <div className="space-y-3 mb-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search team by name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 rounded-xl outline-none"
+                  style={{ fontSize: 13, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}
+                />
+              </div>
+              <div className="flex flex-row gap-3">
+                <div className="relative min-w-[150px] flex-1 sm:flex-none">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
+                    <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                      <SelectValue placeholder="Select Status" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
+                      <SelectItem value="pending_approval" style={{ color: COLORS.textPrimary }}>Pending</SelectItem>
+                      <SelectItem value="active" style={{ color: COLORS.textPrimary }}>Approved (Active)</SelectItem>
+                      <SelectItem value="rejected" style={{ color: COLORS.textPrimary }}>Rejected</SelectItem>
+                      <SelectItem value="disqualified" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
+                      <SelectItem value="withdrawn" style={{ color: COLORS.textPrimary }}>Withdrawn</SelectItem>
+                      <SelectItem value="forming" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="relative min-w-[150px] flex-1 sm:flex-none">
+                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
+                      <SelectValue placeholder="Select Category" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
+                      <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Categories</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.categoryId} value={cat.categoryId} style={{ color: COLORS.textPrimary }}>
+                          {cat.categoryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
-            <div className="relative min-w-[160px]">
-              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <Select value={statusFilter || "none"} onValueChange={(value) => setStatusFilter((value === "none" ? "" : value))} >
-                <SelectTrigger className="w-full pl-10 pr-3 py-2 rounded-xl outline-none" style={{ fontSize: 14, border: `1px solid ${COLORS.border}`, background: COLORS.bg, color: COLORS.textPrimary }}>
-                  <SelectValue placeholder="Select..." />
-                </SelectTrigger>
-                <SelectContent style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
-                  <SelectItem value="ALL" style={{ color: COLORS.textPrimary }}>All Statuses</SelectItem>
-                <SelectItem value="pending_approval" style={{ color: COLORS.textPrimary }}>Pending</SelectItem>
-                <SelectItem value="active" style={{ color: COLORS.textPrimary }}>Approved (Active)</SelectItem>
-                <SelectItem value="rejected" style={{ color: COLORS.textPrimary }}>Rejected</SelectItem>
-                  <SelectItem value="disqualified" style={{ color: COLORS.textPrimary }}>Disqualified</SelectItem>
-                  <SelectItem value="withdrawn" style={{ color: COLORS.textPrimary }}>Withdrawn</SelectItem>
-                  <SelectItem value="forming" style={{ color: COLORS.textPrimary }}>Forming</SelectItem>
-                </SelectContent>
-              </Select>
+
+            {/* Category Team Counts Row */}
+            <div 
+              className="flex flex-wrap items-center gap-2 p-3 rounded-xl border border-dashed transition-all" 
+              style={{ borderColor: COLORS.border, background: `${COLORS.bg}50` }}
+            >
+              <span style={{ fontSize: 11, fontWeight: 700, color: COLORS.textSecondary, letterSpacing: "0.05em" }} className="uppercase w-full mb-1">
+                Team count by category:
+              </span>
+              <div 
+                onClick={() => setCategoryFilter("ALL")}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all hover:opacity-80"
+                style={{ 
+                  border: `1px solid ${categoryFilter === "ALL" ? COLORS.primary : COLORS.border}`, 
+                  background: categoryFilter === "ALL" ? `${COLORS.primary}15` : COLORS.card,
+                  color: categoryFilter === "ALL" ? COLORS.primary : COLORS.textPrimary 
+                }}
+              >
+                <span>All Teams:</span>
+                <span className="font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
+                  {teams.length}
+                </span>
+              </div>
+              {categories.map(cat => {
+                const count = teams.filter(t => t.categoryId === cat.categoryId).length;
+                const isSelected = categoryFilter === cat.categoryId;
+                return (
+                  <div 
+                    key={cat.categoryId}
+                    onClick={() => setCategoryFilter(cat.categoryId)}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all hover:opacity-80"
+                    style={{ 
+                      border: `1px solid ${isSelected ? COLORS.primary : COLORS.border}`, 
+                      background: isSelected ? `${COLORS.primary}15` : COLORS.card,
+                      color: isSelected ? COLORS.primary : COLORS.textPrimary 
+                    }}
+                  >
+                    <span>{cat.categoryName}:</span>
+                    <span className="font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${COLORS.primary}10`, color: COLORS.primary }}>
+                      {count}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -1107,7 +1209,13 @@ function TeamDetailDialog({
           Team Members
         </div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-          {team.members.map(member => <MemberDetailCard key={member.teamMemberId} member={member} />)}
+          {team.members.map(member => (
+            <MemberDetailCard
+              key={member.teamMemberId}
+              member={member}
+              teamStatusBadge={status.badge}
+            />
+          ))}
         </div>
 
         {isPending && (
@@ -1148,7 +1256,22 @@ function TeamDetailDialog({
   );
 }
 
-function MemberDetailCard({ member }: { member: TeamEligibilityMemberResponse }) {
+function MemberDetailCard({
+  member,
+  teamStatusBadge,
+}: {
+  member: TeamEligibilityMemberResponse;
+  teamStatusBadge: ReturnType<typeof getTeamStatusInfo>["badge"];
+}) {
+  const participantStatusLabel = teamStatusBadge === "forming" || teamStatusBadge === "pending_approval"
+    ? "Pending"
+    : teamStatusBadge === "active"
+      ? "Active"
+    : teamStatusBadge === "disqualified"
+      ? "Suspended"
+    : teamStatusBadge === "withdrawn"
+      ? "Withdrawn"
+      : member.participantStatusName || (member.profileComplete ? "Active" : "Unverified");
   const fields: Array<[string, string | undefined]> = [
     ["Full Name", member.fullName],
     ["Email", member.email],
@@ -1158,14 +1281,13 @@ function MemberDetailCard({ member }: { member: TeamEligibilityMemberResponse })
     ["University", member.universityName],
     ["User Type", member.userTypeName],
     ["Account Status", member.accountStatusName],
-    ["Participant Status", member.participantStatusName],
   ];
 
   return (
     <div className="rounded-xl p-4" style={{ background: COLORS.bg, border: `1px solid ${COLORS.border}` }}>
       <div className="flex items-center justify-between gap-2">
         <div style={{ fontSize: 14, fontWeight: 800, color: COLORS.textPrimary }}>{member.fullName || member.email || "Member"}</div>
-        <StatusBadge status={(member.participantStatusName || (member.profileComplete ? "active" : "unverified")).toLowerCase()} />
+        <StatusBadge status={participantStatusLabel.toLowerCase()} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
         {fields.map(([label, value]) => (

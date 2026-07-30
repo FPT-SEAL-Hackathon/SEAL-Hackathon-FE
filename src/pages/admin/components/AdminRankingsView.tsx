@@ -344,7 +344,7 @@ export function AdminRankingsView({ context }: AdminViewProps) {
                     {rankNum <= 3 ? ["🥇", "🥈", "🥉"][rankNum - 1] : `#${rankNum}`}
                   </span>
                 ) : (
-                  <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.textSecondary }}>-</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>
                 )}
               </td>
               <td className="px-4 py-3">
@@ -354,13 +354,18 @@ export function AdminRankingsView({ context }: AdminViewProps) {
               </td>
               <td className="px-4 py-3"><span style={{ fontSize: 13, color: COLORS.textSecondary }}>{row.categoryName ?? row.categoryId ?? row.track}</span></td>
               {activeTab === "round" && (
-                <td className="px-4 py-3"><span style={{ fontWeight: 700, fontSize: 14, color: COLORS.textPrimary }}>{row.finalScore?.toFixed(1) ?? row.totalScore}</span></td>
+                <td className="px-4 py-3">
+                  <span style={{ fontWeight: 700, fontSize: 14, color: rankNum > 0 ? COLORS.textPrimary : COLORS.textSecondary }}>
+                    {rankNum === 0 ? '—' : (row.averageScore?.toFixed(2) ?? row.finalScore?.toFixed(2) ?? row.totalScore)}
+                  </span>
+                </td>
               )}
               {activeTab === "round" && (
                 <td className="px-4 py-3">
-                  {row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
-                  {row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
-                  {row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
+                  {rankNum === 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#dc2626', padding: '2px 6px', borderRadius: 6, letterSpacing: 0.5 }}>DSQ</span>}
+                  {rankNum > 0 && row.isAdvanced === true && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.success, backgroundColor: "rgba(0,148,68,0.1)", padding: "2px 8px", borderRadius: 12 }}>Advanced</span>}
+                  {rankNum > 0 && row.isAdvanced === false && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.error, backgroundColor: "rgba(229,62,46,0.1)", padding: "2px 8px", borderRadius: 12 }}>Eliminated</span>}
+                  {rankNum > 0 && row.isAdvanced == null && <span style={{ fontSize: 12, fontWeight: 600, color: COLORS.textSecondary }}>—</span>}
                 </td>
               )}
               <td className="px-4 py-3"><StatusBadge status={isPublishedStatus} /></td>

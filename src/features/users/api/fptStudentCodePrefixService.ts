@@ -8,6 +8,8 @@ export interface FptStudentCodePrefix {
   majorCode?: string | null;
   note?: string | null;
   active: boolean;
+  /** Số tài khoản đang dùng prefix này. Chỉ có ở endpoint /admin. */
+  usageCount?: number | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -31,8 +33,17 @@ export const fptStudentCodePrefixService = {
       `/api/v1/fpt-student-code-prefixes/admin?includeInactive=${includeInactive}`,
     ),
 
-  save: (payload: FptStudentCodePrefixRequest) =>
+  // POST = tạo mới, backend trả 409 nếu prefix đã tồn tại (không còn ghi đè âm thầm).
+  create: (payload: FptStudentCodePrefixRequest) =>
     api.post<FptStudentCodePrefix>("/api/v1/fpt-student-code-prefixes", payload),
+
+  // PUT = sửa prefix đã có. Prefix nằm ở path và KHÔNG đổi được (nó là khoá chính, đổi sẽ
+  // làm mọi MSSV đang dùng bị mồ côi).
+  update: (prefix: string, payload: FptStudentCodePrefixRequest) =>
+    api.put<FptStudentCodePrefix>(
+      `/api/v1/fpt-student-code-prefixes/${encodeURIComponent(prefix)}`,
+      payload,
+    ),
 
   setActive: (prefix: string, active: boolean) =>
     api.patch<FptStudentCodePrefix>(

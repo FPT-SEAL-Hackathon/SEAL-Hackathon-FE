@@ -1,26 +1,44 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { EventResponse } from "../../api/eventService";
 import { CategoryResponse } from "../../../categories/api/categoryService";
 import { RoundResponse } from "../../../judging/api/roundService";
-import { calculateTimelineBounds, validateTimeline } from "./timelineUtils";
+import { calculateTimelineBounds, validateTimeline, pickDefaultPxPerDay } from "./timelineUtils";
 import { TimelineValidation } from "./TimelineValidation";
 import { TimelineSummary } from "./TimelineSummary";
 import { TimelineLegend } from "./TimelineLegend";
 import { TimelineToolbar } from "./TimelineToolbar";
 import { TimelineGrid } from "./TimelineGrid";
+import { useElementWidth } from "./useDragScroll";
+import type { DraftMarker, DraftRange } from "./DraftOverlay";
 import { COLORS } from "../../../../components/shared/UIComponents";
 import { TooltipProvider } from "../../../../components/ui/tooltip";
-import { Dialog, DialogContent, DialogTitle } from "../../../../components/ui/dialog";
 
 interface Props {
     event: EventResponse | null;
     categories: CategoryResponse[];
     rounds: RoundResponse[];
+    // Mốc/khoảng của round đang soạn trong RoundForm (Timeline Preview).
+    draftMarkers?: DraftMarker[];
+    draftRange?: DraftRange;
 }
 
-export function EventTimeline({ event, categories, rounds }: Props) {
-    // Modal "Mở rộng": Radix Dialog tự đóng khi bấm ra ngoài (overlay) hoặc nhấn Esc.
-    const [expanded, setExpanded] = useState(false);
+// Mức zoom: null = "Fit" (vừa khung). `touched` phân biệt "user đã tự chọn" với "đang dùng
+// mặc định suy ra từ bề rộng khung" — nhờ vậy mặc định được tính theo dữ liệu thật ngay ở
+// lần render đầu (không cần useEffect, không nhấp nháy) nhưng vẫn tôn trọng lựa chọn của user.
+interface ZoomState {
+    touched: boolean;
+    pxPerDay: number | null;
+}
+
+const INITIAL_ZOOM: ZoomState = { touched: false, pxPerDay: null };
+
+export function EventTimeline({ event, categories, rounds, draftMarkers, draftRange }: Props) {
+    // Nút/modal "Expand" đã được bỏ (tạm thời không dùng): zoom −/+/Fit + kéo-để-pan đủ để
+    // xem tổng thể ngay tại chỗ. TimelineToolbar vẫn giữ prop `onExpand` optional nếu cần bật lại.
+    const [inlineZoom, setInlineZoom] = useState<ZoomState>(INITIAL_ZOOM);
+
+    const inlineRef = useRef<HTMLDivElement>(null);
+    const inlinePx = useElementWidth(inlineRef);
 
     const bounds = calculateTimelineBounds(event, categories, rounds);
     const issues = validateTimeline(event, categories, rounds);
@@ -32,46 +50,35 @@ export function EventTimeline({ event, categories, rounds }: Props) {
     const safeCategories = Array.isArray(categories) ? categories : [];
     const safeRounds = Array.isArray(rounds) ? rounds : [];
 
+    const inlinePxPerDay = inlineZoom.touched ? inlineZoom.pxPerDay : pickDefaultPxPerDay(bounds, inlinePx);
+
     return (
         <TooltipProvider delayDuration={200}>
             <div className="flex flex-col">
                 <TimelineSummary event={event} categories={safeCategories} rounds={safeRounds} />
-                <TimelineToolbar onExpand={() => setExpanded(true)} />
+                <TimelineToolbar
+                    pxPerDay={inlinePxPerDay}
+                    onZoomChange={v => setInlineZoom({ touched: true, pxPerDay: v })}
+                    className="mb-3"
+                />
 
                 {/* Bản inline: khung cuộn có viền + bo góc, kéo-để-trượt */}
-                <TimelineGrid
-                    event={event}
-                    bounds={bounds}
-                    categories={safeCategories}
-                    rounds={safeRounds}
-                    className="w-full rounded-xl border shadow-sm bg-white"
-                    style={{ borderColor: COLORS.border }}
-                />
+                <div ref={inlineRef}>
+                    <TimelineGrid
+                        event={event}
+                        bounds={bounds}
+                        categories={safeCategories}
+                        rounds={safeRounds}
+                        pxPerDay={inlinePxPerDay}
+                        draftMarkers={draftMarkers}
+                        draftRange={draftRange}
+                        className="w-full rounded-xl border shadow-sm bg-white"
+                        style={{ borderColor: COLORS.border }}
+                    />
+                </div>
 
                 <TimelineValidation issues={issues} />
                 <TimelineLegend />
-
-                {/* Bản mở rộng: cùng lưới timeline nhưng to hơn, trong modal bấm-ngoài-đóng */}
-                <Dialog open={expanded} onOpenChange={setExpanded}>
-                    <DialogContent className="w-[96vw] max-w-[96vw] h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
-                        <div className="flex items-center px-5 py-3 border-b shrink-0" style={{ borderColor: COLORS.border }}>
-                            <div>
-                                <DialogTitle className="text-base font-bold text-gray-900">Event Schedule Timeline</DialogTitle>
-                                <p className="text-xs text-gray-500">Drag to pan · click outside or press Esc to close</p>
-                            </div>
-                        </div>
-                        <div className="flex-1 min-h-0 p-3 bg-gray-50/40">
-                            <TimelineGrid
-                                event={event}
-                                bounds={bounds}
-                                categories={safeCategories}
-                                rounds={safeRounds}
-                                className="w-full h-full rounded-lg border bg-white"
-                                style={{ borderColor: COLORS.border }}
-                            />
-                        </div>
-                    </DialogContent>
-                </Dialog>
             </div>
         </TooltipProvider>
     );

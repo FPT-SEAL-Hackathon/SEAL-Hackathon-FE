@@ -57,7 +57,7 @@ export const ROLE_MENUS: Record<Role, NavItem[]> = {
     { icon: "GitBranch", label: "Submission Repositories", key: "submission-repositories" },
     { icon: "Star", label: "Criteria", key: "criteria" },
     { icon: "FileText", label: "Submissions", key: "submissions" },
-    { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },
+    // { icon: "Trophy", label: "Judging & Rankings", key: "rankings" },
     { icon: "BarChart2", label: "Research & Analytics", key: "reports" },
     { icon: "AlertCircle", label: "Appeals Management", key: "appeals" },
     { icon: "Award", label: "Awards", key: "awards" },

@@ -75,6 +75,21 @@ export interface SystemPrizeResponse {
   totalPrizes: Array<{ prizeCurrency: string; totalPrize: number }>;
 }
 
+export interface CertificateItemResponse {
+  id: string;
+  type: "PARTICIPATION" | "AWARD";
+  awardId?: string;
+  eventId: string;
+  eventName: string;
+  categoryId?: string;
+  categoryName?: string;
+  teamId: string;
+  teamName: string;
+  title: string;
+  awardTierName?: string;
+  publishedAt?: string;
+}
+
 export const awardService = {
   getById: (id: string) =>
     api.get<AwardResponse>(`/api/v1/awards/${id}`),
@@ -105,6 +120,12 @@ export const awardService = {
   },
 
   // Certificate
+  getEventCertificates: (eventId: string) =>
+    api.get<CertificateItemResponse[]>(`/api/v1/certificates/events/${eventId}`),
+  downloadParticipationCertificate: (eventId: string) =>
+    api.blob(`/api/v1/certificates/download/participation/${eventId}`),
+  downloadAwardCertificate: (awardId: string) =>
+    api.blob(`/api/v1/certificates/download/${awardId}`),
   getCertificateUrl: (awardId: string) =>
     `${API_BASE_URL}/api/v1/certificates/download/${awardId}`,
   downloadCertificate: (awardId: string) =>

@@ -22,6 +22,11 @@ export function OverviewTab({ event, totalPrize, onOpenTeamManagement, onEdit }:
   const { categories, categoryMentors } = useCategoryContext();
   const { roundJudges } = useRoundContext();
   const [visibleTeamCount, setVisibleTeamCount] = useState<number | null>(null);
+  const formatDateTime = (dateTime?: string | null) => {
+    if (!dateTime) return "";
+
+    return dateTime.replace("T", "  ");
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -58,10 +63,42 @@ export function OverviewTab({ event, totalPrize, onOpenTeamManagement, onEdit }:
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Field label="Event Name"><Input value={event.eventName} disabled /></Field>
             <Field label="Status"><Input value={event.eventStatusName} disabled /></Field>
-            <Field label="Total Prize"><Input value={totalPrize ? `${totalPrize.amount} ${totalPrize.currency}` : 'N/A'} disabled /></Field>
-            <Field label="Teams Registered"><Input value={visibleTeamCount === null ? "..." : String(visibleTeamCount)} disabled /></Field>
-            <Field label="Registration Deadline"><Input value={event.registrationEnd} disabled /></Field>
-            <Field label="Event End"><Input value={event.eventEndDate} disabled /></Field>           
+            <div className="md:col-span-2">
+              <Field label="Description">
+                <div
+                  className="w-full rounded-xl px-3 py-2.5 whitespace-pre-wrap break-words"
+                  style={{
+                    minHeight: 80, // chỉ là chiều cao tối thiểu
+                    border: `1px solid ${COLORS.border}`,
+                    background: COLORS.bg,
+                    color: COLORS.textPrimary,
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {event.description || (
+                    <span style={{ color: COLORS.textSecondary }}>
+                      No description
+                    </span>
+                  )}
+                </div>
+              </Field>
+            </div>
+            <Field label="Location"><Input value={event.location} disabled /></Field>
+            <Field label="Team Size">
+              <Input
+                value={
+                  event.minTeamSize != null && event.maxTeamSize != null
+                    ? `${event.minTeamSize} - ${event.maxTeamSize}`
+                    : ""
+                }
+                disabled
+              />
+            </Field> 
+            <Field label="Registration Start"><Input value={formatDateTime(event.registrationStart)} disabled /></Field>
+            <Field label="Registration End"><Input value={formatDateTime(event.registrationEnd)} disabled /></Field>
+            <Field label="Event Start"><Input value={formatDateTime(event.eventStartDate)} disabled /></Field>  
+            <Field label="Event End"><Input value={formatDateTime(event.eventEndDate)} disabled /></Field>           
             <Field label="Category">
               <div className="flex flex-wrap gap-2 min-h-[40px] items-center">
                 {categories.length === 0 ? (
