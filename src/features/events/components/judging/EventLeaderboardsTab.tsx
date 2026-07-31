@@ -346,7 +346,7 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
             </div>
             <div className="p-5 space-y-4">
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-800 text-sm">
-                <p>Publishing rankings will make them visible to participants and open the appeal window.</p>
+                <p>Publishing rankings will make them visible to participants{activeTab === "round" ? " and open the appeal window" : ""}.</p>
               </div>
               {localRankings.some(r => r.isPublished) && (
                 <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-800 text-sm flex gap-2">
@@ -354,16 +354,18 @@ export function EventLeaderboardsTab({ eventId }: { eventId: string }) {
                   <p><strong>Warning:</strong> Rankings have already been published. Re-publishing will reset the appeal window for all participants.</p>
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Appeal Window Duration (minutes)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
-                  value={appealDuration}
-                  onChange={e => setAppealDuration(parseInt(e.target.value) || 0)}
-                />
-              </div>
+              {activeTab === "round" && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Appeal Window Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all"
+                    value={appealDuration}
+                    onChange={e => setAppealDuration(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setShowPublishModal(false)}>Cancel</Button>
