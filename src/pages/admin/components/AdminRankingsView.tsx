@@ -431,14 +431,14 @@ export function AdminRankingsView({ context }: AdminViewProps) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="flex justify-between items-center p-4 border-b border-gray-100">
-              <h3 className="font-bold text-lg text-gray-800">Publish Round Rankings</h3>
+              <h3 className="font-bold text-lg text-gray-800">Publish {activeTab === "round" ? "Round" : "Event"} Rankings</h3>
               <button onClick={() => setShowPublishModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
             <div className="p-4 space-y-4">
               <div className="p-3 bg-blue-50 border border-blue-100 rounded-lg text-blue-800 text-sm">
-                <p>Publishing rankings will make them visible to participants and open the appeal window.</p>
+                <p>Publishing rankings will make them visible to participants{activeTab === "round" ? " and open the appeal window" : ""}.</p>
               </div>
               {localRankings.some(r => r.isPublished) && (
                 <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-800 text-sm flex gap-2">
@@ -446,16 +446,18 @@ export function AdminRankingsView({ context }: AdminViewProps) {
                   <p><strong>Warning:</strong> Rankings have already been published. Re-publishing will reset the appeal window for all participants.</p>
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Appeal Window Duration (minutes)</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  value={appealDuration}
-                  onChange={e => setAppealDuration(parseInt(e.target.value) || 0)}
-                />
-              </div>
+              {activeTab === "round" && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Appeal Window Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    value={appealDuration}
+                    onChange={e => setAppealDuration(parseInt(e.target.value) || 0)}
+                  />
+                </div>
+              )}
             </div>
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setShowPublishModal(false)}>Cancel</Button>
